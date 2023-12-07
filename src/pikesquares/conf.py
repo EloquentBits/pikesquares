@@ -57,8 +57,6 @@ class ClientConfig(BaseSettings):
 
     DEBUG: bool = False
     DAEMONIZE: bool = False
-    ZEROMQ_MONITOR: bool = False
-    DIR_MONITOR: bool = True
 
     RUN_DIR: str = str(Path(user_runtime_dir(APP_NAME, CURRENT_USER)).resolve())
     LOG_DIR: str = str(Path(user_log_dir(APP_NAME, CURRENT_USER)).resolve())
