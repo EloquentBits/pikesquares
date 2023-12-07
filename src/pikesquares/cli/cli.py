@@ -28,17 +28,24 @@ else:
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    config: Optional[str] = typer.Option("", help="Absolute path to configuration file."),
+    config: Optional[str] = typer.Option("", help="Path to configuration file."),
     verbose: Optional[bool] = typer.Option(False, help="Enable verbose mode."),
+    version: Optional[bool] = typer.Option(False, help="Show version and exit."),
 ):
     """
     Welcome to Pike Squares
     """
 
+    if version:
+        from importlib import metadata
+        console.info(metadata.version("pikesquares"))
+        return
+
     assert os.environ.get("VIRTUAL_ENV"), "VIRTUAL_ENV not set"
 
+    print(config)
     client_config = ClientConfig(_env_file=config or None)
-    client_config.setup_dirs()
+    print(client_config)
 
     obj = ctx.ensure_object(dict)
     obj["verbose"] = verbose
@@ -48,7 +55,7 @@ def main(
         device_db = obj['device']
         projects = device_db.search(
             (where('name') == project_name) &
-            (where('type') == "Sub-Emperor")
+            (where('type') == "Project")
         )
         if not projects:
             return
@@ -59,7 +66,7 @@ def main(
     def get_projects_db():
         device_db = obj['device']
         yield from device_db.search(
-            (where('type') == "Sub-Emperor")
+            (where('type') == "Project")
         )
 
     if 'device' not in obj:
@@ -84,13 +91,13 @@ def up(
     client_config.DAEMONIZE = not foreground
 
     # What should user see if device is already started?
-    status = get_service_status(f"main-emperor-emperor", client_config)
+    status = get_service_status(f"device", client_config)
     if status == "running":
         console.info("Your device is already running")
         return
 
-    device = HandlerFactory.make_handler("Main-Emperor")(
-        service_id="main-emperor", 
+    device = HandlerFactory.make_handler("Device")(
+        service_id="device", 
         client_config=client_config,
     )
     device.prepare_service_config()
@@ -98,7 +105,7 @@ def up(
 
 
 @app.command(rich_help_panel="Control", short_help="Show logs of device")
-def logs(ctx: typer.Context, entity: str = typer.Argument("main-emperor")):
+def logs(ctx: typer.Context, entity: str = typer.Argument("device")):
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
 
@@ -117,7 +124,7 @@ def status(ctx: typer.Context):
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
     
-    status = get_service_status(f"main-emperor-emperor", client_config)
+    status = get_service_status(f"device", client_config)
     if status == "running":
         log_func = console.success
     else:

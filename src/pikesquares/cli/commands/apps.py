@@ -1,19 +1,17 @@
 from pathlib import Path
 import shutil
 from typing import Optional
-from tinydb import where
 
+from tinydb import where
 import typer
 import questionary
 import randomname
-
 from cuid import cuid
 
 from pikesquares import (
     HandlerFactory, 
     get_service_status,
 )
-
 from ..console import console
 from ..cli import app
 from ..validators import ServiceNameValidator
@@ -174,7 +172,6 @@ def logs(
 def create(
     ctx: typer.Context,
     project_id: str = typer.Option("", "--in", "--in-project", help="Name or id of project to add new app"),
-    kit_id: str = typer.Option("", "--from-template", "--from-kit", help="Name or id of service kit to add new app")
 ):
     """
     Create new app in project
@@ -193,36 +190,18 @@ def create(
 
     project_db = obj['project'](project_id)
     
-    service_kit_type = questionary.select(
-        "What type of service you want to create?",
-        choices=HandlerFactory.service_handlers(),
+    service_type = questionary.select(
+        "What type of service would you like to create?",
+        choices=HandlerFactory.user_visible_services(),
     ).ask()
     
-    #kits_choices = {
-    #    k.get('name'): k.get('cuid')
-    #    for k in resp.get('results', [])
-    #    if k.get('type').replace(' ', '-') in HandlerFactory.service_handlers()
-    #    and k.get('type').replace(' ', '-') == service_kit_type
-    #}
-    #kits_choices.update({'Custom': "custom"})
-    kits_choices = {
-        "Custom": "custom",
-    }
-
-    selected_kit_name = console.choose(
-        f"From what kit you want to create a {service_kit_type}?",
-        choices=kits_choices,
-    )
-
-    service_name = console.ask("Enter your app name: ", default=randomname.get_name(), validators=[ServiceNameValidator])
-    service_type_prefix = service_kit_type.replace('-', '_').lower()
+    service_name = console.ask("Enter your service name: ", default=randomname.get_name(), validators=[ServiceNameValidator])
+    service_type_prefix = service_type.replace('-', '_').lower()
     service_id = f"{service_type_prefix}_{cuid()}"
-    service = HandlerFactory.make_handler(service_kit_type)(
+    service = HandlerFactory.make_handler(service_type)(
         service_id=service_id,
         client_config=client_config,
     )
-
-    console.info(f"Configuring {service_kit_type} service")
     project_cuid = available_projects.get(project_id)
     service_options = dict(
         project_id=project_cuid,
@@ -230,31 +209,28 @@ def create(
         service_id=service_id,
         name=service_name,
     )
-    if selected_kit_name == "Custom":
-        project_path = project_db.get(where('name') == project_id).get('path')
-        opts = console.ask_for_options(
-            service.default_options,
-            defaults={'root_dir': project_path},
-            label=lambda v: f"Enter {v.replace('_', ' ')}"
-        )
-        service_options.update(opts)
+    service_options["root_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app"
+    service_options["pyvenv_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/venv"
+    service_options["wsgi_file"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/src/simple_wsgi_app/simple_app.py"
+    service_options["wsgi_module"] = "application"
+
+    #if selected_kit_name == "Custom":
+    #    project_path = project_db.get(where('name') == project_id).get('path')
+    #    opts = console.ask_for_options(
+    #        service.default_options,
+    #        defaults={'root_dir': project_path},
+    #        label=lambda v: f"Enter {v.replace('_', ' ')}"
+    #    )
+    #    service_options.update(opts)
     service.prepare_service_config(
         **service_options
     )
-
-    console.info(f"Prefetching {service_kit_type} service data")
-    service.fetch(source=source)
-
-    console.info(f"Connecting {service_kit_type} service")
-    service.connect()
-
-    console.success(f"Starting {service_kit_type} service")
+    console.success(f"Starting {service_type} service")
     service.start()
 
     service_data = {
         "cuid": service_id,
-        "type": service_kit_type,
-        "name": service_name,
+        "type": service_type,
         "path": str(Path(service.root_dir).resolve()),
         "parent_id": service.project_id,
         "options": service_options,
@@ -264,11 +240,8 @@ def create(
     project_db = obj['project'](project_id)
     apps = project_db.get(where('name') == project_id).get('apps')
     apps.append(service_data)
-
     project_db.update({'apps': apps}, where('name') == project_id)
-
-    console.success(f"{service_kit_type} '{service_data.get('name')}' was successfully created in project '{project_id}'!")
-
+    console.success(f"{service_type} '{service_data.get('cuid')}' was successfully created in project '{project_id}'!")
 
 @apps_cmd.command(short_help="Start app.\nAliases:[i] run")
 @apps_cmd.command("run", hidden=True)
@@ -308,7 +281,7 @@ def start(
     app_type = app_ent.get('type')
     app_root_dir = app_ent.get('path')
     app_opts = app_ent.get('options', {})
-    if app_type == "Sub-Emperor":
+    if app_type == "Project":
         console.error(
             "You've entered project name instead of app name!",
             example=f"vc projects start '{app_name}'"
@@ -379,7 +352,7 @@ def stop(
 
     app_id = app_ent.get('cuid')
     app_type = app_ent.get('type')
-    if app_type == "Sub-Emperor":
+    if app_type == "Project":
         console.error(
             "You've entered project name instead of app name!",
             example=f"vc projects stop '{app_name}'"
@@ -391,10 +364,8 @@ def stop(
         parent_service_id=project_id,
         client_config=client_config,
     )
-    console.info(f"Connecting {app_type} service")
     app.connect()
     if app.is_started():
-        console.info(f"Stopping {app_type} service")
         app.stop()
         console.success(f"{app_type} '{app_name}' was successfully stopped in project '{project_id}'!")
     else:

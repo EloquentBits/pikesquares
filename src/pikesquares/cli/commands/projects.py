@@ -71,13 +71,13 @@ def create(
     device_db.insert({
         'name': project_name,
         'cuid': project_id,
-        'type': "Sub-Emperor",
+        'type': "Project",
         'path': str(project_dir.resolve())
     })
 
     proj_db = obj['project'](project_name)
 
-    project = HandlerFactory.make_handler("Sub-Emperor")(
+    project = HandlerFactory.make_handler("Project")(
         service_id=project_id,
         client_config=client_config,
     )
@@ -88,21 +88,16 @@ def create(
         "apps": []
     }
 
-    project = HandlerFactory.make_handler("Sub-Emperor")(
+    project = HandlerFactory.make_handler("Project")(
         service_id=project_id,
         client_config=client_config,
     )
-    console.info("Configuring Sub-Emperor service")
     project.prepare_service_config()
     proj_db.insert(proj_data)
 
-    console.info("Connecting Sub-Emperor service")
     project.connect()
-    console.info("Starting Sub-Emperor service")
     project.start()
-
     console.success(f"Project '{project_name}' was successfully created!")
-
 
 @proj_cmd.command(short_help="Start project.\nAliases:[i] run")
 @proj_cmd.command("run", hidden=True)
@@ -128,7 +123,7 @@ def start(
 
     project_id = project_ent.get('cuid')
     project_type = project_ent.get('type')
-    if project_type != "Sub-Emperor":
+    if project_type != "Project":
         console.error(
             "You've entered app name instead of project name!",
             example=f"vc apps start '{project_name}'"
@@ -143,13 +138,9 @@ def start(
         console.info(f"Project '{project_name}' is already started!")
         return
 
-    console.info("Configuring Sub-Emperor service")
     project.prepare_service_config()
-    console.info("Connecting Sub-Emperor service")
     project.connect()
-    console.info("Starting Sub-Emperor service")
     project.start()
-
     console.success(f"Project '{project_name}' was successfully started!")
 
 
@@ -178,7 +169,7 @@ def stop(
 
     project_id = project_ent.get('cuid')
     project_type = project_ent.get('type')
-    if project_type != "Sub-Emperor":
+    if project_type != "Project":
         console.error(
             "You've entered app name instead of project name!",
             example=f"vc apps stop '{project_name}'"
@@ -193,11 +184,8 @@ def stop(
         console.info(f"Project '{project_name}' is not started!")
         return
 
-    console.info("Connecting Sub-Emperor service")
     project.connect()
-    console.info("Stopping Sub-Emperor service")
     project.stop()
-
     console.success(f"Project '{project_name}' was successfully stopped!")
 
 
@@ -280,7 +268,7 @@ def delete(
 
     projects_choices = {
         k.get('name'): (k.get('cuid'), k.get('path'))
-        for k in device_db.search(where("type") == 'Sub-Emperor')
+        for k in device_db.search(where("type") == 'Project')
     }
     if not projects_choices:
         console.warning("No projects were initialized, nothing to delete!")

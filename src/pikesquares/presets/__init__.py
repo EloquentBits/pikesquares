@@ -1,12 +1,15 @@
 from typing import Dict, List, Type
 from pathlib import Path
 import json
-
 from typing import Union
 
-from uwsgiconf.config import Section as _Section, TypeSection, Configuration #, Strlist
+from uwsgiconf.config import (
+    Section as _Section, 
+    TypeSection, 
+    Configuration as _Configuration,
+)
 from uwsgiconf.typehints import Strlist
-from uwsgiconf.options.routing_routers import RouterHttp
+from uwsgiconf.options.routing_routers import RouterHttp as _RouterHttp
 from uwsgiconf.utils import filter_locals, KeyValue, listify
 from uwsgiconf.formatters import (
     FORMATTERS, 
@@ -14,8 +17,8 @@ from uwsgiconf.formatters import (
     ArgsFormatter,
     IniFormatter,
 )
-from ..data import VirtualHost
-from ..conf import ClientConfig
+
+from ..conf import ClientConfig, VirtualHost
 
 
 class JSONFormatter(FormatterBase):
@@ -41,7 +44,7 @@ FORMATTERS: Dict[str, Type[FormatterBase]] = {formatter.alias: formatter for for
     JSONFormatter,
 )}
 """Available formatters by alias."""
-class VConfConfiguration(Configuration):
+class Configuration(_Configuration):
 
     def format(self, *, do_print: bool = False, formatter: str = 'ini') -> Strlist:
         """Applies formatting to configuration.
@@ -60,7 +63,7 @@ class VConfConfiguration(Configuration):
         return formatted
 
 
-class VConfSection(_Section):
+class Section(_Section):
 
     def include(self, target: Union['Section', List['Section'], str, List[str]]) -> TypeSection:
         """Includes target contents into config.
@@ -82,10 +85,10 @@ class VConfSection(_Section):
         :param kwargs: Configuration objects initializer arguments.
         
         """
-        return VConfConfiguration([self], **kwargs)
+        return Configuration([self], **kwargs)
 
 
-class VConfRouterHttps(RouterHttp):
+class RouterHttps(_RouterHttp):
     """uWSGI includes an HTTPS router/proxy/load-balancer that can forward requests to uWSGI workers.
 
     The server can be used in two ways:
@@ -152,7 +155,7 @@ class VConfRouterHttps(RouterHttp):
 
 
 
-class MainEmperorSection(VConfSection):
+class DeviceSection(Section):
 
     def __init__(
         self,
@@ -208,15 +211,15 @@ class MainEmperorSection(VConfSection):
         )
 
         self.empire.set_emperor_params(
-            stats_address=str(Path(self._runtime_dir) / f"{service_id}-emperor-stats.sock")
+            stats_address=str(Path(self._runtime_dir) / f"{service_id}-stats.sock")
         )
 
         #"--emperor=zmq://tcp://127.0.0.1:5250",
         #self.empire.set_emperor_params(
-        #    stats_address=str(Path(self._runtime_dir) / f"{self.service_id}-emperor-stats.sock")
+        #    stats_address=str(Path(self._runtime_dir) / f"{self.service_id}-stats.sock")
         #)
 
-        self.caching.add_cache("vconf-settings", max_items=100)
+        self.caching.add_cache("pikesquares-settings", max_items=100)
 
         self.workers.set_mules_params(mules=3)
 
@@ -235,7 +238,10 @@ class MainEmperorSection(VConfSection):
         fw = self.routing.routers.https.forwarders.subscription_server(
             address=self.client_config.HTTPS_ROUTER_SUBSCRIPTION_SERVER
         )
-        https_router = VConfRouterHttps(
+        print(f"{self.client_config.CERT=}")
+        print(f"{self.client_config.CERT_KEY=}")
+
+        https_router = RouterHttps(
             on=self.client_config.HTTPS_ROUTER,
             forward_to=fw,
             cert=self.client_config.CERT,
@@ -261,7 +267,7 @@ class MainEmperorSection(VConfSection):
 
     def run_fastrouter(self):
         """
-        Run FastRouter for Main Emperor.
+        Run FastRouter for Device.
         """
 
         runtime_dir = self.get_runtime_dir()
@@ -303,7 +309,7 @@ class MainEmperorSection(VConfSection):
 
 
 
-class SubEmperorSection(VConfSection):
+class ProjectSection(Section):
 
     def __init__(
         self,
@@ -349,7 +355,7 @@ class SubEmperorSection(VConfSection):
         )
 
         self.empire.set_emperor_params(
-            stats_address=str(Path(self._runtime_dir) / f"{self.service_id}-emperor-stats.sock")
+            stats_address=str(Path(self._runtime_dir) / f"{self.service_id}-stats.sock")
         )
 
         self.setup_loggers()
@@ -362,7 +368,7 @@ class SubEmperorSection(VConfSection):
 
     def run_fastrouter(self):
         """
-        Run fastrouter for subemperor.
+        Run fastrouter for Project.
         """
 
         runtime_dir = self.get_runtime_dir()
@@ -402,7 +408,7 @@ class SubEmperorSection(VConfSection):
 
 #def get_project_config(project_id, formatter="json"):
 
-#    section = SubEmperorSection(
+#    section = ProjectSection(
 #        project_id=project_id,
 #        run_dir=run_dir,
 #        log_dir=log_dir,
@@ -413,7 +419,7 @@ class SubEmperorSection(VConfSection):
 #    return configuration.format(formatter=formatter)
 
 
-class Section(VConfSection):
+class Section(Section):
     """Basic wsgi app configuration."""
 
     def __init__(
@@ -554,7 +560,6 @@ class WsgiAppSection(Section):
         self,
         service_id: str,
         client_config: ClientConfig,
-        app_name: str,
         project_id: str,
         wsgi_file: str,
         pyvenv_dir: str,
@@ -686,17 +691,17 @@ class WsgiAppSection(Section):
 
     def setup_virtual_hosts(self, virtual_hosts: list[VirtualHost], socket_path: str):
         for vhost in virtual_hosts:
-            vhost_router_cls = self.routing.routers.http
-            vhost_router_params = {}
-            if vhost.is_https:
-                vhost_router_cls = VConfRouterHttps
-                vhost_router_params = {'cert': vhost.certificate_path, 'key': vhost.certificate_key}
-            vhost_router = vhost_router_cls(
-                on=vhost.address,
-                forward_to=socket_path,
-                **vhost_router_params
-            )
-            self.routing.use_router(vhost_router)
+            #vhost_router_cls = self.routing.routers.http
+            #vhost_router_params = {}
+            #if vhost.is_https:
+            #    vhost_router_cls = RouterHttps
+            #    vhost_router_params = {'cert': vhost.certificate_path, 'key': vhost.certificate_key}
+            #vhost_router = vhost_router_cls(
+            #    on=vhost.address,
+            #    forward_to=socket_path,
+            #    **vhost_router_params
+            #)
+            #self.routing.use_router(vhost_router)
 
             if vhost.static_files_mapping:
                 for mountpoint, target in vhost.static_files_mapping.items():
@@ -709,43 +714,10 @@ class WsgiAppSection(Section):
                     socket_path=socket_path
                 )
 
-"""
-[uwsgi]
-strict = true
-master = true
-exit-on-reload = true
-
-touch-reload=/srv/uwsgi/http-router.ini
-
-logto2 = /srv/uwsgi/logs/http-router.log
-logfile-chown = true
-
-auto-procname = true
-procname-prefix-spaced = [[VConf/HTTP Router]]
-
-plugins = http
-
-http = :80
-#http = =0
-
-uid = %U
-gid = %G
-
-http-subscription-server = /run/user/1000/vconf/subscribe-http.sock
-http-stats-server = /run/user/1000/vconf/subscribe-http-stats.sock
-http-keepalive = 5
-
-http-timeout = 500
-http-headers-timeout = 10
-http-connect-timeout = 60
-http-manage-source = true
-http-chunked-input = true
-http-manage-rtsp = true
-"""
 
 
 class HttpsRouterSection(Section):
-    router_name = "[[ VConf/HTTPS Router ]]"
+    router_name = "[[ PikeSquares/HTTPS Router ]]"
 
     def __init__(
         self,
@@ -838,43 +810,9 @@ class HttpsRouterSection(Section):
                 self.statics.register_static_map(mountpoint, target)
     
 
-"""
-[uwsgi]
-strict = true
-master = true
-exit-on-reload = true
-
-touch-reload=/srv/uwsgi/http-router.ini
-
-logto2 = /srv/uwsgi/logs/http-router.log
-logfile-chown = true
-
-auto-procname = true
-procname-prefix-spaced = [[VConf/HTTP Router]]
-
-plugins = http
-
-http = :80
-#http = =0
-
-uid = %U
-gid = %G
-
-http-subscription-server = /run/user/1000/vconf/subscribe-http.sock
-http-stats-server = /run/user/1000/vconf/subscribe-http-stats.sock
-http-keepalive = 5
-
-http-timeout = 500
-http-headers-timeout = 10
-http-connect-timeout = 60
-http-manage-source = true
-http-chunked-input = true
-http-manage-rtsp = true
-"""
-
 
 class HttpRouterSection(Section):
-    router_name = "[[ VConf/HTTP Router ]]"
+    router_name = "[[ PikeSquares/HTTP Router ]]"
 
     def __init__(
         self,
@@ -963,55 +901,6 @@ class HttpRouterSection(Section):
                 self.statics.register_static_map(mountpoint, target)
 
 
-"""
-[uwsgi]
-uid = $(APP_USER)
-gid = $(APP_GROUP)
-
-master=true
-
-logto=$(ROOT_DIR)/logs/fastrouter.log
-
-procname-master = FastRouter Master
-procname-prefix-spaced = FastRouter Worker:
-
-#shared-socket = 127.0.0.1:$(FASTROUTER_PORT)
-#fastrouter = =0
-
-fastrouter=127.0.0.1:3017 
-;fastrouter=$(ROOT_DIR)/run/fastrouter.sock 
-;chmod-socket = 777
-;chown-socket = uwsgi:www-data
-
-fastrouter-subscription-server=127.0.0.1:7000
-http-stats-server=127.0.0.1:5004
-
-; enable the notification socket
-;notify-socket = :3034
-notify-socket = $(ROOT_DIR)/run/notify.socket
-
-; pass it in subscriptions
-;subscription-notify-socket = :3034
-subscription-notify-socket = $(ROOT_DIR)/run/notify.socket
-
-;exec-as-root=chown %(app_user):%(app_group)  /srv/uwsgi/lims/run/notify.socket
-
-fastrouter-cheap=true
-fastrouter-to = $(ROOT_DIR)/run/fastrouter-post-buffering.socket
-fastrouter-post-buffering = 8192
-
-stats = $(ROOT_DIR)/run/fastrouter-stats.sock
-fastrouter-stats=127.0.0.1:1707
-stats-http=true
-
-fastrouter-quiet=false
-fastrouter-gracetime=30
-
-touch-reload=$(ROOT_DIR)/fastrouter.ini
-
-show-config = true
-"""
-
 
 class FastRouterSection(Section):
     def __init__(
@@ -1046,8 +935,8 @@ class FastRouterSection(Section):
         self.master_process.set_basic_params(enable=True)
         self.main_process.set_owner_params(uid=kwargs.get("uid"), gid=kwargs.get("gid"))
         self.main_process.set_naming_params(
-            prefix=f"({project_name}) VConf FastRouter Worker: ",
-            name=f"({project_name}) VConf FastRouter Master",
+            prefix=f"({project_name}) PikeSquares FastRouter Worker: ",
+            name=f"({project_name}) PikeSquares FastRouter Master",
         )
         fastrouter_cls = self.routing.routers.fast
         fastrouter = fastrouter_cls(
@@ -1072,16 +961,6 @@ class FastRouterSection(Section):
 
 
 class ManagedServiceSection(Section):
-
-    def setup_loggers(self):
-        # self.logging.add_logger(self.logging.loggers.stdio())
-        self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log"))
-        )
-
-    def _setup_environment_variables(self, env_vars):
-        for key, value in env_vars.items():
-            self.env(key, value)
 
     def __init__(self, client_config, project_id, service_id, command, pre_start_section=None, env_vars=None):
         super().__init__(
@@ -1119,6 +998,17 @@ class ManagedServiceSection(Section):
             address=str(Path(client_config.RUN_DIR) / f"{service_id}-stats.sock"),
         )
         self.setup_loggers()
+
+    def setup_loggers(self):
+        # self.logging.add_logger(self.logging.loggers.stdio())
+        self.logging.add_logger(
+            self.logging.loggers.file(filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log"))
+        )
+
+    def _setup_environment_variables(self, env_vars):
+        for key, value in env_vars.items():
+            self.env(key, value)
+
 
 
 class CronJobSection(Section):
