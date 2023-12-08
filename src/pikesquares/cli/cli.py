@@ -45,7 +45,10 @@ def main(
 
     print(config)
     client_config = ClientConfig(_env_file=config or None)
-    print(client_config)
+    for k, v in client_config.dict().items():
+        print(k, v)
+    print()
+    print()
 
     obj = ctx.ensure_object(dict)
     obj["verbose"] = verbose
@@ -70,7 +73,7 @@ def main(
         )
 
     if 'device' not in obj:
-        obj['device'] = TinyDB(f"{client_config.CONFIG_DIR}/device.json")
+        obj['device'] = TinyDB(f"{client_config.CONFIG_DIR}/device-db.json")
 
     if 'project' not in obj:
         obj['project'] = get_project_db

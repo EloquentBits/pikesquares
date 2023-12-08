@@ -211,6 +211,8 @@ def list_(
     device_db = obj['device']
 
     show_fields = ['name', 'path', 'status', 'cuid']
+    for x in device_db:
+        print(x)
     projects = [
         {k: v for k, v in e.items() if k in show_fields}
         for e in device_db

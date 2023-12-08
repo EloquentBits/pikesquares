@@ -20,15 +20,12 @@ import zmq
 from uwsgiconf import uwsgi
 
 from .conf import ClientConfig, VirtualHost
-from .presets import (
-    DeviceSection, 
-    ProjectSection,
-    WsgiAppSection,
-)
 
+from .presets.device import DeviceSection
+from .presets.project import ProjectSection
+from .presets.wsgi_app import WsgiAppSection
 
 PathLike = TypeVar("PathLike", str, Path, None)
-
 
 logger = logging.getLogger(__name__)
 
@@ -362,6 +359,8 @@ class WsgiAppService(Handler):
         self.project_name = project_name
         self.root_dir = root_dir
         self.service_config = Path(self.client_config.CONFIG_DIR) / f"{self.project_id}" / "apps" / f"{self.service_id}.json"
+
+        self.name = options.get('name')
 
         wsgi_app_opts = dict(
 
