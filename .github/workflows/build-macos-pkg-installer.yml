@@ -9,7 +9,7 @@ on:
       - '**'
   
 jobs:
-  python-check:
+  build-pkg-installer:
     strategy:
       matrix:
         python-version: [ "3.11", "3.12" ]

@@ -9,7 +9,7 @@ on:
       - '**'
 
 jobs:
-  build-binary:
+  publish-binary-on-cdn:
     strategy:
       matrix:
         os: [ linux, macos ]
