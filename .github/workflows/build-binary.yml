@@ -13,10 +13,10 @@ jobs:
   build-binary:
     strategy:
       matrix:
-        platform: [ ubuntu-latest, macos-latest-arm64, macos-latest-large, macos-latest-xlarge ] # xlarge - macos with apple silicon processor
+        platform: [ ubuntu-latest, macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
         architecture: [ x86_64, aarch64 ]
-        python-version: [ "3.8", "3.9", "3.10", "3.11", "3.12" ]
-        python-version-short: [ "cp38", "cp39", "cp310", "cp311", "cp312" ]
+        python-version: [ "3.11", "3.12" ]
+        python-version-short: [ "cp311", "cp312" ]
         build-profile-os: [ manylinux, macosx ]
         build-profile-arch: [ x86_64, arm64 ]
         build-profile-platform: [ linux, macos ]

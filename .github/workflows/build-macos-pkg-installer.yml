@@ -12,8 +12,8 @@ jobs:
   python-check:
     strategy:
       matrix:
-        platform: [ macos-latest-arm64, macos-latest-large, macos-latest-xlarge ]  # xlarge - macos with apple silicon processor
-        python-version: [ "3.8", "3.9", "3.10", "3.11", "3.12" ]
+        python-version: [ "3.11", "3.12" ]
+        platform: [ ubuntu-latest, macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
