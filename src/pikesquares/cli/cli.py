@@ -43,12 +43,10 @@ def main(
 
     assert os.environ.get("VIRTUAL_ENV"), "VIRTUAL_ENV not set"
 
-    print(config)
     client_config = ClientConfig(_env_file=config or None)
-    for k, v in client_config.dict().items():
-        print(k, v)
-    print()
-    print()
+    for k, v in client_config.model_dump().items():
+        if k.endswith("_DIR"):
+            Path(v).mkdir(mode=0o777, parents=True, exist_ok=True)
 
     obj = ctx.ensure_object(dict)
     obj["verbose"] = verbose
