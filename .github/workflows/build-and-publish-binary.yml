@@ -54,15 +54,13 @@ jobs:
             --no-emit-warnings \
             -o pikesquares-cli.pex
         
-      - name: Build executable binary (science)
+      - name: Build executable binary (science) - linux
         shell: bash
-        run: |    
-          case "$OSTYPE" in
-            linux*) PLATFORM="linux" ;;
-            darwin*) PLATFORM="macos" ;;
-            *) ;;
-          esac
-          curl -Lo "science" https://github.com/a-scie/lift/releases/download/latest/science-$PLATFORM-${{ matrix.architecture }}
+        if: runner.os == 'Linux'
+        env:
+          PLATFORM: "linux"
+        run: |
+          curl -Lo "science" https://github.com/a-scie/lift/releases/download/latest/science-${{ env.PLATFORM }}-${{ matrix.architecture }}
           chmod +x science
           science lift \
             --file pikesquares=pikesquares-cli.pex build \
@@ -70,18 +68,42 @@ jobs:
             --hash sha256 \
             pikesquares.toml
       
-      - name: Publish binary to cdn
+      - name: Build executable binary (science) - Mac OS
         shell: bash
+        if: runner.os == 'macOS'
+        env:
+          PLATFORM: "macos"
         run: |
-            case "$OSTYPE" in
-              linux*) PLATFORM="linux" ;;
-              darwin*) PLATFORM="macos" ;;
-              *) ;;
-            esac
-
+          curl -Lo "science" https://github.com/a-scie/lift/releases/download/latest/science-${{ env.PLATFORM }}-${{ matrix.architecture }}
+          chmod +x science
+          science lift \
+            --file pikesquares=pikesquares-cli.pex build \
+            --use-platform-suffix \
+            --hash sha256 \
+            pikesquares.toml
+      
+      - name: Publish binary to cdn - Linux
+        shell: bash
+        if: runner.os == 'Linux'
+        env:
+          PLATFORM: "linux"
+        run: |
             curl --request PUT \
             --header 'AccessKey: ${{ secrets.CDN_ACCESS_TOKEN }}' \
             --header 'Content-Type: application/octet-stream' \
             --header 'accept: application/json'  \
-            --data-binary @pikesquares-$PLATFORM-${{ matrix.architecture }} \
-            https://${{ secrets.CDN_URL }}/${{ secrets.CDN_PROJECT_NAME }}/pikesquares-$PLATFORM-${{ matrix.architecture }}
+            --data-binary @pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }} \
+            https://${{ secrets.CDN_URL }}/${{ secrets.CDN_PROJECT_NAME }}/pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }}
+
+      - name: Publish binary to cdn - Mac OS
+        shell: bash
+        if: runner.os == 'macOS'
+        env:
+          PLATFORM: "macos"
+        run: |
+            curl --request PUT \
+            --header 'AccessKey: ${{ secrets.CDN_ACCESS_TOKEN }}' \
+            --header 'Content-Type: application/octet-stream' \
+            --header 'accept: application/json'  \
+            --data-binary @pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }} \
+            https://${{ secrets.CDN_URL }}/${{ secrets.CDN_PROJECT_NAME }}/pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }}
