@@ -13,8 +13,13 @@ jobs:
   build-and-publish-binary:
     strategy:
       matrix:
-        platform: [ ubuntu-latest, macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
-        architecture: [ x86_64, aarch64 ]
+        include:
+          - platform: ubuntu-latest
+            architecture: x86_64
+          - platform: macos-latest-arm64
+            architecture: aarch64
+        # platform: [ ubuntu-latest, macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
+        # architecture: [ x86_64, aarch64 ]
         python-version: [ "3.11", "3.12" ]
     runs-on: ${{ matrix.platform }}
     steps:
