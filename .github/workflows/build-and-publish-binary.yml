@@ -57,9 +57,9 @@ jobs:
       - name: Build executable binary (science)
         shell: bash
         env:
-          SCIENCE_VERSION: "v0.3.0"
+          LATEST_SCIENCE_VERSION: "v0.3.0"
         run: |
-          curl -Lo "$HOME/science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.architecture }}
+          curl -Lo "$HOME/science" https://github.com/a-scie/lift/releases/download/${{ env.LATEST_SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.architecture }}
           chmod +x $HOME/science
           $HOME/science lift \
             --file pikesquares=pikesquares-cli.pex build \
