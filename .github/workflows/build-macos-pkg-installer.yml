@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         python-version: [ "3.11", "3.12" ]
-        platform: [ ubuntu-latest, macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
+        platform: [ macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4

@@ -31,8 +31,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install -U build pex
-          curl -Lo "science" https://github.com/a-scie/lift/releases/download/latest/science-${{ matrix.platform }}-${{ matrix.architecture }}
-          chmod +x science
+
 
       - name: Build CLI wheel
         shell: bash
@@ -57,7 +56,9 @@ jobs:
         
       - name: Build executable binary (science)
         shell: bash
-        run: |
+        run: |    
+          curl -Lo "science" https://github.com/a-scie/lift/releases/download/latest/science-${{ matrix.platform }}-${{ matrix.architecture }}
+          chmod +x science
           science lift \
             --file pikesquares=pikesquares-cli.pex build \
             --use-platform-suffix \
