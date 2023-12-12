@@ -59,9 +59,9 @@ jobs:
         env:
           SCIENCE_VERSION: "v0.3.0"
         run: |
-          curl -Lo "science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.architecture }}
-          chmod +x science
-          science lift \
+          curl -Lo "$HOME/science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.architecture }}
+          chmod +x $HOME/science
+          $HOME/science lift \
             --file pikesquares=pikesquares-cli.pex build \
             --use-platform-suffix \
             --hash sha256 \
