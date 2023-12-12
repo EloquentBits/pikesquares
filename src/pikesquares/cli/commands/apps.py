@@ -267,6 +267,10 @@ def start(
     project_db = obj['project'](project_name)
     
     apps = {a.get('name'): a for a in project_db.get(where('name') == project_name).get('apps')}
+    if not apps:
+        console.warning(f"No apps were created in this project, create at least one app first!")
+        return
+
     if not app_name:
         app_name = console.choose("Select app you want to start in this project", choices=apps)
 
@@ -340,6 +344,10 @@ def stop(
     project_db = obj['project'](project_name)
     
     apps = {a.get('name'): a for a in project_db.get(where('name') == project_name).get('apps')}
+    if not apps:
+        console.warning(f"No apps were created in this project, create at least one app first!")
+        return
+
     if not app_name:
         app_name = console.choose("Select app you want to stop in this project", choices=apps)
 

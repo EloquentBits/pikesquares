@@ -117,6 +117,9 @@ def start(
 
     if not project_name:
         available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
+        if not available_projects:
+            console.warning("Create at least one project first, before starting it!")
+            return
         project_name = console.choose("Select project you want to start", choices=available_projects)
 
     project_ent = device_db.get(where('name') == project_name)
