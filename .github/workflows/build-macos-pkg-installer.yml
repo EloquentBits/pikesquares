@@ -1,15 +1,19 @@
-name: Build PKG Installer (Mac OS)
+name: build-macos-pkg-installer-workflow
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - master
-    tags:
-      - '**'
+  workflow_run:
+    workflows: ["build-publish-multiplatform-binary-workflow"]
+    types:
+      - completed
+  # workflow_dispatch:
+  # push:
+  #   branches:
+  #     - master
+  #   tags:
+  #     - '**'
   
 jobs:
-  build-pkg-installer:
+  build-macos-pkg-installer:
     strategy:
       matrix:
         python-version: [ "3.11", "3.12" ]

@@ -31,3 +31,6 @@ _version.py
 build
 pike-squares-*-*
 *.pex
+
+act
+.secrets

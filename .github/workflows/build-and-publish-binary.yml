@@ -1,4 +1,4 @@
-name: Build binary (multiplatform) and publish it on CDN
+name: build-publish-multiplatform-binary-workflow
 
 on:
   workflow_dispatch:
@@ -13,13 +13,8 @@ jobs:
   build-and-publish-binary:
     strategy:
       matrix:
-        include:
-          - platform: ubuntu-latest
-            architecture: x86_64
-          - platform: macos-latest-arm64
-            architecture: aarch64
-        # platform: [ ubuntu-latest, macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
-        # architecture: [ x86_64, aarch64 ]
+        platform: [ macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
+        architecture: [ aarch64 ]
         python-version: [ "3.11", "3.12" ]
     runs-on: ${{ matrix.platform }}
     steps:
@@ -64,9 +59,9 @@ jobs:
         env:
           LATEST_SCIENCE_VERSION: "v0.3.0"
         run: |
-          curl -Lo "$HOME/science" https://github.com/a-scie/lift/releases/download/${{ env.LATEST_SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.architecture }}
-          chmod +x $HOME/science
-          $HOME/science lift \
+          curl -Lo "/tmp/science" https://github.com/a-scie/lift/releases/download/${{ env.LATEST_SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.architecture }}
+          chmod +x /tmp/science
+          /tmp/science lift \
             --file pikesquares=pikesquares-cli.pex build \
             --use-platform-suffix \
             --hash sha256 \
