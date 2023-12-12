@@ -57,9 +57,10 @@ jobs:
       - name: Build executable binary (science)
         shell: bash
         run: |    
-          curl -Lo "science" https://github.com/a-scie/lift/releases/download/latest/science-${{ matrix.platform }}-${{ matrix.architecture }}
-          chmod +x science
-          science lift \
+          mkdir -p /tmp/
+          curl -Lo "/tmp/science" https://github.com/a-scie/lift/releases/download/latest/science-${{ matrix.platform }}-${{ matrix.architecture }}
+          chmod +x /tmp/science
+          /tmp/science lift \
             --file pikesquares=pikesquares-cli.pex build \
             --use-platform-suffix \
             --hash sha256 \
