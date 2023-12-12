@@ -64,7 +64,7 @@ jobs:
           esac
           curl -Lo "science" https://github.com/a-scie/lift/releases/download/latest/science-$PLATFORM-${{ matrix.architecture }}
           chmod +x science
-          /tmp/science lift \
+          science lift \
             --file pikesquares=pikesquares-cli.pex build \
             --use-platform-suffix \
             --hash sha256 \
