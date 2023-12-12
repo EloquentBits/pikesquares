@@ -54,27 +54,12 @@ jobs:
             --no-emit-warnings \
             -o pikesquares-cli.pex
         
-      - name: Build executable binary (science) - linux
+      - name: Build executable binary (science)
         shell: bash
-        if: runner.os == 'Linux'
         env:
-          PLATFORM: "linux"
+          SCIENCE_VERSION: "v0.3.0"
         run: |
-          curl -Lo "science" https://github.com/a-scie/lift/releases/download/latest/science-${{ env.PLATFORM }}-${{ matrix.architecture }}
-          chmod +x science
-          science lift \
-            --file pikesquares=pikesquares-cli.pex build \
-            --use-platform-suffix \
-            --hash sha256 \
-            pikesquares.toml
-      
-      - name: Build executable binary (science) - Mac OS
-        shell: bash
-        if: runner.os == 'macOS'
-        env:
-          PLATFORM: "macos"
-        run: |
-          curl -Lo "science" https://github.com/a-scie/lift/releases/download/latest/science-${{ env.PLATFORM }}-${{ matrix.architecture }}
+          curl -Lo "science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.architecture }}
           chmod +x science
           science lift \
             --file pikesquares=pikesquares-cli.pex build \
