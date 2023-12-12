@@ -6,7 +6,7 @@ jobs:
   build-binary:
     strategy:
       matrix:
-        platform: [ ubuntu-latest, macos-latest-large, macos-latest-xlarge ] # xlarge - macos with apple silicon processor
+        platform: [ ubuntu-latest, macos-latest-arm64, macos-latest-large, macos-latest-xlarge ] # xlarge - macos with apple silicon processor
         architecture: [ x86_64, aarch64 ]
         python-version: [ "3.8", "3.9", "3.10", "3.11", "3.12" ]
         python-version-short: [ "cp38", "cp39", "cp310", "cp311", "cp312" ]
