@@ -77,7 +77,7 @@ jobs:
             --header 'AccessKey: ${{ secrets.CDN_ACCESS_TOKEN }}' \
             --header 'Content-Type: application/octet-stream' \
             --header 'accept: application/json'  \
-            --data-binary @pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }} \
+            --data-binary @pike-squares-${{ env.PLATFORM }}-${{ matrix.architecture }} \
             https://${{ secrets.CDN_URL }}/${{ secrets.CDN_PROJECT_NAME }}/pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }}
 
       - name: Publish binary to cdn - Mac OS
@@ -90,5 +90,5 @@ jobs:
             --header 'AccessKey: ${{ secrets.CDN_ACCESS_TOKEN }}' \
             --header 'Content-Type: application/octet-stream' \
             --header 'accept: application/json'  \
-            --data-binary @pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }} \
+            --data-binary @pike-squares-${{ env.PLATFORM }}-${{ matrix.architecture }} \
             https://${{ secrets.CDN_URL }}/${{ secrets.CDN_PROJECT_NAME }}/pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }}
