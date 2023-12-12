@@ -1,7 +1,13 @@
 name: Build PKG Installer (Mac OS)
 
-on: [ workflow_dispatch, pull_request ]
-
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    tags:
+      - '**'
+  
 jobs:
   python-check:
     strategy:

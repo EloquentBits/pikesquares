@@ -1,6 +1,12 @@
 name: Publish binary on CDN
 
-on: [ workflow_dispatch, pull_request ]
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    tags:
+      - '**'
 
 jobs:
   build-binary:
