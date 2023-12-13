@@ -8,6 +8,8 @@ on:
     tags:
       - '**'
 
+permissions:
+  contents: write
 
 jobs:
   build-and-publish-binary:
