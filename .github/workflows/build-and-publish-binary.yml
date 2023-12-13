@@ -66,7 +66,16 @@ jobs:
             --use-platform-suffix \
             --hash sha256 \
             pikesquares.toml
-      
+
+      - name: Cache pikesquares binary for pkg installer job
+        id: cache-pikesquares-binary-macos-save
+        if: runner.os == 'macOS'
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            pike-squares-macos-${{ matrix.architecture }}
+          key: "cache-pikesquares-binary-macos-${{ matrix.architecture }}-key"
+
       - name: Publish binary to cdn - Linux
         shell: bash
         if: runner.os == 'Linux'
