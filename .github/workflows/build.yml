@@ -145,6 +145,10 @@ jobs:
         shell: bash
         run: |
           cat ~/Library/Logs/pikesquares/pikesquares-script-postinstall.log
+      - name: Show built installer in folder
+        shell: bash
+        run: |
+          ls -lah .
       - name: Release installer
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
