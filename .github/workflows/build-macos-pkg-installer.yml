@@ -41,12 +41,9 @@ jobs:
           path: mib
 
       - name: Restore cached pikesquares binary for mac
-        id: cache-pikesquares-binary-macos-restore
-        uses: actions/cache/restore@v3
+        uses: actions/download-artifact@v3
         with:
-          path: |
-            pike-squares-macos-${{ matrix.architecture }}
-          key: "cache-pikesquares-binary-macos-${{ matrix.architecture }}-key"
+          name: pike-squares-macos-${{ matrix.architecture }}
 
       - name: Place pikesquares binary into pikesquares folder
         shell: bash
