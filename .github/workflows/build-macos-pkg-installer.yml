@@ -32,11 +32,17 @@ jobs:
         shell: bash
         run: |
           python -m pip install -U jinja2
+      
+      - name: Checkout pikesquares Mac OS Installer Builder (MIB) repo
+        uses: actions/checkout@v4
+        with:
+          repository: EloquentBits/pikesquares-mib
+          path: mib
 
-      - name: Fetch Mac OS Installer Builder (MIB)
+      - name: Run Mac OS Installer Builder (MIB)
         shell: bash
         run: |
-          cd vconf-mib
+          cd mib
           python mib.py --config mib.toml
 
       - name: Upload artifact
