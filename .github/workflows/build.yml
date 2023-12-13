@@ -106,6 +106,7 @@ jobs:
         python-version: [ "3.11", "3.12" ]
         platform: [ macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
     runs-on: ${{ matrix.platform }}
+    needs: [ build-and-publish-binary ]
     steps:
       - uses: actions/checkout@v4
         with:
