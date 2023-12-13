@@ -131,13 +131,14 @@ jobs:
         uses: actions/download-artifact@v3
         with:
             name: pike-squares-macos-${{ matrix.architecture }}
-            path: ./mib/_files/binary/pikesquares
+            path: ./mib/_files/binary
 
       - name: Run Mac OS Installer Builder (MIB)
         shell: bash
         working-directory: ./mib
         run: |
             ls -R _files
+            mv _files/binary/pike-squares-macos-${{ matrix.architecture }} _files/binary/pikesquares
             python mib.py --config mib.toml
             mv pikesquares-installer.pkg pike-squares-macos-${{ matrix.architecture }}-${{ github.ref_name }}.pkg
 
