@@ -1,0 +1,168 @@
+name: Build Project Bundle
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'src/pikesquares/**'
+#    tags:
+#      - '*'
+
+jobs:
+
+  build_bundle:
+    name: Build bundle and upload to BunnyCDN
+    runs-on: linux_x86_64
+    strategy:
+      # Ensure that a wheel builder finishes even if another fails
+      fail-fast: false
+    steps:
+      - name: Checkout VConf repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          #set-safe-directory: '*'
+          #ref: 'v0.1.3'
+          #
+      - name: Read Project Version
+        id: project-version
+        run: echo "version=$(/usr/local/bin/cz version -p)" >> "$GITHUB_OUTPUT"
+
+      - name: Display Project Version
+        run: echo "${{steps.project-version.outputs.version}}"
+
+      - name: setup go
+        uses: https://github.com/actions/setup-go@v4
+        with:
+          go-version: '>=1.20.1'
+
+      - uses: https://gitea.com/actions/go-hashfiles@v0.0.1
+        id: get-pip-reqs-hash
+        with: 
+          patterns: |-
+            requirements.txt
+
+      - name: Dump environment
+        run: |
+          echo "pip reqs hash ${{ steps.get-pip-reqs-hash.outputs.hash }}"
+          echo "Project Version ${{steps.project-version.outputs.version}}"
+          echo "$GITHUB_CONTEXT"
+
+      - name: Cache virtualenv
+        uses: actions/cache@v3
+        with:
+          key: venv-${{ runner.os }}-py311-${{ steps.get-pip-reqs-hash.outputs.hash }}
+         #key: venv-${{ runner.os }}-${{ steps.setup_python.outputs.python-version}}-${{ hashFiles('src/vconf-client-utils/requirements/base.txt') }}
+          path: .venv 
+      
+      - name: build pikesquares wheel
+        env:
+          PEX_TOOLS: 1
+        run: |
+          /usr/bin/python3 -m venv .venv
+          source .venv/bin/activate
+          ./.venv/bin/python3 -m pip install -U build
+          ./.venv/bin/python3 -m pip install -r requirements.txt
+          ./.venv/bin/python3 -m build . --wheel
+
+      - name: Upload pikesquares wheel to VCONF PyPi
+        env:
+          TWINE_USERNAME: admin
+          TWINE_PASSWORD: ${{secrets.PYPI_PASSWORD}}
+          TWINE_REPOSITORY_URL: https://${{secrets.PYPI_HOST}}
+        run: |
+          /usr/bin/python3 -m twine upload --verbose --non-interactive \
+            ./dist/*.whl
+
+      - name: build pikesquares pex
+        env:
+          PEX_TOOLS: 1
+          PROJECT_VERSION: ${{steps.project-version.outputs.version}}
+
+        #--index-url "https://admin:${{secrets.PYPI_PASSWORD}}@${{secret.PYPI_HOST}}/simple/" \
+        run: |
+          /usr/local/bin/pex -v \
+            "pikesquares==$(/usr/local/bin/cz version -p)" \
+            "vconf-binary==$(/usr/local/bin/cz version -p)" \
+            --index-url "https://admin:acqO3uEq8PX8H02@pypi.vc.eloquentbits.com/simple/" \
+            -r requirements.txt \
+            --venv \
+            --include-tools \
+            --python /usr/bin/python3 \
+            --entry-point pikesquares.cli.cli:app \
+            -o vconf-$(/usr/local/bin/cz version -p).pex
+
+      - name: Store pex as artifact
+        uses: https://gitea.com/actions/upload-artifact@v3
+        with:
+          name: vconf-pex
+          path: ./*.pex
+      
+      - name: build bundle
+        run: |
+          /usr/local/bin/science lift \
+            --file vconf-pex=vconf-$(/usr/local/bin/cz version -p).pex \
+              build \
+            --use-platform-suffix \
+            --hash sha256 \
+            vconf.toml
+
+      - name: compress bundle
+        env:
+          PROJECT_VERSION: ${{steps.project-version.outputs.version}}
+        run: |
+          echo " proj version $PROJECT_VERSION"
+          tar Jcf pikesquares-$(/usr/local/bin/cz version -p)-linux-x86_64.tar.xz pike-squares-linux-x86_64
+
+      #- name: upload vconf scie binary to Gitea Generic Package Registry
+      #  run: |
+      #    curl --user "${{secrets.API_ADMIN_USER}}:${{secrets.API_ADMIN_PASSWORD}}" \
+      #         --upload-file ./pikesquares-$(/usr/local/bin/cz version -p)-linux-x86_64.tar.xz \
+      #         https://${{secrets.API_HOST}}/api/packages/EloquentBits/generic/vconf-scie/pikesquares-$(/usr/local/bin/cz version -p)-linux-x86_64.tar.xz
+
+      - name: upload bundle to BunnyCDN
+        env:
+          PROJECT_VERSION: ${{steps.project-version.outputs.version}}
+        run: |
+          echo " proj version $PROJECT_VERSION"
+          curl --request PUT \
+               --header 'AccessKey: ${{ secrets.BUNNYCDN_STORAGE_KEY}}' \
+               --header 'Content-Type: application/octet-stream' \
+               --header 'accept: application/json'  \
+               --data-binary @pikesquares-$(/usr/local/bin/cz version -p)-linux-x86_64.tar.xz \
+               https://ny.storage.bunnycdn.com/vconf-pk-test/pikesquares-$(/usr/local/bin/cz version -p)-linux-x86_64.tar.xz
+
+          curl --request PUT \
+               --header 'AccessKey: ${{ secrets.BUNNYCDN_STORAGE_KEY}}' \
+               --header 'Content-Type: application/octet-stream' \
+               --header 'accept: application/json'  \
+               --data-binary @pikesquares-$(/usr/local/bin/cz version -p)-linux-x86_64.tar.xz \
+               https://ny.storage.bunnycdn.com/vconf-pk-test/pikesquares-latest-linux-x86_64.tar.xz
+
+      - name: purge cache for BunnyCDN Pull Zone
+        run: |
+          curl --request POST \
+               --header 'content-type: application/json' \
+               --header 'AccessKey: ${{ secrets.BUNNYCDN_STORAGE_KEY}}' \
+               https://api.bunny.net/pullzone/${{ secrets.BUNNYCDN_PULL_ZONE_ID}}/purgeCache
+
+      #- name: Create Gitea Release
+      #  id: create-gitea-release
+      #  uses: https://gitea.com/actions/release-action@main
+      #  with:
+      #    insecure: true
+      #    files: |-
+      #      pikesquares-$(/usr/local/bin/cz version -p)-linux-x86_64.xz
+      #    api_key: '${{secrets.RELEASE_TOKEN}}'
+      
+      #- name: Release
+      #  uses: softprops/action-gh-release@v1
+      #  with:
+      #    body_path: "body.md"
+      #    tag_name: ${{ env.REVISION }}
+      #    #${{ steps.cz.outputs.version }}
+      #    files: |
+      #      vconf-linux-x86_64
+      #  env:
+      #    GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
