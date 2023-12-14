@@ -86,15 +86,40 @@ def create(
     )
     service_type_prefix = service_type.replace('-', '_').lower()
     service_id = f"{service_type_prefix}_{cuid()}"
-    #service = HandlerFactory.make_handler(service_type)(
-    #    service_id=service_id,
-    #    client_config=client_config,
-    #)
+
+    root_dir = console.ask("Enter your app root directory: ")
+    assert Path(root_dir).exists(), f"{root_dir} does not exist."
+
+    print(list(Path(root_dir).glob('*venv*')))
+
+    try:
+        pyvenv_dir = console.ask(
+            "Enter your app Python venv directory: ", 
+            default=str(list(Path(root_dir).glob('*venv*'))[0]),
+        )
+    except IndexError:
+        pyvenv_dir = console.ask("Enter your app Python venv directory: ")
+
+    wsgi_file = console.ask(
+        "Enter your app Python WSGI file relative to root directory: ", 
+    )
+    wsgi_file_path = Path(root_dir) / Path(wsgi_file)
+    assert wsgi_file_path.exists(), f"{wsgi_file_path} does not exist"
+
+    wsgi_module = console.ask(
+        "Enter your app Python WSGI module name: ", 
+        default="application",
+    )
+
     app_options = dict()
-    app_options["root_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app"
-    app_options["pyvenv_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/venv"
-    app_options["wsgi_file"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/src/simple_wsgi_app/simple_app.py"
-    app_options["wsgi_module"] = "application"
+    app_options["root_dir"] = root_dir #"/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app"
+    app_options["pyvenv_dir"] = pyvenv_dir #"/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/venv"
+    app_options["wsgi_file"] = wsgi_file_path
+    #"/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/src/simple_wsgi_app/simple_app.py"
+    app_options["wsgi_module"] = wsgi_module
+
+    print(app_options)
+    return
 
     wsgi_app_up(
         client_config,
