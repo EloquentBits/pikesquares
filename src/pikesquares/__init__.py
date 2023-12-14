@@ -221,32 +221,31 @@ class DeviceService(Handler):
 
         self.service_config = Path(self.client_config.CONFIG_DIR) / "device.json"
         with TinyDB(f"{Path(self.client_config.DATA_DIR) / 'device-db.json'}") as db:
-            empjs = json.loads(
+            config = json.loads(
                 DeviceSection(
                     self.client_config,
                     self.service_id,
                 ).as_configuration().format(formatter="json")
             )
-            empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}"
+            config["uwsgi"]["show-config"] = True
+            #empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}"
             # empjs["uwsgi"]["emperor"] = f"{self.client_config.CONFIG_DIR}/project_clo7af2mb0000nldcne2ssmrv/apps"
-            empjs["uwsgi"]["show-config"] = True
-            empjs["uwsgi"]["strict"] = False
-            #empjs["uwsgi"]["plugin"] = "emperor_zeromq"
-            empjs["uwsgi"]["emperor-wrapper"] = str((Path(self.client_config.VENV_DIR) / "bin/uwsgi").resolve())
+            #config["uwsgi"]["plugin"] = "emperor_zeromq"
+            config["uwsgi"]["emperor-wrapper"] = str((Path(self.client_config.VENV_DIR) / "bin/uwsgi").resolve())
 
             routers_dir = Path(self.client_config.CONFIG_DIR) / "routers"
             routers_dir.mkdir(parents=True, exist_ok=True)
             #empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
-            self.service_config.write_text(json.dumps(empjs))
-
-            print(f"{type(empjs)=}")
+            self.service_config.write_text(
+                json.dumps(config)
+            )
 
             devices_db = db.table('devices')
             devices_db.upsert(
                 {
                     'service_type': self.handler_name, 
-                    'service_config': empjs,
+                    'service_config': config,
                 },
                 Query().service_type == self.handler_name,
             )
@@ -372,42 +371,54 @@ def project_up(client_config: ClientConfig, name: str, service_id:str) -> None:
     project.start()
 
 
+def projects_all(client_config: ClientConfig):
+
+    with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
+        projects_db = db.table('projects')
+        return projects_db.all()
+
 @HandlerFactory.register('Https-Router')
 class HttpsRouterService(Handler):
     is_internal = False
     is_enabled = True
 
 
-    config_json = None
+    config_json = {}
+    zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
 
     def prepare_service_config(
-            self, address: str, 
+            self, 
+            address: str, 
             stats_server_address: str,
             subscription_server_address: str,
             ) -> None:
 
+        cert = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2.pem"
+        cert_key = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2-key.pem"
+        client_ca = "/home/pk/.local/share/mkcert/rootCA.pem"
+        section = HttpsRouterSection(
+            self.service_id,
+            self.client_config,
+            address,
+            stats_server_address,
+            subscription_server_address,
+            cert,
+            cert_key,
+            client_ca,
+        )
+        self.config_json = json.loads(
+                section.as_configuration().format(formatter="json"))
+        self.config_json["uwsgi"]["show-config"] = True
+        self.config_json["uwsgi"]["strict"] = False
+        # print(f"{wsgi_app_opts=}")
+        # print(f"wsgi app {self.config_json=}")
+        #empjs["uwsgi"]["plugin"] = "emperor_zeromq"
+        print(self.config_json)
+
+        self.service_config = Path(self.client_config.CONFIG_DIR) / "routers" / f"{self.service_id}.json"
+        self.service_config.write_text(json.dumps(self.config_json))
+
         with TinyDB(f"{Path(self.client_config.DATA_DIR) / 'device-db.json'}") as db:
-            self.service_config = Path(self.client_config.CONFIG_DIR) / "routers" / f"{self.service_id}.json"
-
-            cert = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2.pem"
-            cert_key = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2-key.pem"
-            section = HttpsRouterSection(
-                client_config=self.client_config,
-                service_id=self.service_id,
-                stats_server_address = stats_server_address,
-                subscription_server_address = subscription_server_address,
-                address=address,
-                certificate_path=cert,
-                certificate_key=cert_key,
-            )
-            self.config_json = json.loads(
-                    section.as_configuration().format(formatter="json"))
-            self.config_json["uwsgi"]["show-config"] = True
-            self.config_json["uwsgi"]["strict"] = False
-            # print(f"{wsgi_app_opts=}")
-            # print(f"wsgi app {self.config_json=}")
-            #empjs["uwsgi"]["plugin"] = "emperor_zeromq"
-
             print("Updating routers db.")
             routers_db = db.table('routers')
             routers_db.upsert(
@@ -419,10 +430,38 @@ class HttpsRouterService(Handler):
                 },
                 Query().service_id == self.service_id,
             )
-            print("Done updating projects db.")
+            print("Done updating routers db.")
     
+    def connect(self):
+        print(f"Connecting to zmq emperor  {self.client_config.EMPEROR_ZMQ_ADDRESS}")
+        self.zmq_socket.connect(f"tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}")
 
+    def start(self):
+        if all([
+            self.service_config, 
+            isinstance(self.service_config, Path), 
+            self.service_config.exists()]):
+            msg = json.dumps(self.config_json).encode()
+            #self.service_config.read_text()
 
+            print("sending https router config to zmq")
+            self.zmq_socket.send_multipart(
+                [
+                    b"touch", 
+                    self.config_name.encode(), 
+                    msg,
+                ]
+            )
+            print("sent https router config to zmq")
+        else:
+            print(f"DID NOT SEND https router config to zmq {str(self.service_config.resolve())}")
+
+    def stop(self):
+        self.zmq_socket.send_multipart([
+            b"destroy",
+            self.config_name.encode(),
+        ])
+    """
     def connect(self):
         pass
         #emperor_zmq_opt = uwsgi.opt.get('emperor', b'').decode()
@@ -445,7 +484,7 @@ class HttpsRouterService(Handler):
             self.service_config = Path(self.client_config.CONFIG_DIR) /  "routers" / f"{self.service_id}.json"
         if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
             shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
-
+    """
 
     
 def https_router_up(
@@ -486,12 +525,13 @@ class WsgiAppService(Handler):
     is_internal = False
     is_enabled = True
 
-    project_id: str = ""
-    project_name: str = ""
+    name: str
+    service_id: str
+    project_id: str
+    root_dir: str
+    pyvenv_dir: str
     wsgi_file: str = ""
     wsgi_module: str = ""
-    root_dir: str = ""
-    pyvenv_dir: str = "" 
     virtual_hosts: list[VirtualHost] = []
 
     #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
@@ -500,32 +540,31 @@ class WsgiAppService(Handler):
 
     def prepare_service_config(
         self,
-        project_id: str = "",
-        project_name: str = "",
-        root_dir: str = "",
-        **options
+        name: str,
+        project_id: str,
+        service_id: str,
+        **app_options
     ):
+        self.name = name
+        self.service_id = service_id
         self.project_id = project_id
-        self.project_name = project_name
-        self.root_dir = root_dir
+        self.root_dir = app_options.get('root_dir')
         self.service_config = Path(self.client_config.CONFIG_DIR) / \
                 f"{self.project_id}" / "apps" \
-                / f"{self.service_id}.json"
-
-        self.name = options.get('name')
+                / f"{self.name}.json"
 
         wsgi_app_opts = dict(
 
-            pyvenv_dir=options.get(
+            pyvenv_dir=app_options.get(
                 'pyvenv_dir', self.default_options.get('pyvenv_dir')
             ).format(root_dir=self.root_dir),
 
-            wsgi_file=options.get(
+            wsgi_file=app_options.get(
                 'wsgi_file', 
                 self.default_options.get('wsgi_file')
             ).format(root_dir=self.root_dir),
 
-            wsgi_module=options.get(
+            wsgi_module=app_options.get(
                 'wsgi_module', self.default_options.get('wsgi_module')
             ),
         )
@@ -533,11 +572,12 @@ class WsgiAppService(Handler):
         self.prepare_virtual_hosts()
 
         section = WsgiAppSection(
-            service_id=self.service_id,
-            client_config=self.client_config,
-            project_id=self.project_id,
+            self.client_config,
+            self.name,
+            self.service_id,
+            self.project_id,
+            self.root_dir,
             virtual_hosts=self.virtual_hosts,
-            root_dir=self.root_dir,
             **wsgi_app_opts
         ).as_configuration().format(formatter="json")
         self.config_json = json.loads(section)
@@ -547,6 +587,24 @@ class WsgiAppService(Handler):
         # print(f"{wsgi_app_opts=}")
         # print(f"wsgi app {self.config_json=}")
         #empjs["uwsgi"]["plugin"] = "emperor_zeromq"
+
+        print(self.config_json)
+        self.service_config.write_text(json.dumps(self.config_json))
+
+        with TinyDB(f"{Path(self.client_config.DATA_DIR) / 'device-db.json'}") as db:
+
+            print("Updating aps db.")
+            apps_db = db.table('apps')
+            apps_db.upsert(
+                {
+                    'service_type': self.handler_name, 
+                    'service_id': self.service_id,
+                    'project_id': self.project_id,
+                    'service_config': self.config_json,
+                },
+                Query().service_id == self.service_id,
+            )
+            print("Done updating apps db.")
     
 
     @property
@@ -624,5 +682,27 @@ class WsgiAppService(Handler):
                     / f"{self.service_id}.json"
         if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
             shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
+
+
+def wsgi_app_up(
+        client_config: ClientConfig, 
+        name: str, 
+        project_id:str,
+        service_id:str,
+        **app_options
+    ) -> None:
+
+    app = HandlerFactory.make_handler("WSGI-App")(
+        service_id=service_id, 
+        client_config=client_config,
+    )
+    app.prepare_service_config(
+        name,
+        project_id,
+        service_id,
+        **app_options,
+    )
+    app.connect()
+    app.start()
 
 

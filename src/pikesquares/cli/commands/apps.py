@@ -11,6 +11,8 @@ from cuid import cuid
 from pikesquares import (
     HandlerFactory, 
     get_service_status,
+    wsgi_app_up,
+    projects_all,
 )
 from ..console import console
 from ..cli import app
@@ -48,7 +50,7 @@ for alias in ALIASES:
 @apps_cmd.command("new", hidden=True)
 def create(
     ctx: typer.Context,
-    project_id: str = typer.Option("", "--in", "--in-project", help="Name or id of project to add new app"),
+    project_name: str = typer.Option("", "--in", "--in-project", help="Name or id of project to add new app"),
 ):
     """
     Create new app in project
@@ -58,38 +60,48 @@ def create(
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
 
-    available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
+    available_projects = {
+        p.get('name'): p.get('service_id') for p in projects_all(client_config)
+    }
     if not available_projects:
         console.warning(f"No projects were created, create at least one project first!")
         return
-    if not project_id:
-        project_id = console.choose("Select project where you want to create app", choices=available_projects)
 
-    project_db = obj['project'](project_id)
-    
+    if not project_name:
+        project_name = console.choose(
+            "Select project where you want to create app", 
+            choices=available_projects
+        )
+
     service_type = questionary.select(
         "What type of service would you like to create?",
         choices=HandlerFactory.user_visible_services(),
     ).ask()
     
-    service_name = console.ask("Enter your service name: ", default=randomname.get_name(), validators=[ServiceNameValidator])
+    service_name = console.ask(
+        "Enter your service name: ", 
+        default=randomname.get_name(), 
+        validators=[ServiceNameValidator]
+    )
     service_type_prefix = service_type.replace('-', '_').lower()
     service_id = f"{service_type_prefix}_{cuid()}"
-    service = HandlerFactory.make_handler(service_type)(
-        service_id=service_id,
-        client_config=client_config,
+    #service = HandlerFactory.make_handler(service_type)(
+    #    service_id=service_id,
+    #    client_config=client_config,
+    #)
+    app_options = dict()
+    app_options["root_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app"
+    app_options["pyvenv_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/venv"
+    app_options["wsgi_file"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/src/simple_wsgi_app/simple_app.py"
+    app_options["wsgi_module"] = "application"
+
+    wsgi_app_up(
+        client_config,
+        service_name,
+        available_projects.get(project_name),
+        service_id,
+        **app_options,
     )
-    project_cuid = available_projects.get(project_id)
-    service_options = dict(
-        project_id=project_cuid,
-        project_name=project_id,
-        service_id=service_id,
-        name=service_name,
-    )
-    service_options["root_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app"
-    service_options["pyvenv_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/venv"
-    service_options["wsgi_file"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/src/simple_wsgi_app/simple_app.py"
-    service_options["wsgi_module"] = "application"
 
     #if selected_kit_name == "Custom":
     #    project_path = project_db.get(where('name') == project_id).get('path')
@@ -99,26 +111,26 @@ def create(
     #        label=lambda v: f"Enter {v.replace('_', ' ')}"
     #    )
     #    service_options.update(opts)
-    service.prepare_service_config(
-        **service_options
-    )
-    console.success(f"Starting {service_type} service")
-    service.start()
+    #service.prepare_service_config(
+    #    **service_options
+    #)
+    #console.success(f"Starting {service_type} service")
+    #service.start()
 
-    service_data = {
-        "cuid": service_id,
-        "type": service_type,
-        "path": str(Path(service.root_dir).resolve()),
-        "parent_id": service.project_id,
-        "options": service_options,
-        "virtual_hosts": [vh.dict() for vh in service.virtual_hosts]
-    }
+    #service_data = {
+    #    "cuid": service_id,
+    #    "type": service_type,
+    #    "path": str(Path(service.root_dir).resolve()),
+    #    "parent_id": service.project_id,
+    #    "options": service_options,
+    #    "virtual_hosts": [vh.dict() for vh in service.virtual_hosts]
+    #}
 
-    project_db = obj['project'](project_id)
-    apps = project_db.get(where('name') == project_id).get('apps')
-    apps.append(service_data)
-    project_db.update({'apps': apps}, where('name') == project_id)
-    console.success(f"{service_type} '{service_data.get('cuid')}' was successfully created in project '{project_id}'!")
+    #project_db = obj['project'](project_id)
+    #apps = project_db.get(where('name') == project_id).get('apps')
+    #apps.append(service_data)
+    #project_db.update({'apps': apps}, where('name') == project_id)
+    #console.success(f"{service_type} '{service_data.get('cuid')}' was successfully created in project '{project_id}'!")
 
 @app.command(
     "apps",

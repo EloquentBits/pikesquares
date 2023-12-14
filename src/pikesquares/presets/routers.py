@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from uwsgiconf.options.routing_routers import RouterHttp as _RouterHttp
 from uwsgiconf.utils import filter_locals, KeyValue
 
@@ -83,9 +85,10 @@ class HttpsRouterSection(Section):
         address: str,
         stats_server_address: str,
         subscription_server_address: str,
+        certificate_path: str,
+        certificate_key: str,
+        client_ca: str,
         resubscribe_to: str = None,
-        certificate_path: str = None,
-        certificate_key: str = None,
         **kwargs
     ):
         super().__init__(
@@ -108,10 +111,7 @@ class HttpsRouterSection(Section):
         #self.main_process.set_basic_params(
         #    touch_reload="/srv/uwsgi/%n.http-router.ini"
         #)
-        self.main_process.set_owner_params(
-            uid=kwargs.pop("uid", "%U"),
-            gid=kwargs.pop("gid", "%G")
-        )
+        self.main_process.set_owner_params(uid=client_config.UID, gid=client_config.GID)
         self.main_process.set_naming_params(
             prefix=f"{self.router_name} ",
             autonaming=True
@@ -129,16 +129,28 @@ class HttpsRouterSection(Section):
                 )
             )
 
-        # https = =0,ssl/test-gen/server.crt,ssl/test-gen/server.key,HIGH,ssl/test-gen/ca.crt
+        # https = =0,
+        #           ssl/test-gen/server.crt,
+        #           ssl/test-gen/server.key,
+        #           HIGH,
+        #           ssl/test-gen/ca.crt
+        #"https2": 
+        #       "cert=/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2.pem,
+        #       ciphers=HIGH,
+        #       client_ca=/home/pk/.local/share/mkcert/rootCA.pem,
+        #       key=/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2-key.pem,
+        #       addr=127.0.0.1:3020",
 
         self.router = BaseRouterHttps(
-            on=address,
-            forward_to=BaseRouterHttps.forwarders.subscription_server(
-                address=subscription_server_address,
-                key=subscription_server_address
-            ),
+            address,
             cert=certificate_path,
             key=certificate_key,
+            forward_to=BaseRouterHttps.forwarders.subscription_server(
+                address=subscription_server_address,
+                #key=subscription_server_address
+            ),
+            ciphers="HIGH",
+            client_ca=client_ca,
         )
 
         self.router.set_basic_params(

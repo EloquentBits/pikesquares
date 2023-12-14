@@ -61,9 +61,16 @@ class DeviceSection(Section):
         self.networking.register_socket(
             self.networking.sockets.default(str(Path(self._runtime_dir) / f"{service_id}.sock"))
         )
+        #routers_dir = Path(self.client_config.CONFIG_DIR) / "routers"
+        #routers_dir.mkdir(parents=True, exist_ok=True)
+        #empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
         self.empire.set_emperor_params(
-            stats_address=str(Path(self._runtime_dir) / f"{service_id}-stats.sock")
+            vassals_home = f"zmq://tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}",
+            name=f"Pike Squares Device",
+            pid_file=str((Path(client_config.RUN_DIR) / f"emperor-{self.service_id}.pid").resolve()),
+            spawn_asap=True,
+            stats_address=str(Path(self._runtime_dir) / f"{service_id}-stats.sock"),
         )
 
         #"--emperor=zmq://tcp://127.0.0.1:5250",

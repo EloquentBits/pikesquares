@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Union
 
 from uwsgiconf.typehints import Strlist
@@ -150,17 +151,17 @@ class WsgiAppSection(BaseWsgiAppSection):
 
     def __init__(
         self,
-        service_id: str,
         client_config: ClientConfig,
+        name: str,
+        service_id: str,
         project_id: str,
-        wsgi_file: str,
-        pyvenv_dir: str,
         root_dir: str,
-        wsgi_module: str = "",
         virtual_hosts: list[VirtualHost] = [],
-        **kwargs
+        **app_options,
     ):
+        self.name = name
         self.service_id = service_id
+        self.project_id = project_id
         self.client_config = client_config
         self.virtual_hosts = virtual_hosts or []
 
@@ -174,12 +175,13 @@ class WsgiAppSection(BaseWsgiAppSection):
             embedded_plugins=embedded_plugins, 
             owner=owner,
             touch_reload=str(
-                (Path(client_config.CONFIG_DIR) / f"{project_id}" / "apps" / f"{service_id}.json").resolve()
+                (Path(self.client_config.CONFIG_DIR) / \
+                    f"{self.project_id}" / "apps" / f"{self.name}.json").resolve()
             ),
-            **kwargs
+            **app_options,
         )
         self.python.set_basic_params(
-            python_home=pyvenv_dir,
+            python_home=app_options.get('pyvenv_dir'),
             enable_threads=True,
             #search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
         )
@@ -214,8 +216,8 @@ class WsgiAppSection(BaseWsgiAppSection):
         #:param callable_name: Set WSGI callable name. Default: application.
 
         self.python.set_wsgi_params(
-            module=wsgi_file, 
-            callable_name=wsgi_module if wsgi_module else None,
+            module=app_options.get('wsgi_file'), 
+            callable_name=app_options.get('wsgi_module'),
         )
         self.applications.set_basic_params(exit_if_none=require_app)
 
