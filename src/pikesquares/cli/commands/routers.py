@@ -10,24 +10,24 @@ from cuid import cuid
 
 from pikesquares import (
     get_service_status,
-    project_up,
+    https_router_up,
+    get_first_available_port,
 )
-
 from ..console import console
 from ..validators import ServiceNameValidator
 from ..cli import app
 
 
-ALIASES = ("projs", "prj")
+ALIASES = ("rtrs", "rtr")
 HELP = f"""
-    Projects related commands.\n
+    Routers related commands.\n
     Aliases: [i]{', '.join(ALIASES)}[/i]
 """
 
 proj_cmd = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
-    name="projects",
+    name="routers",
     help=HELP
 )
 for alias in ALIASES:
@@ -38,30 +38,38 @@ for alias in ALIASES:
         hidden=True
     )
 
-@proj_cmd.command(short_help="Create new project.\nAliases:[i] new")
+@proj_cmd.command(short_help="Create a new router.\nAliases:[i] new")
 @proj_cmd.command("new", hidden=True)
 def create(
     ctx: typer.Context,
-    project_name: Optional[str] = typer.Argument("", help="New project name"),
+    #project_name: Optional[str] = typer.Argument("", help="New project name"),
 ):
     """
-    Create new project in environment
+    Create a new router
 
     Aliases: [i] create, new
     """
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
+    port = 3017
+    stats_server_port = 9897
+    subscription_server_port = 5600
 
-    if not project_name:
-        default_project_name = randomname.get_name()
-        project_name = console.ask(
-            f"Project name?",
-            default=default_project_name,
-            validators=[ServiceNameValidator]
-        )
+    #if not project_name:
+    #    default_project_name = randomname.get_name()
+    #    project_name = console.ask(
+    #        f"Project name?",
+    #        default=default_project_name,
+    #        validators=[ServiceNameValidator]
+    #    )
 
-    #console.success(f"Project '{project_name}' was successfully created!")
-    project_up(client_config, project_name, f"project_{cuid()}")
+    https_router_up(
+        client_config, 
+        f"router_{cuid()}", 
+        f"127.0.0.1:{get_first_available_port(port=port)}",
+        f"127.0.0.1:{get_first_available_port(port=stats_server_port)}",
+        f"127.0.0.1:{get_first_available_port(port=subscription_server_port)}",  
+    )
 
 #@proj_cmd.command(short_help="Start project.\nAliases:[i] run")
 #@proj_cmd.command("run", hidden=True)

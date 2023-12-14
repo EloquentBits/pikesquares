@@ -83,7 +83,7 @@ class DeviceSection(Section):
         self.setup_loggers()
 
         #self.run_fastrouter()
-        self.run_httpsrouter()
+        #self.run_httpsrouter()
 
     def run_httpsrouter(self):
 

@@ -2,27 +2,27 @@ import os
 from typing import Optional
 
 import typer
-from tinydb import TinyDB, where
+from tinydb import TinyDB
 
-from pikesquares import (
-    HandlerFactory, 
-    get_service_status,
+from .. import (
+    get_service_status, 
+    device_up,
+    project_up,
 )
 from .console import console
 from ..conf import ClientConfig
 
-
 app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich")
 
-try:
-    import sentry_sdk
-except ImportError:
-    pass
-else:
-    sentry_sdk.init(
-        dsn="https://bbacdfaf17304b809e02b7ab39a64226@sentry.mirimus.com/17",
-        traces_sample_rate=1.0
-    )
+#try:
+#    import sentry_sdk
+#except ImportError:
+#    pass
+#else:
+#    sentry_sdk.init(
+#        dsn="https://bbacdfaf17304b809e02b7ab39a64226@sentry.mirimus.com/17",
+#        traces_sample_rate=1.0
+#    )
 
 
 @app.callback(invoke_without_command=True)
@@ -51,18 +51,20 @@ def main(
     obj = ctx.ensure_object(dict)
     obj["verbose"] = verbose
     obj["client_config"] = client_config
+    obj['db'] = TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}")
 
-    def get_project_db(project_name):
+    """
+    def get_project_db(project_uid):
         device_db = obj['device']
         projects = device_db.search(
-            (where('name') == project_name) &
+            (where('cuid') == project_cuid) &
             (where('type') == "Project")
         )
         if not projects:
             return
         project = projects[0]
         config_path = project.get('path')
-        return TinyDB(f"{config_path}/{project_name}.vconf-project")
+        return TinyDB(f"{config_path}/{project_uid}.json")
 
     def get_projects_db():
         device_db = obj['device']
@@ -70,8 +72,26 @@ def main(
             (where('type') == "Project")
         )
 
-    if 'device' not in obj:
-        obj['device'] = TinyDB(f"{client_config.CONFIG_DIR}/device-db.json")
+    def get_router_db(router_id):
+        device_db = obj['device']
+        routers = device_db.search(
+            (where('name') == router_id) &
+            (where('type') == "Router")
+        )
+        if not routers:
+            return
+        router = routers[0]
+        config_path = router.get('path')
+        return TinyDB(f"{config_path}/{router_id}.json")
+
+    def get_routers_db():
+        device_db = obj['device']
+        yield from device_db.search(
+            (where('type') == "Router")
+        )
+
+    #if 'device' not in obj:
+    #    obj['device'] = TinyDB(f"{client_config.DATA_DIR}/device-db.json")
 
     if 'project' not in obj:
         obj['project'] = get_project_db
@@ -79,6 +99,12 @@ def main(
     if 'projects' not in obj:
         obj['projects'] = get_projects_db
 
+    if 'router' not in obj:
+        obj['router'] = get_router_db
+    
+    if 'routers' not in obj:
+        obj['routers'] = get_routers_db
+    """
 
 @app.command(rich_help_panel="Control", short_help="Run device (if stopped)")
 def up(
@@ -97,12 +123,61 @@ def up(
         console.info("Your device is already running")
         return
 
-    device = HandlerFactory.make_handler("Device")(
-        service_id="device", 
+    device_up(client_config)
+
+    #for project_doc in db.table('projects'):
+    #    project_up(client_config, project_doc.service_id)
+
+    """
+    #routers = {p.get('name'): p.get('cuid') for p in obj['projects']()}
+    routers = obj['routers']()
+    #router_db = obj['router'](router_id)
+
+    if routers:
+        for router in routers:
+            device = HandlerFactory.make_handler("Https-Router")(
+                service_id=router_id, 
+                client_config=client_config,
+            )
+            device.prepare_service_config()
+            device.start()
+    else:
+        router_id = f"router_{cuid()}"
+        device_db = obj['device']
+        device_db.insert({
+            'cuid': router_id,
+            'type': "HttpsRouter",
+            #'path': str(project_dir.resolve())
+        })
+
+        router = HandlerFactory.make_handler("Https-Router")(
+            service_id=router_id, 
+            client_config=client_config,
+        )
+        router.prepare_service_config()
+        router.start()
+
+
+    proj_db = obj['project'](project_name)
+
+    project = HandlerFactory.make_handler("Project")(
+        service_id=project_id,
         client_config=client_config,
     )
-    device.prepare_service_config()
-    device.start()
+    proj_data = {
+        "cuid": project_id,
+        "name": project_name,
+        "path": str(project_dir.resolve()),
+        "apps": []
+    }
+    project.prepare_service_config()
+    proj_db.insert(proj_data)
+
+    project.connect()
+    project.start()
+
+    """
+
 
 
 @app.command(rich_help_panel="Control", short_help="Show logs of device")
@@ -133,6 +208,7 @@ def status(ctx: typer.Context):
     log_func(f"Device is [b]{status}[/b]")
 
 
+from .commands.routers import *
 from .commands.projects import *
 from .commands.apps import *
 

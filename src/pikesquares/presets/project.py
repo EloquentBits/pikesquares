@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from . import Section
 from ..conf import ClientConfig
+
 
 
 class ProjectSection(Section):
@@ -15,7 +18,6 @@ class ProjectSection(Section):
         )
         self.service_id = service_id
         self.client_config = client_config
-        # env = project.env
         self.set_runtime_dir(client_config.RUN_DIR)
 
         # plugins = [
@@ -35,7 +37,7 @@ class ProjectSection(Section):
         self.main_process.set_basic_params(
             vacuum=True,
             # place here correct emperor wrapper
-            #binary_path=str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
+            #binary_path=str((Path(self.client_config.DATA_DIR) / ".venv/bin/uwsgi").resolve())
         )
         self.main_process.set_owner_params(uid=client_config.UID, gid=client_config.GID)
 
@@ -52,9 +54,7 @@ class ProjectSection(Section):
         )
 
         self.setup_loggers()
-
-        self.run_fastrouter()
-
+        #self.run_fastrouter()
 
     def as_string(self):
         return self.as_configuration().print_ini()
