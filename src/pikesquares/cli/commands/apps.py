@@ -13,6 +13,7 @@ from pikesquares import (
     get_service_status,
     wsgi_app_up,
     projects_all,
+    apps_all,
 )
 from ..console import console
 from ..cli import app
@@ -154,21 +155,41 @@ def list_(
     client_config = obj.get("client_config")
 
     if not project:
-        available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
+        available_projects = {
+            p.get('name'): p.get('service_id') for p in projects_all(client_config)
+        }
         if not available_projects:
             console.warning(f"No projects were created, create at least one project first!")
             return
-        project = console.choose("Select project where you want to list apps", choices=available_projects)
+        project = console.choose(
+            "Select project where you want to list apps", 
+            choices=available_projects
+        )
     
-    project_db = obj['project'](project)
-    if not project_db:
-        console.warning(f"Project '{project}' not exists!")
-        return
-    apps = project_db.get(where('name') == project).get('apps')
-    for a in apps:
-        a.update({'status': get_service_status(a.get('cuid'), client_config)})
+    #project_db = obj['project'](project)
+    #if not project_db:
+    #    console.warning(f"Project '{project}' not exists!")
+    #    return
+    #apps = project_db.get(where('name') == project).get('apps')
+    #for a in apps:
+    #    a.update({'status': get_service_status(a.get('cuid'), client_config)})
 
-    console.print_response(apps, title=f"Apps in project '{project}'", show_id=show_id, exclude=['parent_id', 'options'])
+    apps_out = []
+    apps = apps_all(client_config)
+    for app in apps:
+        apps_out.append({
+            'name': app.get('name'),
+            'status': get_service_status(
+                app.get('service_id'), client_config) or "Unknown",
+            'id': app.get('service_id')
+        })
+
+    console.print_response(
+        apps_out, 
+        title=f"Apps in project '{project}'", 
+        show_id=show_id, 
+        exclude=['parent_id', 'options']
+    )
 
 
 @apps_cmd.command("logs", short_help="Show app logs")

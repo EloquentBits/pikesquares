@@ -11,6 +11,7 @@ from cuid import cuid
 from pikesquares import (
     get_service_status,
     project_up,
+    projects_all,
 )
 
 from ..console import console
@@ -18,7 +19,7 @@ from ..validators import ServiceNameValidator
 from ..cli import app
 
 
-ALIASES = ("projs", "prj")
+ALIASES = ("proj", "prj")
 HELP = f"""
     Projects related commands.\n
     Aliases: [i]{', '.join(ALIASES)}[/i]
@@ -63,6 +64,116 @@ def create(
     #console.success(f"Project '{project_name}' was successfully created!")
     project_up(client_config, project_name, f"project_{cuid()}")
 
+@app.command(
+    "projects",
+    rich_help_panel="Show",
+    short_help="Show all projects in specific environment.\nAliases:[i] projects, projects list"
+)
+@app.command("proj", rich_help_panel="Show", hidden=True)
+@proj_cmd.command("list")
+def list_(
+    ctx: typer.Context,
+    show_id: bool = False
+):
+    """
+    Show all projects on current device
+
+    Aliases:[i] projects, projects list
+    """
+    obj = ctx.ensure_object(dict)
+    client_config = obj.get('client_config')
+    projects = projects_all(client_config)
+    if not len(projects):
+        console.warning("No projects were initialized, nothing to show!")
+        return
+    
+    projects_out = []
+    for project in projects:
+        projects_out.append({
+            'name': project.get('name'),
+            'status': get_service_status(project.get('service_id'), client_config) or "Unknown",
+            'id': project.get('service_id')
+        })
+    console.print_response(
+        projects_out, title=f"Projects count: {len(projects)}", show_id=show_id
+    )
+
+@proj_cmd.command("logs")
+def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
+    obj = ctx.ensure_object(dict)
+    client_config = obj.get("client_config")
+
+    if not project_id:
+        available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
+        project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
+        project_id = available_projects.get(project_name)
+
+    status = get_service_status(f"{project_id}-emperor", client_config)
+
+    project_log_file = Path(f"{client_config.LOG_DIR}/{project_id}.log")
+    if project_log_file.exists() and project_log_file.is_file():
+        console.pager(
+            project_log_file.read_text(),
+            status_bar_format=f"{project_log_file.resolve()} (status: {status})"
+        )
+    else:
+        console.error(
+            f"Error:\nLog file {project_log_file} not exists!",
+            hint=f"Check the device log file for possible errors"
+        )
+
+
+@proj_cmd.command(short_help="Delete existing project by name or id\nAliases:[i] delete, rm")
+@proj_cmd.command("rm", hidden=True)
+def delete(
+    ctx: typer.Context,
+    project_name: Optional[str] = typer.Argument("", help="Name of project to remove"),
+):
+    """
+    Delete existing project by name or id
+
+    Aliases:[i] delete, rm
+    """
+    obj = ctx.ensure_object(dict)
+    client_config = obj.get("client_config")
+
+    device_db = obj['device']
+
+    projects_choices = {
+        k.get('name'): (k.get('cuid'), k.get('path'))
+        for k in device_db.search(where("type") == 'Project')
+    }
+    if not projects_choices:
+        console.warning("No projects were initialized, nothing to delete!")
+        return
+    
+    selected_project_name = project_name
+    if not selected_project_name:
+        selected_project_name = console.choose(
+            "Which project you want to delete?",
+            choices=projects_choices,
+        )
+
+    # rm project sources
+    selected_project_cuid, selected_project_path = projects_choices.get(selected_project_name)
+    if Path(selected_project_path).exists() and console.confirm(f"Are you sure you want to delete: {selected_project_path}"):
+        shutil.rmtree(selected_project_path)
+
+    # rm project configs
+    selected_project_config_path = Path(client_config.CONFIG_DIR) / selected_project_cuid
+    selected_project_config_path.with_suffix('.json').unlink(missing_ok=True)
+    if Path(selected_project_config_path).exists():
+        shutil.rmtree(str(selected_project_config_path.resolve()))
+
+    # rm project runtimes
+    for file in Path(client_config.RUN_DIR).iterdir():
+        if selected_project_cuid in str(file.resolve()):
+            file.unlink(missing_ok=True)
+
+    # rm project from db
+    device_db.remove(where('cuid') == selected_project_cuid)
+
+    console.success(f"Removed project '{selected_project_name}'!")
 #@proj_cmd.command(short_help="Start project.\nAliases:[i] run")
 #@proj_cmd.command("run", hidden=True)
 #def start(
@@ -157,131 +268,5 @@ def create(
     #project.connect()
     #project.stop()
     #console.success(f"Project '{project_name}' was successfully stopped!")
-
-
-@app.command(
-    "projects",
-    rich_help_panel="Show",
-    short_help="Show all projects in specific environment.\nAliases:[i] projects, projects list"
-)
-@app.command("proj", rich_help_panel="Show", hidden=True)
-@proj_cmd.command("list")
-def list_(
-    ctx: typer.Context,
-    show_id: bool = False
-):
-    """
-    Show all projects on current device
-
-    Aliases:[i] projects, projects list
-    """
-
-    obj = ctx.ensure_object(dict)
-    client_config = obj.get('client_config')
-    #device_db = obj['device']
-    #show_fields = ['name', 'path', 'status', 'cuid']
-    #for x in device_db:
-    #    print(x)
-    #projects = [
-    #    {k: v for k, v in e.items() if k in show_fields}
-    #    for e in device_db
-    #]
-
-    projects_table = obj['db'].table('projects')
-    projects = []
-    projects_count = len(projects_table.all())
-    if not projects_count:
-        console.warning("No projects were initialized, nothing to show!")
-        return
-    
-    for project in projects_table.all():
-        projects.append({
-            'name': project.get('name'),
-            'status': get_service_status(project.get('service_id'), client_config) or "Unknown",
-            'id': project.get('service_id')
-        })
-    
-    console.print_response(
-        projects, title=f"Projects count: {projects_count}", show_id=show_id
-    )
-
-
-@proj_cmd.command("logs")
-def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
-    obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
-
-    if not project_id:
-        available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
-        project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
-        project_id = available_projects.get(project_name)
-
-    status = get_service_status(f"{project_id}-emperor", client_config)
-
-    project_log_file = Path(f"{client_config.LOG_DIR}/{project_id}.log")
-    if project_log_file.exists() and project_log_file.is_file():
-        console.pager(
-            project_log_file.read_text(),
-            status_bar_format=f"{project_log_file.resolve()} (status: {status})"
-        )
-    else:
-        console.error(
-            f"Error:\nLog file {project_log_file} not exists!",
-            hint=f"Check the device log file for possible errors"
-        )
-
-
-@proj_cmd.command(short_help="Delete existing project by name or id\nAliases:[i] delete, rm")
-@proj_cmd.command("rm", hidden=True)
-def delete(
-    ctx: typer.Context,
-    project_name: Optional[str] = typer.Argument("", help="Name of project to remove"),
-):
-    """
-    Delete existing project by name or id
-
-    Aliases:[i] delete, rm
-    """
-    obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
-
-    device_db = obj['device']
-
-    projects_choices = {
-        k.get('name'): (k.get('cuid'), k.get('path'))
-        for k in device_db.search(where("type") == 'Project')
-    }
-    if not projects_choices:
-        console.warning("No projects were initialized, nothing to delete!")
-        return
-    
-    selected_project_name = project_name
-    if not selected_project_name:
-        selected_project_name = console.choose(
-            "Which project you want to delete?",
-            choices=projects_choices,
-        )
-
-    # rm project sources
-    selected_project_cuid, selected_project_path = projects_choices.get(selected_project_name)
-    if Path(selected_project_path).exists() and console.confirm(f"Are you sure you want to delete: {selected_project_path}"):
-        shutil.rmtree(selected_project_path)
-
-    # rm project configs
-    selected_project_config_path = Path(client_config.CONFIG_DIR) / selected_project_cuid
-    selected_project_config_path.with_suffix('.json').unlink(missing_ok=True)
-    if Path(selected_project_config_path).exists():
-        shutil.rmtree(str(selected_project_config_path.resolve()))
-
-    # rm project runtimes
-    for file in Path(client_config.RUN_DIR).iterdir():
-        if selected_project_cuid in str(file.resolve()):
-            file.unlink(missing_ok=True)
-
-    # rm project from db
-    device_db.remove(where('cuid') == selected_project_cuid)
-
-    console.success(f"Removed project '{selected_project_name}'!")
-
 
 app.add_typer(proj_cmd)

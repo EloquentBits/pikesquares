@@ -360,7 +360,6 @@ class ProjectService(Handler):
             self.config_name.encode(),
         ])
 
-
 def project_up(client_config: ClientConfig, name: str, service_id:str) -> None:
     project = HandlerFactory.make_handler("Project")(
         service_id=service_id, 
@@ -370,12 +369,12 @@ def project_up(client_config: ClientConfig, name: str, service_id:str) -> None:
     project.connect()
     project.start()
 
-
 def projects_all(client_config: ClientConfig):
-
     with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
         projects_db = db.table('projects')
         return projects_db.all()
+
+
 
 @HandlerFactory.register('Https-Router')
 class HttpsRouterService(Handler):
@@ -595,9 +594,9 @@ class WsgiAppService(Handler):
 
             print("Updating aps db.")
             apps_db = db.table('apps')
-            apps_db.upsert(
-                {
+            apps_db.upsert({
                     'service_type': self.handler_name, 
+                    'name': self.name, 
                     'service_id': self.service_id,
                     'project_id': self.project_id,
                     'service_config': self.config_json,
@@ -705,4 +704,8 @@ def wsgi_app_up(
     app.connect()
     app.start()
 
+def apps_all(client_config: ClientConfig):
+    with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
+        apps_db = db.table('apps')
+        return apps_db.all()
 
