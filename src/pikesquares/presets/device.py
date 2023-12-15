@@ -43,6 +43,10 @@ class DeviceSection(Section):
             #binary_path=str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
         )
         self.main_process.set_owner_params(uid=client_config.UID, gid=client_config.GID)
+        self.main_process.set_naming_params(
+            prefix=f"[[ Pike Squares App {service_id} ]] ",
+            autonaming=True
+        )
 
         #self.set_placeholder("vconf_run_dir", self.runtime_dir)
         self.main_process.set_pid_file(

@@ -97,6 +97,7 @@ def read_stats(stats_addr):
         uwsgi.log("unable to get stats")
     else:
         try:
+            print(js)
             return json.loads(js)
         except json.JSONDecodeError:
             pass
@@ -287,13 +288,16 @@ def device_up(client_config: ClientConfig) -> None:
 @HandlerFactory.register('Project')
 class ProjectService(Handler):
 
-    is_internal = True
-    is_enabled = True
+    name: str
+    is_internal: bool = True
+    is_enabled: bool = True
 
     zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
     config_json = {}
 
     def prepare_service_config(self, name: str):
+        self.name = name
+
         with TinyDB(f"{Path(self.client_config.DATA_DIR) / 'device-db.json'}") as db:
             self.service_config = Path(self.client_config.CONFIG_DIR) / f"{self.service_id}.json"
             empjs = json.loads(ProjectSection(
@@ -326,7 +330,7 @@ class ProjectService(Handler):
                     'service_type': self.handler_name, 
                     'service_id': self.service_id,
                     'service_config': self.config_json,
-                    'name': name,
+                    'name': self.name,
                 },
                 Query().service_id == self.service_id,
             )
@@ -361,6 +365,7 @@ class ProjectService(Handler):
         ])
 
 def project_up(client_config: ClientConfig, name: str, service_id:str) -> None:
+    print(f'Starting {service_id}')
     project = HandlerFactory.make_handler("Project")(
         service_id=service_id, 
         client_config=client_config,
@@ -373,6 +378,13 @@ def projects_all(client_config: ClientConfig):
     with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
         projects_db = db.table('projects')
         return projects_db.all()
+
+def get_project(client_config: ClientConfig, project_id):
+    with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
+        return db.table('projects').\
+            get(Query().service_id == project_id)
+
+
 
 
 
@@ -388,13 +400,21 @@ class HttpsRouterService(Handler):
     def prepare_service_config(
             self, 
             address: str, 
-            stats_server_address: str,
-            subscription_server_address: str,
             ) -> None:
 
-        cert = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2.pem"
-        cert_key = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2-key.pem"
-        client_ca = "/home/pk/.local/share/mkcert/rootCA.pem"
+        #cert = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2.pem"
+        #cert_key = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2-key.pem"
+        #client_ca = "/home/pk/.local/share/mkcert/rootCA.pem"
+
+        cert = "/home/pk/dev/eqb/pikesquares/easy-rsa/pki/issued/_wildcard.pikesquares.dev.crt"
+        cert_key = "/home/pk/dev/eqb/pikesquares/easy-rsa/pki/private/_wildcard.pikesquares.dev.key"
+        client_ca = "/home/pk/dev/eqb/pikesquares/easy-rsa/pki/ca.crt"
+
+        stats_server_port = 9897
+        subscription_server_port = 5600
+        stats_server_address = f"127.0.0.1:{get_first_available_port(port=stats_server_port)}"
+        subscription_server_address = f"127.0.0.1:{get_first_available_port(port=subscription_server_port)}"
+
         section = HttpsRouterSection(
             self.service_id,
             self.client_config,
@@ -424,7 +444,7 @@ class HttpsRouterService(Handler):
                 {
                     'service_type': self.handler_name, 
                     'service_id': self.service_id,
-                    'address': self.address,
+                    'address': address,
                     'service_config': self.config_json,
                 },
                 Query().service_id == self.service_id,
@@ -490,20 +510,19 @@ def https_router_up(
         client_config: ClientConfig, 
         service_id:str, 
         address: str,
-        stats_server_address: str,
-        subscription_server_address: str,
         ) -> None:
     https_router = HandlerFactory.make_handler("Https-Router")(
         client_config=client_config,
         service_id=service_id, 
     )
-    https_router.prepare_service_config(
-        address, 
-        stats_server_address, 
-        subscription_server_address,
-    )
+    https_router.prepare_service_config(address)
     https_router.connect()
     https_router.start()
+
+def https_routers_all(client_config: ClientConfig):
+    with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
+        routers_db = db.table('routers')
+        return routers_db.all()
 
 
 
@@ -527,7 +546,6 @@ class WsgiAppService(Handler):
     name: str
     service_id: str
     project_id: str
-    root_dir: str
     pyvenv_dir: str
     wsgi_file: str = ""
     wsgi_module: str = ""
@@ -547,50 +565,33 @@ class WsgiAppService(Handler):
         self.name = name
         self.service_id = service_id
         self.project_id = project_id
-        self.root_dir = app_options.get('root_dir')
         self.service_config = Path(self.client_config.CONFIG_DIR) / \
                 f"{self.project_id}" / "apps" \
                 / f"{self.name}.json"
 
-        wsgi_app_opts = dict(
-
-            pyvenv_dir=app_options.get(
-                'pyvenv_dir', self.default_options.get('pyvenv_dir')
-            ).format(root_dir=self.root_dir),
-
-            wsgi_file=app_options.get(
-                'wsgi_file', 
-                self.default_options.get('wsgi_file')
-            ).format(root_dir=self.root_dir),
-
-            wsgi_module=app_options.get(
-                'wsgi_module', self.default_options.get('wsgi_module')
-            ),
-        )
-
         self.prepare_virtual_hosts()
 
-        section = WsgiAppSection(
-            self.client_config,
-            self.name,
-            self.service_id,
-            self.project_id,
-            self.root_dir,
-            virtual_hosts=self.virtual_hosts,
-            **wsgi_app_opts
-        ).as_configuration().format(formatter="json")
-        self.config_json = json.loads(section)
-
-        self.config_json["uwsgi"]["show-config"] = True
-        self.config_json["uwsgi"]["strict"] = False
-        # print(f"{wsgi_app_opts=}")
-        # print(f"wsgi app {self.config_json=}")
-        #empjs["uwsgi"]["plugin"] = "emperor_zeromq"
-
-        print(self.config_json)
-        self.service_config.write_text(json.dumps(self.config_json))
-
         with TinyDB(f"{Path(self.client_config.DATA_DIR) / 'device-db.json'}") as db:
+            routers_db = db.table('routers')
+            router = routers_db.get(Query().service_id == app_options.get('router_id'))
+            subscription_server_address = router.get('service_config')['uwsgi']['http-subscription-server']
+
+            section = WsgiAppSection(
+                self.client_config,
+                self.name,
+                self.service_id,
+                self.project_id,
+                subscription_server_address,
+                virtual_hosts=self.virtual_hosts,
+                **app_options
+            ).as_configuration().format(formatter="json")
+            self.config_json = json.loads(section)
+
+            self.config_json["uwsgi"]["show-config"] = True
+            self.config_json["uwsgi"]["strict"] = False
+
+            print(self.config_json)
+            self.service_config.write_text(json.dumps(self.config_json))
 
             print("Updating aps db.")
             apps_db = db.table('apps')
@@ -651,6 +652,11 @@ class WsgiAppService(Handler):
                 self.service_config.removesuffix(".stopped")
             )
 
+        if not get_service_status(self.project_id, self.client_config) == "running":
+            project = get_project(self.client_config, self.project_id)
+            if project:
+                project_up(self.client_config, project.get('name'), self.project_id)
+
         Path(self.service_config).parent.mkdir(parents=True, exist_ok=True)
         self.service_config.write_text(json.dumps(self.config_json))
 
@@ -686,8 +692,8 @@ class WsgiAppService(Handler):
 def wsgi_app_up(
         client_config: ClientConfig, 
         name: str, 
-        project_id:str,
-        service_id:str,
+        project_id: str,
+        service_id: str,
         **app_options
     ) -> None:
 

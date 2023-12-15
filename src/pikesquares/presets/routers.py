@@ -76,7 +76,7 @@ class BaseRouterHttps(_RouterHttp):
 
 
 class HttpsRouterSection(Section):
-    router_name = "[[ PikeSquares/HTTPS Router ]]"
+    router_name = "[[ Pike Squares App / HTTPS Router ]]"
 
     def __init__(
         self,
@@ -113,7 +113,7 @@ class HttpsRouterSection(Section):
         #)
         self.main_process.set_owner_params(uid=client_config.UID, gid=client_config.GID)
         self.main_process.set_naming_params(
-            prefix=f"{self.router_name} ",
+            prefix=f"{self.router_name} {self.service_id} ",
             autonaming=True
         )
 
@@ -121,13 +121,13 @@ class HttpsRouterSection(Section):
         # if host in ('0.0.0.0', '127.0.0.1'):
         #     address = f":{port}"
         
-        if resubscribe_to:
-            address = "=0"
-            self.networking.register_socket(
-                self.networking.sockets.shared(
-                    address="0.0.0.0:3435"
-                )
-            )
+        #if resubscribe_to:
+        #    address = "=0"
+        #    self.networking.register_socket(
+        #        self.networking.sockets.shared(
+        #            address="0.0.0.0:3435"
+        #        )
+        #    )
 
         # https = =0,
         #           ssl/test-gen/server.crt,
@@ -141,8 +141,13 @@ class HttpsRouterSection(Section):
         #       key=/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2-key.pem,
         #       addr=127.0.0.1:3020",
 
+        self.networking.register_socket(
+            self.networking.sockets.shared(
+                address=address
+            )
+        )
         self.router = BaseRouterHttps(
-            address,
+            "=0",
             cert=certificate_path,
             key=certificate_key,
             forward_to=BaseRouterHttps.forwarders.subscription_server(
@@ -185,7 +190,7 @@ class HttpsRouterSection(Section):
 
 
 class HttpRouterSection(Section):
-    router_name = "[[ PikeSquares/HTTP Router ]]"
+    router_name = "[[ Pike Squares App / HTTP Router ]]"
 
     def __init__(
         self,

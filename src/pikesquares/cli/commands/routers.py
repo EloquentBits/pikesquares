@@ -4,17 +4,17 @@ import shutil
 
 import typer
 from tinydb import where
-import randomname
 
 from cuid import cuid
 
 from pikesquares import (
     get_service_status,
     https_router_up,
+    https_routers_all,
     get_first_available_port,
 )
 from ..console import console
-from ..validators import ServiceNameValidator
+#from ..validators import ServiceNameValidator
 from ..cli import app
 
 
@@ -24,7 +24,7 @@ HELP = f"""
     Aliases: [i]{', '.join(ALIASES)}[/i]
 """
 
-proj_cmd = typer.Typer(
+routers_cmd = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
     name="routers",
@@ -32,14 +32,14 @@ proj_cmd = typer.Typer(
 )
 for alias in ALIASES:
     app.add_typer(
-        proj_cmd,
+        routers_cmd,
         name=alias,
         help=HELP,
         hidden=True
     )
 
-@proj_cmd.command(short_help="Create a new router.\nAliases:[i] new")
-@proj_cmd.command("new", hidden=True)
+@routers_cmd.command(short_help="Create a new router.\nAliases:[i] new")
+@routers_cmd.command("new", hidden=True)
 def create(
     ctx: typer.Context,
     #project_name: Optional[str] = typer.Argument("", help="New project name"),
@@ -52,8 +52,6 @@ def create(
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
     port = 3017
-    stats_server_port = 9897
-    subscription_server_port = 5600
 
     #if not project_name:
     #    default_project_name = randomname.get_name()
@@ -63,12 +61,14 @@ def create(
     #        validators=[ServiceNameValidator]
     #    )
 
+    port = console.ask(
+        f"Enter the port for the Https Router:",
+        default=str(get_first_available_port(port=8443)),
+    )
     https_router_up(
         client_config, 
         f"router_{cuid()}", 
-        f"127.0.0.1:{get_first_available_port(port=port)}",
-        f"127.0.0.1:{get_first_available_port(port=stats_server_port)}",
-        f"127.0.0.1:{get_first_available_port(port=subscription_server_port)}",  
+        f"0.0.0.0:{port}",
     )
 
 #@proj_cmd.command(short_help="Start project.\nAliases:[i] run")
@@ -168,12 +168,12 @@ def create(
 
 
 @app.command(
-    "projects",
+    "routers",
     rich_help_panel="Show",
-    short_help="Show all projects in specific environment.\nAliases:[i] projects, projects list"
+    short_help="Show all routers.\nAliases:[i] routers, routers list"
 )
-@app.command("proj", rich_help_panel="Show", hidden=True)
-@proj_cmd.command("list")
+@app.command("routers", rich_help_panel="Show", hidden=True)
+@routers_cmd.command("list")
 def list_(
     ctx: typer.Context,
     show_id: bool = False
@@ -186,35 +186,23 @@ def list_(
 
     obj = ctx.ensure_object(dict)
     client_config = obj.get('client_config')
-    #device_db = obj['device']
-    #show_fields = ['name', 'path', 'status', 'cuid']
-    #for x in device_db:
-    #    print(x)
-    #projects = [
-    #    {k: v for k, v in e.items() if k in show_fields}
-    #    for e in device_db
-    #]
-
-    projects_table = obj['db'].table('projects')
-    projects = []
-    projects_count = len(projects_table.all())
-    if not projects_count:
-        console.warning("No projects were initialized, nothing to show!")
+    routers = https_routers_all(client_config)
+    if not len(routers):
+        console.warning("No routers were created, nothing to show!")
         return
     
-    for project in projects_table.all():
-        projects.append({
-            'name': project.get('name'),
-            'status': get_service_status(project.get('service_id'), client_config) or "Unknown",
-            'id': project.get('service_id')
+    routers_out = []
+    for router in routers:
+        routers_out.append({
+            'name': router.get('name'),
+            'status': get_service_status(router.get('service_id'), client_config) or "Unknown",
+            'id': router.get('service_id')
         })
-    
     console.print_response(
-        projects, title=f"Projects count: {projects_count}", show_id=show_id
+        routers_out, title=f"Routers count: {len(routers)}", show_id=show_id
     )
 
-
-@proj_cmd.command("logs")
+@routers_cmd.command("logs")
 def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
@@ -239,11 +227,11 @@ def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
         )
 
 
-@proj_cmd.command(short_help="Delete existing project by name or id\nAliases:[i] delete, rm")
-@proj_cmd.command("rm", hidden=True)
+@routers_cmd.command(short_help="Delete router by name or id\nAliases:[i] delete, rm")
+@routers_cmd.command("rm", hidden=True)
 def delete(
     ctx: typer.Context,
-    project_name: Optional[str] = typer.Argument("", help="Name of project to remove"),
+    project_name: Optional[str] = typer.Argument("", help="Name of router to remove"),
 ):
     """
     Delete existing project by name or id
@@ -292,4 +280,4 @@ def delete(
     console.success(f"Removed project '{selected_project_name}'!")
 
 
-app.add_typer(proj_cmd)
+app.add_typer(routers_cmd)

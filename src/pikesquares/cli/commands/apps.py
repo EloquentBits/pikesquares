@@ -11,9 +11,11 @@ from cuid import cuid
 from pikesquares import (
     HandlerFactory, 
     get_service_status,
+    get_first_available_port,
     wsgi_app_up,
     projects_all,
     apps_all,
+    https_routers_all,
 )
 from ..console import console
 from ..cli import app
@@ -118,8 +120,19 @@ def create(
     #"/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/src/simple_wsgi_app/simple_app.py"
     app_options["wsgi_module"] = wsgi_module
 
+
+    available_routers = {
+        p.get('address'): p.get('service_id') for p in https_routers_all(client_config)
+    }
+    router_address = console.choose("Select router for your app:", choices=available_routers)
+    router_id = available_routers.get(router_address)
+    #print(f"Selected Https Routers: {router_id} running on: {router_address}")
+    app_options["router_id"] = router_id
+
+    port = str(get_first_available_port(port=7080))
+    app_options['socket_address'] = f"127.0.0.1:${port}"
+
     print(app_options)
-    return
 
     wsgi_app_up(
         client_config,
