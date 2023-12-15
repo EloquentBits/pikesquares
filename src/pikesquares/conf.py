@@ -64,7 +64,7 @@ class ClientConfig(BaseSettings):
     PLUGINS_DIR: str = str((Path(DATA_DIR) / "plugins").resolve())
     VENV_DIR: str = os.environ.get("VIRTUAL_ENV", "")
 
-    SSL_DIR: str = str((Path(DATA_DIR) / "ssl").resolve())  # check the paths are the same in install/uninstall scripts
+    PKI_DIR: str = str((Path(DATA_DIR) / "pki").resolve())  # check the paths are the same in install/uninstall scripts
 
     EMPEROR_ZMQ_ADDRESS: str = "127.0.0.1:5250"
 

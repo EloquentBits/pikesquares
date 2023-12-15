@@ -3,7 +3,7 @@ from pathlib import Path
 from . import (
     Section, 
 )
-from .routers import BaseRouterHttps
+#from .routers import BaseRouterHttps
 from ..conf import ClientConfig
 
 
@@ -96,70 +96,69 @@ class DeviceSection(Section):
         #self.run_fastrouter()
         #self.run_httpsrouter()
 
-    def run_httpsrouter(self):
+    #def run_httpsrouter(self):
+    #    fw = self.routing.routers.https.forwarders.subscription_server(
+    #        address=self.client_config.HTTPS_ROUTER_SUBSCRIPTION_SERVER
+    #    )
+    #    print(f"{self.client_config.CERT=}")
+    #    print(f"{self.client_config.CERT_KEY=}")
 
-        fw = self.routing.routers.https.forwarders.subscription_server(
-            address=self.client_config.HTTPS_ROUTER_SUBSCRIPTION_SERVER
-        )
-        print(f"{self.client_config.CERT=}")
-        print(f"{self.client_config.CERT_KEY=}")
+    #    https_router = BaseRouterHttps(
+    #        on=self.client_config.HTTPS_ROUTER,
+    #        forward_to=fw,
+    #        cert=self.client_config.CERT,
+    #        key=self.client_config.CERT_KEY,
+    #    )
+    #    https_router.set_basic_params(
+    #        stats_server=self.client_config.HTTPS_ROUTER_STATS,
+    #        quiet=False,
+    #        keepalive=5,
+    #        #resubscribe_addresses=resubscribe_to
+    #    )
+    #    https_router.set_connections_params(
+    #        timeout_socket=500,
+    #        timeout_headers=10,
+    #        timeout_backend=60,
+    #    )
+    #    https_router.set_manage_params(
+    #        chunked_input=True,
+    #        rtsp=True,
+    #        source_method=True
+    #    )
+    #    self.routing.use_router(https_router)
 
-        https_router = BaseRouterHttps(
-            on=self.client_config.HTTPS_ROUTER,
-            forward_to=fw,
-            cert=self.client_config.CERT,
-            key=self.client_config.CERT_KEY,
-        )
-        https_router.set_basic_params(
-            stats_server=self.client_config.HTTPS_ROUTER_STATS,
-            quiet=False,
-            keepalive=5,
-            #resubscribe_addresses=resubscribe_to
-        )
-        https_router.set_connections_params(
-            timeout_socket=500,
-            timeout_headers=10,
-            timeout_backend=60,
-        )
-        https_router.set_manage_params(
-            chunked_input=True,
-            rtsp=True,
-            source_method=True
-        )
-        self.routing.use_router(https_router)
+    #def run_fastrouter(self):
+    #    """
+    #    Run FastRouter for Device.
+    #    """
 
-    def run_fastrouter(self):
-        """
-        Run FastRouter for Device.
-        """
-
-        runtime_dir = self.get_runtime_dir()
-        #resubscribe_bind_to = "" #127.0.0.1:3069"
-        fastrouter_cls = self.routing.routers.fast
-        fastrouter = fastrouter_cls(
-            on=str(Path(runtime_dir) / "FastRouter.sock"),
-            forward_to=fastrouter_cls.forwarders.subscription_server(
-                address=str(Path(runtime_dir) / "SubscriptionServer.sock"),
-            ),
-        )
-        fastrouter.set_basic_params(
-            stats_server=str(Path(runtime_dir) / "FastRouter-stats.sock"),
-            cheap_mode=True,
-            quiet=False,
-            buffer_size=8192,
-            #gracetime=30,
-        )
-        fastrouter.set_connections_params(retry_delay=30)
-        #if resubscribe_to and resubscribe_to not in subscription_server_address:
-        fastrouter.set_resubscription_params(
-            addresses=str(Path(runtime_dir) / f"SubscriptionServer.sock"),
-            #bind_to=resubscribe_bind_to
-        )
-        fastrouter.set_owner_params(
-            uid=self.client_config.UID, 
-            gid=self.client_config.GID,
-        )
-        self.routing.use_router(fastrouter)
+    #    runtime_dir = self.get_runtime_dir()
+    #    #resubscribe_bind_to = "" #127.0.0.1:3069"
+    #    fastrouter_cls = self.routing.routers.fast
+    #    fastrouter = fastrouter_cls(
+    #        on=str(Path(runtime_dir) / "FastRouter.sock"),
+    #        forward_to=fastrouter_cls.forwarders.subscription_server(
+    #            address=str(Path(runtime_dir) / "SubscriptionServer.sock"),
+    #        ),
+    #    )
+    #    fastrouter.set_basic_params(
+    #        stats_server=str(Path(runtime_dir) / "FastRouter-stats.sock"),
+    #        cheap_mode=True,
+    #        quiet=False,
+    #        buffer_size=8192,
+    #        #gracetime=30,
+    #    )
+    #    fastrouter.set_connections_params(retry_delay=30)
+    #    #if resubscribe_to and resubscribe_to not in subscription_server_address:
+    #    fastrouter.set_resubscription_params(
+    #        addresses=str(Path(runtime_dir) / f"SubscriptionServer.sock"),
+    #        #bind_to=resubscribe_bind_to
+    #    )
+    #    fastrouter.set_owner_params(
+    #        uid=self.client_config.UID, 
+    #        gid=self.client_config.GID,
+    #    )
+    #    self.routing.use_router(fastrouter)
 
     def setup_loggers(self):
         self.logging.add_logger(

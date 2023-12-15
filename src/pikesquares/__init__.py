@@ -402,13 +402,19 @@ class HttpsRouterService(Handler):
             address: str, 
             ) -> None:
 
-        #cert = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2.pem"
-        #cert_key = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2-key.pem"
-        #client_ca = "/home/pk/.local/share/mkcert/rootCA.pem"
 
-        cert = "/home/pk/dev/eqb/pikesquares/easy-rsa/pki/issued/_wildcard.pikesquares.dev.crt"
-        cert_key = "/home/pk/dev/eqb/pikesquares/easy-rsa/pki/private/_wildcard.pikesquares.dev.key"
-        client_ca = "/home/pk/dev/eqb/pikesquares/easy-rsa/pki/ca.crt"
+        def https_router_provision_cert():
+            pass
+
+        https_router_provision_cert()
+    
+        cert = (Path(self.client_config.PKI_DIR) / "issued" / "_wildcard.pikesquares.dev.crt").resolve()
+        cert_key = (Path(self.client_config.PKI_DIR) / "private" / "_wildcard.pikesquares.dev.key").resolve()
+        client_ca = (Path(self.client_config.PKI_DIR) / "ca.crt").resolve()
+
+        assert cert.exists(), "cert missing"
+        assert cert_key.exists(), "key missing"
+        assert client_ca.exists(), "CA cert missing"
 
         stats_server_port = 9897
         subscription_server_port = 5600
@@ -421,9 +427,9 @@ class HttpsRouterService(Handler):
             address,
             stats_server_address,
             subscription_server_address,
-            cert,
-            cert_key,
-            client_ca,
+            str(cert),
+            str(cert_key),
+            str(client_ca),
         )
         self.config_json = json.loads(
                 section.as_configuration().format(formatter="json"))
@@ -450,7 +456,8 @@ class HttpsRouterService(Handler):
                 Query().service_id == self.service_id,
             )
             print("Done updating routers db.")
-    
+
+
     def connect(self):
         print(f"Connecting to zmq emperor  {self.client_config.EMPEROR_ZMQ_ADDRESS}")
         self.zmq_socket.connect(f"tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}")

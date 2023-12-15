@@ -146,8 +146,10 @@ class HttpsRouterSection(Section):
                 address=address
             )
         )
+        # FIXME for when port is lower than the default on the cli
+        ssl_context = f"={(int(address.split(':')[-1]) - 8443)}"
         self.router = BaseRouterHttps(
-            "=0",
+            ssl_context ,
             cert=certificate_path,
             key=certificate_key,
             forward_to=BaseRouterHttps.forwarders.subscription_server(
