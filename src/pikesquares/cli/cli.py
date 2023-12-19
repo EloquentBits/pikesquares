@@ -115,7 +115,10 @@ def main(
 @app.command(rich_help_panel="Control", short_help="Run device (if stopped)")
 def up(
     ctx: typer.Context, 
-    foreground: Optional[bool] = typer.Option(True, help="Run in foreground.")
+    foreground: Optional[bool] = typer.Option(
+        True, 
+        help="Run in foreground."
+    )
 ):
     """ Start all services """
 

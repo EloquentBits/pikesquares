@@ -42,16 +42,16 @@ class DeviceSection(Section):
             # place here correct emperor wrapper
             #binary_path=str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
         )
-        self.main_process.set_owner_params(uid=client_config.UID, gid=client_config.GID)
+        self.main_process.set_owner_params(uid=client_config.RUN_AS_UID, gid=client_config.RUN_AS_GID)
         self.main_process.set_naming_params(
-            prefix=f"[[ Pike Squares App {service_id} ]] ",
+            prefix=f"[[ PikeSquares App ]] ",
             autonaming=True
         )
 
         #self.set_placeholder("vconf_run_dir", self.runtime_dir)
-        self.main_process.set_pid_file(
-            str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve())
-        )
+        #self.main_process.set_pid_file(
+        #    str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve())
+        #)
         
         if self.client_config.DAEMONIZE:
             self.main_process.daemonize(
@@ -71,8 +71,8 @@ class DeviceSection(Section):
 
         self.empire.set_emperor_params(
             vassals_home = f"zmq://tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}",
-            name=f"Pike Squares Device",
-            pid_file=str((Path(client_config.RUN_DIR) / f"emperor-{self.service_id}.pid").resolve()),
+            name=f"PikeSquares App",
+            #pid_file=str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve()),
             spawn_asap=True,
             stats_address=str(Path(self._runtime_dir) / f"{service_id}-stats.sock"),
         )
@@ -155,8 +155,8 @@ class DeviceSection(Section):
     #        #bind_to=resubscribe_bind_to
     #    )
     #    fastrouter.set_owner_params(
-    #        uid=self.client_config.UID, 
-    #        gid=self.client_config.GID,
+    #        uid=self.client_config.RUN_AS_UID, 
+    #        gid=self.client_config.RUN_AS_GID,
     #    )
     #    self.routing.use_router(fastrouter)
 

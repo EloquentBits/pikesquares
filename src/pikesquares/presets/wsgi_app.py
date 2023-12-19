@@ -168,7 +168,7 @@ class WsgiAppSection(BaseWsgiAppSection):
         require_app = True
         embedded_plugins = self.embedded_plugins_presets.BASIC + ['python', 'python2', 'python3']
 
-        owner = f"{client_config.UID}:{client_config.GID}"
+        owner = f"{client_config.RUN_AS_UID}:{client_config.RUN_AS_GID}"
 
         super().__init__(
             name='uwsgi', 

@@ -37,11 +37,10 @@ current_user: str = pwd.getpwuid(os.getuid()).pw_name
 
 class ClientConfig(BaseSettings):
 
-
     model_config = SettingsConfigDict(env_file='pikesquares.conf', env_file_encoding='utf-8')
 
-    UID: str = "pikesquares"
-    GID: str = "pikesquares"
+    RUN_AS_UID: str = "pikesquares"
+    RUN_AS_GID: str = "pikesquares"
     APP_NAME: str = "pikesquares"
 
     DEBUG: bool = False

@@ -93,7 +93,7 @@ class ManagedServiceSection(Section):
         super().__init__(
             name="uwsgi",
             runtime_dir=client_config.RUN_DIR,
-            owner=f"{client_config.UID}:{client_config.GID}",
+            owner=f"{client_config.RUN_AS_UID}:{client_config.RUN_AS_GID}",
             touch_reload=str(
                 (Path(client_config.CONFIG_DIR) / f"{project_id}" / "apps" / f"{service_id}.json").resolve()
             )
@@ -148,7 +148,7 @@ class CronJobSection(Section):
         super().__init__(
             name="uwsgi",
             runtime_dir=client_config.RUN_DIR,
-            owner=f"{client_config.UID}:{client_config.GID}"
+            owner=f"{client_config.RUN_AS_UID}:{client_config.RUN_AS_GID}"
         )
         if env_vars is not None:
             self._setup_environment_variables(env_vars)

@@ -111,7 +111,7 @@ class HttpsRouterSection(Section):
         #self.main_process.set_basic_params(
         #    touch_reload="/srv/uwsgi/%n.http-router.ini"
         #)
-        self.main_process.set_owner_params(uid=client_config.UID, gid=client_config.GID)
+        self.main_process.set_owner_params(uid=client_config.RUN_AS_UID, gid=client_config.RUN_AS_GID)
         self.main_process.set_naming_params(
             prefix=f"{self.router_name} {self.service_id} ",
             autonaming=True
