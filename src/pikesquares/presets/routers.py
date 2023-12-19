@@ -1,7 +1,11 @@
+from pathlib import Path
+
 from uwsgiconf.options.routing_routers import RouterHttp as _RouterHttp
 from uwsgiconf.utils import filter_locals, KeyValue
 
 from . import Section
+
+from ..conf import ClientConfig
 
 
 class BaseRouterHttps(_RouterHttp):
@@ -71,50 +75,45 @@ class BaseRouterHttps(_RouterHttp):
 
 
 
-
-
 class HttpsRouterSection(Section):
-    router_name = "[[ PikeSquares/HTTPS Router ]]"
+    router_name = "[[ Pike Squares App / HTTPS Router ]]"
 
     def __init__(
         self,
-        name: str = "uwsgi",
-        runtime_dir: str = None,
-        project_name: str = None,
-        address: str = "127.0.0.1:3017",
-        stats_server_address: str = "127.0.0.1:9897",
-        subscription_server_address: str = "127.0.0.1:5600",
+        service_id: str,
+        client_config: ClientConfig,
+        address: str,
+        stats_server_address: str,
+        subscription_server_address: str,
+        certificate_path: str,
+        certificate_key: str,
+        client_ca: str,
         resubscribe_to: str = None,
-        certificate_path: str = None,
-        certificate_key: str = None,
-        static_files_mapping: dict = None,
         **kwargs
     ):
-        self.name = name
-        self.runtime_dir = runtime_dir
-        router_cls = self.routing.routers.https
-
         super().__init__(
             strict_config=True,
-            name=self.name,
-            runtime_dir=self.runtime_dir,
+            name="uwsgi",
+            runtime_dir=client_config.RUN_DIR,
             project_name=self.router_name,
             **kwargs,
         )
 
-        self.set_plugins_params(plugins="http")
+        self.service_id = service_id
+        self.client_config = client_config
+        self.set_runtime_dir(self.client_config.RUN_DIR)
+
+
+        #self.set_plugins_params(plugins="http")
 
         self.master_process.set_basic_params(enable=True)
         self.master_process.set_exit_events(reload=True)
-        self.main_process.set_basic_params(
-            touch_reload="/srv/uwsgi/%n.http-router.ini"
-        )
-        self.main_process.set_owner_params(
-            uid=kwargs.pop("uid", "%U"),
-            gid=kwargs.pop("gid", "%G")
-        )
+        #self.main_process.set_basic_params(
+        #    touch_reload="/srv/uwsgi/%n.http-router.ini"
+        #)
+        self.main_process.set_owner_params(uid=client_config.UID, gid=client_config.GID)
         self.main_process.set_naming_params(
-            prefix=f"{self.router_name} ",
+            prefix=f"{self.router_name} {self.service_id} ",
             autonaming=True
         )
 
@@ -122,22 +121,43 @@ class HttpsRouterSection(Section):
         # if host in ('0.0.0.0', '127.0.0.1'):
         #     address = f":{port}"
         
-        if resubscribe_to:
-            address = "=0"
-            self.networking.register_socket(
-                self.networking.sockets.shared(
-                    address="0.0.0.0:3435"
-                )
-            )
+        #if resubscribe_to:
+        #    address = "=0"
+        #    self.networking.register_socket(
+        #        self.networking.sockets.shared(
+        #            address="0.0.0.0:3435"
+        #        )
+        #    )
 
-        self.router = router_cls(
-            on=address,
-            forward_to=router_cls.forwarders.subscription_server(
-                address=subscription_server_address,
-                key=subscription_server_address
-            ),
+        # https = =0,
+        #           ssl/test-gen/server.crt,
+        #           ssl/test-gen/server.key,
+        #           HIGH,
+        #           ssl/test-gen/ca.crt
+        #"https2": 
+        #       "cert=/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2.pem,
+        #       ciphers=HIGH,
+        #       client_ca=/home/pk/.local/share/mkcert/rootCA.pem,
+        #       key=/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2-key.pem,
+        #       addr=127.0.0.1:3020",
+
+        self.networking.register_socket(
+            self.networking.sockets.shared(
+                address=address
+            )
+        )
+        # FIXME for when port is lower than the default on the cli
+        ssl_context = f"={(int(address.split(':')[-1]) - 8443)}"
+        self.router = BaseRouterHttps(
+            ssl_context ,
             cert=certificate_path,
             key=certificate_key,
+            forward_to=BaseRouterHttps.forwarders.subscription_server(
+                address=subscription_server_address,
+                #key=subscription_server_address
+            ),
+            ciphers="HIGH",
+            client_ca=client_ca,
         )
 
         self.router.set_basic_params(
@@ -159,17 +179,20 @@ class HttpsRouterSection(Section):
 
         
         self.logging.set_file_params(owner="true")
-        self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
         self.routing.use_router(self.router)
+
+
+        #self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
+        self.logging.add_logger(
+            self.logging.loggers.file(
+                filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log")
+            )
+        )
         
-        if static_files_mapping:
-            for mountpoint, target in static_files_mapping.items():
-                self.statics.register_static_map(mountpoint, target)
-    
 
 
 class HttpRouterSection(Section):
-    router_name = "[[ PikeSquares/HTTP Router ]]"
+    router_name = "[[ Pike Squares App / HTTP Router ]]"
 
     def __init__(
         self,
@@ -181,11 +204,11 @@ class HttpRouterSection(Section):
         stats_server_address: str = "127.0.0.1:9897",
         subscription_server_address: str = "127.0.0.1:5600",
         resubscribe_to: str = None,
-        static_files_mapping: dict = None,
         **kwargs,
     ):
         self.name = name
-        self.runtime_dir = runtime_dir
+        #self.runtime_dir = runtime_dir
+        self.set_runtime_dir(self.client_config.RUN_DIR)
         router_cls = self.routing.routers.http
 
         super().__init__(
@@ -253,10 +276,6 @@ class HttpRouterSection(Section):
         self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
         self.routing.use_router(self.router)
         
-        if static_files_mapping:
-            for mountpoint, target in static_files_mapping.items():
-                self.statics.register_static_map(mountpoint, target)
-
 
 
 class FastRouterSection(Section):

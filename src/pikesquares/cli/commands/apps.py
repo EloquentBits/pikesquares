@@ -11,6 +11,11 @@ from cuid import cuid
 from pikesquares import (
     HandlerFactory, 
     get_service_status,
+    get_first_available_port,
+    wsgi_app_up,
+    projects_all,
+    apps_all,
+    https_routers_all,
 )
 from ..console import console
 from ..cli import app
@@ -48,7 +53,7 @@ for alias in ALIASES:
 @apps_cmd.command("new", hidden=True)
 def create(
     ctx: typer.Context,
-    project_id: str = typer.Option("", "--in", "--in-project", help="Name or id of project to add new app"),
+    project_name: str = typer.Option("", "--in", "--in-project", help="Name or id of project to add new app"),
 ):
     """
     Create new app in project
@@ -58,38 +63,84 @@ def create(
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
 
-    available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
+    available_projects = {
+        p.get('name'): p.get('service_id') for p in projects_all(client_config)
+    }
     if not available_projects:
         console.warning(f"No projects were created, create at least one project first!")
         return
-    if not project_id:
-        project_id = console.choose("Select project where you want to create app", choices=available_projects)
 
-    project_db = obj['project'](project_id)
-    
+    if not project_name:
+        project_name = console.choose(
+            "Select project where you want to create app", 
+            choices=available_projects
+        )
+
     service_type = questionary.select(
         "What type of service would you like to create?",
         choices=HandlerFactory.user_visible_services(),
     ).ask()
     
-    service_name = console.ask("Enter your service name: ", default=randomname.get_name(), validators=[ServiceNameValidator])
+    service_name = console.ask(
+        "Enter your service name: ", 
+        default=randomname.get_name(), 
+        validators=[ServiceNameValidator]
+    )
     service_type_prefix = service_type.replace('-', '_').lower()
     service_id = f"{service_type_prefix}_{cuid()}"
-    service = HandlerFactory.make_handler(service_type)(
-        service_id=service_id,
-        client_config=client_config,
+
+    root_dir = console.ask("Enter your app root directory: ")
+    assert Path(root_dir).exists(), f"{root_dir} does not exist."
+
+    print(list(Path(root_dir).glob('*venv*')))
+
+    try:
+        pyvenv_dir = console.ask(
+            "Enter your app Python venv directory: ", 
+            default=str(list(Path(root_dir).glob('*venv*'))[0]),
+        )
+    except IndexError:
+        pyvenv_dir = console.ask("Enter your app Python venv directory: ")
+
+    wsgi_file = console.ask(
+        "Enter your app Python WSGI file relative to root directory: ", 
     )
-    project_cuid = available_projects.get(project_id)
-    service_options = dict(
-        project_id=project_cuid,
-        project_name=project_id,
-        service_id=service_id,
-        name=service_name,
+    wsgi_file_path = Path(root_dir) / Path(wsgi_file)
+    assert wsgi_file_path.exists(), f"{wsgi_file_path} does not exist"
+
+    wsgi_module = console.ask(
+        "Enter your app Python WSGI module name: ", 
+        default="application",
     )
-    service_options["root_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app"
-    service_options["pyvenv_dir"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/venv"
-    service_options["wsgi_file"] = "/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/src/simple_wsgi_app/simple_app.py"
-    service_options["wsgi_module"] = "application"
+
+    app_options = dict()
+    app_options["root_dir"] = root_dir #"/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app"
+    app_options["pyvenv_dir"] = pyvenv_dir #"/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/venv"
+    app_options["wsgi_file"] = wsgi_file_path
+    #"/home/pk/dev/vconf-test-wsgiapp/simple-wsgi-app/src/simple_wsgi_app/simple_app.py"
+    app_options["wsgi_module"] = wsgi_module
+
+
+    available_routers = {
+        p.get('address'): p.get('service_id') for p in https_routers_all(client_config)
+    }
+    router_address = console.choose("Select router for your app:", choices=available_routers)
+    router_id = available_routers.get(router_address)
+    #print(f"Selected Https Routers: {router_id} running on: {router_address}")
+    app_options["router_id"] = router_id
+
+    port = str(get_first_available_port(port=7080))
+    app_options['socket_address'] = f"127.0.0.1:{port}"
+
+    print(app_options)
+
+    wsgi_app_up(
+        client_config,
+        service_name,
+        available_projects.get(project_name),
+        service_id,
+        **app_options,
+    )
 
     #if selected_kit_name == "Custom":
     #    project_path = project_db.get(where('name') == project_id).get('path')
@@ -99,26 +150,26 @@ def create(
     #        label=lambda v: f"Enter {v.replace('_', ' ')}"
     #    )
     #    service_options.update(opts)
-    service.prepare_service_config(
-        **service_options
-    )
-    console.success(f"Starting {service_type} service")
-    service.start()
+    #service.prepare_service_config(
+    #    **service_options
+    #)
+    #console.success(f"Starting {service_type} service")
+    #service.start()
 
-    service_data = {
-        "cuid": service_id,
-        "type": service_type,
-        "path": str(Path(service.root_dir).resolve()),
-        "parent_id": service.project_id,
-        "options": service_options,
-        "virtual_hosts": [vh.dict() for vh in service.virtual_hosts]
-    }
+    #service_data = {
+    #    "cuid": service_id,
+    #    "type": service_type,
+    #    "path": str(Path(service.root_dir).resolve()),
+    #    "parent_id": service.project_id,
+    #    "options": service_options,
+    #    "virtual_hosts": [vh.dict() for vh in service.virtual_hosts]
+    #}
 
-    project_db = obj['project'](project_id)
-    apps = project_db.get(where('name') == project_id).get('apps')
-    apps.append(service_data)
-    project_db.update({'apps': apps}, where('name') == project_id)
-    console.success(f"{service_type} '{service_data.get('cuid')}' was successfully created in project '{project_id}'!")
+    #project_db = obj['project'](project_id)
+    #apps = project_db.get(where('name') == project_id).get('apps')
+    #apps.append(service_data)
+    #project_db.update({'apps': apps}, where('name') == project_id)
+    #console.success(f"{service_type} '{service_data.get('cuid')}' was successfully created in project '{project_id}'!")
 
 @app.command(
     "apps",
@@ -142,21 +193,41 @@ def list_(
     client_config = obj.get("client_config")
 
     if not project:
-        available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
+        available_projects = {
+            p.get('name'): p.get('service_id') for p in projects_all(client_config)
+        }
         if not available_projects:
             console.warning(f"No projects were created, create at least one project first!")
             return
-        project = console.choose("Select project where you want to list apps", choices=available_projects)
+        project = console.choose(
+            "Select project where you want to list apps", 
+            choices=available_projects
+        )
     
-    project_db = obj['project'](project)
-    if not project_db:
-        console.warning(f"Project '{project}' not exists!")
-        return
-    apps = project_db.get(where('name') == project).get('apps')
-    for a in apps:
-        a.update({'status': get_service_status(a.get('cuid'), client_config)})
+    #project_db = obj['project'](project)
+    #if not project_db:
+    #    console.warning(f"Project '{project}' not exists!")
+    #    return
+    #apps = project_db.get(where('name') == project).get('apps')
+    #for a in apps:
+    #    a.update({'status': get_service_status(a.get('cuid'), client_config)})
 
-    console.print_response(apps, title=f"Apps in project '{project}'", show_id=show_id, exclude=['parent_id', 'options'])
+    apps_out = []
+    apps = apps_all(client_config)
+    for app in apps:
+        apps_out.append({
+            'name': app.get('name'),
+            'status': get_service_status(
+                app.get('service_id'), client_config) or "Unknown",
+            'id': app.get('service_id')
+        })
+
+    console.print_response(
+        apps_out, 
+        title=f"Apps in project '{project}'", 
+        show_id=show_id, 
+        exclude=['parent_id', 'options']
+    )
 
 
 @apps_cmd.command("logs", short_help="Show app logs")

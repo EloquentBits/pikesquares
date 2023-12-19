@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Union
 
 from uwsgiconf.typehints import Strlist
@@ -150,17 +151,17 @@ class WsgiAppSection(BaseWsgiAppSection):
 
     def __init__(
         self,
-        service_id: str,
         client_config: ClientConfig,
+        name: str,
+        service_id: str,
         project_id: str,
-        wsgi_file: str,
-        pyvenv_dir: str,
-        root_dir: str,
-        wsgi_module: str = "",
+        subscription_server_address: str,
         virtual_hosts: list[VirtualHost] = [],
-        **kwargs
+        **app_options,
     ):
+        self.name = name
         self.service_id = service_id
+        self.project_id = project_id
         self.client_config = client_config
         self.virtual_hosts = virtual_hosts or []
 
@@ -174,17 +175,18 @@ class WsgiAppSection(BaseWsgiAppSection):
             embedded_plugins=embedded_plugins, 
             owner=owner,
             touch_reload=str(
-                (Path(client_config.CONFIG_DIR) / f"{project_id}" / "apps" / f"{service_id}.json").resolve()
+                (Path(self.client_config.CONFIG_DIR) / \
+                    f"{self.project_id}" / "apps" / f"{self.name}.json").resolve()
             ),
-            **kwargs
+            **app_options,
         )
         self.python.set_basic_params(
-            python_home=pyvenv_dir,
+            python_home=app_options.get('pyvenv_dir'),
             enable_threads=True,
             #search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
         )
 
-        self.main_process.change_dir(to=str(Path(root_dir).resolve()))
+        self.main_process.change_dir(to=app_options.get('root_dir'))
         self.main_process.set_pid_file(
             str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve())
         )
@@ -214,15 +216,13 @@ class WsgiAppSection(BaseWsgiAppSection):
         #:param callable_name: Set WSGI callable name. Default: application.
 
         self.python.set_wsgi_params(
-            module=wsgi_file, 
-            callable_name=wsgi_module if wsgi_module else None,
+            module=app_options.get('wsgi_file'), 
+            callable_name=app_options.get('wsgi_module'),
         )
         self.applications.set_basic_params(exit_if_none=require_app)
 
-        socket_addr = '127.0.0.1:5534'
-
         self.networking.register_socket(
-            self.networking.sockets.default(socket_addr)
+            self.networking.sockets.default(app_options.get('socket_address'))
         )
 
         #socket_path = str(Path(self.client_config.RUN_DIR) / f"{service_id}.sock")
@@ -258,7 +258,7 @@ class WsgiAppSection(BaseWsgiAppSection):
         #if ":" in address:
         #    address, port = address.split(':')
 
-        vhost = virtual_hosts[0]
+        #vhost = virtual_hosts[0]
         #vhost_router_cls = self.routing.routers.http
         #vhost_router_params = {}
         #if vhost.is_https:
@@ -271,26 +271,36 @@ class WsgiAppSection(BaseWsgiAppSection):
         #)
         #self.routing.use_router(vhost_router)
 
-        if vhost.static_files_mapping:
-            for mountpoint, target in vhost.static_files_mapping.items():
-                self.statics.register_static_map(mountpoint, target)
+        #if vhost.static_files_mapping:
+        #    for mountpoint, target in vhost.static_files_mapping.items():
+        #        self.statics.register_static_map(mountpoint, target)
         
-        for domain_name in vhost.server_names:
+        #for domain_name in vhost.server_names:
             #self.set_domain_name(
             #    address=vhost.address,
             #    domain_name=name,
             #    socket_path=socket_path,
             #    socket_addr=socket_addr,
             #)
-            subscription_params = dict(
-                server=self.client_config.HTTPS_ROUTER_SUBSCRIPTION_SERVER,
-                address=socket_addr,  # address and port of wsgi app
-                key=domain_name  # <app_name>-<project_name>-vconf.local
-            )
-            print(f"{subscription_params=}")
-            self.subscriptions.subscribe(**subscription_params)
+            #subscribe2=key=test-wsgi-app.pikesquares.dev,server=127.0.0.1:5777
 
+        #subscribe2=key=test-wsgi-app.pikesquares.dev,server=127.0.0.1:5777
 
+        #  subscribe2=
+        #            key=test-wsgi-app.pikesquares.dev,
+        #            server=127.0.0.1:5777,
+        #            sni_key=pikesquares.dev-key.pem,
+        #            sni_crt=pikesquares.dev.pem,
+        #            sni_ca=rootCA.pem
+
+        subscription_params = dict(
+            server=subscription_server_address,
+            address=app_options.get('socket_address'),  # address and port of wsgi app
+            key=f"{name}.pikesquares.dev",
+        )
+        print(f"{subscription_params=}")
+
+        self.subscriptions.subscribe(**subscription_params)
 
         """
         vhost_address = ""
@@ -321,7 +331,9 @@ class WsgiAppSection(BaseWsgiAppSection):
     def setup_loggers(self):
         # self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log"))
+            self.logging.loggers.file(
+                filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log")
+            )
         )
 
     """

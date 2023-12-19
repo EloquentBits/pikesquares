@@ -9,8 +9,9 @@ import randomname
 from cuid import cuid
 
 from pikesquares import (
-    HandlerFactory, 
     get_service_status,
+    project_up,
+    projects_all,
 )
 
 from ..console import console
@@ -18,7 +19,7 @@ from ..validators import ServiceNameValidator
 from ..cli import app
 
 
-ALIASES = ("projs", "prj")
+ALIASES = ("proj", "prj")
 HELP = f"""
     Projects related commands.\n
     Aliases: [i]{', '.join(ALIASES)}[/i]
@@ -60,137 +61,8 @@ def create(
             validators=[ServiceNameValidator]
         )
 
-    project_id = f"project_{cuid()}"
-
-    console.info("Preparing project environment")
-    project_dir = Path(client_config.DATA_DIR) / "projects" / project_name
-    project_dir.mkdir(parents=True, exist_ok=True)
-    console.info(f"Creating project dir: {project_dir.resolve()}")
-
-    device_db = obj['device']
-    device_db.insert({
-        'name': project_name,
-        'cuid': project_id,
-        'type': "Project",
-        'path': str(project_dir.resolve())
-    })
-
-    proj_db = obj['project'](project_name)
-
-    project = HandlerFactory.make_handler("Project")(
-        service_id=project_id,
-        client_config=client_config,
-    )
-    proj_data = {
-        "cuid": project_id,
-        "name": project_name,
-        "path": str(project_dir.resolve()),
-        "apps": []
-    }
-
-    project = HandlerFactory.make_handler("Project")(
-        service_id=project_id,
-        client_config=client_config,
-    )
-    project.prepare_service_config()
-    proj_db.insert(proj_data)
-
-    project.connect()
-    project.start()
-    console.success(f"Project '{project_name}' was successfully created!")
-
-@proj_cmd.command(short_help="Start project.\nAliases:[i] run")
-@proj_cmd.command("run", hidden=True)
-def start(
-    ctx: typer.Context,
-    project_name: Optional[str] = typer.Argument("", help="Project to start"),
-):
-    """
-    Start project.
-
-    Aliases: [i] start, run
-    """
-    obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
-
-    device_db = obj['device']
-
-    if not project_name:
-        available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
-        if not available_projects:
-            console.warning("Create at least one project first, before starting it!")
-            return
-        project_name = console.choose("Select project you want to start", choices=available_projects)
-
-    project_ent = device_db.get(where('name') == project_name)
-
-    project_id = project_ent.get('cuid')
-    project_type = project_ent.get('type')
-    if project_type != "Project":
-        console.error(
-            "You've entered app name instead of project name!",
-            example=f"vc apps start '{project_name}'"
-        )
-        return
-
-    project = HandlerFactory.make_handler(project_type)(
-        service_id=project_id,
-        client_config=client_config,
-    )
-    if project.is_started():
-        console.info(f"Project '{project_name}' is already started!")
-        return
-
-    project.prepare_service_config()
-    project.connect()
-    project.start()
-    console.success(f"Project '{project_name}' was successfully started!")
-
-
-@proj_cmd.command(short_help="Stop project.\nAliases:[i] down")
-@proj_cmd.command("down", hidden=True)
-def stop(
-    ctx: typer.Context,
-    project_name: Optional[str] = typer.Argument("", help="Project to stop"),
-):
-    """
-    Stop project.
-
-    Aliases: [i] stop, down
-    """
-    obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
-
-    device_db = obj['device']
-
-    project_ent = device_db.search(where('name') == project_name)
-    if not project_ent:
-        console.error(f"Project with name '{project_name}' does not exists!")
-        return
-    else:
-        project_ent = project_ent[0]
-
-    project_id = project_ent.get('cuid')
-    project_type = project_ent.get('type')
-    if project_type != "Project":
-        console.error(
-            "You've entered app name instead of project name!",
-            example=f"vc apps stop '{project_name}'"
-        )
-        return
-
-    project = HandlerFactory.make_handler(project_type)(
-        service_id=project_id,
-        client_config=client_config,
-    )
-    if not project.is_started():
-        console.info(f"Project '{project_name}' is not started!")
-        return
-
-    project.connect()
-    project.stop()
-    console.success(f"Project '{project_name}' was successfully stopped!")
-
+    #console.success(f"Project '{project_name}' was successfully created!")
+    project_up(client_config, project_name, f"project_{cuid()}")
 
 @app.command(
     "projects",
@@ -208,27 +80,23 @@ def list_(
 
     Aliases:[i] projects, projects list
     """
-
     obj = ctx.ensure_object(dict)
     client_config = obj.get('client_config')
-    device_db = obj['device']
-
-    show_fields = ['name', 'path', 'status', 'cuid']
-    for x in device_db:
-        print(x)
-    projects = [
-        {k: v for k, v in e.items() if k in show_fields}
-        for e in device_db
-    ]
-    if not projects:
+    projects = projects_all(client_config)
+    if not len(projects):
         console.warning("No projects were initialized, nothing to show!")
         return
     
-    for p in projects:
-        p.update({'status': get_service_status(p.get('cuid'), client_config)})
-    
-    console.print_response(projects, title=f"Projects count: {len(projects)}", show_id=show_id)
-
+    projects_out = []
+    for project in projects:
+        projects_out.append({
+            'name': project.get('name'),
+            'status': get_service_status(project.get('service_id'), client_config) or "Unknown",
+            'id': project.get('service_id')
+        })
+    console.print_response(
+        projects_out, title=f"Projects count: {len(projects)}", show_id=show_id
+    )
 
 @proj_cmd.command("logs")
 def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
@@ -306,6 +174,99 @@ def delete(
     device_db.remove(where('cuid') == selected_project_cuid)
 
     console.success(f"Removed project '{selected_project_name}'!")
+#@proj_cmd.command(short_help="Start project.\nAliases:[i] run")
+#@proj_cmd.command("run", hidden=True)
+#def start(
+#    ctx: typer.Context,
+#    project_name: Optional[str] = typer.Argument("", help="Project to start"),
+#):
+#    """
+#    Start project.
 
+#    Aliases: [i] start, run
+#    """
+#    obj = ctx.ensure_object(dict)
+#    client_config = obj.get("client_config")
+
+#    device_db = obj['device']
+
+    #for project_doc in db.table('projects'):
+    #    project_up(client_config, project_doc.service_id)
+
+#    if not project_name:
+#        available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
+#        if not available_projects:
+#            console.warning("Create at least one project first, before starting it!")
+#            return
+#        project_name = console.choose("Select project you want to start", choices=available_projects)
+
+#    project_ent = device_db.get(where('name') == project_name)
+
+#    project_id = project_ent.get('cuid')
+#    project_type = project_ent.get('type')
+#    if project_type != "Project":
+#        console.error(
+#            "You've entered app name instead of project name!",
+#            example=f"vc apps start '{project_name}'"
+#        )
+#        return
+
+    #project = HandlerFactory.make_handler(project_type)(
+    #    service_id=project_id,
+    #    client_config=client_config,
+    #)
+    #if project.is_started():
+    #    console.info(f"Project '{project_name}' is already started!")
+    #    return
+
+    #project.prepare_service_config()
+    #project.connect()
+    #project.start()
+    #console.success(f"Project '{project_name}' was successfully started!")
+
+
+#@proj_cmd.command(short_help="Stop project.\nAliases:[i] down")
+#@proj_cmd.command("down", hidden=True)
+#def stop(
+#    ctx: typer.Context,
+#    project_name: Optional[str] = typer.Argument("", help="Project to stop"),
+#):
+#    """
+#    Stop project.
+
+#    Aliases: [i] stop, down
+#    """
+#    obj = ctx.ensure_object(dict)
+#    client_config = obj.get("client_config")
+
+#    device_db = obj['device']
+
+#    project_ent = device_db.search(where('name') == project_name)
+#    if not project_ent:
+#        console.error(f"Project with name '{project_name}' does not exists!")
+#        return
+#    else:
+#        project_ent = project_ent[0]
+
+#    project_id = project_ent.get('cuid')
+#    project_type = project_ent.get('type')
+#    if project_type != "Project":
+#        console.error(
+#            "You've entered app name instead of project name!",
+#            example=f"vc apps stop '{project_name}'"
+#        )
+#        return
+
+    #project = HandlerFactory.make_handler(project_type)(
+    #    service_id=project_id,
+    #    client_config=client_config,
+    #)
+    #if not project.is_started():
+    #    console.info(f"Project '{project_name}' is not started!")
+    #    return
+
+    #project.connect()
+    #project.stop()
+    #console.success(f"Project '{project_name}' was successfully stopped!")
 
 app.add_typer(proj_cmd)
