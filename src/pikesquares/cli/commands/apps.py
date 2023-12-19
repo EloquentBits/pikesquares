@@ -130,7 +130,7 @@ def create(
     app_options["router_id"] = router_id
 
     port = str(get_first_available_port(port=7080))
-    app_options['socket_address'] = f"127.0.0.1:${port}"
+    app_options['socket_address'] = f"127.0.0.1:{port}"
 
     print(app_options)
 

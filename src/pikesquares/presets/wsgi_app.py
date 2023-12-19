@@ -284,12 +284,22 @@ class WsgiAppSection(BaseWsgiAppSection):
             #)
             #subscribe2=key=test-wsgi-app.pikesquares.dev,server=127.0.0.1:5777
 
+        #subscribe2=key=test-wsgi-app.pikesquares.dev,server=127.0.0.1:5777
+
+        #  subscribe2=
+        #            key=test-wsgi-app.pikesquares.dev,
+        #            server=127.0.0.1:5777,
+        #            sni_key=pikesquares.dev-key.pem,
+        #            sni_crt=pikesquares.dev.pem,
+        #            sni_ca=rootCA.pem
+
         subscription_params = dict(
             server=subscription_server_address,
             address=app_options.get('socket_address'),  # address and port of wsgi app
             key=f"{name}.pikesquares.dev",
         )
         print(f"{subscription_params=}")
+
         self.subscriptions.subscribe(**subscription_params)
 
         """

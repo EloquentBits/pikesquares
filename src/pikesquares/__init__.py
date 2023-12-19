@@ -120,7 +120,8 @@ class Handler(Protocol):
     config_name: str = ""
     parent_service_id:str = ""
     address: str = ""
-    service_config: PathLike
+    service_config: PathLike = None
+    device_db_path: Path
 
     def __init__(self,
             service_id:str, 
@@ -135,6 +136,7 @@ class Handler(Protocol):
         self.service_id = service_id
         self.parent_service_id = parent_service_id
         self.config_name = f"{service_id}.json"
+        self.device_db_path = Path(self.client_config.DATA_DIR) / 'device-db.json'
 
 
     def setup_address(self, port: int = 5500) -> None:
@@ -221,7 +223,7 @@ class DeviceService(Handler):
         # TODO  self.service_config.tofile()
 
         self.service_config = Path(self.client_config.CONFIG_DIR) / "device.json"
-        with TinyDB(f"{Path(self.client_config.DATA_DIR) / 'device-db.json'}") as db:
+        with TinyDB(self.device_db_path) as db:
             config = json.loads(
                 DeviceSection(
                     self.client_config,
@@ -298,7 +300,7 @@ class ProjectService(Handler):
     def prepare_service_config(self, name: str):
         self.name = name
 
-        with TinyDB(f"{Path(self.client_config.DATA_DIR) / 'device-db.json'}") as db:
+        with TinyDB(self.device_db_path) as db:
             self.service_config = Path(self.client_config.CONFIG_DIR) / f"{self.service_id}.json"
             empjs = json.loads(ProjectSection(
                     client_config=self.client_config,
@@ -443,7 +445,7 @@ class HttpsRouterService(Handler):
         self.service_config = Path(self.client_config.CONFIG_DIR) / "routers" / f"{self.service_id}.json"
         self.service_config.write_text(json.dumps(self.config_json))
 
-        with TinyDB(f"{Path(self.client_config.DATA_DIR) / 'device-db.json'}") as db:
+        with TinyDB(self.device_db_path) as db:
             print("Updating routers db.")
             routers_db = db.table('routers')
             routers_db.upsert(
@@ -578,7 +580,7 @@ class WsgiAppService(Handler):
 
         self.prepare_virtual_hosts()
 
-        with TinyDB(f"{Path(self.client_config.DATA_DIR) / 'device-db.json'}") as db:
+        with TinyDB(self.device_db_path) as db:
             routers_db = db.table('routers')
             router = routers_db.get(Query().service_id == app_options.get('router_id'))
             subscription_server_address = router.get('service_config')['uwsgi']['http-subscription-server']
@@ -664,7 +666,8 @@ class WsgiAppService(Handler):
             if project:
                 project_up(self.client_config, project.get('name'), self.project_id)
 
-        Path(self.service_config).parent.mkdir(parents=True, exist_ok=True)
+        
+        self.service_config.parent.mkdir(parents=True, exist_ok=True)
         self.service_config.write_text(json.dumps(self.config_json))
 
         """

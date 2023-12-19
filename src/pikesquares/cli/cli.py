@@ -28,7 +28,10 @@ app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich")
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    config: Optional[str] = typer.Option("", help="Path to configuration file."),
+    config: Optional[str] = typer.Option(
+        "/opt/pikesquares/pikesquares.conf", 
+        help="Path to configuration file."
+    ),
     verbose: Optional[bool] = typer.Option(False, help="Enable verbose mode."),
     version: Optional[bool] = typer.Option(False, help="Show version and exit."),
 ):
@@ -40,6 +43,9 @@ def main(
         from importlib import metadata
         console.info(metadata.version("pikesquares"))
         return
+
+    venv_dir = os.environ.get("VIRTUAL_ENV")
+    console.info(f"Using Python Virtual Environment @ {venv_dir}")
 
     assert os.environ.get("VIRTUAL_ENV"), "VIRTUAL_ENV not set"
 
@@ -109,9 +115,14 @@ def main(
 @app.command(rich_help_panel="Control", short_help="Run device (if stopped)")
 def up(
     ctx: typer.Context, 
-    foreground: Optional[bool] = typer.Option(False, help="Run in foreground.")
+    foreground: Optional[bool] = typer.Option(True, help="Run in foreground.")
 ):
     """ Start all services """
+
+
+    venv_dir = os.environ.get("VIRTUAL_ENV")
+    console.info(f"Using Python Virtual Environment @ {venv_dir}")
+    print("UP UP UP")
 
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
