@@ -68,6 +68,9 @@ jobs:
 
           #CIBW_BEFORE_ALL: "yum install -y pcre-devel jansson-devel openssl-devel avahi-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64"
         run: |
+          cp setup.py uwsgi
+          rm uwsgi/PKG-INFO
+
           /usr/local/bin/cibuildwheel \
             --platform linux \
             --output-dir dist \
