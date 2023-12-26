@@ -1,0 +1,46 @@
+name: "Setup manylinux2014 image"
+description: "Installs/configures additional CI dependencies"
+inputs:
+  openssl:
+    description: 'Setup OpenSSL (requires vcpkg to also be installed)'
+    default: 0
+  ccache:
+    description: 'Setup Ccache'
+    default: 0
+  python_alias:
+    description: 'Create an alias for python3 to python3.9'
+    default: 0
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup general dependencies
+      shell: bash
+      run: scripts/manylinux2014.sh general
+
+    - name: Setup dependencies for ccache
+      if: ${{ inputs.ccache == 1 }}
+      shell: bash
+      run: scripts/manylinux2014.sh ccache
+
+    - name: Setup python3 as python3.11
+      if: ${{ inputs.python_alias == 1 }}
+      shell: bash
+      run: scripts/manylinux2014.sh python_alias
+
+    - name: Install OpenSSL
+      if: ${{ inputs.openssl == 1 }}
+      shell: bash
+      run: scripts/manylinux2014.sh openssl
+
+    - name: Install ZeroMQ
+      if: ${{ inputs.zeromq == 1 }}
+      shell: bash
+      run: scripts/manylinux2014.sh zeromq
+
+    - name: Setup Ccache
+      if: ${{ inputs.ccache == 1 }}
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}

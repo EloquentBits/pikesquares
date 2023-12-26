@@ -1,0 +1,34 @@
+[build-system]
+requires = [
+  "setuptools", 
+  "wheel",
+  "pkgconfig",
+  #"twine",
+  #  "packaging",
+  #  "Cython",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pikesquares-binary"
+dynamic = [
+  "dependencies",
+]
+version = "0.3.22"
+#readme = "README.md"
+requires-python = ">=3.11"
+keywords = []
+authors = [
+  { name = "Philip Kalinsky", email = "philip.kalinsky@eloquentbits.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[project.urls]
+Documentation = "https://github.com/EloquentBits/pikesquares#readme"
+Issues = "https://github.com/EloquentBits/pikesquares/issues"
+Source = "https://github.com/EloquentBits/pikesquares"

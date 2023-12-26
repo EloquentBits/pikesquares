@@ -257,19 +257,19 @@ class DeviceService(Handler):
         pass
 
     def start(self):
-        # we import `vconf` with `dlopen` flags set to `os.RTLD_GLOBAL` such that
+        # we import `pyuwsgi` with `dlopen` flags set to `os.RTLD_GLOBAL` such that
         # uwsgi plugins can discover uwsgi's globals (notably `extern ... uwsgi`)
         if hasattr(sys, 'setdlopenflags'):
             orig = sys.getdlopenflags()
             try:
                 sys.setdlopenflags(orig | os.RTLD_GLOBAL)
-                import vconf
+                import pyuwsgi
             finally:
                 sys.setdlopenflags(orig)
         else:  # ah well, can't control how dlopen works here
-            import vconf
+            import pyuwsgi
 
-        vconf.run([
+        pyuwsgi.run([
             "--json",
             f"{str(self.service_config.resolve())}"
         ])

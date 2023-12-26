@@ -7,156 +7,259 @@ on:
       - master
     tags:
       - '**'
+    paths-ignore:
+      - '**.md'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/build.yml'
 
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-publish-binary:
+
+  wheels:
+    name: "${{ matrix.py }} ${{ matrix.os }} ${{ matrix.arch }} wheels"
+    runs-on: ${{ matrix.runner }}
+
     strategy:
       matrix:
-        platform: [ macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
-        architecture: [ aarch64 ]
-        python-version: [ "3.11", "3.12" ]
-    runs-on: ${{ matrix.platform }}
+        os: [linux, macos]
+        arch: [x86_64, arm64]
+        include:
+          - {
+              "os": "linux", 
+              "py": "cp311", 
+              "arch": "x86_64", 
+              "runner": "ubuntu-latest", 
+              "cibw_build": "cp311-manylinux_x86_64", 
+              "cibw_wheel_suffix": "manylinux_2_17_x86_64.manylinux2014_x86_64",
+              "pip-cache-path": "~/.cache/pip" }
+          - {
+              "os": "macos", 
+              "py": "cp311", 
+              "arch": "x86_64", 
+              "runner": "macos-latest", 
+              "cibw_build": "cp311-macosx_x86_64", 
+              "cibw_wheel_suffix": "macosx_10_9_x86_64",
+              "pip-cache-path": "~/Library/Caches/pip" }
+
+          - {
+              "os": "macos", 
+              "py": "cp311", 
+              "arch": "arm64", 
+              "runner": "macos-latest-xlarge", 
+              "cibw_build": "cp311-macosx_arm64",  
+              "cibw_wheel_suffix": "macosx_11_0_arm64",
+              "pip-cache-path": "~/Library/Caches/pip"}
+        exclude:
+          - os: linux
+            arch: arm64
+
+          #- {"os": "macos", "py": "cp311", "arch": "arm64", "runner": "macos-latest-xlarge", "cibw_build": "cp311-macosx_arm64",  "pip-cache-path": "~/Library/Caches/pip"}
+      fail-fast: false
+
+    env:
+      MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
+
+      SCIENCE_BINARY_VERSION: "v0.3.0"
+      SCIENCE_BINARY_ARCH: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
+      SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
+
+      PIKESQUARES_BINARY_VERSION: "0.3.22"
+      PIKESQUARES_CLI_VERSION: "0.1.6"
+      PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
+
+      CIBW_BUILD: "${{ matrix.cibw_build }}"
+      CIBW_ARCHS: ${{ matrix.arch }}
+      CIBW_BUILD_VERBOSITY: 5
+      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
+      CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
+      CIBW_BEFORE_BUILD_LINUX: yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
+      CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ARCH=${{ matrix.arch }} ./scripts/pre_build.sh
+      CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-        
-      - name: Install dependencies
+      - name: install deps from homebrew for x86_64
+        if: ${{ matrix.os == 'macos' && matrix.arch == 'x86_64'}}
         shell: bash
         run: |
-          python -m pip install -U build pex
+          brew install zeromq jansson pcre
 
+      - name: install deps from homebrew for arm64
+        if: ${{ matrix.os == 'macos' && matrix.arch == 'arm64'}}
+        shell: bash
+        run: |
+          brew install autoconf libtool automake jansson pcre
 
-      - name: Build CLI wheel
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - uses: actions/cache@v3
+        name: pip cache
+        with:
+          path: ${{ matrix.pip-cache-path }}
+          key: ${{ matrix.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+           ${{ matrix.os }}-pip-
+
+      #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      #pikesquares_binary-0.3.22-cp311-cp311-macosx_10_9_x86_64.whl
+      - uses: actions/cache@v3
+        id: pikesquares-binary-wheel
+        name: cache wheel
+        with:
+          path: wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
+          key: pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-${{ matrix.os }}-${{ matrix.arch }}
+
+      - uses: actions/cache@v3
+        id: science-binary
+        name: cache science binary
+        with:
+          path: ${{ env.SCIENCE_BINARY_NAME }}
+          key: ${{ env.SCIENCE_BINARY_NAME }}
+
+      - name: pip install cibuildwheel pex etc
+        shell: bash
+        run: |
+          pip install 'cibuildwheel>=2.16.2' twine build pex
+
+      #https://github.com/a-scie/jump/releases/download/v0.14.0/scie-jump-linux-x86_64
+      #- name: scie-jump binary download
+      #  if: ${{ steps.scie-jump-binary.outputs.cache-hit != 'true' }} 
+      #  shell: bash
+      #  run: |
+      #    curl -Lo "sci-jump" https://github.com/a-scie/jump/releases/download/${{ env.JUMP_BINARY_VERSION }}/sci-jupm-${{ matrix.os }}-${{ matrix.arch }}
+      #    chmod +x science
+
+      - name: science binary download aarch64
+        if: ${{ steps.science-binary.outputs.cache-hit != 'true' }}  
+        shell: bash
+
+        #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
+        #https://github.com/a-scie/lift/releases/download/v0.3.0/science-macos-x86_64
+        #https://github.com/a-scie/lift/releases/download/v0.3.0/science-macos-aarch64
+        run: |
+          curl -Lo "${{ env.SCIENCE_BINARY_NAME }}" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ matrix.os }}-${{ env.SCIENCE_BINARY_ARCH}}
+          chmod +x "${{ env.SCIENCE_BINARY_NAME }}"
+
+      - name: setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${matrix.os}-${{ matrix.arch }}-${{ matrix.py }}
+
+      # macos-latest Version: 10.9
+      # pyuwsgi.cpython-311-darwin.so
+      - name: build wheel
+        if: ${{ steps.pikesquares-binary-wheel.outputs.cache-hit != 'true' }} 
+        shell: bash
+        run: |
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+          #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
+          #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+          #fi
+          cibuildwheel --output-dir wheelhouse uwsgi
+          ls wheelhouse
+
+      # Xcode_14.3.1
+
+      #  *** Installing runtime libraries
+      #  install libcrypto.3.dylib -> /usr/local/lib/libcrypto.3.dylib
+      #  install libssl.3.dylib -> /usr/local/lib/libssl.3.dylib
+      #  *** Installing development files
+      #  created directory `/usr/local/include/openssl'
+      #
+      #     install libcrypto.a -> /usr/local/lib/libcrypto.a
+      #  install libssl.a -> /usr/local/lib/libssl.a
+      #  link /usr/local/lib/libcrypto.dylib -> /usr/local/lib/libcrypto.3.dylib
+      #  link /usr/local/lib/libssl.dylib -> /usr/local/lib/libssl.3.dylib
+      #  install libcrypto.pc -> /usr/local/lib/pkgconfig/libcrypto.pc
+      #  install openssl.pc -> /usr/local/lib/pkgconfig/openssl.pckk
+      #  install libssl.pc -> /usr/local/lib/pkgconfig/libssl.pc
+
+      #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      #pikesquares_binary-0.3.22-cp311-cp311-macosx_10_9_x86_64.whl
+      #
+      #- uses: actions/upload-artifact@v4
+      #  if: false
+      #  with:
+      #    name: pikesquares-binary-cp311-manylinux_x86_64
+      #    path: ./wheelhouse/*.whl
+      #
+      #
+      - name: build pikesquares-cli wheel
         shell: bash
         run: |
           python -m build . --wheel
+          ls -l dist
 
-      - name: Build PEX
+      - name: build pex
         shell: bash
-        env:
-          PEX_TOOLS: 1
+
         run: |
-          pex -vvv \
-            dist/pikesquares-* \
+          zipinfo wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
+          pex \
+            wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl \
+            dist/pikesquares-${{ env.PIKESQUARES_CLI_VERSION }}-py3-none-any.whl \
             -r requirements.txt \
             --venv \
-            --include-tools \
             --python $(which python) \
             --entry-point pikesquares.cli.cli:app \
             --disable-cache \
             --no-emit-warnings \
-            -o pikesquares-cli.pex
-        
-      - name: Build executable binary (science)
+            -o pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex
+
+      - name: build scie
         shell: bash
-        env:
-          LATEST_SCIENCE_VERSION: "v0.3.0"
         run: |
-          curl -Lo "/tmp/science" https://github.com/a-scie/lift/releases/download/${{ env.LATEST_SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.architecture }}
-          chmod +x /tmp/science
-          /tmp/science lift \
-            --file pikesquares=pikesquares-cli.pex build \
+          ls -l . 
+          ./${{ env.SCIENCE_BINARY_NAME }} --version
+          ./${{ env.SCIENCE_BINARY_NAME }} lift \
+            --file pikesquares-bundle=pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex \
+            build \
             --use-platform-suffix \
             --hash sha256 \
-            pikesquares.toml
-      
-      - name: Upload pikesquares binary as artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: pike-squares-macos-${{ matrix.architecture }}
-          path: pike-squares-macos-${{ matrix.architecture }}
+            pikesquares.toml 
+          ls -l . 
+          chmod 755 ${{ env.PIKESQUARES_BINARY_NAME }}
+          ./${{ env.PIKESQUARES_BINARY_NAME }} --version
+        #  linux-aarch64
+        #  linux-x86_64
+        #  macos-aarch64
+        #  macos-x86_64
+        #  windows-x86_64
 
-      - name: Publish binary to cdn - Linux
+      # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64
+      # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64.sha256
+      #- uses: actions/upload-artifact@v4
+      #  with:
+      #    name: pikesquares-${{ matrix.os }}-${{ matrix.arch }}
+      #    path: pikesquares-${{ matrix.os }}-${{ matrix.arch }}*
+
+      - name: Publish binary to BunnyCDN
         shell: bash
-        if: runner.os == 'Linux'
         env:
-          PLATFORM: "linux"
+          CDN_URL: ny.storage.bunnycdn.com
+          CDN_PROJECT_NAME: pikesquares-downloads
         run: |
             curl --request PUT \
-            --header 'AccessKey: ${{ secrets.CDN_ACCESS_TOKEN }}' \
+            --header 'AccessKey: ${{ secrets.BUNNYCDN_ACCESS_TOKEN }}' \
             --header 'Content-Type: application/octet-stream' \
             --header 'accept: application/json'  \
-            --data-binary @pike-squares-${{ env.PLATFORM }}-${{ matrix.architecture }} \
-            https://${{ secrets.CDN_URL }}/${{ secrets.CDN_PROJECT_NAME }}/pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }}
+            --data-binary @${{ env.PIKESQUARES_BINARY_NAME }} \
+            https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{ env.PIKESQUARES_CLI_VERSION }}/${{ env.PIKESQUARES_BINARY_NAME }}
 
-      - name: Publish binary to cdn - Mac OS
-        shell: bash
-        if: runner.os == 'macOS'
-        env:
-          PLATFORM: "macos"
-        run: |
-            curl --request PUT \
-            --header 'AccessKey: ${{ secrets.CDN_ACCESS_TOKEN }}' \
-            --header 'Content-Type: application/octet-stream' \
-            --header 'accept: application/json'  \
-            --data-binary @pike-squares-${{ env.PLATFORM }}-${{ matrix.architecture }} \
-            https://${{ secrets.CDN_URL }}/${{ secrets.CDN_PROJECT_NAME }}/pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }}
-
-  build-macos-pkg-installer:
-    strategy:
-      matrix:
-        architecture: [ aarch64 ]
-        python-version: [ "3.11", "3.12" ]
-        platform: [ macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
-    runs-on: ${{ matrix.platform }}
-    needs: [ build-and-publish-binary ]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-            fetch-depth: 0
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-            python-version: ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-            python -m pip install -U jinja2
-        
-      - name: Checkout pikesquares Mac OS Installer Builder (MIB) repo
-        uses: actions/checkout@v4
-        with:
-            repository: EloquentBits/pikesquares-mib
-            path: ./mib
-
-      - name: Restore cached pikesquares binary for mac
-        uses: actions/download-artifact@v3
-        with:
-            name: pike-squares-macos-${{ matrix.architecture }}
-            path: ./mib/_files/binary
-
-      - name: Run Mac OS Installer Builder (MIB)
-        shell: bash
-        working-directory: ./mib
-        run: |
-            mv _files/binary/pike-squares-macos-${{ matrix.architecture }} _files/binary/pikesquares
-            ls -R _files
-            python mib.py --config mib.toml
-            mv pikesquares-installer.pkg pike-squares-macos-${{ matrix.architecture }}-${{ github.ref_name }}.pkg
-      - name: Show install logs
-        shell: bash
-        run: |
-          cat ~/Library/Logs/pikesquares/pikesquares-script-postinstall.log
-      - name: Show built installer in folder
-        shell: bash
-        run: |
-          ls -lah ./mib/
-      - name: Release installer
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          name: PikeSquares Mac OS Installer v${{ github.ref_name }}
-          body: |
-            Release of PikeSquares Mac OS Installer v${{ github.ref_name }}
-          files: |
-            ./mib/pike-squares-macos-${{ matrix.architecture }}-${{ github.ref_name }}.pkg
+          #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64

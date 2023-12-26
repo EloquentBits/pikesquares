@@ -1,11 +1,11 @@
 [lift]
-name = "pike-squares"
-description = "Pike Squares App."
+name = "pikesquares"
+description = "PikeSquares App."
 load_dotenv = false
 # base = "/opt/pike-squares/var/.cache/nce"
 
 [lift.app_info]
-repo = "https://git.eloquentbits.com/eqb/vconf"
+repo = "https://github.com/EloquentBits/pikesquares"
 
 [lift.ptex]
 id = "ptex"
@@ -20,10 +20,10 @@ provider = "PythonBuildStandalone"
 version = "3.11"
 
 [[lift.files]]
-name = "pikesquares"
+name = "pikesquares-bundle"
 
 [[lift.commands]]
 name = ""
 description = "pikesquares cli"
-exe = "{pikesquares}"
+exe = "{pikesquares-bundle}"
 args = []
