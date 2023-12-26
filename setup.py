@@ -1,29 +1,169 @@
 # encoding: utf-8
 
-"""
-This is a hack allowing you installing
-uWSGI and uwsgidecorators via pip and easy_install
-since 1.9.11 it automatically detects pypy
-"""
-
-import os
 import sys
+import subprocess
+import os
+
 import errno
 import shlex
+
+import setuptools
+from setuptools.dist import Distribution
+from setuptools.command.build import build
+from setuptools.command.build_ext import build_ext
+from setuptools.command.build_py import build_py
+from setuptools.command.install import install
+from setuptools.command.install_lib import install_lib
+
+#from distutils.core import Extension
+
+# local script imports:
+sys.path.insert(0, os.path.dirname(__file__))
+
+import uwsgiconfig as uc
+
 import uwsgiconfig
 
-from setuptools import setup
-from setuptools.command.build_ext import build_ext
-from distutils.core import Extension
+from wheel.bdist_wheel import bdist_wheel
+
+#from setuptools import setup, find_packages, Extension
+import pathlib
+import shutil
+
+import pkgconfig
+import platform
+
+suffix = '.pyd' if os.name == 'nt' else '.so'
+
+class CustomExtension(setuptools.Extension):
+    def __init__(self, path):
+        self.path = path
+        super().__init__(pathlib.PurePath(path).name, [])
+
+class build_CustomExtensions(build_ext):
+    def run(self):
+        for ext in (x for x in self.extensions if isinstance(x, CustomExtension)):
+            source = f"{ext.path}{suffix}"
+            build_dir = pathlib.PurePath(self.get_ext_fullpath(ext.name)).parent
+            os.makedirs(f"{build_dir}/{pathlib.PurePath(ext.path).parent}",
+                exist_ok = True)
+            print(f"copy from: {source=} to: {build_dir}/{source}")
+            shutil.copy(f"{source}", f"{build_dir}/{source}")
+
+def find_extensions(directory):
+    extensions = []
+    for path, _, filenames in os.walk(directory):
+        for filename in filenames:
+            filename = pathlib.PurePath(filename)
+            if pathlib.PurePath(filename).suffix == suffix:
+                extensions.append(CustomExtension(os.path.join(path, filename.stem)))
+    print(f"{extensions=}")
+    return extensions
+
+
+class VConfBuildPyCommand(build_py):
+    """Custom build command."""
+
+    def run(self):
+        print("=== VConfBuildPyCommand ===")
+        #subprocess.run(['sh', 'vconf_pre_build.sh'], check=True)
+        #subprocess.run(['python', 'scripts/my_custom_script.py'], check=True)
+        #subprocess.run(['sh', 'pyzmq_tools/install_libzmq.sh'], check=True)
+
+        setuptools.command.build_py.build_py.run(self)
+
+uwsgi_compiled = False
+
+def get_profile():
+    is_pypy = False
+    try:
+        import __pypy__  # NOQA
+        is_pypy = True
+    except ImportError:
+        pass
+    if is_pypy:
+        profile = os.environ.get('UWSGI_PROFILE', 'buildconf/pypy.ini')
+    else:
+        profile = os.environ.get('UWSGI_PROFILE', 'buildconf/default.ini')
+    if not profile.endswith('.ini'):
+        profile = "%s.ini" % profile
+    if '/' not in profile:
+        profile = "buildconf/%s" % profile
+
+    return profile
+
+#def patch_bin_path(cmd, conf):
+
+#    bin_name = conf.get('bin_name')
+
+#    if not os.path.isabs(bin_name):
+#        print('PATCHING "bin_name" to properly install_scripts dir')
+#        print(f"{cmd.install_scripts=}")
+
+#        print(f"{os.path.join(cmd.install_scripts, conf.get('bin_name'))=}")
+#        try:
+#            if not os.path.exists(cmd.install_scripts):
+#                os.makedirs(cmd.install_scripts)
+#            conf.set('bin_name',
+#                     os.path.join(cmd.install_scripts, conf.get('bin_name')))
+#        except Exception:
+#            conf.set('bin_name', sys.prefix + '/bin/' + bin_name)
+
+
+#class uWSGIBuilder(build_ext):
+
+#    def run(self):
+#        global uwsgi_compiled
+#        if not uwsgi_compiled:
+#            conf = uc.uConf(get_profile())
+#            patch_bin_path(self, conf)
+#            uc.build_uwsgi(conf)
+#            uwsgi_compiled = True
+
+#class uWSGIInstall(install):
+
+#    def run(self):
+#        print("===================== install")
+#        global uwsgi_compiled
+#        if not uwsgi_compiled:
+#            conf = uc.uConf(get_profile())
+#            patch_bin_path(self, conf)
+#            uc.build_uwsgi(conf)
+#            uwsgi_compiled = True
+#        install.run(self)
+
+
+#class uWSGIInstallLib(install_lib):
+
+#    def run(self):
+#        print("===================== install_lib")
+#        global uwsgi_compiled
+#        if not uwsgi_compiled:
+#            conf = uc.uConf(get_profile())
+#            patch_bin_path(self, conf)
+#            uc.build_uwsgi(conf)
+#            uwsgi_compiled = True
+#        install_lib.run(self)
+
 
 
 class uWSGIBuildExt(build_ext):
 
-    UWSGI_NAME = 'pyuwsgi'
-    UWSGI_PLUGIN = 'pyuwsgi'
-    UWSGI_PROFILE = 'pyuwsgi'
+    UWSGI_NAME = 'vconf'
+    UWSGI_PLUGIN = 'vconf'
+    UWSGI_PROFILE = 'vconf'
+
+    SHARED_LIBS = [
+        'libzmq',
+        'openssl',
+        'sqlite3',
+    ]
+    #if platform.system() == "Linux":
+    #    SHARED_LIBS += ['avahi-client']
 
     def build_extensions(self):
+        print("=====build_extensions=======")
+        
         self.uwsgi_setup()
         # XXX: needs uwsgiconfig fix
         self.uwsgi_build()
@@ -43,6 +183,7 @@ class uWSGIBuildExt(build_ext):
         build_ext.build_extensions(self)
 
     def uwsgi_setup(self):
+        print("=====uwsgi_setup=======")
         profile = os.environ.get('UWSGI_PROFILE') or 'buildconf/%s.ini' % self.UWSGI_PROFILE
 
         if not profile.endswith('.ini'):
@@ -52,17 +193,28 @@ class uWSGIBuildExt(build_ext):
 
         # FIXME: update uwsgiconfig to properly set _EVERYTHING_!
         config = uwsgiconfig.uConf(profile)
+
         # insert in the beginning so UWSGI_PYTHON_NOLIB is exported
         # before the python plugin compiles
-        ep = config.get('embedded_plugins').split(',')
+        ep = [p.strip() for p in config.get('embedded_plugins').split(',')]
         if self.UWSGI_PLUGIN in ep:
             ep.remove(self.UWSGI_PLUGIN)
         ep.insert(0, self.UWSGI_PLUGIN)
+        # Remove domain plugin depends on user OS
+        #ep.remove('bonjour' if platform.system() == "Linux" else 'avahi')
+        config.set('libs', ",".join([
+            pkgconfig.libs(lib) for lib in self.SHARED_LIBS
+        ]))
+        config.set('cflags', ",".join([
+            pkgconfig.cflags(c) for c in self.SHARED_LIBS
+        ]))
         config.set('embedded_plugins', ','.join(ep))
         config.set('as_shared_library', 'true')
         config.set('bin_name', self.get_ext_fullpath(self.UWSGI_NAME))
+        print(f"{self.get_ext_fullpath(self.UWSGI_NAME)=}")
         try:
             os.makedirs(os.path.dirname(config.get('bin_name')))
+            print(f"{os.path.dirname(config.get('bin_name'))=}")
         except OSError as e:
             if e.errno != errno.EEXIST:
                 raise
@@ -71,10 +223,13 @@ class uWSGIBuildExt(build_ext):
         self.uwsgi_config = config
 
     def uwsgi_build(self):
+        print("=====uwsgi_build=======")
         uwsgiconfig.build_uwsgi(self.uwsgi_config)
+        print(f"{self.extensions=}")
 
         # XXX: merge uwsgi_setup (see other comments)
         for ext in self.extensions:
+            print(f"[vconf setup.py] {ext=}")
             if ext.name == self.UWSGI_NAME:
                 ext.sources = [s + '.c' for s in self.uwsgi_config.gcc_list]
                 ext.library_dirs = self.uwsgi_config.include_path[:]
@@ -95,94 +250,132 @@ class uWSGIBuildExt(build_ext):
                         if y:
                             ext.extra_compile_args.append(y)
 
+            #elif ext.name == "hiredis":
+                # build hiredis
+            #    ext.sources = ["/usr/local/src/hiredis-1.1.0/*",]
+            #    ext.library_dirs = ["/usr/local/include/hiredis",]
+            #    ext.libraries = ["hiredis",]
+            # with open("exception", 'w') as file:
+            os.system(f"echo '[vconf setup.py] {ext.libraries=}\n[vconf setup.py] {ext.library_dirs=}\n[vconf setup.py] {ext.extra_compile_args=}'")
 
-LONG_DESCRIPTION = """
-# The uWSGI server as a Python module
+    #def run(self):
+    #    for ext in (x for x in self.extensions if isinstance(x, CustomExtension)):
+    #        source = f"{ext.path}{suffix}"
+    #        build_dir = pathlib.PurePath(self.get_ext_fullpath(ext.name)).parent
+    #        os.makedirs(f"{build_dir}/{pathlib.PurePath(ext.path).parent}",
+                         #            exist_ok = True)
+    #        print(f"copy from: {source=} to: {build_dir}/{source}")
+    #        shutil.copy(f"{source}", f"{build_dir}/{source}")
 
-## Install
 
-```
-pip install pyuwsgi
-```
 
-## Run
+class uWSGIWheel(bdist_wheel):
+    def finalize_options(self):
+        print("===================== uWSGIWheel.finalize_options")
+        bdist_wheel.finalize_options(self)
+        self.root_is_pure = False
 
-uWSGI will get installed to your Python path with a console script named `pyuwsgi`. To
-make it a full drop-in replacement it will install a script named `uwsgi` as well.
+class uWSGIBuildCmd(build):
+    def initialize_options(self):
+        import distutils
+        distutils.command.build.build.initialize_options(self)
+        self.build_base = '_build'
 
-You can also call it directly in your Python code with a list of valid uWSGI options:
 
-```python
-import pyuwsgi
-pyuwsgi.run(["--help"])
-```
+class uWSGIDistribution(Distribution):
 
-## Differences from uWSGI
+    def __init__(self, *attrs):
+        print("===================== uWSGIDistribution.__init__")
+        Distribution.__init__(self, *attrs)
+        #self.cmdclass['install'] = uWSGIInstall
+        #self.cmdclass['install_lib'] = uWSGIInstallLib
+        self.cmdclass['build_ext'] = uWSGIBuildExt
+        self.cmdclass['build'] = uWSGIBuildCmd
+        #self.cmdclass['build_py'] = VConfBuildPyCommand
+        #self.cmdclass['bdist_wheel'] = uWSGIWheel
 
-This is built from uWSGI's source without any modifications.
-A different [`setup.py`](https://github.com/unbit/uwsgi/blob/uwsgi-2.0/setup.pyuwsgi.py)
-is used to make the project a friendlier part of the Python ecosystem. It allows it
-to be imported as a Python module and distributed using the
-[wheel format](https://www.python.org/dev/peps/pep-0427/). The pre-packaged wheels
-include the following common libraries used by uWSGI:
+    #def iter_distribution_names(self):
+    #    for pkg in self.packages or ():
+    #        yield pkg
+    #    for module in self.py_modules or ():
+    #        yield module
 
-* [zlib](https://zlib.net/)
-* [pcre](https://www.pcre.org/)
-* [jansson](http://www.digip.org/jansson/)
+    def has_ext_modules(self):
+        return True
 
-SSL is intentionally excluded for security reasons. If you need SSL support, you can
-force a wheel to be built locally with the `pip` flag `--no-binary=pyuwsgi`.
+    def is_pure(self):
+        return False
 
-In addition to the default plugins, the [`stats_pusher_statsd`](https://uwsgi-docs.readthedocs.io/en/latest/Metrics.html#statsd)
-plugin is included by default in `pyuwsgi` where it is typically optional for uWSGI.
 
-The full uWSGI documentation can be found at
-[https://uwsgi-docs.readthedocs.io](https://uwsgi-docs.readthedocs.io).
+setuptools.setup(
+    name='vconf-binary',
+    author='Eloquent Bits Inc',
+    author_email='philip.kalinsky@eloquentbits.com',
+    url='',
+    python_requires=">=3.11",
+    distclass = uWSGIDistribution,
 
-## License
 
-uWSGI is licensed [GPLv2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt) with
-a [linking exception](https://en.wikipedia.org/wiki/GPL_linking_exception) which means
-you are allowed to use uWSGI (or pyuwsgi) unmodified in a proprietary or otherwise non-GPL
-licensed project without invoking the GPL on the rest of the code.
+    #cmdclass={
+    #    'build_ext': uWSGIBuildExt,
+    #    'bdist_wheel': uWSGIWheel,
+    #},
 
-The [full license](https://github.com/unbit/uwsgi/blob/uwsgi-2.0/LICENSE) can be found
-on GitHub.
+    #packages = ["vconf-binary"],
 
----
+    #package_data = {
+    #    "vconf-binary": [
+    #        "extensions/libhiredis.so"
+    #    ]
+    #},
+    #include_package_data=True,
+    #has_ext_modules=lambda: True,
 
-[![Lincoln Loop](https://cldup.com/gyNz5rfTkR.png)](https://lincolnloop.com)
-
-`pyuwsgi` is sponsored by [Lincoln Loop](https://lincolnloop.com).
-
-[![Unbit](https://cldup.com/TTNag1Zlcw.png)](http://unbit.com/)
-
-`uwsgi` is the creation of [Unbit](http://unbit.com/).
-
-"""
-
-setup(
-    name='pyuwsgi',
-    license='GPL2',
-    version=uwsgiconfig.uwsgi_version + "",
-    author='Unbit',
-    author_email='info@unbit.it',
-    description='The uWSGI server',
-    url='https://uwsgi-docs.readthedocs.io/en/latest/',
-    long_description=LONG_DESCRIPTION,
-    long_description_content_type="text/markdown",
-    cmdclass={
-        'build_ext': uWSGIBuildExt,
-        },
     py_modules=[
         'uwsgidecorators',
-        ],
+    ],
     ext_modules=[
-        Extension('pyuwsgi', sources=[]),
-        ],
-    entry_points={
-        'console_scripts': ['pyuwsgi=pyuwsgi:run', 'uwsgi=pyuwsgi:run'],
-        },
+        setuptools.Extension(
+            'vconf', 
+            sources=[]
+        ),
+        #setuptools.Extension('hiredis', sources=[]),
+    ],
+
+    #ext_modules = find_extensions("extensions"),
+
+    #data_files=[
+    #    (
+    #      'vconf/resources',
+    #      [
+    #          'vconf-resources/vconf.so', 
+    #          'vconf-resources/bootstrap_pex.py'
+    #        ]
+    #    )
+    #],
+
+    #package_data={
+    #    "mypkg": ["*.txt"],
+    #    "mypkg.data": ["*.rst"],
+    #}
+
+
+    #install_requires=[
+    #    'platformdirs',
+        #'twitter.common.contextutil',
+    #],
+
+    #ext_modules=[
+    #    Extension('vconf', sources=[]),
+    #    ] + extensions,
+
+    #entry_points={
+        #'console_scripts': ['vconf=vconf:run', ],
+    #    'console_scripts': [
+    #        'vconf=vconf_main:run'
+    #    ],
+    #},
+
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         "Environment :: Web Environment",
@@ -190,18 +383,59 @@ setup(
         "Operating System :: MacOS :: MacOS X",
         "Operating System :: POSIX",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.5",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
         "Topic :: Internet :: WWW/HTTP",
-        "Topic :: Internet :: WWW/HTTP :: WSGI",
-        "Topic :: Internet :: WWW/HTTP :: WSGI :: Server",
+        "Topic :: Internet :: WWW/HTTP :: VConf",
+        "Topic :: Internet :: WWW/HTTP :: VConf :: Server",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         ]
     )
+
+"""
+https://stackoverflow.com/a/63436907
+
+from setuptools import setup, find_packages, Extension
+from setuptools.command.build_ext import build_ext
+import os
+import pathlib
+import shutil
+
+suffix = '.pyd' if os.name == 'nt' else '.so'
+
+class CustomDistribution(Distribution):
+  def iter_distribution_names(self):
+    for pkg in self.packages or ():
+      yield pkg
+    for module in self.py_modules or ():
+      yield module
+
+class CustomExtension(Extension):
+  def __init__(self, path):
+    self.path = path
+    super().__init__(pathlib.PurePath(path).name, [])
+
+class build_CustomExtensions(build_ext):
+  def run(self):
+    for ext in (x for x in self.extensions if isinstance(x, CustomExtension)):
+      source = f"{ext.path}{suffix}"
+      build_dir = pathlib.PurePath(self.get_ext_fullpath(ext.name)).parent
+      os.makedirs(f"{build_dir}/{pathlib.PurePath(ext.path).parent}",
+          exist_ok = True)
+      shutil.copy(f"{source}", f"{build_dir}/{source}")
+
+def find_extensions(directory):
+  extensions = []
+  for path, _, filenames in os.walk(directory):
+    for filename in filenames:
+      filename = pathlib.PurePath(filename)
+      if pathlib.PurePath(filename).suffix == suffix:
+        extensions.append(CustomExtension(os.path.join(path, filename.stem)))
+  return extensions
+
+setup(
+  # Stuff
+  ext_modules = find_extensions("PackageRoot"),
+  cmdclass = {'build_ext': build_CustomExtensions}
+  distclass = CustomDistribution
+)
+"""
