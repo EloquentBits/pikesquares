@@ -4,10 +4,10 @@ on:
   push:
     branches:
       - master
-    paths:
-      - 'src/pikesquares/**'
-#    tags:
-#      - '*'
+    #paths:
+    #  - 'src/pikesquares/**'
+    tags:
+      - '**'
 
 jobs:
 
