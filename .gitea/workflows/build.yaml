@@ -45,9 +45,10 @@ jobs:
           output-dir: dist
           package-dir: ./uwsgi
         env:
-          CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
-          CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux2014_x86_64:latest
-
+          #CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
+          CIBW_BUILD: cp311-manylinux_x86_64
+          #CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux2014_x86_64:latest
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_ARCHS_LINUX: auto aarch64
           CIBW_ARCHS_MACOS: x86_64
           # cross-compile for arm64 on macos isn't working yet
@@ -55,7 +56,7 @@ jobs:
           # CIBW_ARCHS_MACOS: x86_64 arm64
           # tesing on emulated arm64 isn't supported for MacOS
           # CIBW_TEST_SKIP: "*-macosx_arm64"
-          CIBW_SKIP: cp36-* pp*
+          #CIBW_SKIP: cp36-* pp*
           CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
           CIBW_TEST_COMMAND: pyuwsgi --help
           CIBW_BEFORE_ALL: ./patch-uwsgi-packaging.sh uwsgi
