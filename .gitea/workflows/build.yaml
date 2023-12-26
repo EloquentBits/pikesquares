@@ -12,8 +12,9 @@ on:
 jobs:
 
   build_bundle:
-    name: Build bundle and upload to BunnyCDN
-    runs-on: linux_x86_64
+    name: Build bundle
+    runs-on: ubuntu-act-latest
+    #runs-on: linux_x86_64
     strategy:
       # Ensure that a wheel builder finishes even if another fails
       fail-fast: false
