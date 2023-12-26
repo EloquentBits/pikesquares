@@ -62,7 +62,6 @@ jobs:
           # CIBW_ARCHS_MACOS: x86_64 arm64
           # tesing on emulated arm64 isn't supported for MacOS
           # CIBW_TEST_SKIP: "*-macosx_arm64"
-          #CIBW_SKIP: cp36-* pp*
           CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
           CIBW_TEST_COMMAND: pyuwsgi --help
           CIBW_BEFORE_ALL: ./patch-uwsgi-packaging.sh uwsgi
