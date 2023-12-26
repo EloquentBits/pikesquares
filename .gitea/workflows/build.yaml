@@ -39,7 +39,7 @@ jobs:
       - name: Display Project Version
         run: echo "${{steps.project-version.outputs.version}}"
 
-      - uses: actions/setup-python@v5
+      - uses: https://gitea.com/cerc-io/setup-python@v4
         with:
           python-version: '3.11' 
 
