@@ -31,8 +31,8 @@ from wheel.bdist_wheel import bdist_wheel
 import pathlib
 import shutil
 
-import pkgconfig
-import platform
+#import pkgconfig
+#import platform
 
 suffix = '.pyd' if os.name == 'nt' else '.so'
 
@@ -199,12 +199,12 @@ class uWSGIBuildExt(build_ext):
         ep.insert(0, self.UWSGI_PLUGIN)
         # Remove domain plugin depends on user OS
         #ep.remove('bonjour' if platform.system() == "Linux" else 'avahi')
-        config.set('libs', ",".join([
-            pkgconfig.libs(lib) for lib in self.SHARED_LIBS
-        ]))
-        config.set('cflags', ",".join([
-            pkgconfig.cflags(c) for c in self.SHARED_LIBS
-        ]))
+        #config.set('libs', ",".join([
+        #    pkgconfig.libs(lib) for lib in self.SHARED_LIBS
+        #]))
+        #config.set('cflags', ",".join([
+        #    pkgconfig.cflags(c) for c in self.SHARED_LIBS
+        #]))
         config.set('embedded_plugins', ','.join(ep))
         config.set('as_shared_library', 'true')
         config.set('bin_name', self.get_ext_fullpath(self.UWSGI_NAME))
