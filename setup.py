@@ -20,8 +20,9 @@ from setuptools.command.install_lib import install_lib
 # local script imports:
 sys.path.insert(0, os.path.dirname(__file__))
 
-import uwsgiconfig as uc
+print(sys.path)
 
+#import uwsgiconfig as uc
 import uwsgiconfig
 
 from wheel.bdist_wheel import bdist_wheel
@@ -61,12 +62,11 @@ def find_extensions(directory):
     return extensions
 
 
-class VConfBuildPyCommand(build_py):
+class PikeSquaresBuildPyCommand(build_py):
     """Custom build command."""
 
     def run(self):
-        print("=== VConfBuildPyCommand ===")
-        #subprocess.run(['sh', 'vconf_pre_build.sh'], check=True)
+        #subprocess.run(['sh', 'pyuwsgi_pre_build.sh'], check=True)
         #subprocess.run(['python', 'scripts/my_custom_script.py'], check=True)
         #subprocess.run(['sh', 'pyzmq_tools/install_libzmq.sh'], check=True)
 
@@ -149,9 +149,9 @@ def get_profile():
 
 class uWSGIBuildExt(build_ext):
 
-    UWSGI_NAME = 'vconf'
-    UWSGI_PLUGIN = 'vconf'
-    UWSGI_PROFILE = 'vconf'
+    UWSGI_NAME = 'pyuwsgi'
+    UWSGI_PLUGIN = 'pyuwsgi'
+    UWSGI_PROFILE = 'pikesquares'
 
     SHARED_LIBS = [
         'libzmq',
@@ -162,8 +162,6 @@ class uWSGIBuildExt(build_ext):
     #    SHARED_LIBS += ['avahi-client']
 
     def build_extensions(self):
-        print("=====build_extensions=======")
-        
         self.uwsgi_setup()
         # XXX: needs uwsgiconfig fix
         self.uwsgi_build()
@@ -183,7 +181,6 @@ class uWSGIBuildExt(build_ext):
         build_ext.build_extensions(self)
 
     def uwsgi_setup(self):
-        print("=====uwsgi_setup=======")
         profile = os.environ.get('UWSGI_PROFILE') or 'buildconf/%s.ini' % self.UWSGI_PROFILE
 
         if not profile.endswith('.ini'):
@@ -229,7 +226,6 @@ class uWSGIBuildExt(build_ext):
 
         # XXX: merge uwsgi_setup (see other comments)
         for ext in self.extensions:
-            print(f"[vconf setup.py] {ext=}")
             if ext.name == self.UWSGI_NAME:
                 ext.sources = [s + '.c' for s in self.uwsgi_config.gcc_list]
                 ext.library_dirs = self.uwsgi_config.include_path[:]
@@ -256,7 +252,7 @@ class uWSGIBuildExt(build_ext):
             #    ext.library_dirs = ["/usr/local/include/hiredis",]
             #    ext.libraries = ["hiredis",]
             # with open("exception", 'w') as file:
-            os.system(f"echo '[vconf setup.py] {ext.libraries=}\n[vconf setup.py] {ext.library_dirs=}\n[vconf setup.py] {ext.extra_compile_args=}'")
+            os.system(f"echo '[pikesquares setup.py] {ext.libraries=}\n[pikesquares setup.py] {ext.library_dirs=}\n[pikesquares setup.py] {ext.extra_compile_args=}'")
 
     #def run(self):
     #    for ext in (x for x in self.extensions if isinstance(x, CustomExtension)):
@@ -291,7 +287,7 @@ class uWSGIDistribution(Distribution):
         #self.cmdclass['install_lib'] = uWSGIInstallLib
         self.cmdclass['build_ext'] = uWSGIBuildExt
         self.cmdclass['build'] = uWSGIBuildCmd
-        #self.cmdclass['build_py'] = VConfBuildPyCommand
+        #self.cmdclass['build_py'] = PikeSquaresBuildPyCommand
         #self.cmdclass['bdist_wheel'] = uWSGIWheel
 
     #def iter_distribution_names(self):
@@ -308,7 +304,7 @@ class uWSGIDistribution(Distribution):
 
 
 setuptools.setup(
-    name='vconf-binary',
+    name='pikesquares-binary',
     author='Eloquent Bits Inc',
     author_email='philip.kalinsky@eloquentbits.com',
     url='',
@@ -336,7 +332,7 @@ setuptools.setup(
     ],
     ext_modules=[
         setuptools.Extension(
-            'vconf', 
+            'pyuwsgi', 
             sources=[]
         ),
         #setuptools.Extension('hiredis', sources=[]),
@@ -385,8 +381,8 @@ setuptools.setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.11",
         "Topic :: Internet :: WWW/HTTP",
-        "Topic :: Internet :: WWW/HTTP :: VConf",
-        "Topic :: Internet :: WWW/HTTP :: VConf :: Server",
+        "Topic :: Internet :: WWW/HTTP :: PikeSquares",
+        "Topic :: Internet :: WWW/HTTP :: PikeSquares :: Server",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         ]
     )
