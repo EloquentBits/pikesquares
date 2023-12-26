@@ -17,12 +17,12 @@ jobs:
     strategy:
       # Ensure that a wheel builder finishes even if another fails
       fail-fast: false
-      #matrix:
-      #  include:
-      #    - os: linux_x86_64
-      #      python-version: ["3.11"]
-      #      platform_id: manylinux_x86_64
-      #      manylinux_image: manylinux2014
+      matrix:
+        include:
+          - os: linux_x86_64
+            python-version: ["3.11"]
+            platform_id: manylinux_x86_64
+            manylinux_image: manylinux2014
 
     steps:
       - name: Checkout PikeSquares repo
@@ -39,11 +39,16 @@ jobs:
       - name: Display Project Version
         run: echo "${{steps.project-version.outputs.version}}"
 
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
       - name: Build wheels
-        #uses: pypa/cibuildwheel@v2.16.2
-        #with:
-        #  output-dir: dist
-        #  package-dir: ./uwsgi
+        uses: pypa/cibuildwheel@v2.16.2
+        with:
+          output-dir: dist
+          package-dir: ./uwsgi
         env:
           #CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
           CIBW_BUILD: cp311-manylinux_x86_64
@@ -60,20 +65,19 @@ jobs:
           #CIBW_SKIP: cp36-* pp*
           CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
           CIBW_TEST_COMMAND: pyuwsgi --help
-          #CIBW_BEFORE_ALL: ./patch-uwsgi-packaging.sh uwsgi
-          #CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
+          CIBW_BEFORE_ALL: ./patch-uwsgi-packaging.sh uwsgi
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
 
           CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ./pre_build.sh
           CIBW_BEFORE_BUILD_LINUX: ./pre_build.sh && (yum install -y zlib-devel zeromq-devel libsqlite3x-devel.x86_64 || apk add zlib-dev)
 
           #CIBW_BEFORE_ALL: "yum install -y pcre-devel jansson-devel openssl-devel avahi-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64"
-        run: |
-          cp setup.py uwsgi/
-
-          /usr/local/bin/cibuildwheel \
-            --platform linux \
-            --output-dir dist \
-            uwsgi
+      #run: |
+      #    cp setup.py uwsgi/
+      #    /usr/local/bin/cibuildwheel \
+      #      --platform linux \
+      #      --output-dir dist \
+      #      uwsgi
 
       - name: Create sdist
         run: |
