@@ -25,7 +25,7 @@ jobs:
       #      manylinux_image: manylinux2014
 
     steps:
-      - name: Checkout VConf repo
+      - name: Checkout PikeSquares repo
         #uses: actions/checkout@v4
         uses: https://github.com/actions/checkout@v4
         #with:
@@ -40,10 +40,10 @@ jobs:
         run: echo "${{steps.project-version.outputs.version}}"
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.16.2
-        with:
-          output-dir: dist
-          package-dir: ./uwsgi
+        #uses: pypa/cibuildwheel@v2.16.2
+        #with:
+        #  output-dir: dist
+        #  package-dir: ./uwsgi
         env:
           #CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
           CIBW_BUILD: cp311-manylinux_x86_64
@@ -67,6 +67,11 @@ jobs:
           CIBW_BEFORE_BUILD_LINUX: ./pre_build.sh && (yum install -y zlib-devel zeromq-devel libsqlite3x-devel.x86_64 || apk add zlib-dev)
 
           #CIBW_BEFORE_ALL: "yum install -y pcre-devel jansson-devel openssl-devel avahi-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64"
+        run: |
+          /usr/local/bin/cibuildwheel \
+            --platform linux \
+            --output-dir dist \
+            uwsgi
 
       - name: Create sdist
         run: |
@@ -111,7 +116,7 @@ jobs:
           ./.venv/bin/python3 -m pip install -r requirements.txt
           ./.venv/bin/python3 -m build . --wheel
 
-      - name: Upload pikesquares wheel to VCONF PyPi
+      - name: Upload pikesquares wheel to EQB PyPi
         env:
           TWINE_USERNAME: admin
           TWINE_PASSWORD: ${{secrets.PYPI_PASSWORD}}
@@ -151,7 +156,7 @@ jobs:
               build \
             --use-platform-suffix \
             --hash sha256 \
-            vconf.toml
+            pikesquares.toml
 
       - name: compress bundle
         env:
