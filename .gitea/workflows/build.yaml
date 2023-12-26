@@ -75,10 +75,6 @@ jobs:
           name: dist
           path: dist
 
-
-
-
-
       - name: setup go
         uses: https://github.com/actions/setup-go@v4
         with:
