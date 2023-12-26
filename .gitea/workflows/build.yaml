@@ -60,7 +60,7 @@ jobs:
           #CIBW_SKIP: cp36-* pp*
           CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
           CIBW_TEST_COMMAND: pyuwsgi --help
-          CIBW_BEFORE_ALL: ./patch-uwsgi-packaging.sh uwsgi
+          #CIBW_BEFORE_ALL: ./patch-uwsgi-packaging.sh uwsgi
           #CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
 
           CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ./pre_build.sh
