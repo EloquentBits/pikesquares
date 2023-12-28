@@ -125,9 +125,8 @@ jobs:
           path: pike-squares-macos-${{ matrix.architecture }}
 
       - name: Publish binary to cdn - Linux
-        if: false
         shell: bash
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && false
         env:
           PLATFORM: "linux"
         run: |
