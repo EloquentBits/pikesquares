@@ -15,7 +15,8 @@ jobs:
   build-and-publish-binary:
     strategy:
       matrix:
-        platform: [ macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
+        # macos-latest-large - intel, macos-latest-xlarge - apple silicon
+        platform: [ macos-latest-arm64 ] 
         architecture: [ aarch64 ]
         python-version: [ "3.11", ]
     runs-on: ${{ matrix.platform }}
@@ -138,9 +139,8 @@ jobs:
             https://${{ secrets.CDN_URL }}/${{ secrets.CDN_PROJECT_NAME }}/pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }}
 
       - name: Publish binary to cdn - Mac OS
-        if: false
         shell: bash
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && false
         env:
           PLATFORM: "macos"
         run: |
@@ -210,9 +210,8 @@ jobs:
         run: |
           ls -lah ./mib/
       - name: Release installer
-        if: false
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && false
         with:
           name: PikeSquares Mac OS Installer v${{ github.ref_name }}
           body: |
