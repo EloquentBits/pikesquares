@@ -15,11 +15,10 @@ jobs:
   build-and-publish-binary:
     strategy:
       matrix:
-        # macos-latest-large - intel, macos-latest-xlarge - apple silicon
-        platform: [ arm64 ] 
-        architecture: [ aarch64 ]
+        platform: [ linux ] #arm64 
+        architecture: [ x86_64 ] # aarch64 
         python-version: [ "3.11", ]
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform }}-${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
         with:
