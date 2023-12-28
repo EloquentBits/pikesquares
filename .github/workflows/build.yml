@@ -31,7 +31,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
         
       - name: Install dependencies
-        if: false
         shell: bash
         run: |
           python -m pip install -U build pex
@@ -82,15 +81,12 @@ jobs:
           name: dist
           path: dist
 
-
-
-      #- name: Build CLI wheel
-      #  shell: bash
-      #  run: |
-      #    python -m build . --wheel
+      - name: Build CLI wheel
+        shell: bash
+        run: |
+          python -m build . --wheel
 
       - name: Build PEX
-        if: false
         shell: bash
         env:
           PEX_TOOLS: 1
@@ -107,7 +103,6 @@ jobs:
             -o pikesquares-cli.pex
         
       - name: Build executable binary (science)
-        if: false
         shell: bash
         env:
           LATEST_SCIENCE_VERSION: "v0.3.0"
@@ -124,12 +119,12 @@ jobs:
         if: false
         uses: actions/upload-artifact@v3
         with:
-          name: pike-squares-macos-${{ matrix.architecture }}
-          path: pike-squares-macos-${{ matrix.architecture }}
+          name: pike-squares-${{matrix.platform}}-${{ matrix.architecture }}
+          path: pike-squares-${{matrix.platform}}-${{ matrix.architecture }}
 
       - name: Publish binary to cdn - Linux
         shell: bash
-        if: runner.os == 'Linux' && false
+        if: runner.os == 'Linux'
         env:
           PLATFORM: "linux"
         run: |
