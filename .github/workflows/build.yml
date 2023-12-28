@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         # macos-latest-large - intel, macos-latest-xlarge - apple silicon
-        platform: [ macos-latest-arm64 ] 
+        platform: [ arm64 ] 
         architecture: [ aarch64 ]
         python-version: [ "3.11", ]
     runs-on: ${{ matrix.platform }}
