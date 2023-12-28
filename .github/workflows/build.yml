@@ -25,17 +25,15 @@ jobs:
           submodules: true
           fetch-depth: 0
       
-      #- name: Set up Python ${{ matrix.python-version }}
-      #  if: runner.os != 'Linux'
-      #  uses: actions/setup-python@v4
-      #  with:
-      #    python-version: ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
         
-      #- name: Install dependencies
-      #  if: runner.os != 'Linux'
-      #  shell: bash
-      #  run: |
-      #    python -m pip install -U build pex
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install -U build pex
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.2
