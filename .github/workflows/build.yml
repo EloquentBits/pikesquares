@@ -62,7 +62,7 @@ jobs:
           #CIBW_TEST_COMMAND: pyuwsgi --help
           CIBW_BEFORE_ALL: ./patch-uwsgi-packaging.sh uwsgi
           CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ./pre_build.sh 
-          CIBW_BEFORE_BUILD_LINUX: (apk add openssl-dev zeromq-dev sqlit3-dev zlib-dev) && ./pre_build.sh
+          CIBW_BEFORE_BUILD_LINUX: (apk add openssl-dev zeromq-dev sqlite-dev zlib-dev) && ./pre_build.sh
           #yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 || 
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
 
