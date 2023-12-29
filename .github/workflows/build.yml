@@ -84,6 +84,12 @@ jobs:
       - name: Build CLI wheel
         shell: bash
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          ./.venv/bin/python3 -m pip install -U build
+          ./.venv/bin/python3 -m pip install -r requirements.txt
+          ./.venv/bin/python3 -m build . --wheel
+
           python -m build . --wheel
 
       - name: Build PEX
@@ -148,70 +154,70 @@ jobs:
             --data-binary @pike-squares-${{ env.PLATFORM }}-${{ matrix.architecture }} \
             https://${{ secrets.CDN_URL }}/${{ secrets.CDN_PROJECT_NAME }}/pikesquares-${{ env.PLATFORM }}-${{ matrix.architecture }}
 
-  build-macos-pkg-installer:
-    strategy:
-      matrix:
-        architecture: [ aarch64 ]
-        python-version: [ "3.11", "3.12" ]
-        platform: [ macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
-    runs-on: ${{ matrix.platform }}
-    needs: [ build-and-publish-binary ]
-    steps:
-      - uses: actions/checkout@v4
-        if: false
-        with:
-            fetch-depth: 0
-      - name: Set up Python ${{ matrix.python-version }}
-        if: false
-        uses: actions/setup-python@v4
-        with:
-            python-version: ${{ matrix.python-version }}
+#build-macos-pkg-installer:
+#    strategy:
+#      matrix:
+#        architecture: [ aarch64 ]
+#        python-version: [ "3.11" ]
+#        platform: [ macos-latest-arm64 ] # macos-latest-large - intel, macos-latest-xlarge - apple silicon
+#    runs-on: ${{ matrix.platform }}
+#    needs: [ build-and-publish-binary ]
+#    steps:
+#      - uses: actions/checkout@v4
+#        if: false
+#        with:
+#            fetch-depth: 0
+#      - name: Set up Python ${{ matrix.python-version }}
+#        if: false
+#        uses: actions/setup-python@v4
+#        with:
+#            python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        if: false
-        shell: bash
-        run: |
-            python -m pip install -U jinja2
+#      - name: Install dependencies
+#        if: false
+#        shell: bash
+#        run: |
+#            python -m pip install -U jinja2
         
-      - name: Checkout pikesquares Mac OS Installer Builder (MIB) repo
-        if: false
-        uses: actions/checkout@v4
-        with:
-            repository: EloquentBits/pikesquares-mib
-            path: ./mib
+#      - name: Checkout pikesquares Mac OS Installer Builder (MIB) repo
+#        if: false
+#        uses: actions/checkout@v4
+#        with:
+#            repository: EloquentBits/pikesquares-mib
+#            path: ./mib
 
-      - name: Restore cached pikesquares binary for mac
-        if: false
-        uses: actions/download-artifact@v3
-        with:
-            name: pike-squares-macos-${{ matrix.architecture }}
-            path: ./mib/_files/binary
+#      - name: Restore cached pikesquares binary for mac
+#        if: false
+#        uses: actions/download-artifact@v3
+#        with:
+#            name: pike-squares-macos-${{ matrix.architecture }}
+#            path: ./mib/_files/binary
 
-      - name: Run Mac OS Installer Builder (MIB)
-        if: false
-        shell: bash
-        working-directory: ./mib
-        run: |
-            mv _files/binary/pike-squares-macos-${{ matrix.architecture }} _files/binary/pikesquares
-            ls -R _files
-            python mib.py --config mib.toml
-            mv pikesquares-installer.pkg pike-squares-macos-${{ matrix.architecture }}-${{ github.ref_name }}.pkg
-      - name: Show install logs
-        if: false
-        shell: bash
-        run: |
-          cat ~/Library/Logs/pikesquares/pikesquares-script-postinstall.log
-      - name: Show built installer in folder
-        if: false
-        shell: bash
-        run: |
-          ls -lah ./mib/
-      - name: Release installer
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/') && false
-        with:
-          name: PikeSquares Mac OS Installer v${{ github.ref_name }}
-          body: |
-            Release of PikeSquares Mac OS Installer v${{ github.ref_name }}
-          files: |
-            ./mib/pike-squares-macos-${{ matrix.architecture }}-${{ github.ref_name }}.pkg
+#      - name: Run Mac OS Installer Builder (MIB)
+#        if: false
+#        shell: bash
+#        working-directory: ./mib
+#        run: |
+#            mv _files/binary/pike-squares-macos-${{ matrix.architecture }} _files/binary/pikesquares
+#            ls -R _files
+#            python mib.py --config mib.toml
+#            mv pikesquares-installer.pkg pike-squares-macos-${{ matrix.architecture }}-${{ github.ref_name }}.pkg
+#      - name: Show install logs
+#        if: false
+#        shell: bash
+#        run: |
+#          cat ~/Library/Logs/pikesquares/pikesquares-script-postinstall.log
+#      - name: Show built installer in folder
+#        if: false
+#        shell: bash
+#        run: |
+#          ls -lah ./mib/
+#      - name: Release installer
+#        uses: softprops/action-gh-release@v1
+#        if: startsWith(github.ref, 'refs/tags/') && false
+#        with:
+#          name: PikeSquares Mac OS Installer v${{ github.ref_name }}
+#          body: |
+#            Release of PikeSquares Mac OS Installer v${{ github.ref_name }}
+#          files: |
+#            ./mib/pike-squares-macos-${{ matrix.architecture }}-${{ github.ref_name }}.pkg
