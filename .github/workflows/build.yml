@@ -15,7 +15,7 @@ jobs:
   build-and-publish-binary:
     strategy:
       matrix:
-        platform: [ linux, darwin ] #arm64 
+        platform: [ darwin ] #arm64  linux
         architecture: [ x86_64 ] # aarch64 
         python-version: [ "3.11.7" ]
     runs-on: ${{ matrix.platform }}-${{ matrix.architecture }}
