@@ -40,7 +40,7 @@ jobs:
         with:
           output-dir: dist
           package-dir: ./uwsgi
-          #config-file: ./uwsgi/pyproject.toml
+          config-file: ./uwsgi/pyproject.toml
 
         env:
           #CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}

@@ -10,7 +10,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vconf-binary"
+name = "pikesquares-binary"
 dynamic = [
   "dependencies",
 ]
