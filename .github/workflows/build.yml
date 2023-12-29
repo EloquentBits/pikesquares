@@ -40,6 +40,8 @@ jobs:
         with:
           output-dir: dist
           package-dir: ./uwsgi
+          config-file: ./uwsgi/pyproject.toml
+
         env:
           #CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
           CIBW_BUILD_LINUX: cp311-manylinux_x86_64
@@ -48,7 +50,7 @@ jobs:
           #CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_ARCHS_LINUX: x86_64
           CIBW_ARCHS_MACOS: x86_64
-          #CIBW_PROJECT_REQUIRES_PYTHON: ">=3.11"
+          CIBW_PROJECT_REQUIRES_PYTHON: ">=3.11"
 
           CIBW_BUILD_VERBOSITY: 5
           #CIBW_ARCHS_MACOS: x86_64
