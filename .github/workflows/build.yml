@@ -81,15 +81,9 @@ jobs:
           name: dist
           path: dist
 
-      - name: Build CLI wheel
+      - name: Build pikesquares-binary wheel
         shell: bash
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          ./.venv/bin/python3 -m pip install -U build
-          ./.venv/bin/python3 -m pip install -r requirements.txt
-          ./.venv/bin/python3 -m build . --wheel
-
           python -m build . --wheel
 
       - name: Build PEX
