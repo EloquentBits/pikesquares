@@ -1,0 +1,108 @@
+[build-system]
+requires = [
+  "setuptools", 
+  "wheel",
+  "pkgconfig",
+  #"twine",
+  #  "packaging",
+  #  "Cython",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vconf-binary"
+dynamic = [
+  "dependencies",
+]
+version = "0.3.22"
+#readme = "README.md"
+requires-python = ">=3.11"
+keywords = []
+authors = [
+  { name = "Philip Kalinsky", email = "philip.kalinsky@eloquentbits.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[project.urls]
+Documentation = "https://github.com/EloquentBits/pikesquares#readme"
+Issues = "https://github.com/EloquentBits/pikesquares/issues"
+Source = "https://github.com/EloquentBits/pikesquares"
+######################################
+#####
+#####     cibuildwheel ##############
+
+[tool.cibuildwheel]
+#build = "*"
+
+build = "cp311-manylinux_x86_64"
+# build = "cp311-macosx_arm64"
+
+skip = ""
+test-skip = ""
+
+archs = ["auto"]
+build-frontend = "default"
+config-settings = {}
+dependency-versions = "pinned"
+environment = {}
+environment-pass = []
+build-verbosity = "5"
+
+before-all = ""
+before-build = ""
+
+test-command = ""
+before-test = ""
+test-requires = []
+test-extras = []
+
+container-engine = "docker"
+
+# manylinux-x86_64-image = "quay.io/pypa/manylinux2014_x86_64:latest"
+manylinux-x86_64-image = "manylinux2014"
+#"manylinux2014"
+
+#manylinux_2_35_x86_64
+
+#manylinux-i686-image = "manylinux2014"
+#manylinux-aarch64-image = "manylinux2014"
+#manylinux-ppc64le-image = "manylinux2014"
+#manylinux-s390x-image = "manylinux2014"
+#manylinux-pypy_x86_64-image = "manylinux2014"
+#manylinux-pypy_i686-image = "manylinux2014"
+#manylinux-pypy_aarch64-image = "manylinux2014"
+
+# musllinux-x86_64-image = "musllinux_1_1"
+#musllinux-i686-image = "musllinux_1_1"
+#musllinux-aarch64-image = "musllinux_1_1"
+#musllinux-ppc64le-image = "musllinux_1_1"
+#musllinux-s390x-image = "musllinux_1_1"
+
+[tool.cibuildwheel.linux]
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
+
+
+# The placeholder {package} can be used here; 
+# it will be replaced by the path to the package being built by cibuildwheel.
+#before-all = "apk add pcre-dev jansson-dev openssl-dev zlib-dev zeromq-dev"
+before-all = "yum install -y epel-release nodejs pcre-devel jansson-devel openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64"
+
+[tool.cibuildwheel.linux.environment]
+ZMQ_PREFIX="bundled"
+CFLAGS = "-Wl,-strip-all"
+CXXFLAGS = "-Wl,-strip-all"
+UWSGI_PROFILE = "vconf"
+
+[tool.cibuildwheel.macos.environment]
+CFLAGS = "$(pkg-config --cflags libzmq)"
+LDFLAGS = "$(pkg-config --libs libzmq)"
+
+[tool.cibuildwheel.macos]
+repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
+
+[tool.cibuildwheel.windows]
