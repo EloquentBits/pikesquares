@@ -39,7 +39,7 @@ Source = "https://github.com/EloquentBits/pikesquares"
 [tool.cibuildwheel]
 #build = "*"
 
-build = "cp311-manylinux_x86_64"
+#build = "cp311-manylinux_x86_64"
 # build = "cp311-macosx_arm64"
 
 skip = ""

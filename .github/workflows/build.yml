@@ -44,16 +44,13 @@ jobs:
 
         env:
           #CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
-          CIBW_BUILD_LINUX: cp311-manylinux_x86_64
-          CIBW_BUILD_MACOS: cp311-macosx_x86_64
+          #CIBW_BUILD_LINUX: cp311-manylinux_x86_64
+          #CIBW_BUILD_MACOS: cp311-macosx_x86_64
           CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux2014_x86_64:latest
           #CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-          CIBW_ARCHS_LINUX: x86_64
-          CIBW_ARCHS_MACOS: x86_64
           #CIBW_PROJECT_REQUIRES_PYTHON: ">=3.11"
 
           CIBW_BUILD_VERBOSITY: 5
-          #CIBW_ARCHS_MACOS: x86_64
           # cross-compile for arm64 on macos isn't working yet
           # https://github.com/lincolnloop/pyuwsgi-wheels/issues/18
           # CIBW_ARCHS_MACOS: x86_64 arm64
