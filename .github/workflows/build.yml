@@ -123,7 +123,7 @@ jobs:
       CIBW_BUILD: cp311-macosx_x86_64 cp311-macosx_universal2 cp311-macosx_arm64
       CIBW_ARCHS: 'x86_64 universal2 arm64'
       CIBW_BUILD_VERBOSITY: 5
-      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
+      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares PATH=$PATH:"/usr/local/pkg-config-0.29.2/bin"
       #CIBW_TEST_COMMAND: pyuwsgi --help
       CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
       CIBW_BEFORE_BUILD: IS_MACOS=1 ./scripts/pre_build.sh
