@@ -116,16 +116,9 @@ function build_zmq {
   #./configure --prefix=/usr/local/pkg-config-0.23 --datarootdir=/usr/share
   #make
   #sudo make install
-
-  #cd libzmq
-  # ./autogen.sh
-  # ./configure     # add other options here
-  # make
-  # make check
-  # sudo make install
-  #
+  
   if [ -e zmq-stamp ]; then return; fi
-  echo "building jansson from $JANSSON_DOWNLOAD_URL"
+  echo "building zmq from $ZMQ_DOWNLOAD_URL"
   fetch_unpack "${ZMQ_DOWNLOAD_URL}/${ZMQ_ROOT}.tar.gz"
   (cd "${ZMQ_ROOT}" \
       && ./autogen.sh \
