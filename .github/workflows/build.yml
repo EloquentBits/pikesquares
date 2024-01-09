@@ -23,38 +23,10 @@ concurrency:
 
 jobs:
 
-  linux-python3-11:
-    name: Python 3.11 Linux
-    runs-on: ubuntu-20.04
-
-    env:
-      CIBW_BUILD: 'cp311-manylinux_x86_64'
-      #CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
-      #PYTEST_TIMEOUT: '600'
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install
-      shell: bash
-      run: pip install 'cibuildwheel>=2.16.2' twine build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
   linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
-    needs: linux-python3-11
+    #needs: linux-python3-11
     strategy:
       matrix:
         arch: [x86_64, aarch64]
@@ -80,8 +52,8 @@ jobs:
 
       CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
       #CIBW_TEST_COMMAND: pyuwsgi --help
-      CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
-      CIBW_BEFORE_BUILD: ./scripts/pre_build.sh && yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64
+      #CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
+      #CIBW_BEFORE_BUILD: ./scripts/pre_build.sh && yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64
       #CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ./pre_build.sh 
       #CIBW_BEFORE_BUILD_LINUX: ./pre_build.sh && 
       #  (apk add openssl-dev zeromq-dev sqlite-dev zlib-dev || 
@@ -121,13 +93,16 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cd uwsgi
+        ./scripts/patch-uwsgi-packaging.sh uwsgi
+        ./scripts/pre_build.sh 
+        yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
         #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
         #fi
-        cibuildwheel --output-dir wheelhouse --config-file pyproject.toml .
+        
+        cibuildwheel --output-dir wheelhouse --config-file pyproject.pyuwsgi.toml uwsgi
         ls wheelhouse
 
   build-pywsgi-wheel:
