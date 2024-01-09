@@ -76,14 +76,14 @@ jobs:
       #      --output-dir dist \
       #      uwsgi
 
-      - name: Create sdist
-        run: |
-          rm -rf uwsgi && git submodule update --init
-          pipx run build --sdist --outdir dist uwsgi
-      - uses: actions/upload-artifact@v3
-        with:
-          name: dist
-          path: dist
+      #- name: Create sdist
+      #  run: |
+          #rm -rf uwsgi && git submodule update --init
+      #    pipx run build --wheel --outdir dist uwsgi
+      #- uses: actions/upload-artifact@v3
+      #  with:
+      #    name: dist
+      #    path: dist
 
       - name: setup go
         uses: https://github.com/actions/setup-go@v4

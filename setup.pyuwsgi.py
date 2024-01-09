@@ -1,7 +1,7 @@
 # encoding: utf-8
 
 import sys
-import subprocess
+#import subprocess
 import os
 
 import errno
@@ -12,8 +12,8 @@ from setuptools.dist import Distribution
 from setuptools.command.build import build
 from setuptools.command.build_ext import build_ext
 from setuptools.command.build_py import build_py
-from setuptools.command.install import install
-from setuptools.command.install_lib import install_lib
+#from setuptools.command.install import install
+#from setuptools.command.install_lib import install_lib
 
 #from distutils.core import Extension
 

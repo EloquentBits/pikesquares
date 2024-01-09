@@ -7,35 +7,167 @@ on:
       - master
     tags:
       - '**'
+    paths-ignore:
+      - '**.md'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/build.yml'
 
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-publish-binary:
+
+  linux-python3-11:
+    name: Python 3.11 Linux
+    runs-on: ubuntu-20.04
+
+    env:
+      CIBW_BUILD: 'cp311-manylinux_x86_64'
+      #CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
+      #PYTEST_TIMEOUT: '600'
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install
+      shell: bash
+      run: pip install 'cibuildwheel>=2.16.2' twine build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+  linux-python3:
+    name: Python 3 Linux
+    runs-on: ubuntu-20.04
+    needs: linux-python3-11
     strategy:
       matrix:
-        platform: [ darwin ] #arm64  linux
-        architecture: [ x86_64 ] # aarch64 
-        python-version: [ "3.11.7" ]
+        arch: [x86_64, aarch64]
+        python_build: [cp311-*,]
+        manylinux: [manylinux2014, manylinux_2_28]
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+        exclude:
+          # For now we don't distribute the 2_28 wheels on x64
+          - arch: x86_64
+            manylinux: manylinux_2_28
+          # Speed things up a bit for non-releases
+          - isRelease: false
+            python_build: 'cp311-*'
+          - isRelease: false
+            arch: aarch64
+    env:
+      CIBW_BUILD: ${{ matrix.python_build}}
+      CIBW_SKIP: '*-musllinux_aarch64'
+      CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
+      CIBW_MANYLINUX_AARCH64_IMAGE: ${{ matrix.manylinux }}
+      CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: ${{ matrix.manylinux }}
+      CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux }}
+      CIBW_MANYLINUX_PYPY_X86_64_IMAGE: ${{ matrix.manylinux }}
+      PYTEST_TIMEOUT: '600'
+
+      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
+      #CIBW_TEST_COMMAND: pyuwsgi --help
+      CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
+      CIBW_BEFORE_BUILD: ./scripts/pre_build.sh
+      #CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ./pre_build.sh 
+      #CIBW_BEFORE_BUILD_LINUX: ./pre_build.sh && 
+      #  (apk add openssl-dev zeromq-dev sqlite-dev zlib-dev || 
+      #  yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64)
+      #CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: ./.github/actions/manylinux_2014
+      with:
+        ccache: 1
+        python_alias: 1
+        openssl: 1
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+      if: ${{ matrix.arch == 'aarch64' }}
+
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install
+      shell: bash
+      run: |
+        pip install 'cibuildwheel>=2.16.2' twine build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+        #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: |
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+        #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
+        #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+        #fi
+        cibuildwheel --output-dir wheelhouse --config-file uwsgi/pyproject.toml wsgi
+        ls wheelhouse
+
+  build-pywsgi-wheel:
     runs-on: ${{ matrix.platform }}-${{ matrix.architecture }}
+    name: wheel-${{ matrix.name }}
+
+    strategy:
+      matrix:
+        include:
+          #platform: [ darwin ] #arm64  linux
+          #architecture: [ x86_64 ] # aarch64 
+          #python-version: [ "3.11.7" ]
+          - name: manylinux-x86_64
+            cibw:
+              build: "*manylinux*"
+              arch: x86_64
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 0
+        if: false
       
       - name: Set up Python ${{ matrix.python-version }}
+        if: false
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.architecture }}
         
       - name: Install dependencies
+        if: false
         shell: bash
         run: |
           python -m pip install -U build pex
 
       - name: Build cibuildwheel wheel
+        if: false
         uses: pypa/cibuildwheel@v2.16.2
         with:
           output-dir: dist
@@ -43,6 +175,12 @@ jobs:
           config-file: ./uwsgi/pyproject.toml
 
         env:
+          #CIBW_BUILD: "${{ matrix.cibw.build || '*' }}"
+          #CIBW_SKIP: "${{ matrix.cibw.skip || '' }}"
+          #CIBW_ARCHS_LINUX: "${{ matrix.cibw.arch || 'auto' }}"
+          #CIBW_ARCHS_MACOS: "${{ matrix.cibw.arch || 'auto' }}"
+          #CIBW_MANYLINUX_X86_64_IMAGE: "${{ matrix.cibw.manylinux_x86_64_image || '' }}"
+
           #CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
           CIBW_BUILD_LINUX: cp311-manylinux_x86_64
           CIBW_BUILD_MACOS: cp311-macosx_x86_64
@@ -71,21 +209,28 @@ jobs:
       #      --output-dir dist \
       #      uwsgi
 
-      - name: Create sdist
-        run: |
-          rm -rf uwsgi && git submodule update --init
-          pipx run build --sdist --outdir dist uwsgi
-      - uses: actions/upload-artifact@v3
-        with:
-          name: dist
-          path: dist
+      #- name: Create sdist
+      #  run: |
+          #rm -rf uwsgi && git submodule update --init
+      #    pipx run build --wheel --outdir dist uwsgi
+      #- uses: actions/upload-artifact@v3
+      #  with:
+      #    name: dist
+      #    path: dist
 
       - name: Build pikesquares-binary wheel
+        if: false
         shell: bash
         run: |
           python -m build . --wheel
 
-      - name: Build PEX
+  build-pikesquares-pex:
+    name: pex-${{ matrix.name }}
+    runs-on: ${{ matrix.platform }}-${{ matrix.architecture }}
+
+    steps:
+      - name: build pex
+        if: false
         shell: bash
         env:
           PEX_TOOLS: 1
@@ -101,7 +246,13 @@ jobs:
             --no-emit-warnings \
             -o pikesquares-cli.pex
         
+  build-pikesquares-scie:
+    name: scie-${{ matrix.name }}
+    runs-on: ${{ matrix.platform }}-${{ matrix.architecture }}
+
+    steps:
       - name: Build executable binary (science)
+        if: false
         shell: bash
         env:
           LATEST_SCIENCE_VERSION: "v0.3.0"
