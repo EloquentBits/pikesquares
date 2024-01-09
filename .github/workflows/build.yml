@@ -52,8 +52,8 @@ jobs:
 
       CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
       #CIBW_TEST_COMMAND: pyuwsgi --help
-      #CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
-      #CIBW_BEFORE_BUILD: ./scripts/pre_build.sh && yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64
+      CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
+      CIBW_BEFORE_BUILD_LINUX: ./scripts/pre_build.sh && yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
       #CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ./pre_build.sh 
       #CIBW_BEFORE_BUILD_LINUX: ./pre_build.sh && 
       #  (apk add openssl-dev zeromq-dev sqlite-dev zlib-dev || 
@@ -94,16 +94,13 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        ./scripts/patch-uwsgi-packaging.sh uwsgi
-        #./scripts/pre_build.sh 
-        yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
         #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
         #fi
-        
-        cibuildwheel --output-dir wheelhouse --config-file pyproject.pyuwsgi.toml uwsgi
+        #--config-file pyproject.pyuwsgi.toml 
+        cibuildwheel --output-dir wheelhouse uwsgi
         ls wheelhouse
 
   build-pywsgi-wheel:
