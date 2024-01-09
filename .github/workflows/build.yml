@@ -120,7 +120,7 @@ jobs:
       #cp311-macosx_x86_64
       #cp311-macosx_universal2
       #cp311-macosx_arm64
-      CIBW_BUILD: cp311
+      CIBW_BUILD: cp311-macosx_x86_64 cp311-macosx_universal2 cp311-macosx_arm64
       CIBW_ARCHS: 'x86_64 universal2 arm64'
       CIBW_BUILD_VERBOSITY: 5
       CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
