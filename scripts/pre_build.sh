@@ -9,6 +9,10 @@ ZMQ_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
 ZMQ_DOWNLOAD_URL=https://github.com/zeromq/libzmq/releases/download/v4.3.5
 ZMQ_ROOT=zeromq-4.3.5
 
+PKG_CONFIG_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
+PKG_CONFIG_DOWNLOAD_URL=https://pkgconfig.freedesktop.org/releases/
+PKG_CONFIG_ROOT=pkg-config-0.29.2
+
 # From Multibuild
 BUILD_PREFIX="${BUILD_PREFIX:-/usr/local}"
 MULTIBUILD_DIR=$(dirname "${BASH_SOURCE[0]}")
@@ -111,11 +115,19 @@ function build_jansson {
 }
 
 function build_zmq {
+
+  fetch_unpack "${PKG_CONFIG_DOWNLOAD_URL}/${PKG_CONFIG_ROOT}.tar.gz"
   #tar xzf pkg-config-0.23.tar.gz
   #cd pkg-config-0.23
   #./configure --prefix=/usr/local/pkg-config-0.23 --datarootdir=/usr/share
   #make
   #sudo make install
+  #
+  (cd "${PKG_CONFIG_ROOT}" \
+    ./configure --prefix="${BUILD_PREFIX}" --datarootdir="${BUILD_PREFIX}"/share
+    make
+    make install
+   )
   
   if [ -e zmq-stamp ]; then return; fi
   echo "building zmq from $ZMQ_DOWNLOAD_URL"
