@@ -155,6 +155,11 @@ jobs:
         key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
         #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
+    - name: Install pkg-config
+      shell: bash
+      run: |
+        brew install pkg-config
+
     - name: Build
       shell: bash
       run: |

@@ -115,7 +115,6 @@ function build_jansson {
 }
 
 function build_zmq {
-
   if [ -e zmq-stamp ]; then return; fi
   echo "building zmq from $ZMQ_DOWNLOAD_URL"
   fetch_unpack "${ZMQ_DOWNLOAD_URL}/${ZMQ_ROOT}.tar.gz"
@@ -129,29 +128,26 @@ function build_zmq {
 }
 
 function build_pkg_config {
-
   fetch_unpack "${PKG_CONFIG_DOWNLOAD_URL}/${PKG_CONFIG_ROOT}.tar.gz"
   #tar xzf pkg-config-0.23.tar.gz
   #cd pkg-config-0.23
   #./configure --prefix=/usr/local/pkg-config-0.23 --datarootdir=/usr/share
   #make
   #sudo make install
-  #
-  (cd "${PKG_CONFIG_ROOT}" \
-    ./configure --prefix="${BUILD_PREFIX}"/"${PKG_CONFIG_ROOT}" --datarootdir=/usr/share
-    make
-    make install
-   )
+  #/usr/local/pkg-config-0.23/bin
   
-
+  (cd "${PKG_CONFIG_ROOT}" \
+    && ./configure --prefix="${BUILD_PREFIX}"/"${PKG_CONFIG_ROOT}" --datarootdir=/usr/share \
+    && make \
+    && make install
+   )
 }
 
 function pre_build {
-    build_pkg_config
-
-    #build_pcre
-    #build_jansson
-    #build_zmq
+    #build_pkg_config
+    build_zmq
+    build_jansson
+    #.build_pcre
 }
 
 pre_build
