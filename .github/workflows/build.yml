@@ -121,12 +121,13 @@ jobs:
     - name: Build
       shell: bash
       run: |
+        cd uwsgi
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
         #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
         #fi
-        cibuildwheel --output-dir wheelhouse --config-file uwsgi/pyproject.toml wsgi
+        cibuildwheel --output-dir wheelhouse --config-file pyproject.toml .
         ls wheelhouse
 
   build-pywsgi-wheel:
