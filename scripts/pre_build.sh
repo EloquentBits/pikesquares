@@ -5,6 +5,10 @@ JANSSON_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
 JANSSON_DOWNLOAD_URL=http://www.digip.org/jansson/releases
 JANSSON_ROOT=jansson-2.11
 
+ZMQ_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
+ZMQ_DOWNLOAD_URL=https://github.com/zeromq/libzmq/releases/download/v4.3.5
+ZMQ_ROOT=zeromq-4.3.5
+
 # From Multibuild
 BUILD_PREFIX="${BUILD_PREFIX:-/usr/local}"
 MULTIBUILD_DIR=$(dirname "${BASH_SOURCE[0]}")
@@ -106,10 +110,37 @@ function build_jansson {
     touch jansson-stamp
 }
 
+function build_zmq {
+  #tar xzf pkg-config-0.23.tar.gz
+  #cd pkg-config-0.23
+  #./configure --prefix=/usr/local/pkg-config-0.23 --datarootdir=/usr/share
+  #make
+  #sudo make install
+
+  #cd libzmq
+  # ./autogen.sh
+  # ./configure     # add other options here
+  # make
+  # make check
+  # sudo make install
+  #
+  if [ -e zmq-stamp ]; then return; fi
+  echo "building jansson from $JANSSON_DOWNLOAD_URL"
+  fetch_unpack "${ZMQ_DOWNLOAD_URL}/${ZMQ_ROOT}.tar.gz"
+  (cd "${ZMQ_ROOT}" \
+      && ./autogen.sh \
+      && ./configure --prefix="$BUILD_PREFIX" \
+      && make -j4 \
+      && make check \
+      && make install)
+    touch zmq-stamp
+}
+
 function pre_build {
     build_pcre
     #build_zlib
     build_jansson
+    build_zmq
 }
 
 pre_build
