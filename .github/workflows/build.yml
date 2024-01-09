@@ -46,8 +46,8 @@ jobs:
       CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
       CIBW_MANYLINUX_AARCH64_IMAGE: ${{ matrix.manylinux }}
       CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux }}
-      PYTEST_TIMEOUT: '600'
-
+      CIBW_PROJECT_REQUIRES_PYTHON: ">=3.11"
+      CIBW_BUILD_VERBOSITY: 5
       CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
       #CIBW_TEST_COMMAND: pyuwsgi --help
       CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
