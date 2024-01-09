@@ -30,7 +30,7 @@ jobs:
     strategy:
       matrix:
         arch: [x86_64, aarch64]
-        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*]
+        python_build: [cp311-*, ]
         manylinux: [manylinux2014,]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
@@ -40,7 +40,8 @@ jobs:
           - isRelease: false
             arch: aarch64
     env:
-      CIBW_BUILD: ${{ matrix.python_build}}
+      #CIBW_BUILD: ${{ matrix.python_build}}
+      CIBW_BUILD: cp311-manylinux_x86_64
       CIBW_SKIP: '*-musllinux_aarch64'
       CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
       CIBW_MANYLINUX_AARCH64_IMAGE: ${{ matrix.manylinux }}
