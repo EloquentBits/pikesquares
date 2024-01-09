@@ -74,7 +74,7 @@ function fetch_unpack {
     fi
     # Unpack archive, refreshing contents, echoing dir and file
     # names.
-    tar xfv "$out_archive" && ls -1d ./*
+    tar xf "$out_archive" && ls -1d ./*
 #    rm_mkdir arch_tmp
 #    install_rsync
 #    (cd arch_tmp && \
@@ -116,19 +116,6 @@ function build_jansson {
 
 function build_zmq {
 
-  fetch_unpack "${PKG_CONFIG_DOWNLOAD_URL}/${PKG_CONFIG_ROOT}.tar.gz"
-  #tar xzf pkg-config-0.23.tar.gz
-  #cd pkg-config-0.23
-  #./configure --prefix=/usr/local/pkg-config-0.23 --datarootdir=/usr/share
-  #make
-  #sudo make install
-  #
-  (cd "${PKG_CONFIG_ROOT}" \
-    ./configure --prefix="${BUILD_PREFIX}" --datarootdir="${BUILD_PREFIX}"/share
-    make
-    make install
-   )
-  
   if [ -e zmq-stamp ]; then return; fi
   echo "building zmq from $ZMQ_DOWNLOAD_URL"
   fetch_unpack "${ZMQ_DOWNLOAD_URL}/${ZMQ_ROOT}.tar.gz"
@@ -141,11 +128,30 @@ function build_zmq {
     touch zmq-stamp
 }
 
+function build_pkg_config {
+
+  fetch_unpack "${PKG_CONFIG_DOWNLOAD_URL}/${PKG_CONFIG_ROOT}.tar.gz"
+  #tar xzf pkg-config-0.23.tar.gz
+  #cd pkg-config-0.23
+  #./configure --prefix=/usr/local/pkg-config-0.23 --datarootdir=/usr/share
+  #make
+  #sudo make install
+  #
+  (cd "${PKG_CONFIG_ROOT}" \
+    ./configure --prefix="${BUILD_PREFIX}"/"${PKG_CONFIG_ROOT}" --datarootdir=/usr/share
+    make
+    make install
+   )
+  
+
+}
+
 function pre_build {
-    build_pcre
-    #build_zlib
-    build_jansson
-    build_zmq
+    build_pkg_config
+
+    #build_pcre
+    #build_jansson
+    #build_zmq
 }
 
 pre_build
