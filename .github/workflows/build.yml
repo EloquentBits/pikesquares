@@ -95,8 +95,8 @@ jobs:
       shell: bash
       run: |
         ./scripts/patch-uwsgi-packaging.sh uwsgi
-        ./scripts/pre_build.sh 
-        yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64
+        #./scripts/pre_build.sh 
+        yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
