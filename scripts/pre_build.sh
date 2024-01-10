@@ -139,7 +139,7 @@ function build_pkg_config {
   (cd "${PKG_CONFIG_ROOT}" \
     && ./configure --prefix="${BUILD_PREFIX}"/"${PKG_CONFIG_ROOT}" --datarootdir=/usr/share \
     && make \
-    && make install
+    && sudo make install
    )
 }
 
