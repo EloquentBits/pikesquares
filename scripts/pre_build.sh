@@ -120,10 +120,10 @@ function build_zmq {
   fetch_unpack "${ZMQ_DOWNLOAD_URL}/${ZMQ_ROOT}.tar.gz"
   (cd "${ZMQ_ROOT}" \
       && ./autogen.sh \
-      && ./configure --prefix="$BUILD_PREFIX" \
+      && ./configure \
       && make -j4 \
       && make check \
-      && make install)
+      && sudo make install)
     touch zmq-stamp
 }
 
@@ -137,7 +137,7 @@ function build_pkg_config {
   #/usr/local/pkg-config-0.23/bin
   
   (cd "${PKG_CONFIG_ROOT}" \
-    && ./configure --prefix="${BUILD_PREFIX}"/"${PKG_CONFIG_ROOT}" --datarootdir=/usr/local/share \
+    && ./configure --prefix="${BUILD_PREFIX}"/"${PKG_CONFIG_ROOT}" --datarootdir=/usr/share \
     && make \
     && sudo make install
    )
