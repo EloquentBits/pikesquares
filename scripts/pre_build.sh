@@ -145,9 +145,9 @@ function build_pkg_config {
 
 function pre_build {
     #build_pkg_config
-    build_zmq
-    #build_jansson
-    #.build_pcre
+    #build_zmq
+    build_jansson
+    build_pcre
 }
 
 pre_build
