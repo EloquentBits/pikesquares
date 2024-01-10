@@ -126,7 +126,7 @@ jobs:
       CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares PATH=$PATH:"/usr/local/bin"
       #CIBW_TEST_COMMAND: pyuwsgi --help
       CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
-      CIBW_BEFORE_BUILD: IS_MACOS=1 ./scripts/pre_build.sh
+      #CIBW_BEFORE_BUILD: IS_MACOS=1 ./scripts/pre_build.sh
 
       #CIBW_BEFORE_BUILD_LINUX: yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
       #CIBW_BEFORE_BUILD_LINUX: ./pre_build.sh && 
