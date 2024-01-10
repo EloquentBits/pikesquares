@@ -214,6 +214,8 @@ jobs:
 
     steps:
     - run: brew install openssl
+    - run: brew install tree
+    - run: tree /opt/homebrew/opt/openssl@3
     - run: brew --prefix openssl
     - run: brew install zeromq
     - run: brew install jansson
