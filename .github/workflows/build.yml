@@ -202,7 +202,8 @@ jobs:
       #  export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig"
 
       #CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib" CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
-      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib -lssl -lcrypto" CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
+      #CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib -lssl -lcrypto" CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
+      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib" CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
       #CIBW_TEST_COMMAND: pyuwsgi --help
       CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
       #CIBW_BEFORE_BUILD: IS_MACOS=1 ./scripts/pre_build.sh
@@ -257,6 +258,11 @@ jobs:
       shell: bash
       run: |
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        export APPEND_VERSION=".post0" 
+        export UWSGI_PROFILE=pikesquares 
+        export LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib" 
+        export CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" 
+        export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
         cibuildwheel --output-dir wheelhouse uwsgi
         ls wheelhouse
 
