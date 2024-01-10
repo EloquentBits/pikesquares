@@ -245,6 +245,7 @@ jobs:
       shell: bash
       run: |
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        export LDFLAGS=-L/opt/homebrew/opt/openssl@3/lib
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
         #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
