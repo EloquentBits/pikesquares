@@ -201,7 +201,7 @@ jobs:
       #For pkg-config to find openssl@1.1 you may need to set:
       #  export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig"
 
-      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares PATH=$PATH:"/usr/local/bin" LDFLAGS=$LDFLAGS:"-L/opt/homebrew/opt/openssl@3/lib" CPPFLAGS=$CPPFLAGS:"-I/opt/homebrew/opt/openssl@3/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
+      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib" CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
       #CIBW_TEST_COMMAND: pyuwsgi --help
       CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
       #CIBW_BEFORE_BUILD: IS_MACOS=1 ./scripts/pre_build.sh
