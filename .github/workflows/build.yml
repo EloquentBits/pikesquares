@@ -110,7 +110,7 @@ jobs:
 
   osx-python3:
     name: Python 3 OSX
-    runs-on: macos-12-large
+    runs-on: macos-latest-xlarge
     #needs: linux-python3-11
     strategy:
       matrix:
