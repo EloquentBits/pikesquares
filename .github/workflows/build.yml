@@ -225,6 +225,7 @@ jobs:
     #- run: brew install tree
     - run: pkg-config --cflags openssl
     - run: pkg-config --libs openssl
+    - run: brew info openssl@3
     #-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib -lssl -lcrypto
     #-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include
     
@@ -260,10 +261,9 @@ jobs:
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         export APPEND_VERSION=".post0" 
         export UWSGI_PROFILE=pikesquares 
-        export LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib" 
         export CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" 
         export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
-        cibuildwheel --output-dir wheelhouse uwsgi
+        LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib -lssl -lcrypto" cibuildwheel --output-dir wheelhouse uwsgi
         ls wheelhouse
 
     #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
