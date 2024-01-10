@@ -136,6 +136,8 @@ jobs:
 
     steps:
     - run: brew install zeromq
+    - run: brew install jansson
+    - run: brew install pcre
 
     - uses: actions/checkout@v3
       with:
