@@ -137,7 +137,7 @@ function build_pkg_config {
   #/usr/local/pkg-config-0.23/bin
   
   (cd "${PKG_CONFIG_ROOT}" \
-    && ./configure --prefix="${BUILD_PREFIX}" --docdir=$"{BUILD_PREFIX}"/share/doc --datarootdir=$"{BUILD_PREFIX}"/share \
+    && ./configure --prefix="${BUILD_PREFIX}" --docdir="${BUILD_PREFIX}"/share/doc --datarootdir="${BUILD_PREFIX}"/share \
     && make \
     && sudo make install
    )
