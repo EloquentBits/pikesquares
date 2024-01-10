@@ -109,7 +109,7 @@ jobs:
         path: ./wheelhouse/*.whl
 
   osx-x86-64-python3:
-    name: Python 3 OSX
+    name: Python 3 OSX x86_64
     runs-on: macos-latest
     #needs: linux-python3-11
     strategy:
@@ -135,6 +135,7 @@ jobs:
       #CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
 
     steps:
+    - run: brew install openssl
     - run: brew install zeromq
     - run: brew install jansson
     - run: brew install pcre
@@ -176,10 +177,8 @@ jobs:
         name: pikesquares-binary-cp311-manylinux_x86_64
         path: ./wheelhouse/*.whl
 
-
-
   osx-arm64-python3:
-    name: Python 3 OSX
+    name: Python 3 OSX ARM64
     runs-on: macos-latest-xlarge
     #needs: linux-python3-11
     strategy:
@@ -205,6 +204,7 @@ jobs:
       #CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
 
     steps:
+    - run: brew install openssl
     - run: brew install zeromq
     - run: brew install jansson
     - run: brew install pcre
