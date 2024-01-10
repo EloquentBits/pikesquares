@@ -135,6 +135,8 @@ jobs:
       #CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
 
     steps:
+    - run: brew install pkg-config
+
     - uses: actions/checkout@v3
       with:
         submodules: true
