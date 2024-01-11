@@ -153,16 +153,16 @@ jobs:
       run: |
         pip install 'cibuildwheel>=2.16.2' twine build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+    #- name: Setup Ccache
+    #  uses: hendrikmuhs/ccache-action@main
+    #  with:
+    #    key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
         #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
       run: |
-        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        #export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
         #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
@@ -203,7 +203,8 @@ jobs:
 
       #CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib" CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
       #CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib -lssl -lcrypto" CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
-      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib" CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
+        #CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib" CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
+      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/usr/local/include"
       #CIBW_TEST_COMMAND: pyuwsgi --help
       CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
       #CIBW_BEFORE_BUILD: IS_MACOS=1 ./scripts/pre_build.sh
@@ -223,9 +224,9 @@ jobs:
     steps:
     #- run: brew install openssl
     #- run: brew install tree
-    - run: pkg-config --cflags openssl
-    - run: pkg-config --libs openssl
-    - run: brew info openssl@3
+    #- run: pkg-config --cflags openssl
+    #- run: pkg-config --libs openssl
+    #- run: brew info openssl@3
     #-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib -lssl -lcrypto
     #-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include
     
@@ -249,21 +250,17 @@ jobs:
       run: |
         pip install 'cibuildwheel>=2.16.2' twine build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+    #- name: Setup Ccache
+    #  uses: hendrikmuhs/ccache-action@main
+    #  with:
+    #    key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
         #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
       run: |
-        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-        export APPEND_VERSION=".post0" 
-        export UWSGI_PROFILE=pikesquares 
-        export CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" 
-        export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
-        LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib -lssl -lcrypto" cibuildwheel --output-dir wheelhouse uwsgi
+        #export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        cibuildwheel --output-dir wheelhouse uwsgi
         ls wheelhouse
 
     #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl

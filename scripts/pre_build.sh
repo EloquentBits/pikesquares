@@ -13,6 +13,10 @@ PKG_CONFIG_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
 PKG_CONFIG_DOWNLOAD_URL=https://pkgconfig.freedesktop.org/releases/
 PKG_CONFIG_ROOT=pkg-config-0.29.2
 
+OPENSSL_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
+OPENSSL_DOWNLOAD_URL=https://github.com/openssl/openssl/releases/download/openssl-3.2.0/
+OPENSSL_ROOT=openssl-3.2.0.tar.gz
+
 # From Multibuild
 BUILD_PREFIX="${BUILD_PREFIX:-/usr/local}"
 MULTIBUILD_DIR=$(dirname "${BASH_SOURCE[0]}")
@@ -143,7 +147,20 @@ function build_pkg_config {
    )
 }
 
+function build_openssl {
+  fetch_unpack "${OPENSSL_DOWNLOAD_URL}/${OPENSSL_ROOT}.tar.gz"
+  (cd "${OPENSSL_ROOT}" \
+   && ./Configure darwin64-arm64-cc shared \
+     enable-ec_nistp_64_gcc_128 \
+     no-ssl2 no-ssl3 no-comp \
+     --openssldir=/usr/local/ssl/macos-arm64 \
+   && make depend \
+   && sudo make install
+ )
+}
+
 function pre_build {
+    build_openssl
     #build_pkg_config
     #build_zmq
     #build_jansson
