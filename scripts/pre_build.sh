@@ -154,15 +154,15 @@ function build_openssl {
      enable-ec_nistp_64_gcc_128 \
      no-ssl2 no-ssl3 no-comp \
      --openssldir=/usr/local/ssl/macos-arm64 \
-   && make depend \
+   && make depend -j12 \
    && sudo make install
  )
 }
 
 function pre_build {
+    build_pkg_config
+    build_zmq
     build_openssl
-    #build_pkg_config
-    #build_zmq
     #build_jansson
     #build_pcre
 }
