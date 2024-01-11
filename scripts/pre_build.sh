@@ -6,8 +6,8 @@ JANSSON_DOWNLOAD_URL=http://www.digip.org/jansson/releases
 JANSSON_ROOT=jansson-2.11
 
 ZMQ_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
-ZMQ_DOWNLOAD_URL=https://github.com/zeromq/libzmq/releases/download/v4.3.5
-ZMQ_ROOT=zeromq-4.3.5
+ZMQ_DOWNLOAD_URL=https://github.com/zeromq/libzmq/releases/download/v4.3.4
+ZMQ_ROOT=zeromq-4.3.4
 
 PKG_CONFIG_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
 PKG_CONFIG_DOWNLOAD_URL=https://pkgconfig.freedesktop.org/releases/
@@ -124,8 +124,8 @@ function build_zmq {
   fetch_unpack "${ZMQ_DOWNLOAD_URL}/${ZMQ_ROOT}.tar.gz"
   (cd "${ZMQ_ROOT}" \
       && ./autogen.sh \
-      && ./configure \
-      && make -j4 \
+      && ./configure --prefix="${BUILD_PREFIX}"  \
+      && make -j12 \
       && make check \
       && sudo make install)
     touch zmq-stamp
