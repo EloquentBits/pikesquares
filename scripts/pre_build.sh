@@ -6,8 +6,8 @@ JANSSON_DOWNLOAD_URL=http://www.digip.org/jansson/releases
 JANSSON_ROOT=jansson-2.11
 
 ZMQ_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
-ZMQ_DOWNLOAD_URL=https://github.com/zeromq/libzmq/releases/download/v4.3.4
-ZMQ_ROOT=zeromq-4.3.4
+ZMQ_DOWNLOAD_URL=https://github.com/zeromq/libzmq/releases/download/v4.3.5
+ZMQ_ROOT=zeromq-4.3.5
 
 PKG_CONFIG_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
 PKG_CONFIG_DOWNLOAD_URL=https://pkgconfig.freedesktop.org/releases/
@@ -123,6 +123,7 @@ function build_zmq {
   echo "building zmq from $ZMQ_DOWNLOAD_URL"
   fetch_unpack "${ZMQ_DOWNLOAD_URL}/${ZMQ_ROOT}.tar.gz"
   (cd "${ZMQ_ROOT}" \
+      && patch -u src/proxy.cpp -i ../zeromq-proxy-cpp.patch \
       && ./autogen.sh \
       && ./configure --prefix="${BUILD_PREFIX}"  \
       && make -j12 \
