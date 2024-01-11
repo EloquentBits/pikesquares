@@ -232,8 +232,8 @@ jobs:
     
     #- run: tree /opt/homebrew/opt/openssl@3
     #- run: brew --prefix openssl
-    - run: brew install zeromq
     - run: brew install autoconf
+    - run: brew install libtool
     - run: brew install automake
     - run: brew install jansson
     - run: brew install pcre
