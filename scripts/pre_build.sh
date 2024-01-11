@@ -15,7 +15,7 @@ PKG_CONFIG_ROOT=pkg-config-0.29.2
 
 OPENSSL_HASH=6e85f42dabe49a7831dbdd6d30dca8a966956b51a9a50ed534b82afc3fa5b2f4
 OPENSSL_DOWNLOAD_URL=https://github.com/openssl/openssl/releases/download/openssl-3.2.0/
-OPENSSL_ROOT=openssl-3.2.0.tar.gz
+OPENSSL_ROOT=openssl-3.2.0
 
 # From Multibuild
 BUILD_PREFIX="${BUILD_PREFIX:-/usr/local}"
