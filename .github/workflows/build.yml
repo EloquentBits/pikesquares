@@ -186,8 +186,14 @@ jobs:
             --hash sha256 \
             pikesquares.toml 
           ls -l . 
-          chmod +x pikesquares-${{ matrix.os }}-${{ matrix.arch }}
+          chmod 755 pikesquares-${{ matrix.os }}-${{ matrix.arch }}
           ./pikesquares-${{ matrix.os }}-${{ matrix.arch }} --version
+
+          #  linux-aarch64
+          #  linux-x86_64
+          #  macos-aarch64
+          #  macos-x86_64
+          #  windows-x86_64
 
       # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64
       # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64.sha256
