@@ -188,14 +188,14 @@ jobs:
           ls -l . 
           ./science --version
           ./science lift \
-            --file pikesquares=pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex \
+            --file pikesquares-bundle=pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex \
             build \
             --use-platform-suffix \
             --hash sha256 \
             pikesquares.toml 
           ls -l . 
-        #chmod 755 pikesquares-${{ matrix.os }}-${{ matrix.arch }}
-        #./pikesquares-${{ matrix.os }}-${{ matrix.arch }} --version
+          chmod 755 pikesquares-${{ matrix.os }}-${{ matrix.arch }}
+          ./pikesquares-${{ matrix.os }}-${{ matrix.arch }} --version
         #  linux-aarch64
         #  linux-x86_64
         #  macos-aarch64

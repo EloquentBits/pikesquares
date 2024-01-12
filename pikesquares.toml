@@ -20,10 +20,10 @@ provider = "PythonBuildStandalone"
 version = "3.11"
 
 [[lift.files]]
-name = "pikesquares"
+name = "pikesquares-bundle"
 
 [[lift.commands]]
 name = ""
 description = "pikesquares cli"
-exe = "{pikesquares}"
+exe = "{pikesquares-bundle}"
 args = []
