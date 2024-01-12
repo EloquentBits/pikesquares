@@ -54,7 +54,7 @@ jobs:
 
     env:
       MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
-      SCIENCE_VERSION: "v0.3.0"
+      SCIENCE_BINARY_VERSION: "v0.3.0"
       PIKESQUARES_BINARY_VERSION: "0.3.22"
 
       CIBW_BUILD: "${{ matrix.cibw_build }}"
@@ -110,7 +110,7 @@ jobs:
         name: cache science binary
         with:
           path: science
-          key: ${{ runner.os }}-science-${{ env.SCIENCE_VERSION }}-${{ matrix.arch }}
+          key: ${{ runner.os }}-science-${{ env.SCIENCE_BINARY_VERSION }}-${{ matrix.arch }}
 
       - name: install cibuildwheel
         shell: bash
@@ -171,12 +171,13 @@ jobs:
         if: ${{ steps.science-binary.outputs.cache-hit != 'true' }} 
         shell: bash
         run: |
-          curl -Lo "science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.arch }}
+          curl -Lo "science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ runner.os }}-${{ matrix.arch }}
           chmod +x science
 
       - name: build scie
         shell: bash
         run: |
+          ./science --version
           ./science lift \
             --file pikesquares=pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex build \
             --use-platform-suffix \
