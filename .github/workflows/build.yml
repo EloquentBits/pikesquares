@@ -113,7 +113,6 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.py }}
-          #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       # macos-latest Version: 10.9
       # pyuwsgi.cpython-311-darwin.so
@@ -138,3 +137,24 @@ jobs:
       #  with:
       #    name: pikesquares-binary-cp311-manylinux_x86_64
       #    path: ./wheelhouse/*.whl
+      #
+      - name: install pex
+        shell: bash
+        run: |
+          pip install pex
+
+      - name: build pex
+        shell: bash
+        env:
+          PEX_TOOLS: 1
+        run: |
+          pex -vvv \
+            wheelhouse/pikesquares_binary-${{ matrix.pikesquares-binary-version }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl \
+            -r requirements.txt \
+            --venv \
+            --include-tools \
+            --python $(which python) \
+            --entry-point pikesquares.cli.cli:app \
+            --disable-cache \
+            --no-emit-warnings \
+            -o pikesquares-cli.pex
