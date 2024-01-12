@@ -165,8 +165,8 @@ function pre_build {
       build_pkg_config
       build_zmq
       build_openssl
-      #build_jansson
-      #build_pcre
+      build_jansson
+      build_pcre
     fi
 }
 

@@ -80,17 +80,17 @@ jobs:
       CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
 
     steps:
-      - name: install deps from homebrew
+      - name: install deps from homebrew for x86_64
         if: ${{ matrix.os == 'macos' && matrix.arch == 'x86_64'}}
         shell: bash
         run: |
           brew install zeromq jansson pcre
 
-      - name: install deps from homebrew
+      - name: install deps from homebrew for arm64
         if: ${{ matrix.os == 'macos' && matrix.arch == 'arm64'}}
         shell: bash
         run: |
-          brew install zeromq jansson pcre autoconf libtool automake
+          brew install autoconf libtool automake
 
       - uses: actions/checkout@v3
         with:
@@ -133,7 +133,7 @@ jobs:
       - name: setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
-          key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.py }}
+          key: ${{ github.job }}-${matrix.os}-${{ matrix.arch }}-${{ matrix.py }}
 
       # macos-latest Version: 10.9
       # pyuwsgi.cpython-311-darwin.so
