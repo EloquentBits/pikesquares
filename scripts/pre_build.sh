@@ -127,7 +127,6 @@ function build_zmq {
       && ./autogen.sh \
       && ./configure --prefix="${BUILD_PREFIX}"  \
       && make -j12 \
-      #&& make check \
       && sudo make install)
     touch zmq-stamp
 }
@@ -161,11 +160,14 @@ function build_openssl {
 }
 
 function pre_build {
-    build_pkg_config
-    build_zmq
-    build_openssl
-    #build_jansson
-    #build_pcre
+
+    if [[ "$ARCH" = "arm64" ]]; then
+      build_pkg_config
+      build_zmq
+      build_openssl
+      #build_jansson
+      #build_pcre
+    fi
 }
 
 pre_build
