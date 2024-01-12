@@ -26,8 +26,6 @@ jobs:
   wheels:
     name: "${{ matrix.py }} ${{ matrix.os }} ${{ matrix.arch }} wheels"
     runs-on: ${{ matrix.runner }}
-    env:
-      MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
 
     strategy:
       matrix:
@@ -38,6 +36,7 @@ jobs:
       fail-fast: false
 
     env:
+      MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
       CIBW_BUILD: "${{ matrix.cibw_build }}"
       CIBW_ARCHS: ${{ matrix.arch }}
       CIBW_BUILD_VERBOSITY: 5
