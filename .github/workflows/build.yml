@@ -151,7 +151,7 @@ jobs:
         shell: bash
         run: |
           python -m build . --wheel
-          ls -l .
+          ls -l dist
 
       - name: install pex
         shell: bash
@@ -168,7 +168,7 @@ jobs:
           zipinfo wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
           pex \
             wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl \
-            pikesquares-${{ env.PIKESQUARES_CLI_VERSION }}-py3-none-any.whl \
+            dist/pikesquares-${{ env.PIKESQUARES_CLI_VERSION }}-py3-none-any.whl \
             -r requirements.txt \
             --venv \
             --include-tools \
