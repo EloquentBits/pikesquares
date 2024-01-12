@@ -146,6 +146,13 @@ jobs:
       #    name: pikesquares-binary-cp311-manylinux_x86_64
       #    path: ./wheelhouse/*.whl
       #
+      #
+      - name: build pikesquares-cli wheel
+        shell: bash
+        run: |
+          python -m build . --wheel
+          ls -l .
+
       - name: install pex
         shell: bash
         run: |
