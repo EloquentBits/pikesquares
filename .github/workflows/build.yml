@@ -167,6 +167,14 @@ jobs:
             --no-emit-warnings \
             -o pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex
 
+      #https://github.com/a-scie/jump/releases/download/v0.14.0/scie-jump-linux-x86_64
+      #- name: scie-jump binary download
+      #  if: ${{ steps.scie-jump-binary.outputs.cache-hit != 'true' }} 
+      #  shell: bash
+      #  run: |
+      #    curl -Lo "sci-jump" https://github.com/a-scie/jump/releases/download/${{ env.JUMP_BINARY_VERSION }}/sci-jupm-${{ runner.os }}-${{ matrix.arch }}
+      #    chmod +x science
+
       - name: science binary download
         if: ${{ steps.science-binary.outputs.cache-hit != 'true' }} 
         shell: bash
@@ -186,14 +194,13 @@ jobs:
             --hash sha256 \
             pikesquares.toml 
           ls -l . 
-          chmod 755 pikesquares-${{ matrix.os }}-${{ matrix.arch }}
-          ./pikesquares-${{ matrix.os }}-${{ matrix.arch }} --version
-
-          #  linux-aarch64
-          #  linux-x86_64
-          #  macos-aarch64
-          #  macos-x86_64
-          #  windows-x86_64
+        #chmod 755 pikesquares-${{ matrix.os }}-${{ matrix.arch }}
+        #./pikesquares-${{ matrix.os }}-${{ matrix.arch }} --version
+        #  linux-aarch64
+        #  linux-x86_64
+        #  macos-aarch64
+        #  macos-x86_64
+        #  windows-x86_64
 
       # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64
       # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64.sha256
