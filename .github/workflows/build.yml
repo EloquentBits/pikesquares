@@ -23,252 +23,77 @@ concurrency:
 
 jobs:
 
-  linux-python3:
-    name: Python 3 Linux
-    runs-on: ubuntu-latest
-    #needs: linux-python3-11
+  wheels:
+    name: "${{ matrix.py }} ${{ matrix.os }} ${{ matrix.arch }} wheels"
+    runs-on: ${{ matrix.runner }}
+    env:
+      MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
+
     strategy:
       matrix:
-        arch: [x86_64, aarch64]
-        python_build: [cp311-*, ]
-        manylinux: [manylinux2014,]
-        isRelease:
-          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
-        exclude:
-          # Speed things up a bit for non-releases
-          - isRelease: false
-            arch: aarch64
+        include:
+          - {"os": "ubuntu", "py": "cp311", "arch": "x86_64", "runner": "ubuntu-latest", "cibw_build": "cp311-manylinux_x86_64"}
+          - {"os": "macos", "py": "cp311", "arch": "x86_64", "runner": "macos-latest", "cibw_build": "cp311-macosx_x86_64"}
+          #- {"os": "macos", "py": "cp311", "arch": "arm64", "runner": "macos-latest-xlarge", "cibw_build": "cp311-macosx_arm64"}
+      fail-fast: false
+
     env:
-      #CIBW_BUILD: ${{ matrix.python_build}}
-      CIBW_BUILD: cp311-manylinux_x86_64
-      CIBW_SKIP: '*-musllinux_aarch64'
-      CIBW_ARCHS: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
-      CIBW_MANYLINUX_AARCH64_IMAGE: ${{ matrix.manylinux }}
-      CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.manylinux }}
+      CIBW_BUILD: "${{ matrix.cibw_build }}"
+      CIBW_ARCHS: ${{ matrix.arch }}
       CIBW_BUILD_VERBOSITY: 5
-      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
-      #CIBW_TEST_COMMAND: pyuwsgi --help
+      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares  # PATH=$PATH:"/usr/local/bin"
       CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
       CIBW_BEFORE_BUILD_LINUX: yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
-      #CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ./pre_build.sh 
-      #CIBW_BEFORE_BUILD_LINUX: ./pre_build.sh && 
-      #  (apk add openssl-dev zeromq-dev sqlite-dev zlib-dev || 
-      #  yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64)
-      #CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
+      CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ./scripts/pre_build.sh
+      CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
 
     steps:
-    - uses: actions/checkout@v3
-      if: false
-      with:
-        submodules: true
-        fetch-depth: 0
+      - name: install deps from homebrew
+        if: ${{ matrix.os == 'macos' && matrix.arch == 'x86_64'}}
+        shell: bash
+        run: |
+          brew install zeromq jansson pcre
 
-    #- uses: ./.github/actions/manylinux_2014
-    #  with:
-    #    ccache: 1
-    #    python_alias: 1
-    #    openssl: 1
+      - name: install deps from homebrew
+        if: ${{ matrix.os == 'macos' && matrix.arch == 'arm64'}}
+        shell: bash
+        run: |
+          brew install zeromq jansson pcre autoconf libtool automake
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v2
-      if: ${{ matrix.arch == 'aarch64' }} && false
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Install
-      if: false
-      shell: bash
-      run: |
-        pip install 'cibuildwheel>=2.16.2' twine build
+      - name: Install
+        shell: bash
+        run: |
+          pip install 'cibuildwheel>=2.16.2' twine build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
-        #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.py }}
+          #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-    - name: Build
-      if: false
-      shell: bash
-      run: |
-        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
-        #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
-        #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
-        #fi
-        cibuildwheel --output-dir wheelhouse uwsgi
-        ls wheelhouse
+      - name: Build
+        shell: bash
+        run: |
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+          #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
+          #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+          #fi
+          cibuildwheel --output-dir wheelhouse uwsgi
+          ls wheelhouse
 
-    #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-    - uses: actions/upload-artifact@v4
-      if: false
-      with:
-        name: pikesquares-binary-cp311-manylinux_x86_64
-        path: ./wheelhouse/*.whl
-
-  osx-x86-64-python3:
-    name: Python 3 OSX x86_64
-    runs-on: macos-latest
-    #needs: linux-python3-11
-    strategy:
-      matrix:
-        python_build: [cp311-*, ]
-    env:
-      #CIBW_BUILD: ${{ matrix.python_build}}
-      #cp311-macosx_x86_64
-      #cp311-macosx_universal2
-      #cp311-macosx_arm64
-      CIBW_BUILD: cp311-macosx_x86_64
-      CIBW_ARCHS: 'x86_64'
-      CIBW_BUILD_VERBOSITY: 5
-      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares PATH=$PATH:"/usr/local/bin"
-      #CIBW_TEST_COMMAND: pyuwsgi --help
-      CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
-      #CIBW_BEFORE_BUILD: IS_MACOS=1 ./scripts/pre_build.sh
-
-      #CIBW_BEFORE_BUILD_LINUX: yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
-      #CIBW_BEFORE_BUILD_LINUX: ./pre_build.sh && 
-      #  (apk add openssl-dev zeromq-dev sqlite-dev zlib-dev || 
-      #  yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64)
-      #CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
-
-    steps:
-    - run: brew install zeromq
-    - run: brew install jansson
-    - run: brew install pcre
-
-    - uses: actions/checkout@v3
-      with:
-        submodules: true
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install
-      shell: bash
-      run: |
-        pip install 'cibuildwheel>=2.16.2' twine build
-
-    #- name: Setup Ccache
-    #  uses: hendrikmuhs/ccache-action@main
-    #  with:
-    #    key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
-        #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: |
-        #export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
-        #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
-        #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
-        #fi
-        cibuildwheel --output-dir wheelhouse uwsgi
-        ls wheelhouse
-
-    #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-    - uses: actions/upload-artifact@v4
-      with:
-        name: pikesquares-binary-cp311-manylinux_x86_64
-        path: ./wheelhouse/*.whl
-
-  osx-arm64-python3:
-    name: Python 3 OSX ARM64
-    runs-on: macos-latest-xlarge
-    #needs: linux-python3-11
-    strategy:
-      matrix:
-        python_build: [cp311-*, ]
-    env:
-      #CIBW_BUILD: ${{ matrix.python_build}}
-      #cp311-macosx_x86_64
-      #cp311-macosx_universal2
-      #cp311-macosx_arm64
-      CIBW_BUILD: cp311-macosx_arm64
-      CIBW_ARCHS: 'arm64'
-      CIBW_BUILD_VERBOSITY: 5
-      #If you need to have openssl@1.1 first in your PATH, run:
-      #  echo 'export PATH="/opt/homebrew/opt/openssl@1.1/bin:$PATH"' >> ~/.zshrc
-
-      #For compilers to find openssl@1.1 you may need to set:
-      #  export LDFLAGS="-L/opt/homebrew/opt/openssl@1.1/lib"
-      #  export CPPFLAGS="-I/opt/homebrew/opt/openssl@1.1/include"
-
-      #For pkg-config to find openssl@1.1 you may need to set:
-      #  export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig"
-
-      #CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/opt/openssl@3/lib" CPPFLAGS="-I/opt/homebrew/opt/openssl@3/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
-      #CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib -lssl -lcrypto" CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
-        #CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib" CPPFLAGS="-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include" PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig"
-      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares LDFLAGS="-L/usr/local/include"
-      #CIBW_TEST_COMMAND: pyuwsgi --help
-      CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
-      CIBW_BEFORE_BUILD: IS_MACOS=1 ./scripts/pre_build.sh
-
-      #CIBW_BEFORE_BUILD_LINUX: yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
-      #CIBW_BEFORE_BUILD_LINUX: ./pre_build.sh && 
-      #  (apk add openssl-dev zeromq-dev sqlite-dev zlib-dev || 
-      #  yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64)
-      #CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
-      #
-      #[tool.cibuildwheel.macos.environment]
-      #CFLAGS = "$(pkg-config --cflags libzmq)"
-      #LDFLAGS = "$(pkg-config --libs libzmq)"
-
-      #[tool.cibuildwheel.macos]
-      #re#pair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
-    steps:
-    #- run: brew install openssl
-    #- run: brew install tree
-    #- run: pkg-config --cflags openssl
-    #- run: pkg-config --libs openssl
-    #- run: brew info openssl@3
-    #-L/opt/homebrew/Cellar/openssl@3/3.2.0_1/lib -lssl -lcrypto
-    #-I/opt/homebrew/Cellar/openssl@3/3.2.0_1/include
-    
-    #- run: tree /opt/homebrew/opt/openssl@3
-    #- run: brew --prefix openssl
-    - run: brew install autoconf
-    - run: brew install libtool
-    - run: brew install automake
-    - run: brew install jansson
-    - run: brew install pcre
-
-    - uses: actions/checkout@v3
-      with:
-        submodules: true
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install
-      shell: bash
-      run: |
-        pip install 'cibuildwheel>=2.16.2' twine build
-
-    #- name: Setup Ccache
-    #  uses: hendrikmuhs/ccache-action@main
-    #  with:
-    #    key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
-        #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: |
-        #export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-        cibuildwheel --output-dir wheelhouse uwsgi
-        ls wheelhouse
-
-    #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-    - uses: actions/upload-artifact@v4
-      with:
-        name: pikesquares-binary-cp311-manylinux_x86_64
-        path: ./wheelhouse/*.whl
-
-
+      #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      #- uses: actions/upload-artifact@v4
+      #  if: false
+      #  with:
+      #    name: pikesquares-binary-cp311-manylinux_x86_64
+      #    path: ./wheelhouse/*.whl

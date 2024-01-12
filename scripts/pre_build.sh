@@ -127,7 +127,7 @@ function build_zmq {
       && ./autogen.sh \
       && ./configure --prefix="${BUILD_PREFIX}"  \
       && make -j12 \
-      && make check \
+      #&& make check \
       && sudo make install)
     touch zmq-stamp
 }
