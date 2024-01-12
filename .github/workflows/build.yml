@@ -33,14 +33,18 @@ jobs:
         arch: [x86_64]
         include:
           - {
+              "os": "ubuntu", 
               "py": "cp311", 
+              "arch": "x86_64", 
               "runner": "ubuntu-latest", 
               "pikesquares-binary-version": "0.3.22",
               "cibw_build": "cp311-manylinux_x86_64", 
               "cibw_wheel_suffix": "manylinux_2_17_x86_64.manylinux2014_x86_64",
               "pip-cache-path": "~/.cache/pip" }
           - {
+              "os": "macos", 
               "py": "cp311", 
+              "arch": "x86_64", 
               "runner": "macos-latest", 
               "pikesquares-binary-version": "0.3.22",
               "cibw_build": "cp311-macosx_x86_64", 
