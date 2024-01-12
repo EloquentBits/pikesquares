@@ -29,15 +29,14 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu, macos]
+        os: [linux, macos]
         arch: [x86_64]
         include:
           - {
-              "os": "ubuntu", 
+              "os": "linux", 
               "py": "cp311", 
               "arch": "x86_64", 
               "runner": "ubuntu-latest", 
-              "pikesquares-binary-version": "0.3.22",
               "cibw_build": "cp311-manylinux_x86_64", 
               "cibw_wheel_suffix": "manylinux_2_17_x86_64.manylinux2014_x86_64",
               "pip-cache-path": "~/.cache/pip" }
@@ -46,7 +45,6 @@ jobs:
               "py": "cp311", 
               "arch": "x86_64", 
               "runner": "macos-latest", 
-              "pikesquares-binary-version": "0.3.22",
               "cibw_build": "cp311-macosx_x86_64", 
               "cibw_wheel_suffix": "macosx_10_9_x86_64",
               "pip-cache-path": "~/Library/Caches/pip" }
@@ -56,6 +54,9 @@ jobs:
 
     env:
       MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
+      SCIENCE_VERSION: "v0.3.0"
+      PIKESQUARES_BINARY_VERSION: "0.3.22"
+
       CIBW_BUILD: "${{ matrix.cibw_build }}"
       CIBW_ARCHS: ${{ matrix.arch }}
       CIBW_BUILD_VERBOSITY: 5
@@ -101,8 +102,15 @@ jobs:
         id: pikesquares-binary-wheel
         name: cache wheel
         with:
-          path: wheelhouse/pikesquares_binary-${{ matrix.pikesquares-binary-version }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
-          key: ${{ runner.os }}-pikesquares_binary-${{ matrix.pikesquares-binary-version }}-${{ matrix.cibw_wheel_suffix }}
+          path: wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
+          key: pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-${{ runner.os }}-${{ matrix.arch }}
+
+      - uses: actions/cache@v3
+        id: science-binary
+        name: cache science binary
+        with:
+          path: science
+          key: ${{ runner.os }}-science-${{ env.SCIENCE_VERSION }}-${{ matrix.arch }}
 
       - name: install cibuildwheel
         shell: bash
@@ -148,7 +156,7 @@ jobs:
         env:
           PEX_TOOLS: 1
         run: |
-          pex -vvv \
+          pex -v \
             wheelhouse/pikesquares_binary-${{ matrix.pikesquares-binary-version }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl \
             -r requirements.txt \
             --venv \
@@ -157,4 +165,20 @@ jobs:
             --entry-point pikesquares.cli.cli:app \
             --disable-cache \
             --no-emit-warnings \
-            -o pikesquares-cli.pex
+            -o pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex
+
+      - name: science binary download
+        if: ${{ steps.science-binary.outputs.cache-hit != 'true' }} 
+        shell: bash
+        run: |
+          curl -Lo "science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_VERSION }}/science-${{ runner.os }}-${{ matrix.arch }}
+          chmod +x science
+
+      - name: build scie
+        shell: bash
+        run: |
+          ./science lift \
+            --file pikesquares=pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex build \
+            --use-platform-suffix \
+            --hash sha256 \
+            pikesquares.toml
