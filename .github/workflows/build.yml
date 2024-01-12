@@ -30,9 +30,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - {"os": "ubuntu", "py": "cp311", "arch": "x86_64", "runner": "ubuntu-latest", "cibw_build": "cp311-manylinux_x86_64"}
-          - {"os": "macos", "py": "cp311", "arch": "x86_64", "runner": "macos-latest", "cibw_build": "cp311-macosx_x86_64"}
-          #- {"os": "macos", "py": "cp311", "arch": "arm64", "runner": "macos-latest-xlarge", "cibw_build": "cp311-macosx_arm64"}
+          - {"os": "ubuntu", "py": "cp311", "arch": "x86_64", "runner": "ubuntu-latest", "cibw_build": "cp311-manylinux_x86_64", "pip-cache-path": "~/.cache/pip"}
+          - {"os": "macos", "py": "cp311", "arch": "x86_64", "runner": "macos-latest", "cibw_build": "cp311-macosx_x86_64", "pip-cache-path": "~/Library/Caches/pip"}
+          #- {"os": "macos", "py": "cp311", "arch": "arm64", "runner": "macos-latest-xlarge", "cibw_build": "cp311-macosx_arm64",  "pip-cache-path": "~/Library/Caches/pip"}
       fail-fast: false
 
     env:
@@ -40,7 +40,7 @@ jobs:
       CIBW_BUILD: "${{ matrix.cibw_build }}"
       CIBW_ARCHS: ${{ matrix.arch }}
       CIBW_BUILD_VERBOSITY: 5
-      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares  # PATH=$PATH:"/usr/local/bin"
+      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
       CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
       CIBW_BEFORE_BUILD_LINUX: yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
       CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ARCH=${{ matrix.arch }} ./scripts/pre_build.sh
@@ -68,6 +68,13 @@ jobs:
         with:
           python-version: '3.11'
 
+      - uses: actions/cache@v3
+        with:
+          path: ${{ matrix.pip-cache-path }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+           ${{ runner.os }}-pip-
+
       - name: Install
         shell: bash
         run: |
@@ -79,10 +86,13 @@ jobs:
           key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.py }}
           #save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
+      # macos-latest Version: 10.9
+      # pyuwsgi.cpython-311-darwin.so
       - name: Build
         shell: bash
         run: |
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           #if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
           #  export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
@@ -91,6 +101,8 @@ jobs:
           ls wheelhouse
 
       #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      #pikesquares_binary-0.3.22-cp311-cp311-macosx_10_9_x86_64.whl
+      #
       #- uses: actions/upload-artifact@v4
       #  if: false
       #  with:
