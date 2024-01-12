@@ -217,7 +217,20 @@ jobs:
 
       # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64
       # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pikesquares-${{ matrix.os }}-${{ matrix.arch }}
-          path: pikesquares-${{ matrix.os }}-${{ matrix.arch }}*
+      #- uses: actions/upload-artifact@v4
+      #  with:
+      #    name: pikesquares-${{ matrix.os }}-${{ matrix.arch }}
+      #    path: pikesquares-${{ matrix.os }}-${{ matrix.arch }}*
+
+      - name: Publish binary to cdn - Linux
+        shell: bash
+        env:
+          CDN_URL: ny.storage.bunnycdn.com
+          CDN_PROJECT_NAME: pikesquares-downloads
+        run: |
+            curl --request PUT \
+            --header 'AccessKey: ${{ secrets.BUNNYCDN_ACCESS_TOKEN }}' \
+            --header 'Content-Type: application/octet-stream' \
+            --header 'accept: application/json'  \
+            --data-binary @pikesquares-${{ matrix.os }}-${{ matrix.arch }} \
+            https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/pikesquares-${{ matrix.os }}-${{ matrix.arch }}
