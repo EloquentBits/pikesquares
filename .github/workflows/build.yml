@@ -214,10 +214,17 @@ jobs:
       #    chmod +x science
 
       - name: science binary download
-        if: ${{ steps.science-binary.outputs.cache-hit != 'true' }} 
+        if: ${{ steps.science-binary.outputs.cache-hit != 'true' && matrix.arch != 'amd64' }} 
         shell: bash
         run: |
           curl -Lo "science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ runner.os }}-${{ matrix.arch }}
+          chmod +x science
+
+      - name: science binary download aarch64
+        if: ${{ steps.science-binary.outputs.cache-hit != 'true' && matrix.arch == 'amd64' }}  
+        shell: bash
+        run: |
+          curl -Lo "science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ runner.os }}-aarch64
           chmod +x science
 
       - name: build scie
