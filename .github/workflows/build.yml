@@ -90,7 +90,7 @@ jobs:
         if: ${{ matrix.os == 'macos' && matrix.arch == 'arm64'}}
         shell: bash
         run: |
-          brew install autoconf libtool automake
+          brew install autoconf libtool automake jansson pcre
 
       - uses: actions/checkout@v3
         with:
@@ -149,6 +149,22 @@ jobs:
           #fi
           cibuildwheel --output-dir wheelhouse uwsgi
           ls wheelhouse
+
+      # Xcode_14.3.1
+
+      #  *** Installing runtime libraries
+      #  install libcrypto.3.dylib -> /usr/local/lib/libcrypto.3.dylib
+      #  install libssl.3.dylib -> /usr/local/lib/libssl.3.dylib
+      #  *** Installing development files
+      #  created directory `/usr/local/include/openssl'
+      #
+      #     install libcrypto.a -> /usr/local/lib/libcrypto.a
+      #  install libssl.a -> /usr/local/lib/libssl.a
+      #  link /usr/local/lib/libcrypto.dylib -> /usr/local/lib/libcrypto.3.dylib
+      #  link /usr/local/lib/libssl.dylib -> /usr/local/lib/libssl.3.dylib
+      #  install libcrypto.pc -> /usr/local/lib/pkgconfig/libcrypto.pc
+      #  install openssl.pc -> /usr/local/lib/pkgconfig/openssl.pckk
+      #  install libssl.pc -> /usr/local/lib/pkgconfig/libssl.pc
 
       #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       #pikesquares_binary-0.3.22-cp311-cp311-macosx_10_9_x86_64.whl
