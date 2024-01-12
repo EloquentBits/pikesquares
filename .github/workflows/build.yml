@@ -156,7 +156,11 @@ jobs:
         env:
           PEX_TOOLS: 1
         run: |
-          pex wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl \
+
+          zipinfo wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
+
+          pex \
+            wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl \
             -r requirements.txt \
             --venv \
             --include-tools \
