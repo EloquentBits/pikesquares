@@ -183,3 +183,12 @@ jobs:
             --use-platform-suffix \
             --hash sha256 \
             pikesquares.toml
+          chmod +x pikesquares-${{ matrix.os}}-${{ matrix.arch }}
+          ./pikesquares-${{ matrix.os}}-${{ matrix.arch }} --version
+
+      # /home/runner/work/pikesquares2/pikesquares2/pike-squares-linux-x86_64
+      # /home/runner/work/pikesquares2/pikesquares2/pike-squares-linux-x86_64.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pikesquares-${{ matrix.os }}-${{ matrix.arch }}
+          path: pikesquares-${{ matrix.os }}-${{ matrix.arch }}*
