@@ -56,6 +56,7 @@ jobs:
       MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
       SCIENCE_BINARY_VERSION: "v0.3.0"
       PIKESQUARES_BINARY_VERSION: "0.3.22"
+      PIKESQUARES_CLI_VERSION: "0.1.6"
 
       CIBW_BUILD: "${{ matrix.cibw_build }}"
       CIBW_ARCHS: ${{ matrix.arch }}
@@ -160,9 +161,6 @@ jobs:
 
       - name: build pex
         shell: bash
-        env:
-          PEX_TOOLS: 1
-          PIKESQUARES_CLI_VERSION: "0.1.6"
 
         run: |
           zipinfo wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
@@ -171,7 +169,6 @@ jobs:
             dist/pikesquares-${{ env.PIKESQUARES_CLI_VERSION }}-py3-none-any.whl \
             -r requirements.txt \
             --venv \
-            --include-tools \
             --python $(which python) \
             --entry-point pikesquares.cli.cli:app \
             --disable-cache \
@@ -233,4 +230,6 @@ jobs:
             --header 'Content-Type: application/octet-stream' \
             --header 'accept: application/json'  \
             --data-binary @pikesquares-${{ matrix.os }}-${{ matrix.arch }} \
-            https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/pikesquares-${{ matrix.os }}-${{ matrix.arch }}
+            https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{ env.PIKESQUARES_CLI_VERSION }}/pikesquares-${{ matrix.os }}-${{ matrix.arch }}
+
+          #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
