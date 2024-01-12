@@ -55,7 +55,7 @@ jobs:
               "arch": "arm64", 
               "runner": "macos-latest-xlarge", 
               "cibw_build": "cp311-macosx_arm64",  
-              "cibw_wheel_suffix": "macosx_arm64",
+              "cibw_wheel_suffix": "macosx_11_0_arm64",
               "pip-cache-path": "~/Library/Caches/pip"}
         exclude:
           - os: linux

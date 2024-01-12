@@ -44,7 +44,7 @@ function build_simple {
     fetch_unpack "$url/$archive"
     (cd "$name_version" \
         && ./configure --prefix="$BUILD_PREFIX" \
-        && make -j4 \
+        && make -j4 > /dev/null \
         && make install)
     touch "${name}-stamp"
 }
@@ -113,7 +113,7 @@ function build_jansson {
     check_sha256sum "${ARCHIVE_SDIR:-archives}/${JANSSON_ROOT}.tar.gz" "${JANSSON_HASH}"
     (cd "${JANSSON_ROOT}" \
         && ./configure --prefix="$BUILD_PREFIX" \
-        && make -j4 \
+        && make -j4 > /dev/null \
         && make install)
     touch jansson-stamp
 }
@@ -126,7 +126,7 @@ function build_zmq {
       && patch -u src/proxy.cpp -i ../zeromq-proxy-cpp.patch \
       && ./autogen.sh \
       && ./configure --prefix="${BUILD_PREFIX}"  \
-      && make -j12 \
+      && make -j12 > /dev/null \
       && sudo make install)
     touch zmq-stamp
 }
@@ -142,7 +142,7 @@ function build_pkg_config {
   
   (cd "${PKG_CONFIG_ROOT}" \
     && ./configure --prefix="${BUILD_PREFIX}" --docdir="${BUILD_PREFIX}"/share/doc --datarootdir="${BUILD_PREFIX}"/share \
-    && make \
+    && make > /dev/null \
     && sudo make install
    )
 }
@@ -154,7 +154,7 @@ function build_openssl {
      enable-ec_nistp_64_gcc_128 \
      no-ssl2 no-ssl3 no-comp \
      --openssldir=/usr/local/ssl/macos-arm64 \
-   && make depend -j12 \
+   && make depend -j12 > /dev/null \
    && sudo make install
  )
 }
