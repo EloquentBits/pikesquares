@@ -7,7 +7,7 @@ from tinydb import TinyDB
 from .. import (
     get_service_status, 
     device_up,
-    project_up,
+    #project_up,
 )
 from .console import console
 from ..conf import ClientConfig
@@ -41,7 +41,10 @@ def main(
 
     if version:
         from importlib import metadata
-        console.info(metadata.version("pikesquares"))
+        try:
+            console.info(metadata.version("pikesquares"))
+        except ModuleNotFoundError:
+            console.info("unable to import pikesquares module.")
         return
 
     venv_dir = os.environ.get("VIRTUAL_ENV")
