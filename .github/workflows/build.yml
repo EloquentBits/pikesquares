@@ -88,6 +88,7 @@ jobs:
           python-version: '3.11'
 
       - uses: actions/cache@v3
+        name: pip cache
         with:
           path: ${{ matrix.pip-cache-path }}
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
@@ -97,16 +98,18 @@ jobs:
       #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       #pikesquares_binary-0.3.22-cp311-cp311-macosx_10_9_x86_64.whl
       - uses: actions/cache@v3
+        id: pikesquares-binary-wheel
+        name: cache wheel
         with:
           path: wheelhouse/pikesquares_binary-${{ matrix.pikesquares-binary-version }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
           key: ${{ runner.os }}-pikesquares_binary-${{ matrix.pikesquares-binary-version }}-${{ matrix.cibw_wheel_suffix }}
 
-      - name: Install
+      - name: install cibuildwheel
         shell: bash
         run: |
           pip install 'cibuildwheel>=2.16.2' twine build
 
-      - name: Setup Ccache
+      - name: setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.py }}
@@ -114,7 +117,8 @@ jobs:
 
       # macos-latest Version: 10.9
       # pyuwsgi.cpython-311-darwin.so
-      - name: Build
+      - name: build wheel
+        if: ${{ steps.pikesquares-binary-wheel.outputs.cache-hit != 'true' }} 
         shell: bash
         run: |
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
