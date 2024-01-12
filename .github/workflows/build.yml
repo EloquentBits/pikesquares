@@ -48,7 +48,7 @@ jobs:
               "runner": "macos-latest", 
               "pikesquares-binary-version": "0.3.22",
               "cibw_build": "cp311-macosx_x86_64", 
-              "cibw_wheel_suffix": "macosx_10_9_x86_6",
+              "cibw_wheel_suffix": "macosx_10_9_x86_64",
               "pip-cache-path": "~/Library/Caches/pip" }
 
           #- {"os": "macos", "py": "cp311", "arch": "arm64", "runner": "macos-latest-xlarge", "cibw_build": "cp311-macosx_arm64",  "pip-cache-path": "~/Library/Caches/pip"}
