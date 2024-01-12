@@ -57,6 +57,9 @@ jobs:
               "cibw_build": "cp311-macosx_arm64",  
               "cibw_wheel_suffix": "macosx_arm64",
               "pip-cache-path": "~/Library/Caches/pip"}
+        exclude:
+          - os: linux
+            arch: arm64
 
           #- {"os": "macos", "py": "cp311", "arch": "arm64", "runner": "macos-latest-xlarge", "cibw_build": "cp311-macosx_arm64",  "pip-cache-path": "~/Library/Caches/pip"}
       fail-fast: false
