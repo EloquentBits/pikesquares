@@ -155,7 +155,7 @@ function build_openssl {
      no-ssl2 no-ssl3 no-comp \
      --openssldir=/usr/local/ssl/macos-arm64 \
    && make depend -j12 > /dev/null \
-   && sudo make install
+   && sudo make install_sw
  )
 }
 

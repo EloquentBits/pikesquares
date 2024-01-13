@@ -68,8 +68,8 @@ jobs:
       MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
 
       SCIENCE_BINARY_VERSION: "v0.3.0"
-      SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
       SCIENCE_BINARY_ARCH: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
+      SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
 
       PIKESQUARES_BINARY_VERSION: "0.3.22"
       PIKESQUARES_CLI_VERSION: "0.1.6"
@@ -225,6 +225,8 @@ jobs:
 
       - name: build scie
         shell: bash
+        env: 
+          PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
         run: |
           ls -l . 
           ./${{ env.SCIENCE_BINARY_NAME }} --version
@@ -235,8 +237,8 @@ jobs:
             --hash sha256 \
             pikesquares.toml 
           ls -l . 
-          chmod 755 pikesquares-${{ matrix.os }}-${{ matrix.arch }}
-          ./pikesquares-${{ matrix.os }}-${{ matrix.arch }} --version
+          chmod 755 ${{ env.PIKESQUARES_BINARY_NAME }}
+          ./${{ env.PIKESQUARES_BINARY_NAME }} --version
         #  linux-aarch64
         #  linux-x86_64
         #  macos-aarch64
