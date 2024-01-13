@@ -67,6 +67,10 @@ jobs:
     env:
       MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
 
+      SCIENCE_BINARY_VERSION: "v0.3.0"
+      SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
+      SCIENCE_BINARY_ARCH: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
+
       PIKESQUARES_BINARY_VERSION: "0.3.22"
       PIKESQUARES_CLI_VERSION: "0.1.6"
 
@@ -145,11 +149,6 @@ jobs:
         #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
         #https://github.com/a-scie/lift/releases/download/v0.3.0/science-macos-x86_64
         #https://github.com/a-scie/lift/releases/download/v0.3.0/science-macos-aarch64
-        env:
-          SCIENCE_BINARY_VERSION: "v0.3.0"
-          SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
-          SCIENCE_BINARY_ARCH: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
-
         run: |
           curl -Lo "${{ env.SCIENCE_BINARY_NAME }}" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ matrix.os }}-${{ env.SCIENCE_BINARY_ARCH}}
           chmod +x "${{ env.SCIENCE_BINARY_NAME }}"
