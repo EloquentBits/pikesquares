@@ -220,7 +220,7 @@ jobs:
         shell: bash
         run: |
           curl -Lo ${{ env.SCIENCE_BINARY_NAME }} https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ matrix.os }}-${{ matrix.arch }}
-          chmod +x science
+          chmod +x ${{ env.SCIENCE_BINARY_NAME }} 
         #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
         #https://github.com/a-scie/lift/releases/download/v0.3.0/science-macos-x86_64
 
