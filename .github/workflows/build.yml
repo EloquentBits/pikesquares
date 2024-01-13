@@ -67,6 +67,8 @@ jobs:
     env:
       MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
       SCIENCE_BINARY_VERSION: "v0.3.0"
+      SCIENCE_BINARY_NAME: science-${{ env.SCIENCE_BINARY_VERSION }}-${{ matrix.os }}-${{ matrix.arch }}
+
       PIKESQUARES_BINARY_VERSION: "0.3.22"
       PIKESQUARES_CLI_VERSION: "0.1.6"
 
@@ -123,7 +125,7 @@ jobs:
         name: cache science binary
         with:
           path: science
-          key: ${{ runner.os }}-science-${{ env.SCIENCE_BINARY_VERSION }}-${{ matrix.arch }}
+          key: env.SCIENCE_BINARY_NAME
 
       - name: install cibuildwheel
         shell: bash
@@ -217,22 +219,22 @@ jobs:
         if: ${{ steps.science-binary.outputs.cache-hit != 'true' && matrix.arch != 'amd64' }} 
         shell: bash
         run: |
-          curl -Lo "science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ runner.os }}-${{ matrix.arch }}
+          curl -Lo ${{ env.SCIENCE_BINARY_NAME }} https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ runner.os }}-${{ matrix.arch }}
           chmod +x science
 
       - name: science binary download aarch64
         if: ${{ steps.science-binary.outputs.cache-hit != 'true' && matrix.arch == 'amd64' }}  
         shell: bash
         run: |
-          curl -Lo "science" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ runner.os }}-aarch64
-          chmod +x science
-
+          curl -Lo "${{ env.SCIENCE_BINARY_NAME }}" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ runner.os }}-aarch64
+          chmod +x ${{ env.SCIENCE_BINARY_NAME }}
+          
       - name: build scie
         shell: bash
         run: |
           ls -l . 
-          ./science --version
-          ./science lift \
+          ./${{ env.SCIENCE_BINARY_NAME }} --version
+          ./${{ env.SCIENCE_BINARY_NAME }} lift \
             --file pikesquares-bundle=pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex \
             build \
             --use-platform-suffix \
