@@ -67,7 +67,7 @@ jobs:
     env:
       MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
       SCIENCE_BINARY_VERSION: "v0.3.0"
-      SCIENCE_BINARY_NAME: science-${{ env.SCIENCE_BINARY_VERSION }}-${{ matrix.os }}-${{ matrix.arch }}
+      SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
 
       PIKESQUARES_BINARY_VERSION: "0.3.22"
       PIKESQUARES_CLI_VERSION: "0.1.6"
