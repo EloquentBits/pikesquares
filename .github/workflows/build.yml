@@ -259,7 +259,7 @@ jobs:
             --header 'AccessKey: ${{ secrets.BUNNYCDN_ACCESS_TOKEN }}' \
             --header 'Content-Type: application/octet-stream' \
             --header 'accept: application/json'  \
-            --data-binary @pikesquares-${{ matrix.os }}-${{ matrix.arch }} \
+            --data-binary @${{ env.PIKESQUARES_BINARY_NAME }} \
             https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{ env.PIKESQUARES_CLI_VERSION }}/${{ env.PIKESQUARES_BINARY_NAME }}
 
           #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
