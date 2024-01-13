@@ -107,9 +107,9 @@ jobs:
         name: pip cache
         with:
           path: ${{ matrix.pip-cache-path }}
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          key: ${{ matrix.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
-           ${{ runner.os }}-pip-
+           ${{ matrix.os }}-pip-
 
       #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       #pikesquares_binary-0.3.22-cp311-cp311-macosx_10_9_x86_64.whl
@@ -118,7 +118,7 @@ jobs:
         name: cache wheel
         with:
           path: wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
-          key: pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-${{ runner.os }}-${{ matrix.arch }}
+          key: pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-${{ matrix.os }}-${{ matrix.arch }}
 
       - uses: actions/cache@v3
         id: science-binary
@@ -212,22 +212,25 @@ jobs:
       #  if: ${{ steps.scie-jump-binary.outputs.cache-hit != 'true' }} 
       #  shell: bash
       #  run: |
-      #    curl -Lo "sci-jump" https://github.com/a-scie/jump/releases/download/${{ env.JUMP_BINARY_VERSION }}/sci-jupm-${{ runner.os }}-${{ matrix.arch }}
+      #    curl -Lo "sci-jump" https://github.com/a-scie/jump/releases/download/${{ env.JUMP_BINARY_VERSION }}/sci-jupm-${{ matrix.os }}-${{ matrix.arch }}
       #    chmod +x science
 
       - name: science binary download
         if: ${{ steps.science-binary.outputs.cache-hit != 'true' && matrix.arch != 'amd64' }} 
         shell: bash
         run: |
-          curl -Lo ${{ env.SCIENCE_BINARY_NAME }} https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ runner.os }}-${{ matrix.arch }}
+          curl -Lo ${{ env.SCIENCE_BINARY_NAME }} https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ matrix.os }}-${{ matrix.arch }}
           chmod +x science
+        #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
+        #https://github.com/a-scie/lift/releases/download/v0.3.0/science-macos-x86_64
 
       - name: science binary download aarch64
         if: ${{ steps.science-binary.outputs.cache-hit != 'true' && matrix.arch == 'amd64' }}  
         shell: bash
         run: |
-          curl -Lo "${{ env.SCIENCE_BINARY_NAME }}" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ runner.os }}-aarch64
+          curl -Lo "${{ env.SCIENCE_BINARY_NAME }}" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ matrix.os }}-aarch64
           chmod +x ${{ env.SCIENCE_BINARY_NAME }}
+        #https://github.com/a-scie/lift/releases/download/v0.3.0/science-macos-aarch64
           
       - name: build scie
         shell: bash
