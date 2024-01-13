@@ -124,8 +124,8 @@ jobs:
         id: science-binary
         name: cache science binary
         with:
-          path: env.SCIENCE_BINARY_NAME
-          key: env.SCIENCE_BINARY_NAME
+          path: ${{ env.SCIENCE_BINARY_NAME }}
+          key: ${{ env.SCIENCE_BINARY_NAME }}
 
       - name: install cibuildwheel
         shell: bash
