@@ -73,6 +73,7 @@ jobs:
 
       PIKESQUARES_BINARY_VERSION: "0.3.22"
       PIKESQUARES_CLI_VERSION: "0.1.6"
+      PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
 
       CIBW_BUILD: "${{ matrix.cibw_build }}"
       CIBW_ARCHS: ${{ matrix.arch }}
@@ -221,12 +222,8 @@ jobs:
             --no-emit-warnings \
             -o pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex
 
-        #zipinfo pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex
-
       - name: build scie
         shell: bash
-        env: 
-          PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
         run: |
           ls -l . 
           ./${{ env.SCIENCE_BINARY_NAME }} --version
@@ -263,6 +260,6 @@ jobs:
             --header 'Content-Type: application/octet-stream' \
             --header 'accept: application/json'  \
             --data-binary @pikesquares-${{ matrix.os }}-${{ matrix.arch }} \
-            https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{ env.PIKESQUARES_CLI_VERSION }}/pikesquares-${{ matrix.os }}-${{ matrix.arch }}
+            https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{ env.PIKESQUARES_CLI_VERSION }}/${{ PIKESQUARES_BINARY_NAME }}
 
           #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
