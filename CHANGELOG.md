@@ -1,3 +1,9 @@
+## 0.3.5 (2024-01-15)
+
+### Fix
+
+- incremental changelog in github actions release
+
 ## 0.3.4 (2024-01-15)
 
 ### Fix
