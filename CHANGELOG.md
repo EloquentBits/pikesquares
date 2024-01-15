@@ -1,3 +1,9 @@
+## 0.3.2 (2024-01-15)
+
+### Fix
+
+- read revision from bump job env
+
 ## 0.3.1 (2024-01-15)
 
 ### Fix
