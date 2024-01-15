@@ -285,7 +285,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          path: changelog-${{steps.project-version.outputs.version}}
+          name: changelog-${{steps.project-version.outputs.version}}
 
       - name: Release
         uses: softprops/action-gh-release@v1
