@@ -30,20 +30,4 @@ jobs:
       - name: Print Version
         run: echo "Bumped to version ${{ steps.cz.outputs.version }}"
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: bundle
-          path: bundle
-          pattern: bundle-*
-          merge-multiple: true
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          body_path: "body.md"
-          tag_name: ${{ env.REVISION }}
-          files: |
-            bundle/*
 
