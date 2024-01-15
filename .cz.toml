@@ -8,5 +8,5 @@ version_files = [
 tag_format = "v$version"
 version_scheme = "semver"
 version_provider = "commitizen"
-update_changelog_on_bump = false
+update_changelog_on_bump = true
 major_version_zero = true
