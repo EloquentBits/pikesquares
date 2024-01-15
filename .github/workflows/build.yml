@@ -283,12 +283,16 @@ jobs:
           pattern: bundle-*
           merge-multiple: true
 
+      - uses: actions/download-artifact@v4
+        with:
+          path: changelog-${{steps.project-version.outputs.version}}
+
       - name: Release
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          body_path: "body.md"
+          body_path: "changelog-${{steps.project-version.outputs.version}}"
           tag_name: "${{steps.project-version.outputs.version}}"
           files: |
             bundle/*
