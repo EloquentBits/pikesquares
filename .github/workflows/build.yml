@@ -1,7 +1,12 @@
 name: build-and-release-pikesquares
 
 on:
+  workflow_run:
+    workflows: [Bump version]
+    types: [completed]
+
   workflow_dispatch:
+
   push:
     branches:
       - master
