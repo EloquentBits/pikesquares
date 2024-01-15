@@ -5,6 +5,9 @@ on:
     branches:
       - master
 
+permissions:
+  actions: write
+
 jobs:
   bump_version:
     if: "!startsWith(github.event.head_commit.message, 'bump:')"
