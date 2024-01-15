@@ -260,7 +260,6 @@ jobs:
             --header 'accept: application/json'  \
             --data-binary @${{ env.PIKESQUARES_BINARY_NAME }} \
             https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{steps.project-version.outputs.version}}/${{ env.PIKESQUARES_BINARY_NAME }}
-
           #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
 
   gh-release:
