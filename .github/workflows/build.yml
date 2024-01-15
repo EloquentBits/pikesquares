@@ -209,7 +209,6 @@ jobs:
             --venv \
             --python $(which python) \
             --entry-point pikesquares.cli.cli:app \
-            --disable-cache \
             --no-emit-warnings \
             -o pikesquares-cli-${{ matrix.os }}-${{ matrix.arch }}.pex
 
