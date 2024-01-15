@@ -73,6 +73,8 @@ jobs:
       SCIENCE_BINARY_ARCH: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
       SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
 
+      #PIKESQUARES_BUNDLE_VERSION: 
+
       PIKESQUARES_BINARY_VERSION: "0.3.22"
       PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
 
@@ -258,6 +260,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: wheels
     steps:
+
+      - name: Display Project Version
+        run: echo "${{ jobs.wheels.env.PIKESQUARES_BUNDLE_VERSION }}"
+
       - uses: actions/download-artifact@v4
         with:
           path: bundle
@@ -270,6 +276,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           body_path: "body.md"
-          tag_name: ${{ env.REVISION }}
+          tag_name: ${{ jobs.bump-version.env.REVISION }}
           files: |
             bundle/*
