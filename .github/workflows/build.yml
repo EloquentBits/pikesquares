@@ -77,7 +77,6 @@ jobs:
       SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
 
       PIKESQUARES_BINARY_VERSION: "0.3.22"
-      PIKESQUARES_CLI_VERSION: "0.1.6"
       PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
 
       CIBW_BUILD: "${{ matrix.cibw_build }}"
@@ -226,7 +225,7 @@ jobs:
           zipinfo wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl
           pex \
             wheelhouse/pikesquares_binary-${{ env.PIKESQUARES_BINARY_VERSION }}-cp311-cp311-${{ matrix.cibw_wheel_suffix }}.whl \
-            dist/pikesquares-${{ env.PIKESQUARES_CLI_VERSION }}-py3-none-any.whl \
+            dist/pikesquares-"${{steps.project-version.outputs.version}}"-py3-none-any.whl \
             -r requirements.txt \
             --venv \
             --python $(which python) \
@@ -273,6 +272,6 @@ jobs:
             --header 'Content-Type: application/octet-stream' \
             --header 'accept: application/json'  \
             --data-binary @${{ env.PIKESQUARES_BINARY_NAME }} \
-            https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{ env.PIKESQUARES_CLI_VERSION }}/${{ env.PIKESQUARES_BINARY_NAME }}
+            https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{steps.project-version.outputs.version}}/${{ env.PIKESQUARES_BINARY_NAME }}
 
           #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
