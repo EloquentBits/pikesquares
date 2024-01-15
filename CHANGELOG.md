@@ -1,3 +1,14 @@
+## 0.2.0 (2024-01-15)
+
+### Feat
+
+- release action
+
+### Fix
+
+- release action
+- release action
+
 ## 0.1.7 (2024-01-15)
 
 ### Fix
