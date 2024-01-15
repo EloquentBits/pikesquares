@@ -1,0 +1,12 @@
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.6"
+version_files = [
+    "src/pikesquares/__version__.py",
+    "src/pikesquares/pyproject.toml:version",
+]
+tag_format = "v$version"
+version_scheme = "semver"
+version_provider = "commitizen"
+update_changelog_on_bump = false
+major_version_zero = true
