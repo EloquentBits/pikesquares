@@ -11,7 +11,7 @@ on:
     branches:
       - master
     tags:
-      - '**'
+      - "v*.*.*"
     paths-ignore:
       - '**.md'
       - 'scripts/**'
@@ -31,7 +31,6 @@ jobs:
   wheels:
     name: "${{ matrix.py }} ${{ matrix.os }} ${{ matrix.arch }} wheels"
     runs-on: ${{ matrix.runner }}
-
     strategy:
       matrix:
         os: [linux, macos]
@@ -65,8 +64,6 @@ jobs:
         exclude:
           - os: linux
             arch: arm64
-
-          #- {"os": "macos", "py": "cp311", "arch": "arm64", "runner": "macos-latest-xlarge", "cibw_build": "cp311-macosx_arm64",  "pip-cache-path": "~/Library/Caches/pip"}
       fail-fast: false
 
     env:
@@ -130,9 +127,6 @@ jobs:
       - name: Display Project Version
         run: echo "${{steps.project-version.outputs.version}}"
 
-
-      #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      #pikesquares_binary-0.3.22-cp311-cp311-macosx_10_9_x86_64.whl
       - uses: actions/cache@v3
         id: pikesquares-binary-wheel
         name: cache wheel
@@ -158,10 +152,6 @@ jobs:
       - name: science binary download aarch64
         if: ${{ steps.science-binary.outputs.cache-hit != 'true' }}  
         shell: bash
-
-        #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
-        #https://github.com/a-scie/lift/releases/download/v0.3.0/science-macos-x86_64
-        #https://github.com/a-scie/lift/releases/download/v0.3.0/science-macos-aarch64
         run: |
           curl -Lo "${{ env.SCIENCE_BINARY_NAME }}" https://github.com/a-scie/lift/releases/download/${{ env.SCIENCE_BINARY_VERSION }}/science-${{ matrix.os }}-${{ env.SCIENCE_BINARY_ARCH}}
           chmod +x "${{ env.SCIENCE_BINARY_NAME }}"
@@ -187,7 +177,6 @@ jobs:
           ls wheelhouse
 
       # Xcode_14.3.1
-
       #  *** Installing runtime libraries
       #  install libcrypto.3.dylib -> /usr/local/lib/libcrypto.3.dylib
       #  install libssl.3.dylib -> /usr/local/lib/libssl.3.dylib
@@ -202,16 +191,6 @@ jobs:
       #  install openssl.pc -> /usr/local/lib/pkgconfig/openssl.pckk
       #  install libssl.pc -> /usr/local/lib/pkgconfig/libssl.pc
 
-      #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      #pikesquares_binary-0.3.22-cp311-cp311-macosx_10_9_x86_64.whl
-      #
-      #- uses: actions/upload-artifact@v4
-      #  if: false
-      #  with:
-      #    name: pikesquares-binary-cp311-manylinux_x86_64
-      #    path: ./wheelhouse/*.whl
-      #
-      #
       - name: build pikesquares-cli wheel
         shell: bash
         run: |
@@ -248,18 +227,18 @@ jobs:
           ls -l . 
           chmod 755 ${{ env.PIKESQUARES_BINARY_NAME }}
           ./${{ env.PIKESQUARES_BINARY_NAME }} --version
-        #  linux-aarch64
-        #  linux-x86_64
-        #  macos-aarch64
-        #  macos-x86_64
-        #  windows-x86_64
 
-      # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64
-      # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64.sha256
-      #- uses: actions/upload-artifact@v4
-      #  with:
-      #    name: pikesquares-${{ matrix.os }}-${{ matrix.arch }}
-      #    path: pikesquares-${{ matrix.os }}-${{ matrix.arch }}*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ env.PIKESQUARES_BINARY_NAME }}
+          path: ${{ env.PIKESQUARES_BINARY_NAME }}
+          retention-days: 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ env.PIKESQUARES_BINARY_NAME }}.sha256
+          path: ${{ env.PIKESQUARES_BINARY_NAME }}.sha256
+          retention-days: 1
 
       - name: Publish binary to BunnyCDN
         shell: bash
@@ -273,5 +252,25 @@ jobs:
             --header 'accept: application/json'  \
             --data-binary @${{ env.PIKESQUARES_BINARY_NAME }} \
             https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{steps.project-version.outputs.version}}/${{ env.PIKESQUARES_BINARY_NAME }}
-
           #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
+
+  gh-release:
+    name: Prepare github release
+    runs-on: ubuntu-latest
+    needs: wheels
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: bundle
+          pattern: bundle-*
+          merge-multiple: true
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          body_path: "body.md"
+          tag_name: ${{ env.REVISION }}
+          files: |
+            bundle/*
