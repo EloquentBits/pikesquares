@@ -235,23 +235,17 @@ jobs:
           ls -l . 
           chmod 755 ${{ env.PIKESQUARES_BINARY_NAME }}
           ./${{ env.PIKESQUARES_BINARY_NAME }} --version
-        #  linux-aarch64
-        #  linux-x86_64
-        #  macos-aarch64
-        #  macos-x86_64
-        #  windows-x86_64
-
-      # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64
-      # /home/runner/work/pikesquares2/pikesquares2/pikesquares-linux-x86_64.sha256
-      #- uses: actions/upload-artifact@v4
-      #  with:
-      #    name: pikesquares-${{ matrix.os }}-${{ matrix.arch }}
-      #    path: pikesquares-${{ matrix.os }}-${{ matrix.arch }}*
 
       - uses: actions/upload-artifact@v4
         with:
           name: bundle-${{ env.PIKESQUARES_BINARY_NAME }}
           path: ${{ env.PIKESQUARES_BINARY_NAME }}
+          retention-days: 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ env.PIKESQUARES_BINARY_NAME }}.sha256
+          path: ${{ env.PIKESQUARES_BINARY_NAME }}.sha256
           retention-days: 1
 
       - name: Publish binary to BunnyCDN
@@ -268,26 +262,4 @@ jobs:
             https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{steps.project-version.outputs.version}}/${{ env.PIKESQUARES_BINARY_NAME }}
 
           #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
-  release:
-
-    needs: [ wheels, ]
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-
-    steps:
-
-    - uses: actions/download-artifact@v4
-      with:
-        name: bundle
-        path: bundle
-        pattern: bundle-*
-        merge-multiple: true
-
-    - name: Release
-      uses: softprops/action-gh-release@v1
-      if: startsWith(github.ref, 'refs/tags/')
-      with:
-        files: |
-          bundle/*
-
 
