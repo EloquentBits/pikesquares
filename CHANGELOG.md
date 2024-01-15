@@ -1,3 +1,9 @@
+## 0.3.1 (2024-01-15)
+
+### Fix
+
+- pin python interpreter standalone in lift library to 3.11.7
+
 ## 0.3.0 (2024-01-15)
 
 ### Feat
