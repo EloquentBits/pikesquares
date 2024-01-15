@@ -65,8 +65,6 @@ jobs:
         exclude:
           - os: linux
             arch: arm64
-
-          #- {"os": "macos", "py": "cp311", "arch": "arm64", "runner": "macos-latest-xlarge", "cibw_build": "cp311-macosx_arm64",  "pip-cache-path": "~/Library/Caches/pip"}
       fail-fast: false
 
     env:
@@ -187,7 +185,6 @@ jobs:
           ls wheelhouse
 
       # Xcode_14.3.1
-
       #  *** Installing runtime libraries
       #  install libcrypto.3.dylib -> /usr/local/lib/libcrypto.3.dylib
       #  install libssl.3.dylib -> /usr/local/lib/libssl.3.dylib
@@ -202,16 +199,6 @@ jobs:
       #  install openssl.pc -> /usr/local/lib/pkgconfig/openssl.pckk
       #  install libssl.pc -> /usr/local/lib/pkgconfig/libssl.pc
 
-      #pikesquares_binary-0.3.22-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      #pikesquares_binary-0.3.22-cp311-cp311-macosx_10_9_x86_64.whl
-      #
-      #- uses: actions/upload-artifact@v4
-      #  if: false
-      #  with:
-      #    name: pikesquares-binary-cp311-manylinux_x86_64
-      #    path: ./wheelhouse/*.whl
-      #
-      #
       - name: build pikesquares-cli wheel
         shell: bash
         run: |
