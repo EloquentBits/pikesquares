@@ -261,8 +261,21 @@ jobs:
     needs: wheels
     steps:
 
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: pip install commitizen
+        shell: bash
+        run: |
+          pip install commitizen
+
+      - name: Read Project Version
+        id: project-version
+        run: echo "version=$(cz version -p)" >> "$GITHUB_OUTPUT"
+
       - name: Display Project Version
-        run: echo "${{ jobs.wheels.env.PIKESQUARES_BUNDLE_VERSION }}"
+        run: echo "${{steps.project-version.outputs.version}}"
 
       - uses: actions/download-artifact@v4
         with:
@@ -276,6 +289,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           body_path: "body.md"
-          tag_name: ${{ jobs.bump-version.env.REVISION }}
+          tag_name: "${{steps.project-version.outputs.version}}"
           files: |
             bundle/*
