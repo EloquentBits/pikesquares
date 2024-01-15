@@ -17,7 +17,8 @@ version = "0.13.3"
 [[lift.interpreters]]
 id = "cpython311"
 provider = "PythonBuildStandalone"
-version = "3.11"
+version = "3.11.7"
+release = "20240107"
 
 [[lift.files]]
 name = "pikesquares-bundle"
