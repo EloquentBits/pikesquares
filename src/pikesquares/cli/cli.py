@@ -6,9 +6,10 @@ from tinydb import TinyDB
 
 from .. import (
     get_service_status, 
-    device_up,
-    #project_up,
 )
+from ..services.device import device_up
+#from ..services.project import project_up,
+
 from .console import console
 from ..conf import ClientConfig
 

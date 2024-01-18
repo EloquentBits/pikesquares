@@ -10,6 +10,8 @@ from cuid import cuid
 
 from pikesquares import (
     get_service_status,
+)
+from pikesquares.services.project import (
     project_up,
     projects_all,
 )

@@ -6,7 +6,8 @@ from uwsgiconf.typehints import Strlist
 from . import (
     Section, 
 )
-from ..conf import ClientConfig, VirtualHost
+from ..services.data import VirtualHost
+from ..conf import ClientConfig
 
 class BaseWsgiAppSection(Section):
     """Basic wsgi app configuration."""
