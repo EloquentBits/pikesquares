@@ -30,10 +30,10 @@ jobs:
       - name: Print Version
         run: echo "Bumped to version ${{ steps.cz.outputs.version }}"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: changelog-${{ steps.cz.outputs.version }}
-          path: body.md
-          retention-days: 1
+      #- uses: actions/upload-artifact@v4
+      #  with:
+      #    name: changelog-${{ steps.cz.outputs.version }}
+      #    path: body.md
+      #    retention-days: 1
 
 

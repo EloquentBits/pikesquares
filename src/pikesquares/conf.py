@@ -2,7 +2,6 @@ import os
 import pwd
 from pathlib import Path
 
-import pydantic
 from platformdirs import (
     user_data_dir, 
     user_runtime_dir,
@@ -14,24 +13,6 @@ from pydantic_settings import (
     BaseSettings, 
     SettingsConfigDict,
 )
-
-
-
-class VirtualHost(pydantic.BaseModel):
-    address: str
-    certificate_path: str
-    certificate_key: str
-    server_names: list[str]
-    protocol: str = "https"
-    static_files_mapping: dict = {}
-
-    @property
-    def is_https(self):
-        return all([
-            self.certificate_key,
-            self.certificate_path
-        ])
-
 
 current_user: str = pwd.getpwuid(os.getuid()).pw_name
 

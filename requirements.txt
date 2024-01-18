@@ -6,6 +6,6 @@ randomname
 sentry-sdk
 tinydb
 typer[all]
-uWSGI
+#uWSGI
 uwsgiconf
 zmq

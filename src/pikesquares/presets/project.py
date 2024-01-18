@@ -59,11 +59,8 @@ class ProjectSection(Section):
     def as_string(self):
         return self.as_configuration().print_ini()
 
+    """
     def run_fastrouter(self):
-        """
-        Run fastrouter for Project.
-        """
-
         runtime_dir = self.get_runtime_dir()
         #resubscribe_bind_to = "" #127.0.0.1:3069"
         fastrouter_cls = self.routing.routers.fast
@@ -91,6 +88,7 @@ class ProjectSection(Section):
             gid=self.client_config.GID,
         )
         self.routing.use_router(fastrouter)
+    """
 
     def setup_loggers(self):
         self.logging.add_logger(self.logging.loggers.stdio())

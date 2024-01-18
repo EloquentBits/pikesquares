@@ -23,8 +23,36 @@ release = "20240107"
 [[lift.files]]
 name = "pikesquares-bundle"
 
+[[lift.files]]
+name = "healthchecks-io-3-1"
+type = "blob"
+source = "ptex-fetch"
+
+[lift.files.digest]
+size = 18865100
+fingerprint = "2b6d77c14059c1c4a1fdcd6210f6a66023f790d14f4ee6ed9a96df27b0fe80bf"
+
+# "name": "cowsay-1.1.0.jar",
+#  "key": "cowsay.jar",
+#  "size": 1724250,
+#  "hash": "212ee64546eb8b5074572fed4107d850eb90bc462aa3099c0ac8ea63fdca7811",
+#  "type": "blob",
+#  "source": "ptex-fetch"
+
 [[lift.commands]]
 name = ""
 description = "pikesquares cli"
 exe = "{pikesquares-bundle}"
 args = []
+
+
+[[lift.bindings]]
+name = "ptex-fetch"
+#description = "healthchecks pex"
+exe = "{ptex}"
+args = [
+  "{scie.lift}",
+]
+
+[[ptex]]
+name = {"healthchecks-io-3-1" = "https://pikesquares-downloads.b-cdn.net/healthchecks-io-3-1.pex"}

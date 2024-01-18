@@ -9,9 +9,11 @@ from cuid import cuid
 
 from pikesquares import (
     get_service_status,
+    get_first_available_port,
+)
+from pikesquares.services.router import (
     https_router_up,
     https_routers_all,
-    get_first_available_port,
 )
 from ..console import console
 #from ..validators import ServiceNameValidator

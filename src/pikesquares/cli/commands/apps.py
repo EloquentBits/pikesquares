@@ -8,15 +8,24 @@ import questionary
 import randomname
 from cuid import cuid
 
+
 from pikesquares import (
-    HandlerFactory, 
-    get_service_status,
+    get_service_status, 
     get_first_available_port,
-    wsgi_app_up,
-    projects_all,
-    apps_all,
-    https_routers_all,
 )
+
+from pikesquares.services import (
+    HandlerFactory, 
+)
+
+from pikesquares.services.app import (
+    wsgi_app_up,
+    apps_all,
+)
+
+from pikesquares.services.project import projects_all
+from pikesquares.services.router import https_routers_all
+
 from ..console import console
 from ..cli import app
 from ..validators import ServiceNameValidator
