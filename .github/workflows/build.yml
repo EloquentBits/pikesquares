@@ -68,13 +68,9 @@ jobs:
 
     env:
       MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
-
       SCIENCE_BINARY_VERSION: "v0.3.0"
       SCIENCE_BINARY_ARCH: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
       SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
-
-      #PIKESQUARES_BUNDLE_VERSION: 
-
       PIKESQUARES_BINARY_VERSION: "0.3.22"
       PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
 
@@ -283,9 +279,11 @@ jobs:
           pattern: bundle-*
           merge-multiple: true
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: changelog-${{steps.project-version.outputs.version}}
+      #- uses: actions/download-artifact@v4
+      #  with:
+      #    name: changelog-${{steps.project-version.outputs.version}}
+      #    github-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }} # token with actions:read permissions on target repo
+      #    run-id: 1234
 
       - name: Release
         uses: softprops/action-gh-release@v1
