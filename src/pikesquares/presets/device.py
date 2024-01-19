@@ -4,24 +4,18 @@ from . import (
     Section, 
 )
 #from .routers import BaseRouterHttps
-from ..conf import ClientConfig
 
 
 class DeviceSection(Section):
 
-    def __init__(
-        self,
-        client_config: ClientConfig,
-        service_id: str,
-    ):
+    def __init__(self, svc_model):
         super().__init__(
             name="uwsgi",                                       # uwsgi: [uwsgi] section header
             strict_config=True,                                 # uwsgi: strict = true
         )
-        self.service_id = service_id
-        self.client_config = client_config
+        self.svc_model = svc_model
         # env = project.env
-        self.set_runtime_dir(client_config.RUN_DIR)
+        self.set_runtime_dir(svc_model.client_config.RUN_DIR)
 
         # plugins = [
         #         "logfile",
@@ -35,14 +29,14 @@ class DeviceSection(Section):
         # )
         self.master_process.set_basic_params(
             enable=True,
-            fifo_file = str(Path(self._runtime_dir) / f"{service_id}-master-fifo"),
+            fifo_file = str(Path(self._runtime_dir) / f"{svc_model.service_id}-master-fifo"),
         )   # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
             # place here correct emperor wrapper
             #binary_path=str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
         )
-        self.main_process.set_owner_params(uid=client_config.RUN_AS_UID, gid=client_config.RUN_AS_GID)
+        self.main_process.set_owner_params(uid=svc_model.client_config.RUN_AS_UID, gid=svc_model.client_config.RUN_AS_GID)
         self.main_process.set_naming_params(
             prefix=f"[[ PikeSquares App ]] ",
             autonaming=True
@@ -53,28 +47,28 @@ class DeviceSection(Section):
         #    str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve())
         #)
         
-        if self.client_config.DAEMONIZE:
+        if svc_model.client_config.DAEMONIZE:
             self.main_process.daemonize(
-                log_into=str((Path(self.client_config.LOG_DIR) / f"{self.service_id}.log").resolve())
+                log_into=str((Path(svc_model.client_config.LOG_DIR) / f"{svc_model.service_id}.log").resolve())
             )
 
         self.main_process.set_basic_params(
-            touch_reload=str((Path(client_config.CONFIG_DIR) / f"{self.service_id}.json").resolve())
+            touch_reload=str((Path(svc_model.client_config.CONFIG_DIR) / f"{svc_model.service_id}.json").resolve())
         )
         
         self.networking.register_socket(
-            self.networking.sockets.default(str(Path(self._runtime_dir) / f"{service_id}.sock"))
+            self.networking.sockets.default(str(Path(self._runtime_dir) / f"{svc_model.service_id}.sock"))
         )
         #routers_dir = Path(self.client_config.CONFIG_DIR) / "routers"
         #routers_dir.mkdir(parents=True, exist_ok=True)
         #empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
         self.empire.set_emperor_params(
-            vassals_home = f"zmq://tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}",
+            vassals_home = f"zmq://tcp://{svc_model.client_config.EMPEROR_ZMQ_ADDRESS}",
             name=f"PikeSquares App",
             #pid_file=str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve()),
             spawn_asap=True,
-            stats_address=str(Path(self._runtime_dir) / f"{service_id}-stats.sock"),
+            stats_address=str(Path(self._runtime_dir) / f"{svc_model.service_id}-stats.sock"),
         )
 
         #"--emperor=zmq://tcp://127.0.0.1:5250",
@@ -162,7 +156,7 @@ class DeviceSection(Section):
 
     def setup_loggers(self):
         self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log"))
+            self.logging.loggers.file(filepath=str(Path(self.svc_model.client_config.LOG_DIR) / f"{self.svc_model.service_id}.log"))
         )
         self.logging.add_logger(self.logging.loggers.stdio())
 

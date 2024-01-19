@@ -1,24 +1,19 @@
 from pathlib import Path
 
 from . import Section
-from ..conf import ClientConfig
 
 
 
 class ProjectSection(Section):
 
-    def __init__(
-        self,
-        client_config: ClientConfig,
-        service_id: str,
-    ):
+    def __init__(self, svc_model):
         super().__init__(
             name="uwsgi",                                       # uwsgi: [uwsgi] section header
             strict_config=True,                                 # uwsgi: strict = true
         )
-        self.service_id = service_id
-        self.client_config = client_config
-        self.set_runtime_dir(client_config.RUN_DIR)
+        self.svc_model = svc_model
+
+        self.set_runtime_dir(svc_model.client_config.RUN_DIR)
 
         # plugins = [
         #         "logfile",
@@ -32,25 +27,25 @@ class ProjectSection(Section):
 
         self.master_process.set_basic_params(
             enable=True,
-            fifo_file = str(Path(self._runtime_dir) / f"{self.service_id}-master-fifo"),
+            fifo_file = str(Path(self._runtime_dir) / f"{svc_model.service_id}-master-fifo"),
         )   # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
             # place here correct emperor wrapper
             #binary_path=str((Path(self.client_config.DATA_DIR) / ".venv/bin/uwsgi").resolve())
         )
-        self.main_process.set_owner_params(uid=client_config.UID, gid=client_config.GID)
+        self.main_process.set_owner_params(uid=svc_model.client_config.RUN_AS_UID, gid=svc_model.client_config.RUN_AS_GID)
 
         self.main_process.set_pid_file(
-            str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve())
+            str((Path(svc_model.client_config.RUN_DIR) / f"{svc_model.service_id}.pid").resolve())
         )
         
         self.networking.register_socket(
-            self.networking.sockets.default(str(Path(self._runtime_dir) / f"{self.service_id}.sock"))
+            self.networking.sockets.default(str(Path(self._runtime_dir) / f"{svc_model.service_id}.sock"))
         )
 
         self.empire.set_emperor_params(
-            stats_address=str(Path(self._runtime_dir) / f"{self.service_id}-stats.sock")
+            stats_address=str(Path(self._runtime_dir) / f"{svc_model.service_id}-stats.sock")
         )
 
         self.setup_loggers()
@@ -93,7 +88,7 @@ class ProjectSection(Section):
     def setup_loggers(self):
         self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log"))
+            self.logging.loggers.file(filepath=str(Path(self.svc_model.client_config.LOG_DIR) / f"{self.svc_model.service_id}.log"))
         )
 
 

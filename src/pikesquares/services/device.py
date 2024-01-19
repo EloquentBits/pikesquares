@@ -10,7 +10,11 @@ from tinydb import TinyDB, Query
 
 from ..presets.device import DeviceSection
 from ..conf import ClientConfig
-from . import Handler, HandlerFactory
+from . import (
+    Handler, 
+    HandlerFactory, 
+    Device, 
+)
 
 
 @HandlerFactory.register('Device')
@@ -22,25 +26,23 @@ class DeviceService(Handler):
     def prepare_service_config(self):
         # TODO  self.service_config.tofile()
 
-        self.service_config = Path(self.client_config.CONFIG_DIR) / "device.json"
-        with TinyDB(self.device_db_path) as db:
+        with TinyDB(self.svc_model.device_db_path) as db:
             config = json.loads(
                 DeviceSection(
-                    self.client_config,
-                    self.service_id,
+                    self.svc_model,
                 ).as_configuration().format(formatter="json")
             )
             config["uwsgi"]["show-config"] = True
             #empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}"
             # empjs["uwsgi"]["emperor"] = f"{self.client_config.CONFIG_DIR}/project_clo7af2mb0000nldcne2ssmrv/apps"
             #config["uwsgi"]["plugin"] = "emperor_zeromq"
-            config["uwsgi"]["emperor-wrapper"] = str((Path(self.client_config.VENV_DIR) / "bin/uwsgi").resolve())
+            config["uwsgi"]["emperor-wrapper"] = str((Path(self.svc_model.client_config.VENV_DIR) / "bin/uwsgi").resolve())
 
-            routers_dir = Path(self.client_config.CONFIG_DIR) / "routers"
+            routers_dir = Path(self.svc_model.client_config.CONFIG_DIR) / "routers"
             routers_dir.mkdir(parents=True, exist_ok=True)
             #empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
-            self.service_config.write_text(
+            self.svc_model.service_config.write_text(
                 json.dumps(config)
             )
 
@@ -71,7 +73,7 @@ class DeviceService(Handler):
 
         pyuwsgi.run([
             "--json",
-            f"{str(self.service_config.resolve())}"
+            f"{str(self.svc_model.service_config.resolve())}"
         ])
 
     def stop(self):
@@ -79,11 +81,13 @@ class DeviceService(Handler):
 
 
 def device_up(client_config: ClientConfig) -> None:
-    device = HandlerFactory.make_handler("Device")(
+
+    svc_model = Device(
         service_id="device", 
         client_config=client_config,
     )
-    device.prepare_service_config()
-    device.start()
+    svc = HandlerFactory.make_handler("Device")(svc_model)
+    svc.prepare_service_config()
+    svc.start()
 
 

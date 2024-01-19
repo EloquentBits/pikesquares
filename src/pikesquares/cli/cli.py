@@ -53,7 +53,11 @@ def main(
 
     assert os.environ.get("VIRTUAL_ENV"), "VIRTUAL_ENV not set"
 
+    print(f"{config=}")
     client_config = ClientConfig(_env_file=config or None)
+
+    print(f"{client_config.DATA_DIR=}")
+
     for k, v in client_config.model_dump().items():
         if k.endswith("_DIR"):
             Path(v).mkdir(mode=0o777, parents=True, exist_ok=True)
@@ -61,7 +65,8 @@ def main(
     obj = ctx.ensure_object(dict)
     obj["verbose"] = verbose
     obj["client_config"] = client_config
-    obj['db'] = TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}")
+
+    #obj['db'] = TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}")
 
     """
     def get_project_db(project_uid):
@@ -126,20 +131,18 @@ def up(
 ):
     """ Start all services """
 
-
     venv_dir = os.environ.get("VIRTUAL_ENV")
     console.info(f"Using Python Virtual Environment @ {venv_dir}")
-    print("UP UP UP")
 
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
     client_config.DAEMONIZE = not foreground
 
     # What should user see if device is already started?
-    status = get_service_status(f"device", client_config)
-    if status == "running":
-        console.info("Your device is already running")
-        return
+    #status = get_service_status(f"device", client_config)
+    #if status == "running":
+    #    console.info("Your device is already running")
+    #    return
 
     device_up(client_config)
 
