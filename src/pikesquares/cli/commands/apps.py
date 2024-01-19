@@ -90,8 +90,8 @@ def create(
         choices=HandlerFactory.user_visible_services(),
     ).ask()
     
-    service_name = console.ask(
-        "Enter your service name: ", 
+    name = console.ask(
+        "Enter your app name: ", 
         default=randomname.get_name(), 
         validators=[ServiceNameValidator]
     )
@@ -137,15 +137,11 @@ def create(
     router_id = available_routers.get(router_address)
     #print(f"Selected Https Routers: {router_id} running on: {router_address}")
     app_options["router_id"] = router_id
-
-    port = str(get_first_available_port(port=7080))
-    app_options['socket_address'] = f"127.0.0.1:{port}"
-
     print(app_options)
 
     wsgi_app_up(
         client_config,
-        service_name,
+        name,
         available_projects.get(project_name),
         service_id,
         **app_options,
@@ -227,7 +223,8 @@ def list_(
         apps_out.append({
             'name': app.get('name'),
             'status': get_service_status(
-                app.get('service_id'), client_config) or "Unknown",
+                app.get('service_id'), client_config
+            ) or "Unknown",
             'id': app.get('service_id')
         })
 

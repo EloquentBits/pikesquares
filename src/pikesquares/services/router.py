@@ -4,10 +4,13 @@ from pathlib import Path
 import zmq
 from tinydb import TinyDB, Query
 
-from . import Handler, HandlerFactory
-from .. import get_first_available_port
 from ..presets.routers import HttpsRouterSection
 from ..conf import ClientConfig
+from . import (
+    Handler, 
+    HandlerFactory, 
+    HttpsRouter,
+)
 
 
 @HandlerFactory.register('Https-Router')
@@ -30,29 +33,7 @@ class HttpsRouterService(Handler):
 
         https_router_provision_cert()
     
-        cert = (Path(self.client_config.PKI_DIR) / "issued" / "_wildcard.pikesquares.dev.crt").resolve()
-        cert_key = (Path(self.client_config.PKI_DIR) / "private" / "_wildcard.pikesquares.dev.key").resolve()
-        client_ca = (Path(self.client_config.PKI_DIR) / "ca.crt").resolve()
-
-        assert cert.exists(), "cert missing"
-        assert cert_key.exists(), "key missing"
-        assert client_ca.exists(), "CA cert missing"
-
-        stats_server_port = 9897
-        subscription_server_port = 5600
-        stats_server_address = f"127.0.0.1:{get_first_available_port(port=stats_server_port)}"
-        subscription_server_address = f"127.0.0.1:{get_first_available_port(port=subscription_server_port)}"
-
-        section = HttpsRouterSection(
-            self.service_id,
-            self.client_config,
-            address,
-            stats_server_address,
-            subscription_server_address,
-            str(cert),
-            str(cert_key),
-            str(client_ca),
-        )
+        section = HttpsRouterSection(self.svc_model, address)
         self.config_json = json.loads(
                 section.as_configuration().format(formatter="json"))
         self.config_json["uwsgi"]["show-config"] = True
@@ -62,53 +43,57 @@ class HttpsRouterService(Handler):
         #empjs["uwsgi"]["plugin"] = "emperor_zeromq"
         print(self.config_json)
 
-        self.service_config = Path(self.client_config.CONFIG_DIR) / "routers" / f"{self.service_id}.json"
-        self.service_config.write_text(json.dumps(self.config_json))
+        #self.svc_model.service_config.write_text(json.dumps(self.config_json))
 
-        with TinyDB(self.device_db_path) as db:
+        with TinyDB(self.svc_model.device_db_path) as db:
             print("Updating routers db.")
             routers_db = db.table('routers')
             routers_db.upsert(
                 {
                     'service_type': self.handler_name, 
-                    'service_id': self.service_id,
+                    'service_id': self.svc_model.service_id,
                     'address': address,
                     'service_config': self.config_json,
                 },
-                Query().service_id == self.service_id,
+                Query().service_id == self.svc_model.service_id,
             )
             print("Done updating routers db.")
 
 
     def connect(self):
-        print(f"Connecting to zmq emperor  {self.client_config.EMPEROR_ZMQ_ADDRESS}")
-        self.zmq_socket.connect(f"tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}")
+        pass
+        #print(f"Connecting to zmq emperor  {self.client_config.EMPEROR_ZMQ_ADDRESS}")
+        #self.zmq_socket.connect(f"tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}")
 
     def start(self):
-        if all([
-            self.service_config, 
-            isinstance(self.service_config, Path), 
-            self.service_config.exists()]):
-            msg = json.dumps(self.config_json).encode()
+        #if all([
+        #    self.service_config, 
+        #    isinstance(self.service_config, Path), 
+        #    self.service_config.exists()]):
+        #    msg = json.dumps(self.config_json).encode()
             #self.service_config.read_text()
 
-            print("sending https router config to zmq")
-            self.zmq_socket.send_multipart(
-                [
-                    b"touch", 
-                    self.config_name.encode(), 
-                    msg,
-                ]
-            )
-            print("sent https router config to zmq")
-        else:
-            print(f"DID NOT SEND https router config to zmq {str(self.service_config.resolve())}")
+        #    print("sending https router config to zmq")
+        #    self.zmq_socket.send_multipart(
+        #        [
+        #            b"touch", 
+        #            self.config_name.encode(), 
+        #            msg,
+        #        ]
+        #    )
+        #    print("sent https router config to zmq")
+        #else:
+        #    print(f"DID NOT SEND https router config to zmq {str(self.service_config.resolve())}")
+
+        self.svc_model.service_config.parent.mkdir(parents=True, exist_ok=True)
+        self.svc_model.service_config.write_text(json.dumps(self.config_json))
 
     def stop(self):
-        self.zmq_socket.send_multipart([
-            b"destroy",
-            self.config_name.encode(),
-        ])
+        pass
+        #self.zmq_socket.send_multipart([
+        #    b"destroy",
+        #    self.config_name.encode(),
+        #])
     """
     def connect(self):
         pass
@@ -140,10 +125,13 @@ def https_router_up(
         service_id:str, 
         address: str,
         ) -> None:
-    https_router = HandlerFactory.make_handler("Https-Router")(
+
+    svc_model = HttpsRouter(
+        service_id=service_id,
         client_config=client_config,
-        service_id=service_id, 
     )
+
+    https_router = HandlerFactory.make_handler("Https-Router")(svc_model)
     https_router.prepare_service_config(address)
     https_router.connect()
     https_router.start()

@@ -53,8 +53,6 @@ def create(
     """
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
-    port = 3017
-
     #if not project_name:
     #    default_project_name = randomname.get_name()
     #    project_name = console.ask(

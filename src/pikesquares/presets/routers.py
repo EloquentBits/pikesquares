@@ -78,31 +78,19 @@ class BaseRouterHttps(_RouterHttp):
 class HttpsRouterSection(Section):
     router_name = "[[ Pike Squares App / HTTPS Router ]]"
 
-    def __init__(
-        self,
-        service_id: str,
-        client_config: ClientConfig,
-        address: str,
-        stats_server_address: str,
-        subscription_server_address: str,
-        certificate_path: str,
-        certificate_key: str,
-        client_ca: str,
-        resubscribe_to: str = None,
-        **kwargs
-    ):
+    def __init__(self, svc_model, address: str, **kwargs):
         super().__init__(
             strict_config=True,
             name="uwsgi",
-            runtime_dir=client_config.RUN_DIR,
+            runtime_dir=str(svc_model.run_dir),
             project_name=self.router_name,
             **kwargs,
         )
+        self.svc_model = svc_model
 
-        self.service_id = service_id
-        self.client_config = client_config
-        self.set_runtime_dir(self.client_config.RUN_DIR)
-
+        #self.service_id = service_id
+        #self.client_config = client_config
+        self.set_runtime_dir(str(self.svc_model.run_dir))
 
         #self.set_plugins_params(plugins="http")
 
@@ -111,9 +99,9 @@ class HttpsRouterSection(Section):
         #self.main_process.set_basic_params(
         #    touch_reload="/srv/uwsgi/%n.http-router.ini"
         #)
-        self.main_process.set_owner_params(uid=client_config.RUN_AS_UID, gid=client_config.RUN_AS_GID)
+        self.main_process.set_owner_params(uid=svc_model.uid, gid=svc_model.gid)
         self.main_process.set_naming_params(
-            prefix=f"{self.router_name} {self.service_id} ",
+            prefix=f"{self.router_name} {svc_model.service_id} ",
             autonaming=True
         )
 
@@ -142,29 +130,28 @@ class HttpsRouterSection(Section):
         #       addr=127.0.0.1:3020",
 
         self.networking.register_socket(
-            self.networking.sockets.shared(
-                address=address
-            )
+            #self.networking.sockets.shared(address=str(svc_model.socket_address))
+            self.networking.sockets.default(str(svc_model.socket_address))
         )
         # FIXME for when port is lower than the default on the cli
         ssl_context = f"={(int(address.split(':')[-1]) - 8443)}"
         self.router = BaseRouterHttps(
             ssl_context ,
-            cert=certificate_path,
-            key=certificate_key,
+            cert=str(svc_model.certificate),
+            key=str(svc_model.certificate_key),
             forward_to=BaseRouterHttps.forwarders.subscription_server(
-                address=subscription_server_address,
+                address=str(svc_model.subscription_server_address),
                 #key=subscription_server_address
             ),
             ciphers="HIGH",
-            client_ca=client_ca,
+            client_ca=str(svc_model.client_ca),
         )
 
         self.router.set_basic_params(
-            stats_server=stats_server_address,
+            stats_server=str(svc_model.stats_address),
             quiet=False,
             keepalive=5,
-            resubscribe_addresses=resubscribe_to
+            #resubscribe_addresses=(svc_model.resubscribe_to),
         )
         self.router.set_connections_params(
             timeout_socket=500,
@@ -177,16 +164,12 @@ class HttpsRouterSection(Section):
             source_method=True
         )
 
-        
         self.logging.set_file_params(owner="true")
         self.routing.use_router(self.router)
 
-
         #self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
         self.logging.add_logger(
-            self.logging.loggers.file(
-                filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log")
-            )
+            self.logging.loggers.file(filepath=str(svc_model.log_file))
         )
         
 

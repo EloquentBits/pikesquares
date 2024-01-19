@@ -36,11 +36,12 @@ class DeviceService(Handler):
             #empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}"
             # empjs["uwsgi"]["emperor"] = f"{self.client_config.CONFIG_DIR}/project_clo7af2mb0000nldcne2ssmrv/apps"
             #config["uwsgi"]["plugin"] = "emperor_zeromq"
-            config["uwsgi"]["emperor-wrapper"] = str((Path(self.svc_model.client_config.VENV_DIR) / "bin/uwsgi").resolve())
 
-            routers_dir = Path(self.svc_model.client_config.CONFIG_DIR) / "routers"
-            routers_dir.mkdir(parents=True, exist_ok=True)
-            #empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
+            #routers_dir = Path(self.svc_model.client_config.CONFIG_DIR) / "routers"
+            #routers_dir.mkdir(parents=True, exist_ok=True)
+            #config["uwsgi"]["emperor"] = str(routers_dir.resolve())
+
+            config["uwsgi"]["emperor-wrapper"] = str((Path(self.svc_model.client_config.VENV_DIR) / "bin/uwsgi").resolve())
 
             self.svc_model.service_config.write_text(
                 json.dumps(config)

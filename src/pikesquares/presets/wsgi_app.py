@@ -152,33 +152,22 @@ class WsgiAppSection(BaseWsgiAppSection):
 
     def __init__(
         self,
-        client_config: ClientConfig,
-        name: str,
-        service_id: str,
-        project_id: str,
+        svc_model,
         subscription_server_address: str,
         virtual_hosts: list[VirtualHost] = [],
         **app_options,
     ):
-        self.name = name
-        self.service_id = service_id
-        self.project_id = project_id
-        self.client_config = client_config
+        self.svc_model = svc_model
         self.virtual_hosts = virtual_hosts or []
 
         require_app = True
         embedded_plugins = self.embedded_plugins_presets.BASIC + ['python', 'python2', 'python3']
 
-        owner = f"{client_config.RUN_AS_UID}:{client_config.RUN_AS_GID}"
-
         super().__init__(
             name='uwsgi', 
             embedded_plugins=embedded_plugins, 
-            owner=owner,
-            touch_reload=str(
-                (Path(self.client_config.CONFIG_DIR) / \
-                    f"{self.project_id}" / "apps" / f"{self.name}.json").resolve()
-            ),
+            owner=f"{svc_model.uid}:{svc_model.gid}",
+            touch_reload=svc_model.touch_reload_file,
             **app_options,
         )
         self.python.set_basic_params(
@@ -188,16 +177,14 @@ class WsgiAppSection(BaseWsgiAppSection):
         )
 
         self.main_process.change_dir(to=app_options.get('root_dir'))
-        self.main_process.set_pid_file(
-            str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve())
-        )
+        self.main_process.set_pid_file(str(svc_model.pid_file))
 
         self.master_process.set_basic_params( 
             enable=True,
-            fifo_file=str(Path(client_config.RUN_DIR) / f"{service_id}-master-fifo"),
+            fifo_file=str(svc_model.fifo_file)
         )
 
-        self.set_plugins_params(search_dirs=client_config.PLUGINS_DIR)
+        self.set_plugins_params(search_dirs=svc_model.client_config.PLUGINS_DIR)
 
         #if app.wsgi_module and callable(app.wsgi_module):
         #    wsgi_callable = wsgi_module.__name__
@@ -223,7 +210,7 @@ class WsgiAppSection(BaseWsgiAppSection):
         self.applications.set_basic_params(exit_if_none=require_app)
 
         self.networking.register_socket(
-            self.networking.sockets.default(app_options.get('socket_address'))
+            self.networking.sockets.default(svc_model.socket_address)
         )
 
         #socket_path = str(Path(self.client_config.RUN_DIR) / f"{service_id}.sock")
@@ -246,14 +233,20 @@ class WsgiAppSection(BaseWsgiAppSection):
         # )
 
         self.subscriptions.set_server_params(
-            client_notify_address=str(Path(client_config.RUN_DIR) / f"{service_id}-notify.sock"),
+            client_notify_address=str(svc_model.notify_socket),
         )
 
         self.monitoring.set_stats_params(
-            address=str(Path(client_config.RUN_DIR) / f"{service_id}-stats.sock"),
+            address=str(svc_model.stats_address)
         )
         
-        self.setup_loggers()
+        # self.logging.add_logger(self.logging.loggers.stdio())
+        self.logging.add_logger(
+            self.logging.loggers.file(
+                filepath=str(svc_model.log_file)
+            )
+        )
+
         #self.setup_virtual_hosts(virtual_hosts, socket_addr=socket_addr)
 
         #if ":" in address:
@@ -296,8 +289,8 @@ class WsgiAppSection(BaseWsgiAppSection):
 
         subscription_params = dict(
             server=subscription_server_address,
-            address=app_options.get('socket_address'),  # address and port of wsgi app
-            key=f"{name}.pikesquares.dev",
+            address=str(svc_model.socket_address),  # address and port of wsgi app
+            key=f"{svc_model.name}.pikesquares.dev",
         )
         print(f"{subscription_params=}")
 
@@ -329,13 +322,6 @@ class WsgiAppSection(BaseWsgiAppSection):
         """
 
 
-    def setup_loggers(self):
-        # self.logging.add_logger(self.logging.loggers.stdio())
-        self.logging.add_logger(
-            self.logging.loggers.file(
-                filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log")
-            )
-        )
 
     """
     def setup_virtual_hosts(self, virtual_hosts: list[VirtualHost], 

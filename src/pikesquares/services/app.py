@@ -6,12 +6,16 @@ import shutil
 from tinydb import TinyDB, Query
 
 from .. import get_service_status
-from . import Handler, HandlerFactory
 from .project import project_up
 from ..presets.wsgi_app import WsgiAppSection
 from ..conf import ClientConfig
-
 from .data import VirtualHost
+
+from . import (
+    Handler, 
+    HandlerFactory, 
+    WsgiApp,
+)
 
 
 @HandlerFactory.register('WSGI-App')
@@ -45,41 +49,32 @@ class WsgiAppService(Handler):
 
     def prepare_service_config(
         self,
-        name: str,
-        project_id: str,
-        service_id: str,
         **app_options
     ):
-        self.name = name
-        self.service_id = service_id
-        self.project_id = project_id
-        self.service_config = Path(self.client_config.CONFIG_DIR) / \
-                f"{self.project_id}" / "apps" \
-                / f"{self.name}.json"
+        self.name = self.svc_model.name
+        self.service_id = self.svc_model.service_id
+        self.project_id = self.svc_model.project_id
 
         self.prepare_virtual_hosts()
 
-        with TinyDB(self.device_db_path) as db:
+        with TinyDB(self.svc_model.device_db_path) as db:
             routers_db = db.table('routers')
             router = routers_db.get(Query().service_id == app_options.get('router_id'))
             subscription_server_address = router.get('service_config')['uwsgi']['http-subscription-server']
 
             section = WsgiAppSection(
-                self.client_config,
-                self.name,
-                self.service_id,
-                self.project_id,
+                self.svc_model,
                 subscription_server_address,
                 virtual_hosts=self.virtual_hosts,
                 **app_options
             ).as_configuration().format(formatter="json")
-            self.config_json = json.loads(section)
 
+            self.config_json = json.loads(section)
             self.config_json["uwsgi"]["show-config"] = True
             self.config_json["uwsgi"]["strict"] = False
 
             print(self.config_json)
-            self.service_config.write_text(json.dumps(self.config_json))
+            #self.service_config.write_text(json.dumps(self.config_json))
 
             print("Updating aps db.")
             apps_db = db.table('apps')
@@ -109,19 +104,18 @@ class WsgiAppService(Handler):
         }
 
     def prepare_virtual_hosts(self, include_proj_in_url: bool=False):
-        # if not self.virtual_hosts:
-        self.setup_address()
+
         server_names = [
             # f"{self.service_id}-{self.project_id}-vconf.local",
             # f"{self.name}-{self.project_name}-vconf.local",
-             f"{self.name}.{self.project_name}.pikesquares.dev" \
+             f"{self.name}.{self.project_id}.pikesquares.dev" \
                 if include_proj_in_url else f"{self.name}.pikesquares.dev",
         ]
         self.virtual_hosts = [
             VirtualHost(
-                address=self.address,
-                certificate_path=self.client_config.CERT,
-                certificate_key=self.client_config.CERT_KEY,
+                address=self.svc_model.socket_address,
+                certificate_path=str(self.svc_model.certificate),
+                certificate_key=str(self.svc_model.certificate_key),
                 server_names=[sn for sn in server_names if "--" not in sn]
             )
         ]
@@ -134,20 +128,19 @@ class WsgiAppService(Handler):
         #self.zmq_socket.connect(f'tcp://127.0.0.1:{zmq_port}')
 
     def start(self):
-        if not self.is_started() and str(self.service_config.resolve()).endswith(".stopped"):
-            shutil.move(
-                str(self.service_config),
-                self.service_config.removesuffix(".stopped")
-            )
+        #if not self.is_started() and str(self.service_config.resolve()).endswith(".stopped"):
+        #    shutil.move(
+        #        str(self.service_config),
+        #        self.service_config.removesuffix(".stopped")
+        #    )
 
-        if not get_service_status(self.project_id, self.client_config) == "running":
-            project = get_project(self.client_config, self.project_id)
-            if project:
-                project_up(self.client_config, project.get('name'), self.project_id)
-
+        #if not get_service_status(self.project_id, self.client_config) == "running":
+        #    project = get_project(self.client_config, self.project_id)
+        #    if project:
+        #        project_up(self.client_config, project.get('name'), self.project_id)
         
-        self.service_config.parent.mkdir(parents=True, exist_ok=True)
-        self.service_config.write_text(json.dumps(self.config_json))
+        self.svc_model.service_config.parent.mkdir(parents=True, exist_ok=True)
+        self.svc_model.service_config.write_text(json.dumps(self.config_json))
 
         """
         if all([
@@ -170,32 +163,32 @@ class WsgiAppService(Handler):
         """
 
     def stop(self):
-        if self.service_config is None:
-            self.service_config = Path(self.client_config.CONFIG_DIR) / \
-                    f"{self.parent_service_id}" / "apps" \
-                    / f"{self.service_id}.json"
-        if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
-            shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
+        pass
+        #if self.service_config is None:
+        #    self.service_config = Path(self.client_config.CONFIG_DIR) / \
+        #            f"{self.parent_service_id}" / "apps" \
+        #            / f"{self.service_id}.json"
+        #if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
+        #    shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
 
 
 def wsgi_app_up(
         client_config: ClientConfig, 
         name: str, 
-        project_id: str,
         service_id: str,
+        project_id: str,
         **app_options
     ) -> None:
 
-    app = HandlerFactory.make_handler("WSGI-App")(
-        service_id=service_id, 
+    svc_model = WsgiApp(
         client_config=client_config,
+        name=name,
+        service_id=service_id,
+        project_id=project_id,
     )
-    app.prepare_service_config(
-        name,
-        project_id,
-        service_id,
-        **app_options,
-    )
+
+    app = HandlerFactory.make_handler("WSGI-App")(svc_model)
+    app.prepare_service_config(**app_options)
     app.connect()
     app.start()
 
