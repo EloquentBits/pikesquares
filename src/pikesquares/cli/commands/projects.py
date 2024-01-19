@@ -66,6 +66,23 @@ def create(
     #console.success(f"Project '{project_name}' was successfully created!")
     project_up(client_config, project_name, f"project_{cuid()}")
 
+
+@proj_cmd.command("up")
+def up(
+    ctx: typer.Context, 
+    name: Optional[str] = typer.Argument("")
+    ):
+    obj = ctx.ensure_object(dict)
+    client_config = obj.get("client_config")
+    projects = projects_all(client_config)
+    for project in projects:
+        name = project.get('name')
+        status = get_service_status(project.get('service_id'), client_config) or "Unknown",
+        service_id = project.get('service_id')
+        print(f"{status=} {name} [{service_id}]")
+        project_up(client_config, name, service_id)
+
+
 @app.command(
     "projects",
     rich_help_panel="Show",
@@ -139,43 +156,45 @@ def delete(
     obj = ctx.ensure_object(dict)
     client_config = obj.get("client_config")
 
-    device_db = obj['device']
+    #device_db = obj['device']
 
-    projects_choices = {
-        k.get('name'): (k.get('cuid'), k.get('path'))
-        for k in device_db.search(where("type") == 'Project')
-    }
-    if not projects_choices:
-        console.warning("No projects were initialized, nothing to delete!")
-        return
+    #projects_choices = {
+    #    k.get('name'): (k.get('cuid'), k.get('path'))
+    #    for k in device_db.search(where("type") == 'Project')
+    #}
+    #if not projects_choices:
+    #    console.warning("No projects were initialized, nothing to delete!")
+    #    return
     
-    selected_project_name = project_name
-    if not selected_project_name:
-        selected_project_name = console.choose(
-            "Which project you want to delete?",
-            choices=projects_choices,
-        )
+    #selected_project_name = project_name
+    #if not selected_project_name:
+    #    selected_project_name = console.choose(
+    #        "Which project you want to delete?",
+    #        choices=projects_choices,
+    #    )
 
     # rm project sources
-    selected_project_cuid, selected_project_path = projects_choices.get(selected_project_name)
-    if Path(selected_project_path).exists() and console.confirm(f"Are you sure you want to delete: {selected_project_path}"):
-        shutil.rmtree(selected_project_path)
+    #selected_project_cuid, selected_project_path = projects_choices.get(selected_project_name)
+    #if Path(selected_project_path).exists() and console.confirm(f"Are you sure you want to delete: {selected_project_path}"):
+    #    shutil.rmtree(selected_project_path)
 
     # rm project configs
-    selected_project_config_path = Path(client_config.CONFIG_DIR) / selected_project_cuid
-    selected_project_config_path.with_suffix('.json').unlink(missing_ok=True)
-    if Path(selected_project_config_path).exists():
-        shutil.rmtree(str(selected_project_config_path.resolve()))
+    #selected_project_config_path = Path(client_config.CONFIG_DIR) / selected_project_cuid
+    #selected_project_config_path.with_suffix('.json').unlink(missing_ok=True)
+    #if Path(selected_project_config_path).exists():
+    #    shutil.rmtree(str(selected_project_config_path.resolve()))
 
     # rm project runtimes
-    for file in Path(client_config.RUN_DIR).iterdir():
-        if selected_project_cuid in str(file.resolve()):
-            file.unlink(missing_ok=True)
+    #for file in Path(client_config.RUN_DIR).iterdir():
+    #    if selected_project_cuid in str(file.resolve()):
+    #        file.unlink(missing_ok=True)
 
     # rm project from db
-    device_db.remove(where('cuid') == selected_project_cuid)
+    #device_db.remove(where('cuid') == selected_project_cuid)
 
-    console.success(f"Removed project '{selected_project_name}'!")
+    #console.success(f"Removed project '{selected_project_name}'!")
+
+
 #@proj_cmd.command(short_help="Start project.\nAliases:[i] run")
 #@proj_cmd.command("run", hidden=True)
 #def start(
