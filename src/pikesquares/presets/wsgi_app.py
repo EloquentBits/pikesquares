@@ -171,12 +171,12 @@ class WsgiAppSection(BaseWsgiAppSection):
             **app_options,
         )
         self.python.set_basic_params(
-            python_home=app_options.get('pyvenv_dir'),
+            python_home=svc_model.pyvenv_dir,
             enable_threads=True,
             #search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
         )
 
-        self.main_process.change_dir(to=app_options.get('root_dir'))
+        self.main_process.change_dir(to=svc_model.root_dir)
         self.main_process.set_pid_file(str(svc_model.pid_file))
 
         self.master_process.set_basic_params( 
@@ -204,8 +204,8 @@ class WsgiAppSection(BaseWsgiAppSection):
         #:param callable_name: Set WSGI callable name. Default: application.
 
         self.python.set_wsgi_params(
-            module=app_options.get('wsgi_file'), 
-            callable_name=app_options.get('wsgi_module'),
+            module=str(svc_model.wsgi_file), 
+            callable_name=svc_model.wsgi_module,
         )
         self.applications.set_basic_params(exit_if_none=require_app)
 

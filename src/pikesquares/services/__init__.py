@@ -93,11 +93,18 @@ class Device(BaseService):
         return Path(self.client_config.CONFIG_DIR) / 'device.json'
 
     @property
-    def apps_dir(self) -> str:
-        apps_dir = Path(self.client_config.CONFIG_DIR) / "projects"
-        if apps_dir and not apps_dir.exists():
-            apps_dir.mkdir(parents=True, exist_ok=True)
-        return str(apps_dir.resolve())
+    def spooler_dir(self) -> Path:
+        dir = Path(self.client_config.DATA_DIR) / 'spooler'
+        if dir and not dir.exists():
+            dir.mkdir(parents=True, exist_ok=True)
+        return dir
+
+    @property
+    def apps_dir(self) -> Path:
+        dir = Path(self.client_config.CONFIG_DIR) / "projects"
+        if dir and not dir.exists():
+            dir.mkdir(parents=True, exist_ok=True)
+        return dir
 
     #def __init__(self, client_config, *args, **kwargs):
     #    self.client_config = client_config
@@ -155,6 +162,10 @@ class WsgiApp(BaseService):
 
     name: str
     project_id: str
+    root_dir: Path
+    pyvenv_dir: Path
+    wsgi_module: str
+    router_id: str
 
     @property
     def service_config(self):

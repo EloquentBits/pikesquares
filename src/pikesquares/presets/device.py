@@ -1,4 +1,4 @@
-from pathlib import Path
+#from pathlib import Path
 
 from . import (
     Section, 
@@ -41,7 +41,6 @@ class DeviceSection(Section):
             prefix=f"[[ PikeSquares App ]] ",
             autonaming=True
         )
-
         #self.set_placeholder("vconf_run_dir", self.runtime_dir)
         #self.main_process.set_pid_file(
         #    str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve())
@@ -73,6 +72,24 @@ class DeviceSection(Section):
         #self.empire.set_emperor_params(
         #    stats_address=str(Path(self._runtime_dir) / f"{self.service_id}-stats.sock")
         #)
+
+        #uwsgiconf.options.spooler.Spooler
+        self.spooler.set_basic_params(
+            #touch_reload=str(""),
+            quiet=False,
+            process_count=1,
+            max_tasks=10,
+            harakiri=60,
+            #change_dir=str(""),
+            poll_interval=10,
+            #cheap=True,
+            #base_dir=str(""),
+        )
+        self.spooler.add(
+            work_dir=str(svc_model.spooler_dir),
+            external=False
+
+        )
 
         self.caching.add_cache("pikesquares-settings", max_items=100)
 
