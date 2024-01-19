@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 
 import zmq
@@ -31,21 +32,23 @@ class ProjectService(Handler):
             empjs = json.loads(ProjectSection(
                     self.svc_model
                 ).as_configuration().format(formatter="json"))
+
             self.svc_model.service_config.write_text(json.dumps(empjs))
             self.config_json = json.loads(self.svc_model.service_config.read_text())
-            stats_addr = self.config_json["uwsgi"]["emperor-stats-server"]
-            #self.config_json["uwsgi"]["emperor"] = zmq_addr #uwsgi.cache_get(zmq_addr_key, self.cache).decode()
-            self.config_json["uwsgi"]["emperor"] = self.svc_model.apps_dir
 
-            uwsgi.cache_update(f"{self.svc_model.service_id}-stats-addr", str(stats_addr), 0, self.svc_model.cache)
-            self.config_json["uwsgi"]["show-config"] = True
-            self.config_json["uwsgi"]["strict"] = False
+            #stats_addr = self.config_json["uwsgi"]["emperor-stats-server"]
+            #self.config_json["uwsgi"]["emperor"] = zmq_addr #uwsgi.cache_get(zmq_addr_key, self.cache).decode()
+            #self.config_json["uwsgi"]["emperor"] = self.svc_model.apps_dir
+
+            #uwsgi.cache_update(f"{self.svc_model.service_id}-stats-addr", str(stats_addr), 0, self.svc_model.cache)
+            #self.config_json["uwsgi"]["show-config"] = True
+            #self.config_json["uwsgi"]["strict"] = True
             # self.config_json["uwsgi"]["plugin"] = "logfile"
 
             #if "logfile" in config_json["uwsgi"].get("plugin", ""):
             #    config_json["uwsgi"].pop("plugin")
 
-            self.svc_model.service_config.write_text(json.dumps(self.config_json))
+            #self.svc_model.service_config.write_text(json.dumps(self.config_json))
 
             print("Updating projects db.")
             projects_db = db.table('projects')
@@ -61,32 +64,43 @@ class ProjectService(Handler):
             print("Done updating projects db.")
     
     def connect(self):
-        print(f"Connecting to zmq emperor  {self.svc_model.client_config.EMPEROR_ZMQ_ADDRESS}")
-        self.zmq_socket.connect(f"tcp://{self.svc_model.client_config.EMPEROR_ZMQ_ADDRESS}")
+        pass
+        #print(f"Connecting to zmq emperor  {self.svc_model.client_config.EMPEROR_ZMQ_ADDRESS}")
+        #self.zmq_socket.connect(f"tcp://{self.svc_model.client_config.EMPEROR_ZMQ_ADDRESS}")
 
     def start(self):
-        if all([
-            self.svc_model.service_config, 
-            isinstance(self.svc_model.service_config, Path), 
-            self.svc_model.service_config.exists()]):
-            msg = json.dumps(self.config_json).encode()
-            #self.service_config.read_text()
+        #print("sending msg to zmq")
+        #self.zmq_socket.send_multipart(
+        #    [
+        #        b"touch", 
+        #        f"{self.svc_model.service_id}.json".encode(), 
+        #        json.dumps(self.config_json).encode(),
+        #    ]
+        #)
+        #print("sent msg to zmq")
 
-            print("sending msg to zmq")
-            self.zmq_socket.send_multipart(
-                [
-                    b"touch", 
-                    f"{self.svc_model.service_id}.json".encode(), 
-                    msg,
-                ]
-            )
-            print("sent msg to zmq")
+        #if not self.is_started() and str(self.service_config.resolve()).endswith(".stopped"):
+        #    shutil.move(
+        #        str(self.service_config),
+        #        self.service_config.removesuffix(".stopped")
+        #    )
+
+        self.svc_model.service_config.parent.mkdir(parents=True, exist_ok=True)
+        self.svc_model.service_config.write_text(json.dumps(self.config_json))
 
     def stop(self):
-        self.zmq_socket.send_multipart([
-            b"destroy",
-            f"{self.svc_model.service_id}.json".encode(), 
-        ])
+        pass
+        #self.zmq_socket.send_multipart([
+        #    b"destroy",
+        #    f"{self.svc_model.service_id}.json".encode(), 
+        #])
+        #if self.svc_model.service_config is None:
+        #    self.svc_model.service_config = Path(self.client_config.CONFIG_DIR) / \
+        #            f"{self.svc_model.parent_service_id}" / "apps" \
+        #            / f"{self.svc_model.service_id}.json"
+
+        #if self.is_started() and not str(self.svc_model.service_config.resolve()).endswith(".stopped"):
+        #    shutil.move(self.svc_model.service_config, self.svc_model.service_config.with_suffix(".stopped"))
 
 def project_up(
         client_config: ClientConfig, 

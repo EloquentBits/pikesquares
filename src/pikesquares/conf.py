@@ -20,8 +20,8 @@ class ClientConfig(BaseSettings):
 
     model_config = SettingsConfigDict(env_file='pikesquares.conf', env_file_encoding='utf-8')
 
-    RUN_AS_UID: str = "pikesquares"
-    RUN_AS_GID: str = "pikesquares"
+    RUN_AS_UID: int = 1000
+    RUN_AS_GID: int = 1000
     APP_NAME: str = "pikesquares"
 
     DEBUG: bool = False
@@ -37,8 +37,4 @@ class ClientConfig(BaseSettings):
     EMPEROR_ZMQ_ADDRESS: str = "127.0.0.1:5250"
 
     PKI_DIR: str = str((Path(DATA_DIR) / "pki").resolve())  # check the paths are the same in install/uninstall scripts
-    CERT:str = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2.pem"
-    CERT_KEY:str = "/home/pk/dev/eqb/pikesquares/tmp/_wildcard.pikesquares.dev+2-key.pem"
-    #CERT: str = str((Path(SSL_DIR) / "pikesquares.dev.pem"))  # check the paths are the same in install/uninstall scripts
-    #CERT_KEY: str = str((Path(SSL_DIR) / "pikesquares.dev-key.pem"))  # check the paths are the same in install/uninstall scripts
 

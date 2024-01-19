@@ -15,7 +15,7 @@ class DeviceSection(Section):
         )
         self.svc_model = svc_model
         # env = project.env
-        self.set_runtime_dir(svc_model.client_config.RUN_DIR)
+        self.set_runtime_dir(str(svc_model.run_dir))
 
         # plugins = [
         #         "logfile",
@@ -29,14 +29,14 @@ class DeviceSection(Section):
         # )
         self.master_process.set_basic_params(
             enable=True,
-            fifo_file = str(Path(self._runtime_dir) / f"{svc_model.service_id}-master-fifo"),
+            fifo_file = str(svc_model.fifo_file),
         )   # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
             # place here correct emperor wrapper
             #binary_path=str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
         )
-        self.main_process.set_owner_params(uid=svc_model.client_config.RUN_AS_UID, gid=svc_model.client_config.RUN_AS_GID)
+        self.main_process.set_owner_params(uid=svc_model.uid, gid=svc_model.gid)
         self.main_process.set_naming_params(
             prefix=f"[[ PikeSquares App ]] ",
             autonaming=True
@@ -48,27 +48,25 @@ class DeviceSection(Section):
         #)
         
         if svc_model.client_config.DAEMONIZE:
-            self.main_process.daemonize(
-                log_into=str((Path(svc_model.client_config.LOG_DIR) / f"{svc_model.service_id}.log").resolve())
-            )
+            self.main_process.daemonize(log_into=str(svc_model.log_file))
 
-        self.main_process.set_basic_params(
-            touch_reload=str((Path(svc_model.client_config.CONFIG_DIR) / f"{svc_model.service_id}.json").resolve())
-        )
-        
+        self.main_process.set_basic_params(touch_reload=str(svc_model.touch_reload_file))
+
         self.networking.register_socket(
-            self.networking.sockets.default(str(Path(self._runtime_dir) / f"{svc_model.service_id}.sock"))
+            self.networking.sockets.default(str(svc_model.socket_address))
         )
         #routers_dir = Path(self.client_config.CONFIG_DIR) / "routers"
         #routers_dir.mkdir(parents=True, exist_ok=True)
         #empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
         self.empire.set_emperor_params(
-            vassals_home = f"zmq://tcp://{svc_model.client_config.EMPEROR_ZMQ_ADDRESS}",
+            vassals_home = str(svc_model.apps_dir),
+            #vassals_home = f"zmq://tcp://{svc_model.client_config.EMPEROR_ZMQ_ADDRESS}",
             name=f"PikeSquares App",
-            #pid_file=str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve()),
             spawn_asap=True,
-            stats_address=str(Path(self._runtime_dir) / f"{svc_model.service_id}-stats.sock"),
+            stats_address=str(svc_model.stats_address),
+            #str(Path(self._runtime_dir) / f"{svc_model.service_id}-stats.sock"),
+            #pid_file=str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve()),
         )
 
         #"--emperor=zmq://tcp://127.0.0.1:5250",
@@ -85,10 +83,19 @@ class DeviceSection(Section):
         #    shared=False,
         #)
 
-        self.setup_loggers()
+        self.logging.add_logger(
+            self.logging.loggers.file(filepath=str(svc_model.log_file))
+        )
+        self.logging.add_logger(self.logging.loggers.stdio())
 
         #self.run_fastrouter()
         #self.run_httpsrouter()
+
+
+    def as_string(self):
+        return self.as_configuration().print_ini()
+
+
 
     #def run_httpsrouter(self):
     #    fw = self.routing.routers.https.forwarders.subscription_server(
@@ -153,14 +160,4 @@ class DeviceSection(Section):
     #        gid=self.client_config.RUN_AS_GID,
     #    )
     #    self.routing.use_router(fastrouter)
-
-    def setup_loggers(self):
-        self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(Path(self.svc_model.client_config.LOG_DIR) / f"{self.svc_model.service_id}.log"))
-        )
-        self.logging.add_logger(self.logging.loggers.stdio())
-
-    def as_string(self):
-        return self.as_configuration().print_ini()
-
 
