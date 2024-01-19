@@ -11,9 +11,13 @@ import randomname
 from tinydb import TinyDB, Query
 #from uwsgiconf import uwsgi
 
+from pikesquares import (
+    get_first_available_port
+)
 from ..presets.device import DeviceSection
 from ..conf import ClientConfig
 from .project import project_up
+from .router import https_router_up
 from . import (
     Handler, 
     HandlerFactory, 
@@ -105,6 +109,16 @@ def device_up(client_config: ClientConfig) -> None:
                 client_config, 
                 randomname.get_name(), 
                 f"project_{cuid()}"
+            )
+
+        routers_db = db.table('routers')
+        if not routers_db.all():
+            https_router_port = str(get_first_available_port(port=8443))
+            print(f"no routers exist. creating one on port [{https_router_port}]")
+            https_router_up(
+                client_config, 
+                f"router_{cuid()}", 
+                f"0.0.0.0:{https_router_port}",
             )
 
     svc.start()
