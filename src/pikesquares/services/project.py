@@ -1,10 +1,10 @@
 import json
-import shutil
+#import shutil
 from pathlib import Path
 
-import zmq
+#import zmq
 from tinydb import TinyDB, Query
-from uwsgiconf import uwsgi
+#from uwsgiconf import uwsgi
 
 from ..presets.project import ProjectSection
 from ..conf import ClientConfig
@@ -22,7 +22,7 @@ class ProjectService(Handler):
     is_internal: bool = True
     is_enabled: bool = True
 
-    zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
+    #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
     config_json = {}
 
     def prepare_service_config(self, name: str):

@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import TypeVar
 import socket
 
+from uwsgi_tasks import set_uwsgi_callbacks
+set_uwsgi_callbacks()
+
 from uwsgiconf import uwsgi
 
 PathLike = TypeVar("PathLike", str, Path, None)

@@ -86,7 +86,7 @@ def create(
         )
 
     service_type = questionary.select(
-        "What type of service would you like to create?",
+        "What type of app would you like to create?",
         choices=HandlerFactory.user_visible_services(),
     ).ask()
     
@@ -139,11 +139,13 @@ def create(
     app_options["router_id"] = router_id
     print(app_options)
 
+    project_id = available_projects.get(project_name)
+
     wsgi_app_up(
         client_config,
         name,
-        available_projects.get(project_name),
         service_id,
+        project_id,
         **app_options,
     )
 

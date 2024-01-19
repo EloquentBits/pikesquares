@@ -8,4 +8,5 @@ tinydb
 typer[all]
 #uWSGI
 uwsgiconf
-zmq
+uwsgi-tasks
+#zmq

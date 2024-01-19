@@ -5,8 +5,8 @@ import shutil
 #import zmq
 from tinydb import TinyDB, Query
 
-from .. import get_service_status
-from .project import project_up
+#from .. import get_service_status
+#from .project import project_up
 from ..presets.wsgi_app import WsgiAppSection
 from ..conf import ClientConfig
 from .data import VirtualHost
@@ -59,7 +59,7 @@ class WsgiAppService(Handler):
 
         with TinyDB(self.svc_model.device_db_path) as db:
             routers_db = db.table('routers')
-            router = routers_db.get(Query().service_id == app_options.get('router_id'))
+            router = routers_db.get(Query().service_id == self.svc_model.router_id)
             subscription_server_address = router.get('service_config')['uwsgi']['http-subscription-server']
 
             section = WsgiAppSection(
@@ -185,6 +185,7 @@ def wsgi_app_up(
         name=name,
         service_id=service_id,
         project_id=project_id,
+        **app_options,
     )
 
     app = HandlerFactory.make_handler("WSGI-App")(svc_model)
