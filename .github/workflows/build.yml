@@ -157,7 +157,7 @@ jobs:
           ls -l . 
           ./${{ env.SCIENCE_BINARY_NAME }} --version
           ./${{ env.SCIENCE_BINARY_NAME }} lift \
-            --file pikesquares-bundle=pikesquares-${{ matrix.os }}-${{ matrix.arch }}.pex \
+            --file pikesquares-pex=pikesquares-${{ matrix.os }}-${{ matrix.arch }}.pex \
             build \
             --use-platform-suffix \
             --hash sha256 \
