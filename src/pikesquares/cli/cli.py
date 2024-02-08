@@ -40,6 +40,14 @@ def main(
     Welcome to Pike Squares
     """
 
+    for key, value in os.environ.items():
+        print(f'{key}: {value}')
+
+    print(f"{os.environ.get('VIRTUAL_ENV')=}") #= "{scie.bindings}/pex_root"
+    print(f"{os.environ.get('PEX_ROOT')=}") #= "{scie.bindings}/pex_root"
+    print(f"{os.environ.get('PEX_PYTHON_PATH')=}")#= "#{cpython311:python}"
+    print(f"{os.environ.get('HC_PEX_ROOT')=}")#= "{healthchecks-io}"
+
     if version:
         from importlib import metadata
         try:

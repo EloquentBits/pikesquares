@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-import zmq
+#import zmq
 from tinydb import TinyDB, Query
 
 from ..presets.routers import HttpsRouterSection
@@ -20,7 +20,7 @@ class HttpsRouterService(Handler):
 
 
     config_json = {}
-    zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
+    #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
 
     def prepare_service_config(
             self, 

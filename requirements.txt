@@ -3,7 +3,6 @@ platformdirs
 pydantic-settings
 questionary
 randomname
-sentry-sdk
 tinydb
 typer[all]
 #uWSGI

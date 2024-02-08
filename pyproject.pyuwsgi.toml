@@ -32,3 +32,85 @@ classifiers = [
 Documentation = "https://github.com/EloquentBits/pikesquares#readme"
 Issues = "https://github.com/EloquentBits/pikesquares/issues"
 Source = "https://github.com/EloquentBits/pikesquares"
+
+######################################
+#####
+#####     cibuildwheel ##############
+
+[tool.cibuildwheel]
+#build = "*"
+
+#      CIBW_BUILD: "${{ matrix.cibw_build }}"
+#      CIBW_ARCHS: ${{ matrix.arch }}
+#      CIBW_BUILD_VERBOSITY: 5
+#      CIBW_ENVIRONMENT: APPEND_VERSION=".post0" UWSGI_PROFILE=pikesquares
+#      CIBW_BEFORE_ALL: ./scripts/patch-uwsgi-packaging.sh uwsgi
+#      CIBW_BEFORE_BUILD_LINUX: yum install -y openssl-devel zlib-devel zeromq-devel libsqlite3x-devel.x86_64 pcre-devel jansson-devel 
+#      CIBW_BEFORE_BUILD_MACOS: IS_MACOS=1 ARCH=${{ matrix.arch }} ./scripts/pre_build.sh
+#      CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
+
+build = ""
+skip = ""
+test-skip = ""
+
+archs = ["auto"]
+build-frontend = "default"
+config-settings = {}
+dependency-versions = "pinned"
+environment = {}
+environment-pass = []
+build-verbosity = "5"
+
+before-all = "./scripts/patch-uwsgi-packaging.sh uwsgi"
+before-build = ""
+
+test-command = ""
+before-test = ""
+test-requires = []
+test-extras = []
+
+container-engine = "docker"
+
+# manylinux-x86_64-image = "quay.io/pypa/manylinux2014_x86_64:latest"
+manylinux-x86_64-image = "manylinux2014"
+#"manylinux2014"
+
+#manylinux_2_35_x86_64
+
+#manylinux-i686-image = "manylinux2014"
+#manylinux-aarch64-image = "manylinux2014"
+#manylinux-ppc64le-image = "manylinux2014"
+#manylinux-s390x-image = "manylinux2014"
+#manylinux-pypy_x86_64-image = "manylinux2014"
+#manylinux-pypy_i686-image = "manylinux2014"
+#manylinux-pypy_aarch64-image = "manylinux2014"
+
+# musllinux-x86_64-image = "musllinux_1_1"
+#musllinux-i686-image = "musllinux_1_1"
+#musllinux-aarch64-image = "musllinux_1_1"
+#musllinux-ppc64le-image = "musllinux_1_1"
+#musllinux-s390x-image = "musllinux_1_1"
+
+[tool.cibuildwheel.linux]
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
+
+# The placeholder {package} can be used here; 
+# it will be replaced by the path to the package being built by cibuildwheel.
+#before-all = "apk add pcre-dev jansson-dev openssl-dev zlib-dev zeromq-dev"
+before-all = "yum install -y epel-release nodejs pcre-devel jansson-devel openssl-devel zlib-devel libsqlite3x-devel.x86_64"
+#zeromq-devel 
+
+[tool.cibuildwheel.linux.environment]
+#ZMQ_PREFIX="bundled"
+CFLAGS = "-Wl,-strip-all"
+CXXFLAGS = "-Wl,-strip-all"
+UWSGI_PROFILE = "pikesquares"
+
+#[tool.cibuildwheel.macos.environment]
+#CFLAGS = "$(pkg-config --cflags libzmq)"
+#LDFLAGS = "$(pkg-config --libs libzmq)"
+
+[tool.cibuildwheel.macos]
+repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
+
+[tool.cibuildwheel.windows]
