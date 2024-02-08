@@ -46,7 +46,7 @@ jobs:
               "py": "cp312", 
               "arch": "x86_64", 
               "runner": "macos-latest", 
-              "cibw-wheel-suffix": "macosx_10_9_x86_64",
+              "cibw-wheel-suffix": "macosx_11_0_x86_64",
               "pip-cache-path": "~/Library/Caches/pip" }
 
           - {
