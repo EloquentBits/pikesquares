@@ -1,11 +1,7 @@
-from pathlib import Path
-
 from uwsgiconf.options.routing_routers import RouterHttp as _RouterHttp
 from uwsgiconf.utils import filter_locals, KeyValue
 
 from . import Section
-
-from ..conf import ClientConfig
 
 
 class BaseRouterHttps(_RouterHttp):

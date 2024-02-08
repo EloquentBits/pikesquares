@@ -12,47 +12,61 @@ id = "ptex"
 version = "0.7.0"
 
 [lift.scie_jump]
-version = "0.13.3"
+version = "0.14.0"
 
 [[lift.interpreters]]
-id = "cpython311"
+id = "cpython312"
 provider = "PythonBuildStandalone"
-version = "3.11.7"
+version = "3.12.1"
 release = "20240107"
 
 [[lift.files]]
-name = "pikesquares-bundle"
+name = "pikesquares-pex"
 
 [[lift.files]]
-name = "healthchecks-io-3-1"
-type = "blob"
-source = "ptex-fetch"
+name = "entrypoint.py"
 
-[lift.files.digest]
-size = 18865100
-fingerprint = "2b6d77c14059c1c4a1fdcd6210f6a66023f790d14f4ee6ed9a96df27b0fe80bf"
-
-# "name": "cowsay-1.1.0.jar",
-#  "key": "cowsay.jar",
-#  "size": 1724250,
-#  "hash": "212ee64546eb8b5074572fed4107d850eb90bc462aa3099c0ac8ea63fdca7811",
-#  "type": "blob",
-#  "source": "ptex-fetch"
+#[[lift.files]]
+#name = "healthchecks-io-pex"
+#type = "blob"
+#source = { url = "https://pikesquares-downloads.b-cdn.net/healthchecks-io-3-1.pex", lazy = true }
+#digest = { size = 18865100, fingerprint = "e1252c97e5e765a2ffb75bc2d4c5ddab8cfa98ef547bb1f39b051380bf013a7c" }
+#eager_extract = true
 
 [[lift.commands]]
-name = ""
-description = "pikesquares cli"
-exe = "{pikesquares-bundle}"
-args = []
+description = "Launch PikeSquares"
+exe = "{pikesquares-pex}"
 
+#[lift.commands.env.default]
+#HC_PEX_ROOT = "{scie.bindings.healthchecks}"
+#HC_PEX_ROOT = "{scie.bindings.healthchecks:VIRTUAL_ENV}"
 
-[[lift.bindings]]
-name = "ptex-fetch"
-#description = "healthchecks pex"
-exe = "{ptex}"
-args = [
-  "{scie.lift}",
-]
+#env.remove_re = [
+#    "PEX_.*",
+#]
 
-[[ptex]]
-name = {"healthchecks-io-3-1" = "https://pikesquares-downloads.b-cdn.net/healthchecks-io-3-1.pex"}
+#[lift.bindings.env.replace]
+#PEX_ROOT = "{scie.bindings}/pex_root"
+#PEX_PYTHON_PATH = "#{cpython312:python}"
+
+#[lift.commands.env.replace]
+#HC_ROOT = "{scie.file.healthchecks-io-pex}"
+#HC_PEX_ROOT = "{scie.bindings.healthchecks}/pex_root"
+#SCIE_BINDING_ENV = "/home/pk/dev/eqb/pikesquares/scie_env"
+#PEX_ROOT = "{scie.bindings.healthchecks-io}/pex_root"
+#PEX_PYTHON_PATH = "#{cpython39:python}"
+
+#[[lift.bindings]]
+#name = "healthchecks"
+#exe = "#{cpython312:python}"
+#args = [
+#    "{healthchecks-io-pex}",
+#    "{entrypoint.py}",
+#]
+#env.remove_re = [
+#    "PEX_.*",
+#]
+
+#[lift.bindings.env.replace]
+#PEX_ROOT = "{scie.bindings}/pex_root"
+#PEX_PYTHON_PATH = "#{cpython312:python}"
