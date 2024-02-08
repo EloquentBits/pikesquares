@@ -66,7 +66,7 @@ jobs:
       SCIENCE_BINARY_VERSION: "v0.3.0"
       SCIENCE_BINARY_ARCH: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
       SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
-      #PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
+      PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
       PIKESQUARES_PYUWSGI_WHEEL: https://pypi.vc.eloquentbits.com/packages/pikesquares_pyuwsgi-2.0.23.post0-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl
 
     steps:
@@ -163,30 +163,30 @@ jobs:
             --hash sha256 \
             pikesquares.toml 
 
-      #- uses: actions/upload-artifact@v4
-      #  with:
-      #    name: bundle-${{ env.PIKESQUARES_BINARY_NAME }}
-      #    path: ${{ env.PIKESQUARES_BINARY_NAME }}
-      #    retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ env.PIKESQUARES_BINARY_NAME }}
+          path: ${{ env.PIKESQUARES_BINARY_NAME }}
+          retention-days: 1
 
-      #- uses: actions/upload-artifact@v4
-      #  with:
-      #    name: bundle-${{ env.PIKESQUARES_BINARY_NAME }}.sha256
-      #    path: ${{ env.PIKESQUARES_BINARY_NAME }}.sha256
-      #    retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ env.PIKESQUARES_BINARY_NAME }}.sha256
+          path: ${{ env.PIKESQUARES_BINARY_NAME }}.sha256
+          retention-days: 1
 
-      #- name: Publish binary to BunnyCDN
-      #  shell: bash
-      #  env:
-      #    CDN_URL: ny.storage.bunnycdn.com
-      #    CDN_PROJECT_NAME: pikesquares-downloads
-      #  run: |
-      #      curl --request PUT \
-      #      --header 'AccessKey: ${{ secrets.BUNNYCDN_ACCESS_TOKEN }}' \
-      #      --header 'Content-Type: application/octet-stream' \
-      #      --header 'accept: application/json'  \
-      #      --data-binary @${{ env.PIKESQUARES_BINARY_NAME }} \
-      #      https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{steps.project-version.outputs.version}}/${{ env.PIKESQUARES_BINARY_NAME }}
+      - name: Publish binary to BunnyCDN
+        shell: bash
+        env:
+          CDN_URL: ny.storage.bunnycdn.com
+          CDN_PROJECT_NAME: pikesquares-downloads
+        run: |
+            curl --request PUT \
+            --header 'AccessKey: ${{ secrets.BUNNYCDN_ACCESS_TOKEN }}' \
+            --header 'Content-Type: application/octet-stream' \
+            --header 'accept: application/json'  \
+            --data-binary @${{ env.PIKESQUARES_BINARY_NAME }} \
+            https://${{ env.CDN_URL }}/${{ env.CDN_PROJECT_NAME }}/${{steps.project-version.outputs.version}}/${{ env.PIKESQUARES_BINARY_NAME }}
           #https://github.com/a-scie/lift/releases/download/v0.3.0/science-linux-x86_64
 
   gh-release:
@@ -228,7 +228,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          body_path: "changelog-${{steps.project-version.outputs.version}}"
+          #body_path: "changelog-${{steps.project-version.outputs.version}}"
           tag_name: "${{steps.project-version.outputs.version}}"
           files: |
             bundle/*
