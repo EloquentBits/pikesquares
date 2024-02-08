@@ -4,7 +4,6 @@ on:
   workflow_run:
     workflows: [Bump version]
     types: [completed]
-
   workflow_dispatch:
 
   push:
@@ -27,7 +26,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
   wheels:
     name: "${{ matrix.py }} ${{ matrix.os }} ${{ matrix.arch }} wheels"
     runs-on: ${{ matrix.runner }}
