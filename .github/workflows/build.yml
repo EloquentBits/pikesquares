@@ -141,8 +141,6 @@ jobs:
         shell: bash
         run: |
           pex \
-            #dist/pikesquares-"${{steps.project-version.outputs.version}}"-py3-none-any.whl \
-            #--index-url "https://${{ secrets.PYPI_USER }}:${{ secrets.PYPI_PASSWORD }}@${{ secrets.PYPI_REPO_URL }}" \
             ${{ env.PIKESQUARES_PYUWSGI_WHEEL }} \
             sentry-sdk \
             -r requirements.txt \
