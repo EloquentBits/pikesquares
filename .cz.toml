@@ -1,13 +1,8 @@
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.1.6"
+version = "0.0.1"
 version_files = [
     "src/pikesquares/__version__.py",
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bundle-${{ env.PIKESQUARES_BINARY_NAME }}.sha256
-          path: ${{ env.PIKESQUARES_BINARY_NAME }}.sha256
-          retention-days: 1
     "src/pikesquares/pyproject.toml:version",
 ]
 tag_format = "v$version"
