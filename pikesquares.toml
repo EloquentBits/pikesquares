@@ -23,8 +23,8 @@ release = "20240107"
 [[lift.files]]
 name = "pikesquares-pex"
 
-[[lift.files]]
-name = "entrypoint.py"
+#[[lift.files]]
+#name = "entrypoint.py"
 
 #[[lift.files]]
 #name = "healthchecks-io-pex"
