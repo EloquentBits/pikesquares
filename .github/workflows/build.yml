@@ -74,6 +74,7 @@ jobs:
       #  shell: bash
       #  run: |
       #    brew install zeromq jansson pcre
+
       #- name: install deps from homebrew for arm64
       #  if: ${{ matrix.os == 'macos' && matrix.arch == 'arm64'}}
       #  shell: bash
