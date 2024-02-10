@@ -115,14 +115,6 @@ jobs:
           path: ${{ env.SCIENCE_BINARY_NAME }}
           key: ${{ env.SCIENCE_BINARY_NAME }}
 
-      #https://github.com/a-scie/jump/releases/download/v0.14.0/scie-jump-linux-x86_64
-      #- name: scie-jump binary download
-      #  if: ${{ steps.scie-jump-binary.outputs.cache-hit != 'true' }} 
-      #  shell: bash
-      #  run: |
-      #    curl -Lo "sci-jump" https://github.com/a-scie/jump/releases/download/${{ env.JUMP_BINARY_VERSION }}/sci-jupm-${{ matrix.os }}-${{ matrix.arch }}
-      #    chmod +x science
-
       - name: science binary download aarch64
         if: ${{ steps.science-binary.outputs.cache-hit != 'true' }}  
         shell: bash
