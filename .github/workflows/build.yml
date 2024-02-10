@@ -133,7 +133,7 @@ jobs:
         run: |
           pex \
             dist/pikesquares-"${{steps.project-version.outputs.version}}"-py3-none-any.whl \
-            ${{ secrets.PYPI_URL }}/pikesquares_pyuwsgi-$(make print-version)-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl
+            "${{ secrets.PYPI_URL }}/pikesquares_pyuwsgi-$(make print-version)-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl"
             sentry-sdk \
             -r requirements.txt \
             --venv \
