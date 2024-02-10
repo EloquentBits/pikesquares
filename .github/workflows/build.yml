@@ -67,7 +67,6 @@ jobs:
       SCIENCE_BINARY_ARCH: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
       SCIENCE_BINARY_NAME: science-v0.3.0-${{ matrix.os }}-${{ matrix.arch }}
       PIKESQUARES_BINARY_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
-      PIKESQUARES_PYUWSGI_WHEEL: https://pypi.vc.eloquentbits.com/packages/pikesquares_pyuwsgi-2.0.23.post0-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl
 
     steps:
       #- name: install deps from homebrew for x86_64
@@ -142,7 +141,7 @@ jobs:
         run: |
           pex \
             dist/pikesquares-"${{steps.project-version.outputs.version}}"-py3-none-any.whl \
-            ${{ env.PIKESQUARES_PYUWSGI_WHEEL }} \
+            ${{ secrets.PYPI_URL }}/pikesquares_pyuwsgi-$(make print-version)-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl
             sentry-sdk \
             -r requirements.txt \
             --venv \
