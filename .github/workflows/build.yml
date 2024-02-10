@@ -133,13 +133,11 @@ jobs:
         run: |
           pex \
             dist/pikesquares-"${{steps.project-version.outputs.version}}"-py3-none-any.whl \
-            "${{ secrets.PYPI_URL }}/pikesquares_pyuwsgi-$(make print-version)-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl"
+            "${{ secrets.PYPI_URL }}/pikesquares_pyuwsgi-2.0.24-post0-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl"
             sentry-sdk \
             -r requirements.txt \
             --venv \
-            --python $(which python) \
             --entry-point pikesquares.cli.cli:app \
-            --no-emit-warnings \
             -o pikesquares-${{ matrix.os }}-${{ matrix.arch }}.pex
 
       - name: build scie
