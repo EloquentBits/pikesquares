@@ -1,3 +1,0 @@
-[submodule "uwsgi"]
-	path = uwsgi
-	url = https://github.com/unbit/uwsgi
