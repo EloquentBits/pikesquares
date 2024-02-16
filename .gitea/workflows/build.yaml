@@ -133,12 +133,11 @@ jobs:
           PEX_TOOLS: 1
           PROJECT_VERSION: ${{steps.project-version.outputs.version}}
 
-        #--index-url "https://admin:${{secrets.PYPI_PASSWORD}}@${{secret.PYPI_HOST}}/simple/" \
         run: |
           /usr/local/bin/pex -v \
             "pikesquares==$(/usr/local/bin/cz version -p)" \
             "vconf-binary==$(/usr/local/bin/cz version -p)" \
-            --index-url "https://admin:acqO3uEq8PX8H02@pypi.vc.eloquentbits.com/simple/" \
+            --index-url "https://admin:${{secrets.PYPI_PASSWORD}}@${{secret.PYPI_HOST}}/simple/" \
             -r requirements.txt \
             --venv \
             --include-tools \
