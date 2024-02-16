@@ -63,7 +63,7 @@ jobs:
 
     env:
       MATRIX_ID: "${{ matrix.py }}-${{ matrix.os }}-${{ matrix.arch }}"
-      PIKESQUARES_PEX_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}.pex
+      PIKESQUARES_PEX_NAME: pikesquares-${{ matrix.os }}-${{ matrix.arch }}.pex
 
     steps:
       - uses: actions/checkout@v3
