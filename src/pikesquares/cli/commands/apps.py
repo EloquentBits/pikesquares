@@ -70,10 +70,10 @@ def create(
     Aliases: [i] create, new
     """
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     available_projects = {
-        p.get('name'): p.get('service_id') for p in projects_all(client_config)
+        p.get('name'): p.get('service_id') for p in projects_all(conf)
     }
     if not available_projects:
         console.warning(f"No projects were created, create at least one project first!")
@@ -131,7 +131,7 @@ def create(
 
 
     available_routers = {
-        p.get('address'): p.get('service_id') for p in https_routers_all(client_config)
+        p.get('address'): p.get('service_id') for p in https_routers_all(conf)
     }
     router_address = console.choose("Select router for your app:", choices=available_routers)
     router_id = available_routers.get(router_address)
@@ -142,7 +142,7 @@ def create(
     project_id = available_projects.get(project_name)
 
     wsgi_app_up(
-        client_config,
+        conf,
         name,
         service_id,
         project_id,
@@ -197,11 +197,11 @@ def list_(
     """
     
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     if not project:
         available_projects = {
-            p.get('name'): p.get('service_id') for p in projects_all(client_config)
+            p.get('name'): p.get('service_id') for p in projects_all(conf)
         }
         if not available_projects:
             console.warning(f"No projects were created, create at least one project first!")
@@ -217,15 +217,15 @@ def list_(
     #    return
     #apps = project_db.get(where('name') == project).get('apps')
     #for a in apps:
-    #    a.update({'status': get_service_status(a.get('cuid'), client_config)})
+    #    a.update({'status': get_service_status(a.get('cuid'), conf)})
 
     apps_out = []
-    apps = apps_all(client_config)
+    apps = apps_all(conf)
     for app in apps:
         apps_out.append({
             'name': app.get('name'),
             'status': get_service_status(
-                app.get('service_id'), client_config
+                app.get('service_id'), conf
             ) or "Unknown",
             'id': app.get('service_id')
         })
@@ -246,7 +246,7 @@ def logs(
 ):
 
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     if not project_id:
         available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
@@ -266,10 +266,10 @@ def logs(
         app_name = console.choose("Choose app you want to view logs:", choices=apps)
         app_id = apps.get(app_name)
 
-    status = get_service_status(f"{app_id}", client_config)
+    status = get_service_status(f"{app_id}", conf)
 
-    project_log_file = Path(f"{client_config.LOG_DIR}/{project_id}.log")
-    app_log_file = Path(f"{client_config.LOG_DIR}/{app_id}.log")
+    project_log_file = Path(f"{conf.LOG_DIR}/{project_id}.log")
+    app_log_file = Path(f"{conf.LOG_DIR}/{app_id}.log")
     if app_log_file.exists() and app_log_file.is_file():
         console.pager(
             app_log_file.read_text(),
@@ -288,7 +288,7 @@ def logs(
     app_id: Optional[str] = typer.Argument("")
 ):
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     if not project_id:
         available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
@@ -305,10 +305,10 @@ def logs(
         app_name = console.choose("Choose app you want to view logs:", choices=apps)
         app_id = apps.get(app_name)
 
-    status = get_service_status(f"{app_id}", client_config)
+    status = get_service_status(f"{app_id}", conf)
 
-    project_log_file = Path(f"{client_config.LOG_DIR}/{project_id}.log")
-    app_log_file = Path(f"{client_config.LOG_DIR}/{app_id}.log")
+    project_log_file = Path(f"{conf.LOG_DIR}/{project_id}.log")
+    app_log_file = Path(f"{conf.LOG_DIR}/{app_id}.log")
     if app_log_file.exists() and app_log_file.is_file():
         console.pager(
             app_log_file.read_text(),
@@ -333,7 +333,7 @@ def start(
     Aliases: [i] create, new
     """
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     if not project_id:
         available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
@@ -371,7 +371,7 @@ def start(
 
     app = HandlerFactory.make_handler(app_type)(
         service_id=app_id,
-        client_config=client_config,
+        conf=conf,
     )
     console.info(f"Configuring {app_type} service")
     service_opts = dict(
@@ -410,7 +410,7 @@ def stop(
     Aliases: [i] create, new
     """
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     if not project_id:
         available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
@@ -447,7 +447,7 @@ def stop(
     app = HandlerFactory.make_handler(app_type)(
         service_id=app_id,
         parent_service_id=project_id,
-        client_config=client_config,
+        conf=conf,
     )
     app.connect()
     if app.is_started():
@@ -470,7 +470,7 @@ def delete(
     Aliases:[i] delete, rm
     """
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     if not proj_name:
         available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
@@ -500,13 +500,13 @@ def delete(
     selected_app_cuid = apps_choices.get(app_name)
 
     # rm app configs
-    selected_app_config_path = Path(client_config.CONFIG_DIR) / selected_app_cuid
+    selected_app_config_path = Path(conf.CONFIG_DIR) / selected_app_cuid
     selected_app_config_path.with_suffix('.json').unlink(missing_ok=True)
     if Path(selected_app_config_path).exists():
         shutil.rmtree(str(selected_app_config_path.resolve()))
 
     # rm app runtimes
-    for file in Path(client_config.RUN_DIR).iterdir():
+    for file in Path(conf.RUN_DIR).iterdir():
         if selected_app_cuid in str(file.resolve()):
             file.unlink(missing_ok=True)
 

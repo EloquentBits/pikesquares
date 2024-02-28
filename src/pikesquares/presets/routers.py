@@ -85,7 +85,7 @@ class HttpsRouterSection(Section):
         self.svc_model = svc_model
 
         #self.service_id = service_id
-        #self.client_config = client_config
+        #self.conf = conf
         self.set_runtime_dir(str(self.svc_model.run_dir))
 
         #self.set_plugins_params(plugins="http")
@@ -187,7 +187,7 @@ class HttpRouterSection(Section):
     ):
         self.name = name
         #self.runtime_dir = runtime_dir
-        self.set_runtime_dir(self.client_config.RUN_DIR)
+        self.set_runtime_dir(self.conf.RUN_DIR)
         router_cls = self.routing.routers.http
 
         super().__init__(

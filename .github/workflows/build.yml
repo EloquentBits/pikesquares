@@ -102,6 +102,7 @@ jobs:
 
       - name: build pex
         shell: bash
+
         run: |
           pex \
             dist/pikesquares-"${{steps.project-version.outputs.version}}"-py3-none-any.whl \

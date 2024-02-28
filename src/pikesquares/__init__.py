@@ -92,8 +92,8 @@ def read_stats(stats_addr):
         except json.JSONDecodeError:
             pass
 
-def get_service_status(service_id, client_config):
-    stats_socket = (Path(client_config.RUN_DIR) / f"{service_id}-stats.sock")
+def get_service_status(service_id, conf):
+    stats_socket = (Path(conf.RUN_DIR) / f"{service_id}-stats.sock")
     if stats_socket.exists() and stats_socket.is_socket():
         socket_path = str(stats_socket.resolve())
         socket_started = read_stats(socket_path) or None

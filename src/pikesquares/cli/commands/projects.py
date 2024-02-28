@@ -51,7 +51,7 @@ def create(
     Aliases: [i] create, new
     """
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     if not project_name:
         default_project_name = randomname.get_name()
@@ -62,7 +62,7 @@ def create(
         )
 
     #console.success(f"Project '{project_name}' was successfully created!")
-    project_up(client_config, project_name, f"project_{cuid()}")
+    project_up(conf, project_name, f"project_{cuid()}")
 
 
 @proj_cmd.command("up")
@@ -71,14 +71,14 @@ def up(
     name: Optional[str] = typer.Argument("")
     ):
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
-    projects = projects_all(client_config)
+    conf = obj.get("conf")
+    projects = projects_all(conf)
     for project in projects:
         name = project.get('name')
-        status = get_service_status(project.get('service_id'), client_config) or "Unknown",
+        status = get_service_status(project.get('service_id'), conf) or "Unknown",
         service_id = project.get('service_id')
         print(f"{status=} {name} [{service_id}]")
-        project_up(client_config, name, service_id)
+        project_up(conf, name, service_id)
 
 
 @app.command(
@@ -98,8 +98,8 @@ def list_(
     Aliases:[i] projects, projects list
     """
     obj = ctx.ensure_object(dict)
-    client_config = obj.get('client_config')
-    projects = projects_all(client_config)
+    conf = obj.get('conf')
+    projects = projects_all(conf)
     if not len(projects):
         console.warning("No projects were initialized, nothing to show!")
         return
@@ -108,7 +108,7 @@ def list_(
     for project in projects:
         projects_out.append({
             'name': project.get('name'),
-            'status': get_service_status(project.get('service_id'), client_config) or "Unknown",
+            'status': get_service_status(project.get('service_id'), conf) or "Unknown",
             'id': project.get('service_id')
         })
     console.print_response(
@@ -118,16 +118,16 @@ def list_(
 @proj_cmd.command("logs")
 def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     if not project_id:
         available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
         project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
         project_id = available_projects.get(project_name)
 
-    status = get_service_status(f"{project_id}-emperor", client_config)
+    status = get_service_status(f"{project_id}-emperor", conf)
 
-    project_log_file = Path(f"{client_config.LOG_DIR}/{project_id}.log")
+    project_log_file = Path(f"{conf.LOG_DIR}/{project_id}.log")
     if project_log_file.exists() and project_log_file.is_file():
         console.pager(
             project_log_file.read_text(),
@@ -152,7 +152,7 @@ def delete(
     Aliases:[i] delete, rm
     """
     obj = ctx.ensure_object(dict)
-    client_config = obj.get("client_config")
+    conf = obj.get("conf")
 
     #device_db = obj['device']
 
@@ -177,13 +177,13 @@ def delete(
     #    shutil.rmtree(selected_project_path)
 
     # rm project configs
-    #selected_project_config_path = Path(client_config.CONFIG_DIR) / selected_project_cuid
+    #selected_project_config_path = Path(conf.CONFIG_DIR) / selected_project_cuid
     #selected_project_config_path.with_suffix('.json').unlink(missing_ok=True)
     #if Path(selected_project_config_path).exists():
     #    shutil.rmtree(str(selected_project_config_path.resolve()))
 
     # rm project runtimes
-    #for file in Path(client_config.RUN_DIR).iterdir():
+    #for file in Path(conf.RUN_DIR).iterdir():
     #    if selected_project_cuid in str(file.resolve()):
     #        file.unlink(missing_ok=True)
 
@@ -205,12 +205,12 @@ def delete(
 #    Aliases: [i] start, run
 #    """
 #    obj = ctx.ensure_object(dict)
-#    client_config = obj.get("client_config")
+#    conf = obj.get("conf")
 
 #    device_db = obj['device']
 
     #for project_doc in db.table('projects'):
-    #    project_up(client_config, project_doc.service_id)
+    #    project_up(conf, project_doc.service_id)
 
 #    if not project_name:
 #        available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
@@ -232,7 +232,7 @@ def delete(
 
     #project = HandlerFactory.make_handler(project_type)(
     #    service_id=project_id,
-    #    client_config=client_config,
+    #    conf=conf,
     #)
     #if project.is_started():
     #    console.info(f"Project '{project_name}' is already started!")
@@ -256,7 +256,7 @@ def delete(
 #    Aliases: [i] stop, down
 #    """
 #    obj = ctx.ensure_object(dict)
-#    client_config = obj.get("client_config")
+#    conf = obj.get("conf")
 
 #    device_db = obj['device']
 
@@ -278,7 +278,7 @@ def delete(
 
     #project = HandlerFactory.make_handler(project_type)(
     #    service_id=project_id,
-    #    client_config=client_config,
+    #    conf=conf,
     #)
     #if not project.is_started():
     #    console.info(f"Project '{project_name}' is not started!")

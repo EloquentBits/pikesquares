@@ -22,7 +22,7 @@ class ProjectSection(Section):
         # ]
         # self.set_plugins_params(
         #     plugins=plugins,
-        #     search_dirs=[client_config.PLUGINS_DIR],
+        #     search_dirs=[conf.PLUGINS_DIR],
         # )
 
         self.master_process.set_basic_params(
@@ -32,7 +32,7 @@ class ProjectSection(Section):
         self.main_process.set_basic_params(
             vacuum=True,
             # place here correct emperor wrapper
-            #binary_path=str((Path(self.client_config.DATA_DIR) / ".venv/bin/uwsgi").resolve())
+            #binary_path=str((Path(self.conf.DATA_DIR) / ".venv/bin/uwsgi").resolve())
         )
         self.main_process.set_owner_params(uid=svc_model.uid, gid=svc_model.gid)
 
@@ -47,7 +47,7 @@ class ProjectSection(Section):
             name=f"PikeSquares App",
             stats_address=svc_model.stats_address,
             spawn_asap=True,
-            #pid_file=str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+            #pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
             #stats_address=str(Path(self._runtime_dir) / f"{svc_model.service_id}-stats.sock")
         )
         #self.run_fastrouter()
@@ -85,8 +85,8 @@ class ProjectSection(Section):
             #bind_to=resubscribe_bind_to
         )
         fastrouter.set_owner_params(
-            uid=self.client_config.UID, 
-            gid=self.client_config.GID,
+            uid=self.conf.UID, 
+            gid=self.conf.GID,
         )
         self.routing.use_router(fastrouter)
     """

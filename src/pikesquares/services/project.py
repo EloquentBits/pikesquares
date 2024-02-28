@@ -65,8 +65,8 @@ class ProjectService(Handler):
     
     def connect(self):
         pass
-        #print(f"Connecting to zmq emperor  {self.svc_model.client_config.EMPEROR_ZMQ_ADDRESS}")
-        #self.zmq_socket.connect(f"tcp://{self.svc_model.client_config.EMPEROR_ZMQ_ADDRESS}")
+        #print(f"Connecting to zmq emperor  {self.svc_model.conf.EMPEROR_ZMQ_ADDRESS}")
+        #self.zmq_socket.connect(f"tcp://{self.svc_model.conf.EMPEROR_ZMQ_ADDRESS}")
 
     def start(self):
         #print("sending msg to zmq")
@@ -95,7 +95,7 @@ class ProjectService(Handler):
         #    f"{self.svc_model.service_id}.json".encode(), 
         #])
         #if self.svc_model.service_config is None:
-        #    self.svc_model.service_config = Path(self.client_config.CONFIG_DIR) / \
+        #    self.svc_model.service_config = Path(self.conf.CONFIG_DIR) / \
         #            f"{self.svc_model.parent_service_id}" / "apps" \
         #            / f"{self.svc_model.service_id}.json"
 
@@ -103,7 +103,7 @@ class ProjectService(Handler):
         #    shutil.move(self.svc_model.service_config, self.svc_model.service_config.with_suffix(".stopped"))
 
 def project_up(
-        client_config: ClientConfig, 
+        conf: ClientConfig, 
         name: str, 
         service_id:str) -> None:
 
@@ -111,20 +111,20 @@ def project_up(
 
     svc_model = Project(
         service_id=service_id,
-        client_config=client_config,
+        conf=conf,
     )
     svc = HandlerFactory.make_handler("Project")(svc_model)
     svc.prepare_service_config(name)
     svc.connect()
     svc.start()
 
-def projects_all(client_config: ClientConfig):
-    with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
+def projects_all(conf: ClientConfig):
+    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
         projects_db = db.table('projects')
         return projects_db.all()
 
-def get_project(client_config: ClientConfig, project_id):
-    with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
+def get_project(conf: ClientConfig, project_id):
+    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
         return db.table('projects').\
             get(Query().service_id == project_id)
 

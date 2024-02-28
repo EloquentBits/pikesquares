@@ -132,7 +132,7 @@ class BaseWsgiAppSection(Section):
     #        address, port = address.split(':')
 
     #    subscription_params = dict(
-    #        server=self.client_config.HTTPS_ROUTER_SUBSCRIPTION_SERVER,
+    #        server=self.conf.HTTPS_ROUTER_SUBSCRIPTION_SERVER,
     #        address=address,  # address and port of wsgi app
     #        key=domain_name  # <app_name>-<project_name>-vconf.local
     #    )
@@ -184,14 +184,14 @@ class WsgiAppSection(BaseWsgiAppSection):
             fifo_file=str(svc_model.fifo_file)
         )
 
-        self.set_plugins_params(search_dirs=svc_model.client_config.PLUGINS_DIR)
+        self.set_plugins_params(search_dirs=svc_model.conf.PLUGINS_DIR)
 
         #if app.wsgi_module and callable(app.wsgi_module):
         #    wsgi_callable = wsgi_module.__name__
 
         #self.set_plugins_params(
         #    plugins="python311",
-        #    search_dirs=[client_config.PLUGINS_DIR],
+        #    search_dirs=[conf.PLUGINS_DIR],
         #)
 
         #:param module:
@@ -213,13 +213,13 @@ class WsgiAppSection(BaseWsgiAppSection):
             self.networking.sockets.default(svc_model.socket_address)
         )
 
-        #socket_path = str(Path(self.client_config.RUN_DIR) / f"{service_id}.sock")
+        #socket_path = str(Path(self.conf.RUN_DIR) / f"{service_id}.sock")
 
         #self.networking.register_socket(
         #    self.networking.sockets.default(socket_path)
         #)
         # self.subscriptions.subscribe(
-        #     server=str(Path(self.client_config.RUN_DIR) / f"SubscriptionServer-{project_id}.sock"),
+        #     server=str(Path(self.conf.RUN_DIR) / f"SubscriptionServer-{project_id}.sock"),
         #     address=app_name,
         #     key=service_id
         # )
@@ -227,7 +227,7 @@ class WsgiAppSection(BaseWsgiAppSection):
         # vhost_domain_name = f"{app_name}.{project_name}.vconf.local"
 
         # self.subscriptions.subscribe(
-        #     server=self.client_config.HTTPS_ROUTER_SUBSCRIPTION_SERVER,
+        #     server=self.conf.HTTPS_ROUTER_SUBSCRIPTION_SERVER,
         #     address="127.0.0.1:5500",  # <app_name>.<project_name>.vconf.local (forward from this address to https router)
         #     key=vhost_domain_name  # internal uwsgi key
         # )

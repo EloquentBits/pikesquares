@@ -18,37 +18,37 @@ logger = logging.getLogger(__name__)
 class BaseService(pydantic.BaseModel):
 
     service_id:str
-    client_config: ClientConfig
+    conf: ClientConfig
     cache:str = "pikesquares-settings"
     parent_service_id:str = ""
 
     @property
     def run_dir(self) -> Path:
-        return Path(self.client_config.RUN_DIR)
+        return Path(self.conf.RUN_DIR)
 
     @property
     def service_config(self) -> Path:
-        return Path(self.client_config.CONFIG_DIR) / f"{self.service_id}.json"
+        return Path(self.conf.CONFIG_DIR) / f"{self.service_id}.json"
 
     @property
     def stats_address(self) -> Path:
-        return Path(self.client_config.RUN_DIR) / f"{self.service_id}-stats.sock"
+        return Path(self.conf.RUN_DIR) / f"{self.service_id}-stats.sock"
 
     @property
     def socket_address(self) -> Path:
-        return Path(self.client_config.RUN_DIR) / f"{self.service_id}.sock"
+        return Path(self.conf.RUN_DIR) / f"{self.service_id}.sock"
 
     @property
     def notify_socket(self) -> Path:
-        return Path(self.client_config.RUN_DIR) / f"{self.service_id}-notify.sock"
+        return Path(self.conf.RUN_DIR) / f"{self.service_id}-notify.sock"
 
     @property
     def uid(self) -> int:
-        return self.client_config.RUN_AS_UID
+        return self.conf.RUN_AS_UID
 
     @property
     def gid(self) -> int:
-        return self.client_config.RUN_AS_GID
+        return self.conf.RUN_AS_GID
 
     @property
     def touch_reload_file(self) -> Path:
@@ -56,31 +56,31 @@ class BaseService(pydantic.BaseModel):
 
     @property
     def pid_file(self) -> Path:
-        return Path(self.client_config.RUN_DIR) / f"{self.service_id}.pid"
+        return Path(self.conf.RUN_DIR) / f"{self.service_id}.pid"
 
     @property
     def log_file(self) -> Path:
-        return Path(self.client_config.LOG_DIR) / f"{self.service_id}.log"
+        return Path(self.conf.LOG_DIR) / f"{self.service_id}.log"
 
     @property
     def fifo_file(self) -> Path:
-        return Path(self.client_config.RUN_DIR) / f"{self.service_id}-master-fifo"
+        return Path(self.conf.RUN_DIR) / f"{self.service_id}-master-fifo"
 
     @property
     def device_db_path(self) -> Path:
-        return Path(self.client_config.DATA_DIR) / 'device-db.json'
+        return Path(self.conf.DATA_DIR) / 'device-db.json'
 
     @property
     def certificate(self) -> Path:
-        return Path(self.client_config.PKI_DIR) / "issued" / "_wildcard.pikesquares.dev.crt"
+        return Path(self.conf.PKI_DIR) / "issued" / "_wildcard.pikesquares.dev.crt"
 
     @property
     def certificate_key(self) -> Path:
-        return Path(self.client_config.PKI_DIR) / "private" / "_wildcard.pikesquares.dev.key"
+        return Path(self.conf.PKI_DIR) / "private" / "_wildcard.pikesquares.dev.key"
 
     @property
     def client_ca(self) -> Path:
-        return Path(self.client_config.PKI_DIR) / "ca.crt"
+        return Path(self.conf.PKI_DIR) / "ca.crt"
 
 
         
@@ -90,31 +90,31 @@ class Device(BaseService):
 
     @property
     def service_config(self):
-        return Path(self.client_config.CONFIG_DIR) / 'device.json'
+        return Path(self.conf.CONFIG_DIR) / 'device.json'
 
     @property
     def spooler_dir(self) -> Path:
-        dir = Path(self.client_config.DATA_DIR) / 'spooler'
+        dir = Path(self.conf.DATA_DIR) / 'spooler'
         if dir and not dir.exists():
             dir.mkdir(parents=True, exist_ok=True)
         return dir
 
     @property
     def apps_dir(self) -> Path:
-        dir = Path(self.client_config.CONFIG_DIR) / "projects"
+        dir = Path(self.conf.CONFIG_DIR) / "projects"
         if dir and not dir.exists():
             dir.mkdir(parents=True, exist_ok=True)
         return dir
 
-    #def __init__(self, client_config, *args, **kwargs):
-    #    self.client_config = client_config
+    #def __init__(self, conf, *args, **kwargs):
+    #    self.conf = conf
 
         #super().__init__(*args, **kwargs)
 
     #def up(self):
     #    device = HandlerFactory.make_handler("Device")(
     #        service_id="device", 
-    #        client_config=self.client_config,
+    #        conf=self.conf,
     #    )
     #    device.prepare_service_config()
     #    device.start()
@@ -125,11 +125,11 @@ class Project(BaseService):
 
     @property
     def service_config(self):
-        return Path(self.client_config.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
+        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
 
     @property
     def apps_dir(self) -> str:
-        apps_dir = Path(self.client_config.CONFIG_DIR) / f"{self.service_id}" / "apps"
+        apps_dir = Path(self.conf.CONFIG_DIR) / f"{self.service_id}" / "apps"
         if apps_dir and not apps_dir.exists():
             apps_dir.mkdir(parents=True, exist_ok=True)
         return str(apps_dir.resolve())
@@ -139,7 +139,7 @@ class HttpsRouter(BaseService):
 
     @property
     def service_config(self):
-        return Path(self.client_config.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
+        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
 
     @property
     def socket_address(self) -> str:
@@ -169,7 +169,7 @@ class WsgiApp(BaseService):
 
     @property
     def service_config(self):
-        return Path(self.client_config.CONFIG_DIR) / \
+        return Path(self.conf.CONFIG_DIR) / \
                 f"{self.project_id}" / "apps" \
                 / f"{self.name}.json"
 
@@ -190,7 +190,7 @@ class Handler(Protocol):
         self.svc_model = svc_model
 
     def is_started(self):
-        return get_service_status(self.svc_model.service_id, self.svc_model.client_config) == "running"
+        return get_service_status(self.svc_model.service_id, self.svc_model.conf) == "running"
 
     @abstractmethod
     def connect(self):

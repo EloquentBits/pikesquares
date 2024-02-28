@@ -1,11 +1,10 @@
 cuid
-platformdirs
 pydantic-settings
 questionary
 randomname
 tinydb
 typer[all]
-#uWSGI
+uWSGI
 uwsgiconf
 uwsgi-tasks
 #zmq

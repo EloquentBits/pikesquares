@@ -89,26 +89,26 @@ class Section(_Section):
 
 class ManagedServiceSection(Section):
 
-    def __init__(self, client_config, project_id, service_id, command, pre_start_section=None, env_vars=None):
+    def __init__(self, conf, project_id, service_id, command, pre_start_section=None, env_vars=None):
         super().__init__(
             name="uwsgi",
-            runtime_dir=client_config.RUN_DIR,
-            owner=f"{client_config.RUN_AS_UID}:{client_config.RUN_AS_GID}",
+            runtime_dir=conf.RUN_DIR,
+            owner=f"{conf.RUN_AS_UID}:{conf.RUN_AS_GID}",
             touch_reload=str(
-                (Path(client_config.CONFIG_DIR) / f"{project_id}" / "apps" / f"{service_id}.json").resolve()
+                (Path(conf.CONFIG_DIR) / f"{project_id}" / "apps" / f"{service_id}.json").resolve()
             )
         )
         self.project_id = project_id
         self.service_id = service_id
 
-        self.client_config = client_config
+        self.conf = conf
 
         if pre_start_section:
             self.include(pre_start_section)
 
         executable_path, *_ = command.split(' ')
         executable_name = Path(executable_path).stem
-        pid_path = Path(client_config.RUN_DIR) / f"{executable_name}.pid"
+        pid_path = Path(conf.RUN_DIR) / f"{executable_name}.pid"
         self.main_process.run_command_on_event(f"touch {pid_path}")
 
         if env_vars:
@@ -122,14 +122,14 @@ class ManagedServiceSection(Section):
         )
 
         self.monitoring.set_stats_params(
-            address=str(Path(client_config.RUN_DIR) / f"{service_id}-stats.sock"),
+            address=str(Path(conf.RUN_DIR) / f"{service_id}-stats.sock"),
         )
         self.setup_loggers()
 
     def setup_loggers(self):
         # self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(Path(self.client_config.LOG_DIR) / f"{self.service_id}.log"))
+            self.logging.loggers.file(filepath=str(Path(self.conf.LOG_DIR) / f"{self.service_id}.log"))
         )
 
     def _setup_environment_variables(self, env_vars):
@@ -144,11 +144,11 @@ class CronJobSection(Section):
         for key, value in env_vars.items():
             self.env(key, value)
 
-    def __init__(self, client_config, command, env_vars=None, **kwargs):
+    def __init__(self, conf, command, env_vars=None, **kwargs):
         super().__init__(
             name="uwsgi",
-            runtime_dir=client_config.RUN_DIR,
-            owner=f"{client_config.RUN_AS_UID}:{client_config.RUN_AS_GID}"
+            runtime_dir=conf.RUN_DIR,
+            owner=f"{conf.RUN_AS_UID}:{conf.RUN_AS_GID}"
         )
         if env_vars is not None:
             self._setup_environment_variables(env_vars)

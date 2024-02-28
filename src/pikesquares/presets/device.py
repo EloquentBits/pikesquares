@@ -25,7 +25,7 @@ class DeviceSection(Section):
         # ]
         # self.set_plugins_params(
         #     plugins=plugins,
-        #     search_dirs=[client_config.PLUGINS_DIR,],
+        #     search_dirs=[conf.PLUGINS_DIR,],
         # )
         self.master_process.set_basic_params(
             enable=True,
@@ -43,10 +43,10 @@ class DeviceSection(Section):
         )
         #self.set_placeholder("vconf_run_dir", self.runtime_dir)
         #self.main_process.set_pid_file(
-        #    str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve())
+        #    str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve())
         #)
         
-        if svc_model.client_config.DAEMONIZE:
+        if svc_model.conf.DAEMONIZE:
             self.main_process.daemonize(log_into=str(svc_model.log_file))
 
         self.main_process.set_basic_params(touch_reload=str(svc_model.touch_reload_file))
@@ -54,18 +54,18 @@ class DeviceSection(Section):
         self.networking.register_socket(
             self.networking.sockets.default(str(svc_model.socket_address))
         )
-        #routers_dir = Path(self.client_config.CONFIG_DIR) / "routers"
+        #routers_dir = Path(self.conf.CONFIG_DIR) / "routers"
         #routers_dir.mkdir(parents=True, exist_ok=True)
         #empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
         self.empire.set_emperor_params(
             vassals_home = str(svc_model.apps_dir),
-            #vassals_home = f"zmq://tcp://{svc_model.client_config.EMPEROR_ZMQ_ADDRESS}",
+            #vassals_home = f"zmq://tcp://{svc_model.conf.EMPEROR_ZMQ_ADDRESS}",
             name=f"PikeSquares App",
             spawn_asap=True,
             stats_address=str(svc_model.stats_address),
             #str(Path(self._runtime_dir) / f"{svc_model.service_id}-stats.sock"),
-            #pid_file=str((Path(client_config.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+            #pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
         )
 
         #"--emperor=zmq://tcp://127.0.0.1:5250",
@@ -116,19 +116,19 @@ class DeviceSection(Section):
 
     #def run_httpsrouter(self):
     #    fw = self.routing.routers.https.forwarders.subscription_server(
-    #        address=self.client_config.HTTPS_ROUTER_SUBSCRIPTION_SERVER
+    #        address=self.conf.HTTPS_ROUTER_SUBSCRIPTION_SERVER
     #    )
-    #    print(f"{self.client_config.CERT=}")
-    #    print(f"{self.client_config.CERT_KEY=}")
+    #    print(f"{self.conf.CERT=}")
+    #    print(f"{self.conf.CERT_KEY=}")
 
     #    https_router = BaseRouterHttps(
-    #        on=self.client_config.HTTPS_ROUTER,
+    #        on=self.conf.HTTPS_ROUTER,
     #        forward_to=fw,
-    #        cert=self.client_config.CERT,
-    #        key=self.client_config.CERT_KEY,
+    #        cert=self.conf.CERT,
+    #        key=self.conf.CERT_KEY,
     #    )
     #    https_router.set_basic_params(
-    #        stats_server=self.client_config.HTTPS_ROUTER_STATS,
+    #        stats_server=self.conf.HTTPS_ROUTER_STATS,
     #        quiet=False,
     #        keepalive=5,
     #        #resubscribe_addresses=resubscribe_to
@@ -173,8 +173,8 @@ class DeviceSection(Section):
     #        #bind_to=resubscribe_bind_to
     #    )
     #    fastrouter.set_owner_params(
-    #        uid=self.client_config.RUN_AS_UID, 
-    #        gid=self.client_config.RUN_AS_GID,
+    #        uid=self.conf.RUN_AS_UID, 
+    #        gid=self.conf.RUN_AS_GID,
     #    )
     #    self.routing.use_router(fastrouter)
 

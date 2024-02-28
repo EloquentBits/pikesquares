@@ -62,8 +62,8 @@ class HttpsRouterService(Handler):
 
     def connect(self):
         pass
-        #print(f"Connecting to zmq emperor  {self.client_config.EMPEROR_ZMQ_ADDRESS}")
-        #self.zmq_socket.connect(f"tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}")
+        #print(f"Connecting to zmq emperor  {self.conf.EMPEROR_ZMQ_ADDRESS}")
+        #self.zmq_socket.connect(f"tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}")
 
     def start(self):
         #if all([
@@ -114,21 +114,21 @@ class HttpsRouterService(Handler):
 
     def stop(self):
         if self.service_config is None:
-            self.service_config = Path(self.client_config.CONFIG_DIR) /  "routers" / f"{self.service_id}.json"
+            self.service_config = Path(self.conf.CONFIG_DIR) /  "routers" / f"{self.service_id}.json"
         if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
             shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
     """
 
     
 def https_router_up(
-        client_config: ClientConfig, 
+        conf: ClientConfig, 
         service_id:str, 
         address: str,
         ) -> None:
 
     svc_model = HttpsRouter(
         service_id=service_id,
-        client_config=client_config,
+        conf=conf,
     )
 
     https_router = HandlerFactory.make_handler("Https-Router")(svc_model)
@@ -136,8 +136,8 @@ def https_router_up(
     https_router.connect()
     https_router.start()
 
-def https_routers_all(client_config: ClientConfig):
-    with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
+def https_routers_all(conf: ClientConfig):
+    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
         routers_db = db.table('routers')
         return routers_db.all()
 

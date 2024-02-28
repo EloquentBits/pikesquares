@@ -43,15 +43,15 @@ class DeviceService(Handler):
                 ).as_configuration().format(formatter="json")
             )
             self.config_json["uwsgi"]["show-config"] = True
-            #empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.client_config.EMPEROR_ZMQ_ADDRESS}"
-            # empjs["uwsgi"]["emperor"] = f"{self.client_config.CONFIG_DIR}/project_clo7af2mb0000nldcne2ssmrv/apps"
+            #empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}"
+            # empjs["uwsgi"]["emperor"] = f"{self.conf.CONFIG_DIR}/project_clo7af2mb0000nldcne2ssmrv/apps"
             #config["uwsgi"]["plugin"] = "emperor_zeromq"
 
-            #routers_dir = Path(self.svc_model.client_config.CONFIG_DIR) / "routers"
+            #routers_dir = Path(self.svc_model.conf.CONFIG_DIR) / "routers"
             #routers_dir.mkdir(parents=True, exist_ok=True)
             #config["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
-            self.config_json["uwsgi"]["emperor-wrapper"] = str((Path(self.svc_model.client_config.VENV_DIR) / "bin/uwsgi").resolve())
+            self.config_json["uwsgi"]["emperor-wrapper"] = str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
             #self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
             devices_db = db.table('devices')
@@ -92,11 +92,11 @@ class DeviceService(Handler):
         pass
 
 
-def device_up(client_config: ClientConfig) -> None:
+def device_up(conf: ClientConfig) -> None:
 
     svc_model = Device(
         service_id="device", 
-        client_config=client_config,
+        conf=conf,
     )
     svc = HandlerFactory.make_handler("Device")(svc_model)
     svc.prepare_service_config()
@@ -106,7 +106,7 @@ def device_up(client_config: ClientConfig) -> None:
         if not projects_db.all():
             print("no projects exist. creating one.")
             project_up(
-                client_config, 
+                conf, 
                 randomname.get_name(), 
                 f"project_{cuid()}"
             )
@@ -116,7 +116,7 @@ def device_up(client_config: ClientConfig) -> None:
             https_router_port = str(get_first_available_port(port=8443))
             print(f"no routers exist. creating one on port [{https_router_port}]")
             https_router_up(
-                client_config, 
+                conf, 
                 f"router_{cuid()}", 
                 f"0.0.0.0:{https_router_port}",
             )

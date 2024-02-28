@@ -134,10 +134,10 @@ class WsgiAppService(Handler):
         #        self.service_config.removesuffix(".stopped")
         #    )
 
-        #if not get_service_status(self.project_id, self.client_config) == "running":
-        #    project = get_project(self.client_config, self.project_id)
+        #if not get_service_status(self.project_id, self.conf) == "running":
+        #    project = get_project(self.conf, self.project_id)
         #    if project:
-        #        project_up(self.client_config, project.get('name'), self.project_id)
+        #        project_up(self.conf, project.get('name'), self.project_id)
         
         self.svc_model.service_config.parent.mkdir(parents=True, exist_ok=True)
         self.svc_model.service_config.write_text(json.dumps(self.config_json))
@@ -165,7 +165,7 @@ class WsgiAppService(Handler):
     def stop(self):
         pass
         #if self.service_config is None:
-        #    self.service_config = Path(self.client_config.CONFIG_DIR) / \
+        #    self.service_config = Path(self.conf.CONFIG_DIR) / \
         #            f"{self.parent_service_id}" / "apps" \
         #            / f"{self.service_id}.json"
         #if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
@@ -173,7 +173,7 @@ class WsgiAppService(Handler):
 
 
 def wsgi_app_up(
-        client_config: ClientConfig, 
+        conf: ClientConfig, 
         name: str, 
         service_id: str,
         project_id: str,
@@ -181,7 +181,7 @@ def wsgi_app_up(
     ) -> None:
 
     svc_model = WsgiApp(
-        client_config=client_config,
+        conf=conf,
         name=name,
         service_id=service_id,
         project_id=project_id,
@@ -193,8 +193,8 @@ def wsgi_app_up(
     app.connect()
     app.start()
 
-def apps_all(client_config: ClientConfig):
-    with TinyDB(f"{Path(client_config.DATA_DIR) / 'device-db.json'}") as db:
+def apps_all(conf: ClientConfig):
+    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
         apps_db = db.table('apps')
         return apps_db.all()
 
