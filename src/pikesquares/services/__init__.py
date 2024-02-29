@@ -10,6 +10,7 @@ from .. import (
     get_first_available_port,
     get_service_status,
 )
+from ..cli.pki import CERT_NAME
 from ..conf import ClientConfig
 
 logger = logging.getLogger(__name__)
@@ -72,11 +73,11 @@ class BaseService(pydantic.BaseModel):
 
     @property
     def certificate(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "issued" / "_wildcard.pikesquares.dev.crt"
+        return Path(self.conf.PKI_DIR) / "issued" / f"{CERT_NAME}.crt"
 
     @property
     def certificate_key(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "private" / "_wildcard.pikesquares.dev.key"
+        return Path(self.conf.PKI_DIR) / "private" / f"{CERT_NAME}.key"
 
     @property
     def client_ca(self) -> Path:
