@@ -1,3 +1,4 @@
+import sys
 import os
 from typing import Optional
 
@@ -11,11 +12,15 @@ from ..services.device import device_up
 #from ..services.project import project_up,
 
 from .console import console
+from .pki import (
+        ensure_pki,
+        ensure_build_ca,
+        ensure_csr,
+        ensure_sign_req,
+)
 from ..conf import ClientConfig
 
 app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich")
-
-
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -36,9 +41,6 @@ def main(
         return
 
     #os.environ.get('PIKESQUARES_SCIE_BINDINGS')
-
-    #print(f"{env_file=}")
-    print(f"{os.environ.get('PIKESQUARES_DATA_DIR')=}")
     data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", ""))
     conf_mapping = {}
     with TinyDB(data_dir / "device-db.json") as db:
@@ -50,7 +52,14 @@ def main(
             return
 
     conf = ClientConfig(**conf_mapping)
-    print(conf.model_dump())
+    console.info(conf.model_dump())
+
+    if all([
+        ensure_pki(conf),
+        ensure_build_ca(conf),
+        ensure_csr(conf),
+        ensure_sign_req(conf),]):
+           console.info(f"Wildcard certificate created.")
 
     #for k, v in conf.model_dump().items():
     #    if k.endswith("_DIR"):
@@ -59,6 +68,9 @@ def main(
     obj = ctx.ensure_object(dict)
     obj["verbose"] = verbose
     obj["conf"] = conf
+
+    #console.warning("....exiting....")
+    #sys.exit()
 
 
 @app.command(rich_help_panel="Control", short_help="Run device (if stopped)")
