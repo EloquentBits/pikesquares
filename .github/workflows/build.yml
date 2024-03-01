@@ -26,8 +26,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  org-check:
+    name: Check GitHub Organization
+    if: github.repository_owner == 'EloquentBits'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Noop
+        run: "true"
   wheels:
     name: "${{ matrix.py }} ${{ matrix.os }} ${{ matrix.arch }} wheels"
+    needs: org-check
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:

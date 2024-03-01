@@ -130,7 +130,7 @@ class HttpsRouterSection(Section):
             self.networking.sockets.default(str(svc_model.socket_address))
         )
         # FIXME for when port is lower than the default on the cli
-        ssl_context = f"={(int(address.split(':')[-1]) - 8443)}"
+        ssl_context = address #f"={(int(address.split(':')[-1]) - 8443)}"
         self.router = BaseRouterHttps(
             ssl_context ,
             cert=str(svc_model.certificate),
