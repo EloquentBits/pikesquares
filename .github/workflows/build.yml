@@ -111,11 +111,13 @@ jobs:
       - name: build pex
         shell: bash
 
+        # https://pypi.vc.eloquentbits.com/packages/
+        # pikesquares_pyuwsgi-2.0.24.post0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+        #  "${{ secrets.PYPI_URL }}/pikesquares_pyuwsgi-2.0.24.post0-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl" \
         run: |
           pex \
             dist/pikesquares-"${{steps.project-version.outputs.version}}"-py3-none-any.whl \
-            "${{ secrets.PYPI_URL }}/pikesquares_pyuwsgi-2.0.24.post0-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl" \
-            sentry-sdk \
+            "https://pypi.vc.eloquentbits.com/packages/pikesquares_pyuwsgi-2.0.24.post0-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl" \
             -r requirements.txt \
             --venv \
             --entry-point pikesquares.cli.cli:app \
