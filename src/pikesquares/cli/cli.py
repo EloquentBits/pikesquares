@@ -1,4 +1,5 @@
 import sys
+import shutil
 import os
 from typing import Optional
 
@@ -40,8 +41,15 @@ def main(
             console.info("unable to import pikesquares module.")
         return
 
-    #os.environ.get('PIKESQUARES_SCIE_BINDINGS')
+    print(f"{os.environ.get('PIKESQUARES_SCIE_BINDINGS')=}")
+    print(f"{os.environ.get('VIRTUAL_ENV')=}")
+
     data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", ""))
+
+    if not (Path(data_dir) / "device-db.json").exists():
+        console.warning(f"conf db does not exist @ {data_dir}/device-db.json")
+        sys.exit()
+
     conf_mapping = {}
     with TinyDB(data_dir / "device-db.json") as db:
         conf_db = db.table('configs')
@@ -71,6 +79,31 @@ def main(
 
     #console.warning("....exiting....")
     #sys.exit()
+
+@app.command(rich_help_panel="Control", short_help="Nuke installation")
+def uninstall(
+    ctx: typer.Context, 
+    dry_run: Optional[bool] = typer.Option(
+        False, 
+        help="Uninstall dry run"
+    )
+):
+    """ Delete the entire PikeSquares installation """
+
+    obj = ctx.ensure_object(dict)
+    conf = obj.get("conf")
+
+    for user_dir in [
+            conf.DATA_DIR, 
+            conf.CONFIG_DIR, 
+            conf.RUN_DIR, 
+            conf.LOG_DIR,
+            conf.PLUGINS_DIR,
+            conf.PKI_DIR]:
+        if not dry_run:
+            shutil.rmtree(user_dir)
+        console.info(f"removing {user_dir}")
+    console.info("PikeSquares has been uninstalled.")
 
 
 @app.command(rich_help_panel="Control", short_help="Run device (if stopped)")
