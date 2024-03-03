@@ -100,10 +100,10 @@ class DeviceSection(Section):
         #    shared=False,
         #)
 
+        #self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(
             self.logging.loggers.file(filepath=str(svc_model.log_file))
         )
-        self.logging.add_logger(self.logging.loggers.stdio())
 
         #self.run_fastrouter()
         #self.run_httpsrouter()

@@ -41,8 +41,8 @@ def main(
             console.info("unable to import pikesquares module.")
         return
 
-    print(f"{os.environ.get('PIKESQUARES_SCIE_BINDINGS')=}")
-    print(f"{os.environ.get('VIRTUAL_ENV')=}")
+    #print(f"{os.environ.get('PIKESQUARES_SCIE_BINDINGS')=}")
+    #print(f"{os.environ.get('VIRTUAL_ENV')=}")
 
     data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", ""))
 
@@ -60,7 +60,7 @@ def main(
             return
 
     conf = ClientConfig(**conf_mapping)
-    console.info(conf.model_dump())
+    #console.info(conf.model_dump())
 
     if all([
         ensure_pki(conf),
@@ -101,7 +101,10 @@ def uninstall(
             conf.PLUGINS_DIR,
             conf.PKI_DIR]:
         if not dry_run:
-            shutil.rmtree(user_dir)
+            try:
+                shutil.rmtree(user_dir)
+            except FileNotFoundError:
+                pass
         console.info(f"removing {user_dir}")
     console.info("PikeSquares has been uninstalled.")
 

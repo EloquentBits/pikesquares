@@ -6,5 +6,5 @@ tinydb
 typer[all]
 uWSGI
 uwsgiconf
-uwsgi-tasks
+uwsgi-tasks @ git+https://github.com/EloquentBits/uwsgi_tasks@master
 #zmq
