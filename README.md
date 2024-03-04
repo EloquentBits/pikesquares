@@ -13,7 +13,7 @@
 ## Installation
 
 ```console
-pip install pikesquares
+curl -fsSl https://install.pikesquares.com | bash
 ```
 
 ## License
