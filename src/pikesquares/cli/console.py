@@ -89,19 +89,19 @@ class Console(BaseConsole, _RenderMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def pager(self, content, *, status_bar_format=None, color=True):
-        from click import echo_via_pager
-        os.environ['LESS'] = " ".join([
-            "-P{} (?pB%pB\%):lines %lt-%lb)$".format(
-                status_bar_format
-                .replace(':', '\:')
-                .replace('.', '\.')
-            ),
-            # "-m",
-            # "+G",
-        ])
-        os.environ['LESSSECURE'] = '1'
-        return echo_via_pager(content, color=color)
+    #def pager(self, content, *, status_bar_format=None, color=True):
+    #    from click import echo_via_pager
+    #    os.environ['LESS'] = " ".join([
+    #        "-P{} (?pB%pB\%):lines %lt-%lb)$".format(
+    #            status_bar_format
+    #            .replace(':', '\:')
+    #            .replace('.', '\.')
+    #        ),
+    #        # "-m",
+    #        # "+G",
+    #    ])
+    #    os.environ['LESSSECURE'] = '1'
+    #    return echo_via_pager(content, color=color)
 
     def error(self, *args, **kwargs):
         example = kwargs.pop('example', None)
@@ -170,6 +170,9 @@ class Console(BaseConsole, _RenderMixin):
     
     def choose_many(self, *args, **kwargs):
         return questionary.checkbox(*args, **kwargs).unsafe_ask()
+
+    def choose_path(self, *args, **kwargs):
+        return questionary.path(*args, **kwargs).unsafe_ask()
 
     def format_print(*args, **kwargs):
         title = kwargs.pop('title', "")
@@ -323,3 +326,4 @@ class Console(BaseConsole, _RenderMixin):
 
 
 console = Console()
+stderr_console = Console(stderr=True)

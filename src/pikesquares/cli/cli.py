@@ -46,6 +46,9 @@ def main(
 
     data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", ""))
 
+    #pex_python = os.environ.get("PEX_PYTHON_PATH")
+    #console.info(f"{pex_python=}")
+
     if not (Path(data_dir) / "device-db.json").exists():
         console.warning(f"conf db does not exist @ {data_dir}/device-db.json")
         sys.exit()
@@ -56,7 +59,7 @@ def main(
         try:
             conf_mapping = conf_db.search(Query().version == os.environ.get("PIKESQUARES_VERSION"))[0]
         except IndexError:
-            print(f"unable to load conf from {str(data_dir)}/device-db.json")
+            console.warning(f"unable to load conf from {str(data_dir)}/device-db.json")
             return
 
     conf = ClientConfig(**conf_mapping)

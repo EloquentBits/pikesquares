@@ -6,6 +6,7 @@ COLOR_RED="\x1b[31m"
 COLOR_GREEN="\x1b[32m"
 COLOR_YELLOW="\x1b[33m"
 COLOR_RESET="\x1b[0m"
+NO_COLOR="$(tput sgr0 2>/dev/null || printf '')"
 
 function log() {
   echo -e "$@" 1>&2
@@ -127,6 +128,53 @@ function calculate_arch() {
   fi
 }
 
+printf '\n'
+
+function img_ascii(){
+printf "$COLOR_GREEN"
+  cat <<'EOF'
+                            ++                                      
+                          +++++                                     
+                         +++++++                                    
+                         +++++++                                    
+                         +++++++                                    
+                         +++++++                                    
+                       +++++++++++++                                
+                    ++++++++++++++++++                              
+                    +++++++++++++++++++                             
+                    +++++++++++++++++++                             
+                    ++++++++++++++++++++++                          
+                    ++++++++++++++++++++++                          
+                    ++++++++++++++++++++++                          
+                   +++++++++++++++++++++++         PikeSquares is now installed        
+                   +++++++++++++++++++++++                          
+                   +++++++++++++++++++++++              
+                   +++++++++++++++  ++++++             Run `pikesquares up` to launch              
+                   +++++++++++++++++++++++                       
+                  ++++++++++++++++++++++++                      or    
+                  ++++++++++++++++++++++++                  
+                  +++++++++++++++++++ ++++                 `pikesquares --help` for commands
+                 +++++++++++++++++++++ ++                           
+                 +++++++++++++++++++++  +                           
+                +++ ++++++++++++++++++                              
+              +++   +++++++++++++++++++                             
+             ++     +++++++++++++++++ +                             
+           +++      +++++++++++++++++ +                             
+          ++        ++++++++++++++++++ +                            
+        +++         ++++++++++++++++++ +                            
+       ++           +++++++++++++++++++++                           
+     ++             +++++++++++++++++++++                           
+    ++                  ++++++    +++++++                           
+  ++                     ++++      +++++ +                          
+ +                       ++++       ++++++                          
+                         ++++        ++++                           
+                        +++++        ++++                           
+                      +++++++        ++++                           
+                   ++++++++++        +++++                          
+EOF
+printf "$NO_COLOR"
+}
+
 check_cmd cat
 
 function usage() {
@@ -202,7 +250,7 @@ if ! command -v "${base_name}" > /dev/null; then
   log "You'll either need to invoke ${dest} explicitly or else add ${bin_dir} to your shell's PATH."
 fi
 
-green "Done."
+img_ascii
 
 #green "\nRunning \`pants\` in a Pants-enabled repo will use the version of Pants configured for that repo."
 #green "In a repo not yet Pants-enabled, it will prompt you to set up Pants for that repo."

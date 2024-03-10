@@ -1,6 +1,7 @@
-from pydantic import validate_email
 from string import punctuation
 from pathlib import Path
+
+from pydantic import validate_email
 
 
 class Validator:
@@ -40,7 +41,7 @@ class ServicePathValidator(Validator):
         try:
             p = Path(path)
             if not p.exists():
-                raise ValueError(f"File or directory on path '{path}' is not exists!")
+                raise ValueError(f"File or directory on path '{path}' does not exist!")
         except PermissionError:
             raise ValueError(f"Insufficient rights to access the path '{path}'!")
         return path

@@ -15,9 +15,9 @@ from . import (
 
 @HandlerFactory.register('Https-Router')
 class HttpsRouterService(Handler):
-    is_internal = False
-    is_enabled = True
-
+    is_internal: bool = False
+    is_enabled: bool = True
+    is_app: bool = False
 
     config_json = {}
     #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
@@ -46,7 +46,6 @@ class HttpsRouterService(Handler):
         #self.svc_model.service_config.write_text(json.dumps(self.config_json))
 
         with TinyDB(self.svc_model.device_db_path) as db:
-            print("Updating routers db.")
             routers_db = db.table('routers')
             routers_db.upsert(
                 {
@@ -57,8 +56,6 @@ class HttpsRouterService(Handler):
                 },
                 Query().service_id == self.svc_model.service_id,
             )
-            print("Done updating routers db.")
-
 
     def connect(self):
         pass

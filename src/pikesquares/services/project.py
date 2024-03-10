@@ -21,6 +21,7 @@ class ProjectService(Handler):
     name: str
     is_internal: bool = True
     is_enabled: bool = True
+    is_app: bool = False
 
     #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
     config_json = {}
@@ -41,8 +42,12 @@ class ProjectService(Handler):
             #self.config_json["uwsgi"]["emperor"] = self.svc_model.apps_dir
 
             #uwsgi.cache_update(f"{self.svc_model.service_id}-stats-addr", str(stats_addr), 0, self.svc_model.cache)
-            #self.config_json["uwsgi"]["show-config"] = True
-            #self.config_json["uwsgi"]["strict"] = True
+
+            self.config_json["uwsgi"]["emperor-wrapper"] = \
+                str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
+
+            self.config_json["uwsgi"]["show-config"] = True
+            self.config_json["uwsgi"]["strict"] = True
             # self.config_json["uwsgi"]["plugin"] = "logfile"
 
             #if "logfile" in config_json["uwsgi"].get("plugin", ""):

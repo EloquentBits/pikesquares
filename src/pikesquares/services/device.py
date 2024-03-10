@@ -28,8 +28,9 @@ from . import (
 @HandlerFactory.register('Device')
 class DeviceService(Handler):
 
-    is_internal = True
-    is_enabled = True
+    is_internal: bool = True
+    is_enabled: bool = True
+    is_app: bool = False
 
     config_json = {}
 
@@ -51,7 +52,9 @@ class DeviceService(Handler):
             #routers_dir.mkdir(parents=True, exist_ok=True)
             #config["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
-            self.config_json["uwsgi"]["emperor-wrapper"] = str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
+            self.config_json["uwsgi"]["emperor-wrapper"] = \
+                str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
+
             #self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
             devices_db = db.table('devices')
