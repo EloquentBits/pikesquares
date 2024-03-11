@@ -4,6 +4,7 @@ import os
 from typing import Optional
 
 import typer
+from typing_extensions import Annotated
 from tinydb import TinyDB, Query
 
 #from .. import (
@@ -115,12 +116,9 @@ def uninstall(
 @app.command(rich_help_panel="Control", short_help="Run device (if stopped)")
 def up(
     ctx: typer.Context, 
-    foreground: Optional[bool] = typer.Option(
-        True, 
-        help="Run in foreground."
-    )
+    foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
-    """ Start all services """
+    """ Launch PikeSquares Server """
 
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")

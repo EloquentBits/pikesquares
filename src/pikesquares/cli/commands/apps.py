@@ -4,7 +4,6 @@ import subprocess
 import os
 from glob import glob
 from pathlib import Path
-import shutil
 from typing import Optional
 from enum import Enum
 
@@ -82,41 +81,6 @@ class LanguageRuntime(str, Enum):
     ruby = "ruby"
     php = "php"
     perl = "perl"
-
-
-custom_style_fancy = questionary.Style(
-    [
-        ("separator", "fg:#cc5454"),
-        ("qmark", "fg:#673ab7 bold"),
-        ("question", ""),
-        ("selected", "fg:#cc5454"),
-        ("pointer", "fg:#673ab7 bold"),
-        ("highlighted", "fg:#673ab7 bold"),
-        ("answer", "fg:#f44336 bold"),
-        ("text", "fg:#FBE9E7"),
-        ("disabled", "fg:#858585 italic"),
-    ]
-)
-
-custom_style_dope = questionary.Style(
-    [
-        ("separator", "fg:#6C6C6C"),
-        ("qmark", "fg:#FF9D00 bold"),
-        ("question", ""),
-        ("selected", "fg:#5F819D"),
-        ("pointer", "fg:#FF9D00 bold"),
-        ("answer", "fg:#5F819D bold"),
-    ]
-)
-
-custom_style_genius = questionary.Style(
-    [
-        ("qmark", "fg:#E91E63 bold"),
-        ("question", ""),
-        ("selected", "fg:#673AB7 bold"),
-        ("answer", "fg:#2196f3 bold"),
-    ]
-)
 
 
 def run_steps(name, step_times, app_steps_task_id):
@@ -252,6 +216,7 @@ def create(
     name: Annotated[str, typer.Option("--name", "-n", help="app name")] = "",
     source: Annotated[str, typer.Option("--source", "-s", help="app source")] = "",
     app_type: Annotated[str, typer.Option("--app-type", "-t", help="app source")] =  "",
+    router_address: Annotated[str, typer.Option("--router-address", "-r", help="ssl router address")] =  "",
 
     base_dir: Annotated[
         Optional[Path], 
@@ -297,9 +262,13 @@ def create(
         #    validators=[ServiceNameValidator]
 
         name = questionary.text(
-            "Enter your app name", 
+            "Enter your app name: ", 
             default=randomname.get_name(), 
+            style=console.custom_style_dope,
         ).ask()
+        if not name:
+            console.warning(f"...cli cancelled by user. exiting.")
+            return
 
     def get_project_id(project):
         with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
@@ -308,8 +277,9 @@ def create(
     project_id = None
     if not project:
         project = questionary.select(
-                "Select project where you want to create app", 
-                choices=[p.get("name") for p in projects_all(conf)],
+            "Select project where you want to create app: ", 
+            choices=[p.get("name") for p in projects_all(conf)],
+            style=console.custom_style_dope,
             ).ask()
         project_id = get_project_id(project).get("service_id")
         assert project_id
@@ -320,7 +290,7 @@ def create(
 
     # Runtime
     runtime = questionary.select(
-        "Select a language runtime for your app",
+        "Select a language runtime for your app: ",
         choices=[
             "Python/WSGI",
             questionary.Separator(),
@@ -328,7 +298,7 @@ def create(
             questionary.Choice("PHP", disabled="coming soon"),
             questionary.Choice("perl/PSGI", disabled="coming soon"),
         ],
-        style=custom_style_dope,
+        style=console.custom_style_dope,
     ).ask()
 
     #console.info(f"selected {runtime=}")
@@ -344,13 +314,14 @@ def create(
     service_id = f"{service_type_prefix}_{cuid()}"
 
     source = questionary.select(
-        "Select a source for your app",
+            "Select a source for your app: ",
         choices=[
             "Local Filesystem Directory",
             questionary.Separator(),
             questionary.Choice("Git Repository", disabled="coming soon"),
             questionary.Choice("PikeSquares App Template", disabled="coming soon"),
         ],
+        style=console.custom_style_dope,
     ).ask()
 
     app_options = dict()
@@ -358,9 +329,10 @@ def create(
     base_dir = None
     if source == "Local Filesystem Directory":
         base_dir = questionary.path(
-            "Enter your app base directory", 
+                "Enter your app base directory: ", 
             default=os.getcwd(),
             only_directories=True,
+            style=console.custom_style_dope,
         ).ask()
         app_options["root_dir"] = base_dir
     else:
@@ -379,12 +351,13 @@ def create(
 
     if len(wsgi_files_choices):
         wsgi_file = questionary.select(
-            "Select a WSGI file",
-            choices=wsgi_files_choices
+                "Select a WSGI file: ",
+            choices=wsgi_files_choices,
+            style=console.custom_style_dope,
         ).ask()
     else:
         wsgi_file = questionary.text(
-            "Enter your app Python WSGI file relative to root directory", 
+                "Enter your app Python WSGI file relative to root directory: ", 
         ).ask()
 
     wsgi_file_path = Path(base_dir) / wsgi_file
@@ -393,27 +366,29 @@ def create(
 
     # WSGI Module
     wsgi_module = questionary.text(
-        "Enter your app Python WSGI module name", 
+            "Enter your app Python WSGI module name: ", 
         default="application",
+        style=console.custom_style_dope,
     ).ask()
     app_options["wsgi_module"] = wsgi_module
 
     # Router
-    available_routers = {
-        p.get('address'): p.get('service_id') for p in https_routers_all(conf)
-    }
-    if not len(available_routers):
-        console.warning("unable to locate https proxy.")
-        return
-    elif len(available_routers) > 1:
-        router_address = console.choose(
-            "Select an https proxy for your app:", 
-            choices=available_routers
-        )
-    else:
-        router_address = list(available_routers.keys())[0]
+    def get_router(addr):
+        with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+            return db.table('routers').get(Query().address == addr)
 
-    router_id = available_routers.get(router_address)
+    router_id = None
+    if not router_address:
+        router_address = questionary.select(
+            "Select an ssl proxy for your app: ", 
+            choices=[r.get("address") for r in https_routers_all(conf)],
+            style=console.custom_style_dope,
+            ).ask()
+    try:
+        router_id = get_router(router_address).get("service_id")
+    except IndexError:
+        console.warning(f"unable to locate router at address [{router_address}]")
+        return
     #print(f"Selected Https Routers: {router_id} running on: {router_address}")
     app_options["router_id"] = router_id
     #print(app_options)
@@ -474,7 +449,7 @@ def create(
 @apps_cmd.command("list")
 def list_(
     ctx: typer.Context,
-    project: str = typer.Argument("", help="Project name or id"),
+    project: str = typer.Argument("", help="Project name"),
     show_id: bool = False
 ):
     """
@@ -486,43 +461,48 @@ def list_(
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")
 
+    #if not project:
+    #    available_projects = {
+    #        p.get('name'): p.get('service_id') for p in projects_all(conf)
+    #    }
+    #    if not available_projects:
+    #        console.warning(f"No projects were created, create at least one project first!")
+    #        return
+    #    project = console.choose(
+    #        "Select project where you want to list apps", 
+    #        choices=available_projects
+    #    )
+
+    def get_project_id(project):
+        with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+            return db.table('projects').get(Query().name == project)
+
+    project_id = None
     if not project:
-        available_projects = {
-            p.get('name'): p.get('service_id') for p in projects_all(conf)
-        }
-        if not available_projects:
-            console.warning(f"No projects were created, create at least one project first!")
-            return
-        project = console.choose(
-            "Select project where you want to list apps", 
-            choices=available_projects
+        project = questionary.select(
+            "Select project: ", 
+            choices=[p.get("name") for p in projects_all(conf)],
+            style=console.custom_style_dope,
+            ).ask()
+        project_id = get_project_id(project).get("service_id")
+        assert project_id
+    else:
+        project_id = get_project_id(project)
+
+    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+        apps_out = []
+        for app in db.table('apps').search(where('project_id') == project_id):
+            apps_out.append({
+                'name': app.get('name'),
+                'status': "", #get_service_status(app.get('service_id'), conf) or "Unknown",
+                'id': app.get('service_id')
+            })
+        console.print_response(
+            apps_out, 
+            title=f"Apps in project '{project}'", 
+            show_id=show_id, 
+            exclude=['parent_id', 'options']
         )
-    
-    #project_db = obj['project'](project)
-    #if not project_db:
-    #    console.warning(f"Project '{project}' not exists!")
-    #    return
-    #apps = project_db.get(where('name') == project).get('apps')
-    #for a in apps:
-    #    a.update({'status': get_service_status(a.get('cuid'), conf)})
-
-    apps_out = []
-    apps = apps_all(conf)
-    for app in apps:
-        apps_out.append({
-            'name': app.get('name'),
-            'status': get_service_status(
-                app.get('service_id'), conf
-            ) or "Unknown",
-            'id': app.get('service_id')
-        })
-
-    console.print_response(
-        apps_out, 
-        title=f"Apps in project '{project}'", 
-        show_id=show_id, 
-        exclude=['parent_id', 'options']
-    )
 
 
 @apps_cmd.command("logs", short_help="Show app logs")
@@ -540,45 +520,6 @@ def logs(
         if not available_projects:
             console.warning(f"No projects were created, create at least one project first!")
             return
-        project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
-        project_id = available_projects.get(project_name)
-    
-    project_db = obj['project'](project_name)
-
-    if not app_id:
-        apps = {
-            a.get("name"): a.get("cuid")
-            for a in project_db.get(where('name') == project_name).get('apps')
-        }
-        app_name = console.choose("Choose app you want to view logs:", choices=apps)
-        app_id = apps.get(app_name)
-
-    status = get_service_status(f"{app_id}", conf)
-
-    project_log_file = Path(f"{conf.LOG_DIR}/{project_id}.log")
-    app_log_file = Path(f"{conf.LOG_DIR}/{app_id}.log")
-    if app_log_file.exists() and app_log_file.is_file():
-        console.pager(
-            app_log_file.read_text(),
-            status_bar_format=f"{app_log_file.resolve()} (status: {status})"
-        )
-    else:
-        console.error(
-            f"Error:\nLog file {app_log_file} not exists!",
-            hint=f"Check the project log file {project_log_file} for possible errors"
-        )
-
-@apps_cmd.command("logs")
-def logs(
-    ctx: typer.Context,
-    project_id: Optional[str] = typer.Argument(""),
-    app_id: Optional[str] = typer.Argument("")
-):
-    obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
-
-    if not project_id:
-        available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
         project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
         project_id = available_projects.get(project_name)
     

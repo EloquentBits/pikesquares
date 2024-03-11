@@ -147,8 +147,9 @@ class HttpsRouter(BaseService):
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=3017)}"
 
-    #stats_server_port = 9897
-    #stats_server_address = f"127.0.0.1:{get_first_available_port(port=stats_server_port)}"
+    @property
+    def stats_address(self) -> str:
+        return f"127.0.0.1:{get_first_available_port(port=9897)}"
 
     @property
     def subscription_server_address(self) -> str:
