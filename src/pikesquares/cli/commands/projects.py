@@ -102,7 +102,7 @@ def list_(
     projects = projects_all(conf)
     if not len(projects):
         console.warning("No projects were initialized, nothing to show!")
-        return
+        raise typer.Exit()
     
     projects_out = []
     for project in projects:

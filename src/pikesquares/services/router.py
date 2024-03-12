@@ -37,7 +37,9 @@ class HttpsRouterService(Handler):
         self.config_json = json.loads(
                 section.as_configuration().format(formatter="json"))
         self.config_json["uwsgi"]["show-config"] = True
-        self.config_json["uwsgi"]["strict"] = False
+        self.config_json["uwsgi"]["strict"] = True
+        self.config_json["uwsgi"]["notify-socket"] = str(self.svc_model.notify_socket)
+
         # print(f"{wsgi_app_opts=}")
         # print(f"wsgi app {self.config_json=}")
         #empjs["uwsgi"]["plugin"] = "emperor_zeromq"

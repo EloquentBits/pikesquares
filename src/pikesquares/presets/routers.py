@@ -90,7 +90,10 @@ class HttpsRouterSection(Section):
 
         #self.set_plugins_params(plugins="http")
 
-        self.master_process.set_basic_params(enable=True)
+        self.master_process.set_basic_params(
+            enable=True,
+            fifo_file = str(svc_model.fifo_file),
+        )
         self.master_process.set_exit_events(reload=True)
         #self.main_process.set_basic_params(
         #    touch_reload="/srv/uwsgi/%n.http-router.ini"

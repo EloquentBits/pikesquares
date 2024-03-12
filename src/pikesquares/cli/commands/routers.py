@@ -67,7 +67,7 @@ def create(
         f"Enter the port for the Https Router: ",
         default=str(get_first_available_port(port=8443)),
         style=console.custom_style_dope,
-    )
+    ).ask()
     https_router_up(
         conf, 
         f"router_{cuid()}", 
@@ -192,7 +192,7 @@ def list_(
     routers = https_routers_all(conf)
     if not len(routers):
         console.warning("No routers were created, nothing to show!")
-        return
+        raise typer.Exit()
     
     routers_out = []
     for router in routers:
@@ -253,7 +253,7 @@ def delete(
         routers_all = routers_db.all()
         if not len(routers_all):
             console.info("no proxies available.")
-            return
+            raise typer.Exit()
 
         for router_to_delete in questionary.checkbox(
                 f"Select the proxy(s) to be deleted?",

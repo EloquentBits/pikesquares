@@ -1,4 +1,6 @@
 import sys
+import traceback
+import re
 import time
 import subprocess
 import os
@@ -8,6 +10,7 @@ from typing import Optional
 from enum import Enum
 
 from tinydb import TinyDB, where, Query
+import git
 import typer
 from typing_extensions import Annotated
 import randomname
@@ -82,6 +85,7 @@ class LanguageRuntime(str, Enum):
     php = "php"
     perl = "perl"
 
+CHOSE_FILE_MYSELF = "-- Chose the file myself --"
 
 def run_steps(name, step_times, app_steps_task_id):
     """Run steps for a single app, and update corresponding progress bars."""
@@ -206,6 +210,70 @@ def create_venv(venv_dir):
     #      '/home/pk/.local/share/pikesquares/venvs/wsgi_app_cltkiddjs0000c1j1oqyyt832'], 
     #returncode=0)
 
+def clone_to_dir(url: str, target_dir: str):
+    env = {
+        "GIT_SSL_NO_VERIFY": "true"
+    }
+    options =  []
+    #url = "ssh://git@github.com:psychotechnik/python-wsgi-test-01.git"
+    if not url:
+        url = "git@github.com:psychotechnik/python-wsgi-test-01.git"
+    #scheme = urlparse(url).scheme
+
+    executable, subcommand = "/usr/bin/git", "clone"
+
+    if not target_dir:
+        target_dir = "/tmp/python-wsgi-test-01"
+
+    subprocess_cmd_args = [executable, subcommand, url, target, *set(options)]
+    print(f"{subprocess_cmd_args=}")
+    subprocess.run(
+        subprocess_cmd_args,
+        env=env
+    )
+
+
+class NameValidator(questionary.Validator):
+    def validate(self, document):
+        if len(document.text) == 0:
+            raise questionary.ValidationError(
+                message="Please enter a value",
+                cursor_position=len(document.text),
+            )
+
+class RepoAddressValidator(questionary.Validator):
+    def validate(self, document):
+        if len(document.text) == 0:
+            raise questionary.ValidationError(
+                message="Please enter a valid repo url",
+                cursor_position=len(document.text),
+            )
+
+class PathValidator(questionary.Validator):
+    def validate(self, document):
+        if len(document.text) == 0:
+            raise questionary.ValidationError(
+                message="Please enter a value",
+                cursor_position=len(document.text),
+            )
+        if not Path(document.text).exists():
+            raise questionary.ValidationError(
+                message="Please enter an existing directory to clone your git repository into",
+                cursor_position=len(document.text),
+            )
+
+
+class CloneProgress(git.RemoteProgress):
+    def update(self, op_code, cur_count, max_count=None, message=''):
+        #console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
+        if message:
+            console.info(f"Completed git clone {message}")
+ 
+#validate=lambda text: True if len(text) > 0 else "Please enter a value"
+
+#print(questionary.text("What's your name?", 
+#    validate=lambda text: len(text) > 0).ask())
+
 @apps_cmd.command(short_help="Create new app in project\nAliases: [i] create, new")
 @apps_cmd.command("new", hidden=True)
 def create(
@@ -215,7 +283,7 @@ def create(
     ),
     name: Annotated[str, typer.Option("--name", "-n", help="app name")] = "",
     source: Annotated[str, typer.Option("--source", "-s", help="app source")] = "",
-    app_type: Annotated[str, typer.Option("--app-type", "-t", help="app source")] =  "",
+    #app_type: Annotated[str, typer.Option("--app-type", "-t", help="app source")] =  "",
     router_address: Annotated[str, typer.Option("--router-address", "-r", help="ssl router address")] =  "",
 
     base_dir: Annotated[
@@ -252,41 +320,175 @@ def create(
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")
 
-    #console.info(f"{name=} | {source=} | {app_type=} | {base_dir=} {runtime.value=}")
-    #console.info(HandlerFactory.user_visible_apps())
-    # APP Name
-    if not name:
-        #name = console.ask(
-        #    "Enter your app name: ", 
-        #    default=randomname.get_name(), 
-        #    validators=[ServiceNameValidator]
+    custom_style = obj.get("cli-style")
 
-        name = questionary.text(
-            "Enter your app name: ", 
-            default=randomname.get_name(), 
-            style=console.custom_style_dope,
+    app_options = dict()
+
+    #console.error(
+    #        "this is some kind of misunderstanding", 
+    #        example="this is an example", 
+    #        example_description="this is a description", 
+    #        hint="this is a hint"
+    #)
+
+    provider = questionary.select(
+            "Select a base directory or git repository directory for your app: ",
+        choices=[
+            "Git Repository",
+            "Local Filesystem Directory",
+            "PikeSquares App Template",
+            #questionary.Separator(),
+            #questionary.Choice("PikeSquares App Template", disabled="coming soon"),
+        ],
+        style=custom_style,
+        use_shortcuts=True,
+        use_indicator=True,
+        show_selected=True,
+        instruction="this is an instruction",
+    ).ask()
+    if not provider:
+        raise typer.Exit()
+
+    base_dir:str = ""
+    repo_name:str = ""
+    if provider == "Local Filesystem Directory":
+        base_dir = questionary.path(
+                "Enter your app base directory: ", 
+            default=os.getcwd(),
+            only_directories=True,
+            style=custom_style,
         ).ask()
-        if not name:
-            console.warning(f"...cli cancelled by user. exiting.")
-            return
 
-    def get_project_id(project):
-        with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
-            return db.table('projects').get(Query().name == project)
+    elif provider == "Git Repository":
+        repo = None
+        repo_url:str = ""
+
+        def prompt_repo_url():
+            return questionary.text(
+                "Enter your app git repository url: ", 
+                default="git@github.com:psychotechnik/python-wsgi-test-01.git",
+                style=custom_style,
+                validate=RepoAddressValidator,
+            ).ask()
+
+        repo_url = prompt_repo_url()
+        if not repo_url:
+            raise typer.Exit()
+
+        def prompt_base_dir(repo_name: str) -> Path:
+            return questionary.path(
+                    f"Choose a directory to clone your `{repo_name}` git repository into: ", 
+                default=os.getcwd(),
+                only_directories=True,
+                style=custom_style,
+                validate=PathValidator,
+            ).ask()
+
+        def get_repo_name_from_url(repo_url):
+            str_pattern = ["([^/]+)\\.git$"]
+            for i in range(len(str_pattern)):
+                pattern = re.compile(str_pattern[i])
+                matcher = pattern.search(repo_url)
+                if matcher:
+                    return matcher.group(1)
+
+        repo_name = get_repo_name_from_url(repo_url)
+        if not repo_name:
+            console.warning(f"unable to extract repository name from url `{repo_url}`")
+            raise typer.Exit()
+
+        base_dir = prompt_base_dir(repo_name)
+        clone_into_dir = Path(base_dir) / repo_name
+        if clone_into_dir.exists() and any(clone_into_dir.iterdir()):
+            clone_into_dir_files = list(clone_into_dir.iterdir())
+            if clone_into_dir / ".git" in clone_into_dir_files:
+                if not questionary.confirm(
+                    f"There appears to be a git repository already cloned in {clone_into_dir}. Chose another directory?",
+                    default=True,
+                    auto_enter=True,
+                    style=custom_style,
+                ).ask():
+                    raise typer.Exit()
+
+                base_dir = prompt_base_dir(repo_name)
+            elif len(clone_into_dir_files):
+                if not questionary.confirm(
+                    f"Directory {str(clone_into_dir)} is not emptry. Continue?",
+                    default=True,
+                    auto_enter=True,
+                    style=custom_style,
+                ).ask():
+                    raise typer.Exit()
+
+        console.info(f"cloning `{repo_name}` repository into `{clone_into_dir}`")
+
+        while not repo:
+            try:
+                repo = git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
+            except git.GitCommandError as exc:
+                if "already exists and is not an empty directory" in exc.stderr:
+                    if questionary.confirm(
+                            "Continue with this directory?",
+                            instruction=f"A git repository exists at {base_dir}",
+                            default=True,
+                            auto_enter=True,
+                            style=custom_style,
+                            ).ask():
+                        break
+                    base_dir = prompt_base_dir(repo_name)
+                elif "Repository not found" in exc.stderr:
+                    console.warning(f"unable to locate a git repository at {repo_url}")
+                    repo_url = prompt_repo_url()
+                    if not repo_url:
+                        raise typer.Exit()
+                else:
+                    console.warning(f"error: unable to clone a git repository at {repo_url}")
+                    console.warning(f"{exc.stdout}")
+                    console.warning(f"{exc.stderr}")
+                    repo_url = prompt_repo_url()
+                    if not repo_url:
+                        raise typer.Exit()
+        if repo:
+            #repo_working_dir = repo.working_dir
+            base_dir = str(clone_into_dir)
+
+    elif provider == "PikeSquares App Template":
+        pass
+    else:
+        console.warning("invalid app source")
+        raise typer.Exit()
+
+    app_options["root_dir"] = base_dir
+
+    base_dir_name = str(Path(base_dir).name) if base_dir else None
+    name = name or questionary.text(
+        "Choose a name for your app: ", 
+        default=repo_name or base_dir_name  or randomname.get_name(),
+        style=custom_style,
+        validate=NameValidator,
+    ).ask()
+
+    if not name:
+        raise typer.Exit()
+
+    #DISABLED = True
+    #response = questionary.confirm("Are you amazed?").skip_if(DISABLED, default=True).ask()
 
     project_id = None
-    if not project:
-        project = questionary.select(
-            "Select project where you want to create app: ", 
-            choices=[p.get("name") for p in projects_all(conf)],
-            style=console.custom_style_dope,
-            ).ask()
-        project_id = get_project_id(project).get("service_id")
-        assert project_id
-    else:
-        project_id = get_project_id(project)
+    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+        projects = db.table('projects').all()
+        if len(projects) == 1:
+            project = "sandbox"
+        else:
+            project = project or questionary.select(
+                    "Select project where you want to create app: ", 
+                    choices=[p.get("name") for p in projects],
+                    style=custom_style,
+                    ).ask()
+        project_id = db.table('projects').get(Query().name == project).get("service_id")
 
-    #console.info(f"selected {project=} {project_id=}")
+    if not all([project, project_id]):
+        raise typer.Exit()
 
     # Runtime
     runtime = questionary.select(
@@ -298,10 +500,10 @@ def create(
             questionary.Choice("PHP", disabled="coming soon"),
             questionary.Choice("perl/PSGI", disabled="coming soon"),
         ],
-        style=console.custom_style_dope,
+        style=custom_style,
     ).ask()
-
-    #console.info(f"selected {runtime=}")
+    if not runtime:
+        raise typer.Exit()
 
     # APP Type
     #service_type = console.choose(
@@ -313,34 +515,8 @@ def create(
     service_type_prefix = service_type.replace('-', '_').lower()
     service_id = f"{service_type_prefix}_{cuid()}"
 
-    source = questionary.select(
-            "Select a source for your app: ",
-        choices=[
-            "Local Filesystem Directory",
-            questionary.Separator(),
-            questionary.Choice("Git Repository", disabled="coming soon"),
-            questionary.Choice("PikeSquares App Template", disabled="coming soon"),
-        ],
-        style=console.custom_style_dope,
-    ).ask()
-
-    app_options = dict()
-
-    base_dir = None
-    if source == "Local Filesystem Directory":
-        base_dir = questionary.path(
-                "Enter your app base directory: ", 
-            default=os.getcwd(),
-            only_directories=True,
-            style=console.custom_style_dope,
-        ).ask()
-        app_options["root_dir"] = base_dir
-    else:
-        console.warning("invalid app source")
-        return
-
     # WSGI File
-    located_wsgi_files = glob(f"{os.getcwd()}/**/*wsgi*.py", recursive=True)
+    located_wsgi_files = glob(f"{base_dir}/**/*wsgi*.py", recursive=True)
     wsgi_files_choices = []
     wsgi_file = None
     for f in located_wsgi_files:
@@ -349,26 +525,38 @@ def create(
         wsgi_files_choices.append(f)
         #f.replace(f"{os.getcwd()}/", "")] = f
 
+    def prompt_for_wsgi_file():
+        return questionary.path(
+            "Enter your app Python WSGI file relative to root directory: ", 
+            default=base_dir,
+            only_directories=False,
+            style=custom_style,
+        ).ask()
+
     if len(wsgi_files_choices):
         wsgi_file = questionary.select(
                 "Select a WSGI file: ",
-            choices=wsgi_files_choices,
-            style=console.custom_style_dope,
+            choices=[
+                CHOSE_FILE_MYSELF,
+                questionary.Separator(),
+            ] + wsgi_files_choices,
+            style=custom_style,
         ).ask()
+        if wsgi_file == CHOSE_FILE_MYSELF:
+            wsgi_file = prompt_for_wsgi_file()
     else:
-        wsgi_file = questionary.text(
-                "Enter your app Python WSGI file relative to root directory: ", 
-        ).ask()
+        wsgi_file = prompt_for_wsgi_file()
 
     wsgi_file_path = Path(base_dir) / wsgi_file
     assert wsgi_file_path.exists(), f"{wsgi_file_path} does not exist"
+
     app_options["wsgi_file"] = str(wsgi_file_path)
 
     # WSGI Module
     wsgi_module = questionary.text(
             "Enter your app Python WSGI module name: ", 
         default="application",
-        style=console.custom_style_dope,
+        style=custom_style,
     ).ask()
     app_options["wsgi_module"] = wsgi_module
 
@@ -382,13 +570,13 @@ def create(
         router_address = questionary.select(
             "Select an ssl proxy for your app: ", 
             choices=[r.get("address") for r in https_routers_all(conf)],
-            style=console.custom_style_dope,
+            style=custom_style,
             ).ask()
     try:
         router_id = get_router(router_address).get("service_id")
     except IndexError:
         console.warning(f"unable to locate router at address [{router_address}]")
-        return
+        raise typer.Exit()
     #print(f"Selected Https Routers: {router_id} running on: {router_address}")
     app_options["router_id"] = router_id
     #print(app_options)
@@ -410,6 +598,18 @@ def create(
         project_id,
         **app_options,
     )
+
+    try:
+        router_port = router_address.split(':')[-1]
+    except IndexError:
+        pass
+    else:
+        url = console.render_link(f'{name}.pikesquares.dev', port=router_port)
+        console.success(f"App `{name}` is starting up. ")
+        console.success(f"App is available at {url}")
+
+    # [uWSGI http pid 3758459] rounded-hip.pikesquares.dev:8443 => marking 127.0.0.1:4018 as failed
+    # [notify-socket] [subscription ack] rounded-hip.pikesquares.dev:8443 => new node: 127.0.0.1:4018
 
     #if selected_kit_name == "Custom":
     #    project_path = project_db.get(where('name') == project_id).get('path')
@@ -482,7 +682,7 @@ def list_(
         project = questionary.select(
             "Select project: ", 
             choices=[p.get("name") for p in projects_all(conf)],
-            style=console.custom_style_dope,
+            style=custom_style,
             ).ask()
         project_id = get_project_id(project).get("service_id")
         assert project_id
@@ -519,7 +719,7 @@ def logs(
         available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
         if not available_projects:
             console.warning(f"No projects were created, create at least one project first!")
-            return
+            raise typer.Exit()
         project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
         project_id = available_projects.get(project_name)
     
@@ -567,7 +767,7 @@ def start(
         available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
         if not available_projects:
             console.warning(f"No projects were created, create at least one project first!")
-            return
+            raise typer.Exit()
         project_name = console.choose("Select project where you want to start app", choices=available_projects)
         project_id = available_projects.get(project_name)
 
@@ -576,7 +776,7 @@ def start(
     apps = {a.get('name'): a for a in project_db.get(where('name') == project_name).get('apps')}
     if not apps:
         console.warning(f"No apps were created in this project, create at least one app first!")
-        return
+        raise typer.Exit()
 
     if not app_name:
         app_name = console.choose("Select app you want to start in this project", choices=apps)
@@ -584,7 +784,7 @@ def start(
     app_ent = apps.get(app_name)
     if not app_ent:
         console.error(f"Application with name '{app_name}' does not exists!")
-        return
+        raise typer.Exit()
 
     app_id = app_ent.get('cuid')
     app_type = app_ent.get('type')
@@ -595,7 +795,7 @@ def start(
             "You've entered project name instead of app name!",
             example=f"vc projects start '{app_name}'"
         )
-        return
+        raise typer.Exit()
 
     app = HandlerFactory.make_handler(app_type)(
         service_id=app_id,
@@ -644,7 +844,7 @@ def stop(
         available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
         if not available_projects:
             console.warning(f"No projects were created, create at least one project first!")
-            return
+            raise typer.Exit()
         project_name = console.choose("Select project where you want to stop app", choices=available_projects)
         project_id = available_projects.get(project_name)
 
@@ -653,7 +853,7 @@ def stop(
     apps = {a.get('name'): a for a in project_db.get(where('name') == project_name).get('apps')}
     if not apps:
         console.warning(f"No apps were created in this project, create at least one app first!")
-        return
+        raise typer.Exit()
 
     if not app_name:
         app_name = console.choose("Select app you want to stop in this project", choices=apps)
@@ -661,7 +861,7 @@ def stop(
     app_ent = apps.get(app_name)
     if not app_ent:
         console.error(f"Application with name '{app_name}' does not exists!")
-        return
+        raise typer.Exit()
 
     app_id = app_ent.get('cuid')
     app_type = app_ent.get('type')
@@ -670,7 +870,7 @@ def stop(
             "You've entered project name instead of app name!",
             example=f"vc projects stop '{app_name}'"
         )
-        return
+        raise typer.Exit()
 
     app = HandlerFactory.make_handler(app_type)(
         service_id=app_id,
@@ -690,7 +890,6 @@ def stop(
 def delete(
     ctx: typer.Context,
     app_name: Annotated[str, typer.Option("--name", "-n", help="Name of app to delete")] = "",
-
     proj_name: Optional[str] = typer.Option("", "--from", help="Name of project to delete app"),
 ):
     """
@@ -732,7 +931,7 @@ def delete(
             apps_all = apps_db.all()
             if not len(apps_all):
                 console.info("no apps available.")
-                return
+                raise typer.Exit()
 
             for app_to_delete in questionary.checkbox(
                     f"Select the app(s) to be deleted?",
@@ -749,8 +948,8 @@ def delete(
                 # FIXME use cuid instread of app name
                 selected_app_config_path = Path(conf.CONFIG_DIR) / \
                     f"{project_id}" / "apps" \
-                    / f"{app_name}.json"
-                #console.info(f"{selected_app_config_path=}")
+                    / f"{selected_app_cuid}.json"
+                console.info(f"{selected_app_config_path=}")
 
                 if Path(selected_app_config_path).exists():
                     selected_app_config_path.unlink(missing_ok=True)

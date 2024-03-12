@@ -156,6 +156,7 @@ class WsgiAppSection(BaseWsgiAppSection):
         svc_model,
         subscription_server_address: str,
         https_router_address: str,
+        subscription_notify_socket: str,
         virtual_hosts: list[VirtualHost] = [],
         **app_options,
     ):
@@ -237,8 +238,14 @@ class WsgiAppSection(BaseWsgiAppSection):
         #     key=vhost_domain_name  # internal uwsgi key
         # )
 
+        # enable the notification socket
+        #notify-socket = /tmp/notify.socket
+        #; pass it in subscriptions
+        #subscription-notify-socket = /tmp/notify.socket
+
         self.subscriptions.set_server_params(
-            client_notify_address=str(svc_model.notify_socket),
+            #client_notify_address=str(svc_model.notify_socket),
+            client_notify_address=subscription_notify_socket,
         )
 
         self.monitoring.set_stats_params(

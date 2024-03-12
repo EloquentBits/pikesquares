@@ -177,7 +177,7 @@ class WsgiApp(BaseService):
         # FIXME use cuid instread of app name
         return Path(self.conf.CONFIG_DIR) / \
                 f"{self.project_id}" / "apps" \
-                / f"{self.name}.json"
+                / f"{self.service_id}.json"
 
     @property
     def socket_address(self) -> str:
@@ -216,7 +216,12 @@ class Handler(Protocol):
     @abstractmethod
     def stop(self):
         raise NotImplementedError
-    
+
+    def write_fifo(self, command: str) -> None:
+        with open(self.svc_model.fifo_file, "w") as master_fifo:
+           master_fifo.write(command)
+           uwsgi.log(f"[pikesquares-services] : sent command [{command}] to master fifo")
+
     @property
     def default_options(self):
         return {}

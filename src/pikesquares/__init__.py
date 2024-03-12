@@ -48,6 +48,7 @@ def abstract_unix_addr(arg):
 def read_stats(stats_addr):
     js = ''
     http_stats = False
+    sfamily = None
     #stats_addr = args.address
 
     if stats_addr.startswith('http://'):
@@ -60,6 +61,8 @@ def read_stats(stats_addr):
         sfamily, addr, host = abstract_unix_addr(stats_addr)
     else:
         sfamily, addr, host = unix_addr(stats_addr)
+
+    print(f"{sfamily=} {addr}")
 
     try:
         s = None

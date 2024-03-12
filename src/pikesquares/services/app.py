@@ -61,20 +61,22 @@ class WsgiAppService(Handler):
         with TinyDB(self.svc_model.device_db_path) as db:
             routers_db = db.table('routers')
             router = routers_db.get(Query().service_id == self.svc_model.router_id)
-            subscription_server_address = router.get('service_config')['uwsgi']['http-subscription-server']
             https_router_address = router.get('address')
+            subscription_server_address = router.get('service_config')['uwsgi']['http-subscription-server']
+            subscription_notify_socket = router.get('service_config')['uwsgi']['notify-socket']
 
             section = WsgiAppSection(
                 self.svc_model,
                 subscription_server_address,
                 https_router_address,
+                subscription_notify_socket,
                 virtual_hosts=self.virtual_hosts,
                 **app_options
             ).as_configuration().format(formatter="json")
 
             self.config_json = json.loads(section)
             self.config_json["uwsgi"]["show-config"] = True
-            self.config_json["uwsgi"]["strict"] = False
+            self.config_json["uwsgi"]["strict"] = True
 
             #print(self.config_json)
             #self.service_config.write_text(json.dumps(self.config_json))
