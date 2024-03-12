@@ -1,6 +1,7 @@
 cuid
-pydantic-settings
+gitpython
 questionary
+pydantic-settings
 randomname
 tinydb
 typer[all]

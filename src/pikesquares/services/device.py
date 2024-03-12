@@ -2,12 +2,8 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Protocol, TypeVar
 
 from cuid import cuid
-import randomname
-
-#import zmq
 from tinydb import TinyDB, Query
 #from uwsgiconf import uwsgi
 
@@ -28,14 +24,13 @@ from . import (
 @HandlerFactory.register('Device')
 class DeviceService(Handler):
 
-    is_internal = True
-    is_enabled = True
+    is_internal: bool = True
+    is_enabled: bool = True
+    is_app: bool = False
 
     config_json = {}
 
     def prepare_service_config(self):
-        # TODO  self.service_config.tofile()
-
         with TinyDB(self.svc_model.device_db_path) as db:
             self.config_json = json.loads(
                 DeviceSection(
@@ -43,15 +38,11 @@ class DeviceService(Handler):
                 ).as_configuration().format(formatter="json")
             )
             self.config_json["uwsgi"]["show-config"] = True
+            self.config_json["uwsgi"]["emperor-wrapper"] = \
+                str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
+
             #empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}"
-            # empjs["uwsgi"]["emperor"] = f"{self.conf.CONFIG_DIR}/project_clo7af2mb0000nldcne2ssmrv/apps"
             #config["uwsgi"]["plugin"] = "emperor_zeromq"
-
-            #routers_dir = Path(self.svc_model.conf.CONFIG_DIR) / "routers"
-            #routers_dir.mkdir(parents=True, exist_ok=True)
-            #config["uwsgi"]["emperor"] = str(routers_dir.resolve())
-
-            self.config_json["uwsgi"]["emperor-wrapper"] = str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
             #self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
             devices_db = db.table('devices')
@@ -91,8 +82,27 @@ class DeviceService(Handler):
     def stop(self):
         pass
 
+        #res = device_config.main_process.actions.fifo_write(target, command)
 
-def device_up(conf: ClientConfig) -> None:
+
+def device_write_fifo(conf: ClientConfig, command: str, console) -> None:
+    """
+    Write command to master fifo named pipe
+    """
+    if not command in ["r", "q", "s"]:
+        console.warning("unknown master fifo command '{command}'")
+        return
+
+    svc_model = Device(
+        service_id="device", 
+        conf=conf,
+    )
+    svc = HandlerFactory.make_handler("Device")(svc_model)
+    svc.prepare_service_config()
+    svc.write_fifo(command)
+
+
+def device_up(conf: ClientConfig, console) -> None:
 
     svc_model = Device(
         service_id="device", 
@@ -102,25 +112,29 @@ def device_up(conf: ClientConfig) -> None:
     svc.prepare_service_config()
 
     with TinyDB(svc_model.device_db_path) as db:
-        projects_db = db.table('projects')
-        if not projects_db.all():
-            print("no projects exist. creating one.")
-            project_up(
-                conf, 
-                randomname.get_name(), 
-                f"project_{cuid()}"
-            )
+        if not db.table('projects').all():
+            for proj_config in (Path(conf.CONFIG_DIR) / "projects").glob("project_*.json"):
+                for app_config in (Path(conf.CONFIG_DIR) / \
+                        proj_config.stem / "apps").glob("*.json"):
+                    console.info(f"found loose app config. deleting {app_config.name}")
+                    app_config.unlink()
+                console.info(f"found loose project config. deleting {proj_config.name}")
+                proj_config.unlink()
+            console.info("creating sandbox project.")
+            project_up(conf, "sandbox", f"project_{cuid()}")
 
-        routers_db = db.table('routers')
-        if not routers_db.all():
+        if not db.table('routers').all():
+            for router_config in (Path(conf.CONFIG_DIR) / "projects").glob("router_*.json"):
+                console.info(f"found loose router config. deleting {router_config.name}")
+                router_config.unlink()
+
             https_router_port = str(get_first_available_port(port=8443))
-            print(f"no routers exist. creating one on port [{https_router_port}]")
+            console.info(f"no routers exist. creating one on port [{https_router_port}]")
             https_router_up(
                 conf, 
                 f"router_{cuid()}", 
                 f"0.0.0.0:{https_router_port}",
             )
-
     svc.start()
 
 

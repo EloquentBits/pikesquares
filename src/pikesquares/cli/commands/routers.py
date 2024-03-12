@@ -3,9 +3,11 @@ from typing import Optional
 import shutil
 
 import typer
-from tinydb import where
+from typing_extensions import Annotated
+from tinydb import TinyDB, where, Query
 
 from cuid import cuid
+import questionary
 
 from pikesquares import (
     get_service_status,
@@ -61,10 +63,11 @@ def create(
     #        validators=[ServiceNameValidator]
     #    )
 
-    port = console.ask(
-        f"Enter the port for the Https Router:",
+    port = questionary.text(
+        f"Enter the port for the Https Router: ",
         default=str(get_first_available_port(port=8443)),
-    )
+        style=console.custom_style_dope,
+    ).ask()
     https_router_up(
         conf, 
         f"router_{cuid()}", 
@@ -189,7 +192,7 @@ def list_(
     routers = https_routers_all(conf)
     if not len(routers):
         console.warning("No routers were created, nothing to show!")
-        return
+        raise typer.Exit()
     
     routers_out = []
     for router in routers:
@@ -227,19 +230,62 @@ def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
         )
 
 
-@routers_cmd.command(short_help="Delete router by name or id\nAliases:[i] delete, rm")
+@routers_cmd.command(short_help="Delete router\nAliases:[i] delete, rm")
 @routers_cmd.command("rm", hidden=True)
 def delete(
     ctx: typer.Context,
-    project_name: Optional[str] = typer.Argument("", help="Name of router to remove"),
-):
+    router_address: Annotated[str, typer.Option("--router-address", help="router to remove")] = "",
+    ):
     """
-    Delete existing project by name or id
+    Delete existing https router
 
     Aliases:[i] delete, rm
     """
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")
+
+    def get_router(addr):
+        with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+            return db.table('routers').get(Query().address == addr)
+
+    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+        routers_db = db.table('routers')
+        routers_all = routers_db.all()
+        if not len(routers_all):
+            console.info("no proxies available.")
+            raise typer.Exit()
+
+        for router_to_delete in questionary.checkbox(
+                f"Select the proxy(s) to be deleted?",
+                choices=[r.get("address") for r in routers_all],
+                ).ask():
+            selected_router_cuid = get_router(router_to_delete).get("service_id")
+            console.info(f"selected proxy to delete: {selected_router_cuid=}")
+            assert(selected_router_cuid)
+
+            # rm router configs
+            #router = routers_db.get(Query().service_id == selected_router_cuid)
+
+            selected_router_config_path = Path(conf.CONFIG_DIR) / \
+                "projects" \
+                / f"{selected_router_cuid}.json"
+            console.info(f"{selected_router_config_path=}")
+
+            if Path(selected_router_config_path).exists():
+                selected_router_config_path.unlink(missing_ok=True)
+                console.info(f"deleted router config @ {selected_router_cuid}")
+
+            # rm router runtimes
+            # note uwsgi vacuum should remove all of these
+            #for file in path(conf.run_dir).iterdir():
+            #    if selected_router_cuid in str(file.resolve()):
+            #        file.unlink(missing_ok=true)
+            #        console.info(f"deleted app run files @ {str(file)}")
+
+            routers_db.remove(where('service_id') == selected_router_cuid)
+            console.success(f"removed ssl proxy '{router_to_delete}' [{selected_router_cuid}]")
+
+    """
 
     device_db = obj['device']
 
@@ -278,6 +324,6 @@ def delete(
     device_db.remove(where('cuid') == selected_project_cuid)
 
     console.success(f"Removed project '{selected_project_name}'!")
-
+    """ 
 
 app.add_typer(routers_cmd)

@@ -34,11 +34,12 @@ class WsgiAppService(Handler):
 
     is_internal = False
     is_enabled = True
+    is_app = True
 
     name: str
     service_id: str
     project_id: str
-    pyvenv_dir: str
+    pyvenv_dir: str = ""
     wsgi_file: str = ""
     wsgi_module: str = ""
     virtual_hosts: list[VirtualHost] = []
@@ -60,23 +61,26 @@ class WsgiAppService(Handler):
         with TinyDB(self.svc_model.device_db_path) as db:
             routers_db = db.table('routers')
             router = routers_db.get(Query().service_id == self.svc_model.router_id)
+            https_router_address = router.get('address')
             subscription_server_address = router.get('service_config')['uwsgi']['http-subscription-server']
+            subscription_notify_socket = router.get('service_config')['uwsgi']['notify-socket']
 
             section = WsgiAppSection(
                 self.svc_model,
                 subscription_server_address,
+                https_router_address,
+                subscription_notify_socket,
                 virtual_hosts=self.virtual_hosts,
                 **app_options
             ).as_configuration().format(formatter="json")
 
             self.config_json = json.loads(section)
             self.config_json["uwsgi"]["show-config"] = True
-            self.config_json["uwsgi"]["strict"] = False
+            self.config_json["uwsgi"]["strict"] = True
 
-            print(self.config_json)
+            #print(self.config_json)
             #self.service_config.write_text(json.dumps(self.config_json))
 
-            print("Updating aps db.")
             apps_db = db.table('apps')
             apps_db.upsert({
                     'service_type': self.handler_name, 
@@ -87,9 +91,7 @@ class WsgiAppService(Handler):
                 },
                 Query().service_id == self.service_id,
             )
-            print("Done updating apps db.")
     
-
     @property
     def default_options(self):
         """
@@ -97,7 +99,7 @@ class WsgiAppService(Handler):
         """
         return {
             "root_dir": "",
-            "pyvenv_dir": "{root_dir}/.venv",
+            #"pyvenv_dir": "{root_dir}/.venv",
             "wsgi_file": "{root_dir}/wsgi.py",
             "wsgi_module": "application",
             "python_version": "3.11"

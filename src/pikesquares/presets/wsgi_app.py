@@ -7,7 +7,8 @@ from . import (
     Section, 
 )
 from ..services.data import VirtualHost
-from ..conf import ClientConfig
+
+
 
 class BaseWsgiAppSection(Section):
     """Basic wsgi app configuration."""
@@ -154,6 +155,8 @@ class WsgiAppSection(BaseWsgiAppSection):
         self,
         svc_model,
         subscription_server_address: str,
+        https_router_address: str,
+        subscription_notify_socket: str,
         virtual_hosts: list[VirtualHost] = [],
         **app_options,
     ):
@@ -171,10 +174,13 @@ class WsgiAppSection(BaseWsgiAppSection):
             **app_options,
         )
         self.python.set_basic_params(
-            python_home=svc_model.pyvenv_dir,
             enable_threads=True,
             #search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
         )
+        if svc_model.pyvenv_dir:
+            self.python.set_basic_params(
+                python_home=svc_model.pyvenv_dir,
+            )
 
         self.main_process.change_dir(to=svc_model.root_dir)
         self.main_process.set_pid_file(str(svc_model.pid_file))
@@ -232,8 +238,14 @@ class WsgiAppSection(BaseWsgiAppSection):
         #     key=vhost_domain_name  # internal uwsgi key
         # )
 
+        # enable the notification socket
+        #notify-socket = /tmp/notify.socket
+        #; pass it in subscriptions
+        #subscription-notify-socket = /tmp/notify.socket
+
         self.subscriptions.set_server_params(
-            client_notify_address=str(svc_model.notify_socket),
+            #client_notify_address=str(svc_model.notify_socket),
+            client_notify_address=subscription_notify_socket,
         )
 
         self.monitoring.set_stats_params(
@@ -287,12 +299,18 @@ class WsgiAppSection(BaseWsgiAppSection):
         #            sni_crt=pikesquares.dev.pem,
         #            sni_ca=rootCA.pem
 
+        https_router_port = ""
+        try:
+            https_router_port = f':{https_router_address.split(":")[-1]}'
+        except IndexError:
+            pass
+        
         subscription_params = dict(
             server=subscription_server_address,
             address=str(svc_model.socket_address),  # address and port of wsgi app
-            key=f"{svc_model.name}.pikesquares.dev",
+            key=f"{svc_model.name}.pikesquares.dev{https_router_port}",
         )
-        print(f"{subscription_params=}")
+        #print(f"{subscription_params=}")
 
         self.subscriptions.subscribe(**subscription_params)
 

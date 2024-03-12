@@ -95,6 +95,7 @@ class ClientConfig(BaseSettings):
     EASYRSA_DIR: str
     EMPEROR_ZMQ_ADDRESS: str
     PKI_DIR: str
+    CLI_STYLE: str = "dope"
     version: str
 
     """

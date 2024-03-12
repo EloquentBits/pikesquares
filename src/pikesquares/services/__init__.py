@@ -7,6 +7,7 @@ import pydantic
 from uwsgiconf import uwsgi
 
 from .. import (
+    #PathLike,
     get_first_available_port,
     get_service_status,
 )
@@ -146,8 +147,9 @@ class HttpsRouter(BaseService):
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=3017)}"
 
-    #stats_server_port = 9897
-    #stats_server_address = f"127.0.0.1:{get_first_available_port(port=stats_server_port)}"
+    @property
+    def stats_address(self) -> str:
+        return f"127.0.0.1:{get_first_available_port(port=9897)}"
 
     @property
     def subscription_server_address(self) -> str:
@@ -159,24 +161,29 @@ class HttpsRouter(BaseService):
         return Path()
 
 
+
 class WsgiApp(BaseService):
 
     name: str
     project_id: str
     root_dir: Path
-    pyvenv_dir: Path
     wsgi_module: str
+    wsgi_file: str
     router_id: str
+    pyvenv_dir: str
 
     @property
     def service_config(self):
+        # FIXME use cuid instread of app name
         return Path(self.conf.CONFIG_DIR) / \
                 f"{self.project_id}" / "apps" \
-                / f"{self.name}.json"
+                / f"{self.service_id}.json"
 
     @property
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=4017)}"
+
+
 
 class Handler(Protocol):
 
@@ -186,6 +193,7 @@ class Handler(Protocol):
             svc_model,
             is_internal: bool = True,
             is_enabled: bool = False,
+            is_app: bool = False,
 
         ):
         self.svc_model = svc_model
@@ -208,7 +216,12 @@ class Handler(Protocol):
     @abstractmethod
     def stop(self):
         raise NotImplementedError
-    
+
+    def write_fifo(self, command: str) -> None:
+        with open(self.svc_model.fifo_file, "w") as master_fifo:
+           master_fifo.write(command)
+           uwsgi.log(f"[pikesquares-services] : sent command [{command}] to master fifo")
+
     @property
     def default_options(self):
         return {}
@@ -231,11 +244,15 @@ class HandlerFactory:
     handlers = {}
 
     @classmethod
-    def user_visible_services(cls):
+    def user_visible_apps(cls):
         return {
             k
             for k in cls.handlers
-            if cls.handlers[k].is_internal == False and cls.handlers[k].is_enabled == True
+            if all([
+                cls.handlers[k].is_internal == False,
+                cls.handlers[k].is_enabled == True,
+                cls.handlers[k].is_app == True]
+            )
         }
 
     @classmethod

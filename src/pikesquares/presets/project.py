@@ -1,4 +1,4 @@
-#from pathlib import Path
+from pathlib import Path
 
 from . import Section
 
@@ -33,6 +33,8 @@ class ProjectSection(Section):
             vacuum=True,
             # place here correct emperor wrapper
             #binary_path=str((Path(self.conf.DATA_DIR) / ".venv/bin/uwsgi").resolve())
+            #binary_path=str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
+
         )
         self.main_process.set_owner_params(uid=svc_model.uid, gid=svc_model.gid)
 

@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 from typing import List
 
+
+
 def pluralize(count: int, words: List[str], show_count: bool = True):
     cases = (2, 0, 1, 1, 1, 2)
     plural_word = words[2 if 5 <= (count % 100) < 20 else cases[min(count % 10, 5)]]
@@ -42,7 +44,47 @@ class _RenderMixin:
                 'offline': {'text': ":stop_button: {name}", 'style': "red"},
             }
         }
-    
+
+    @property
+    def custom_style_fancy(self):
+        return questionary.Style(
+        [
+            ("separator", "fg:#cc5454"),
+            ("qmark", "fg:#673ab7 bold"),
+            ("question", ""),
+            ("selected", "fg:#cc5454"),
+            ("pointer", "fg:#673ab7 bold"),
+            ("highlighted", "fg:#673ab7 bold"),
+            ("answer", "fg:#f44336 bold"),
+            ("text", "fg:#FBE9E7"),
+            ("disabled", "fg:#858585 italic"),
+        ]
+    )
+
+    @property
+    def custom_style_dope(self):
+        return questionary.Style(
+        [
+            ("separator", "fg:#6C6C6C"),
+            ("qmark", "fg:#FF9D00 bold"),
+            ("question", ""),
+            ("selected", "fg:#5F819D"),
+            ("pointer", "fg:#FF9D00 bold"),
+            ("answer", "fg:#5F819D bold"),
+        ]
+    )
+
+    @property
+    def custom_style_genius(self):
+        return questionary.Style(
+        [
+            ("qmark", "fg:#E91E63 bold"),
+            ("question", ""),
+            ("selected", "fg:#673AB7 bold"),
+            ("answer", "fg:#2196f3 bold"),
+        ]
+    )
+
     def _item(self, entity):
         status = entity.get('status', 'offline')
         label_params = self.styles['item'].get(status)
@@ -89,19 +131,19 @@ class Console(BaseConsole, _RenderMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def pager(self, content, *, status_bar_format=None, color=True):
-        from click import echo_via_pager
-        os.environ['LESS'] = " ".join([
-            "-P{} (?pB%pB\%):lines %lt-%lb)$".format(
-                status_bar_format
-                .replace(':', '\:')
-                .replace('.', '\.')
-            ),
-            # "-m",
-            # "+G",
-        ])
-        os.environ['LESSSECURE'] = '1'
-        return echo_via_pager(content, color=color)
+    #def pager(self, content, *, status_bar_format=None, color=True):
+    #    from click import echo_via_pager
+    #    os.environ['LESS'] = " ".join([
+    #        "-P{} (?pB%pB\%):lines %lt-%lb)$".format(
+    #            status_bar_format
+    #            .replace(':', '\:')
+    #            .replace('.', '\.')
+    #        ),
+    #        # "-m",
+    #        # "+G",
+    #    ])
+    #    os.environ['LESSSECURE'] = '1'
+    #    return echo_via_pager(content, color=color)
 
     def error(self, *args, **kwargs):
         example = kwargs.pop('example', None)
@@ -170,6 +212,9 @@ class Console(BaseConsole, _RenderMixin):
     
     def choose_many(self, *args, **kwargs):
         return questionary.checkbox(*args, **kwargs).unsafe_ask()
+
+    def choose_path(self, *args, **kwargs):
+        return questionary.path(*args, **kwargs).unsafe_ask()
 
     def format_print(*args, **kwargs):
         title = kwargs.pop('title', "")
@@ -323,3 +368,4 @@ class Console(BaseConsole, _RenderMixin):
 
 
 console = Console()
+stderr_console = Console(stderr=True)
