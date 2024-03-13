@@ -172,3 +172,29 @@ jobs:
           tag_name: "${{steps.project-version.outputs.version}}"
           files: |
             bundle/*
+
+      # Runs the telegram notify action to send a notification
+      #- name: Telegram Notify
+      #  uses: appleboy/telegram-action@master
+      #  with:
+      #    to: ${{ secrets.TELEGRAM_ID }}
+      #    token: ${{ secrets.TELEGRAM_TOKEN }}
+      #    format: markdown
+      #    message: |
+      #      A new PR is raised [View all PR's](https://github.com/<user>/<repo>/pulls)
+
+      - name: Send Telegram Message Ok
+        uses: appleboy/telegram-action@master
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          format: markdown
+          message: |
+            *A new release has been created*
+            *again. release created.*
+            Application: *Write something to be put inside your message*. The below lines still are part of your message.          
+            Branch: *${{ github.ref }}*
+            Repository: *${{ github.repository }}*
+            Owner: *${{ github.repository_owner }}*
