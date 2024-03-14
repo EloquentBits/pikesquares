@@ -96,6 +96,8 @@ class ClientConfig(BaseSettings):
     EMPEROR_ZMQ_ADDRESS: str
     PKI_DIR: str
     CLI_STYLE: str = "dope"
+    ENABLE_SENTRY: bool = True
+    SENTRY_DSN: str = ""
     version: str
 
     """

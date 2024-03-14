@@ -1,6 +1,5 @@
-import sys
 import shutil
-import os
+#import os
 from typing import Optional
 
 import typer
@@ -34,6 +33,7 @@ def main(
     """
     Welcome to Pike Squares
     """
+
     #for key, value in os.environ.items():
     #    print(f'{key}: {value}')
     if version:
@@ -55,6 +55,17 @@ def main(
         typer.Exit()
     #console.info(conf.model_dump())
 
+    if conf.ENABLE_SENTRY and conf.SENTRY_DSN:
+        try:
+            import sentry_sdk
+        except ImportError:
+            pass
+        else:
+            sentry_sdk.init(
+                dsn=conf.SENTRY_DSN,
+                traces_sample_rate=1.0
+            )
+
     if all([
         ensure_pki(conf),
         ensure_build_ca(conf),
@@ -75,8 +86,6 @@ def main(
         getattr(console, f"custom_style_{conf.CLI_STYLE}"),
     )
             
-    #console.warning("....exiting....")
-    #sys.exit()
 
 @app.command(rich_help_panel="Control", short_help="Run device (if stopped)")
 def up(
