@@ -27,6 +27,7 @@ class ProjectSection(Section):
 
         self.master_process.set_basic_params(
             enable=True,
+            no_orphans=True,
             fifo_file = str(svc_model.fifo_file)
         )   # uwsgi: master = true
         self.main_process.set_basic_params(

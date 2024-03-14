@@ -53,6 +53,7 @@ class DeviceService(Handler):
                 },
                 Query().service_type == self.handler_name,
             )
+            print(f"DeviceService updated device_db")
 
     def connect(self):
         pass
@@ -109,6 +110,7 @@ def device_up(conf: ClientConfig, console) -> None:
         conf=conf,
     )
     svc = HandlerFactory.make_handler("Device")(svc_model)
+
     svc.prepare_service_config()
 
     with TinyDB(svc_model.device_db_path) as db:

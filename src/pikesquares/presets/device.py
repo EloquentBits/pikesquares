@@ -1,3 +1,4 @@
+import os
 #from pathlib import Path
 
 from . import (
@@ -29,27 +30,38 @@ class DeviceSection(Section):
         # )
         self.master_process.set_basic_params(
             enable=True,
+            no_orphans=True,
             fifo_file = str(svc_model.fifo_file),
         )   # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
-            # place here correct emperor wrapper
-            #binary_path=str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
         )
+        if os.environ.get("PEX_PYTHON_PATH"):
+            self.main_process.set_basic_params(
+                binary_path=os.environ.get("PEX_PYTHON_PATH"),
+            # place here correct emperor wrapper
+            #str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
+        )
+
         self.main_process.set_owner_params(uid=svc_model.uid, gid=svc_model.gid)
         self.main_process.set_naming_params(
-            prefix=f"[[ PikeSquares App ]] ",
-            autonaming=True
+            prefix="[[ PikeSquares App ]] ",
+            suffix="[suffix]",
+            name="PikeSquares App [name]",
+            autonaming=False
         )
         #self.set_placeholder("vconf_run_dir", self.runtime_dir)
-        #self.main_process.set_pid_file(
-        #    str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve())
-        #)
+        self.main_process.set_pid_file(
+            #str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve())
+            svc_model.pid_file,
+        )
         
         if svc_model.conf.DAEMONIZE:
             self.main_process.daemonize(log_into=str(svc_model.log_file))
 
-        self.main_process.set_basic_params(touch_reload=str(svc_model.touch_reload_file))
+        self.main_process.set_basic_params(
+            touch_reload=str(svc_model.touch_reload_file),
+        )
 
         self.networking.register_socket(
             self.networking.sockets.default(str(svc_model.socket_address))
@@ -61,7 +73,7 @@ class DeviceSection(Section):
         self.empire.set_emperor_params(
             vassals_home = str(svc_model.apps_dir),
             #vassals_home = f"zmq://tcp://{svc_model.conf.EMPEROR_ZMQ_ADDRESS}",
-            name=f"PikeSquares App",
+            name=f"PikeSquares Server",
             spawn_asap=True,
             stats_address=str(svc_model.stats_address),
             #str(Path(self._runtime_dir) / f"{svc_model.service_id}-stats.sock"),
@@ -93,6 +105,9 @@ class DeviceSection(Section):
 
         self.caching.add_cache("pikesquares-settings", max_items=100)
 
+        self.workers.set_basic_params(
+            count=2
+        )
         self.workers.set_mules_params(mules=3)
 
         #self.python.import_module(
@@ -111,8 +126,6 @@ class DeviceSection(Section):
 
     def as_string(self):
         return self.as_configuration().print_ini()
-
-
 
     #def run_httpsrouter(self):
     #    fw = self.routing.routers.https.forwarders.subscription_server(

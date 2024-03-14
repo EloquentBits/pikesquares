@@ -7,15 +7,14 @@ import typer
 from typing_extensions import Annotated
 from tinydb import TinyDB, Query
 
-#from .. import (
-#    get_service_status, 
-#)
+from .. import (
+    load_client_conf,
+    write_master_fifo,
+    get_service_status, 
+)
 from ..services.device import (
     device_up, 
-    device_write_fifo,
 )
-#from ..services.project import project_up,
-
 from .console import console
 from .pki import (
         ensure_pki,
@@ -23,7 +22,6 @@ from .pki import (
         ensure_csr,
         ensure_sign_req,
 )
-from ..conf import ClientConfig
 
 app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich")
 @app.callback(invoke_without_command=True)
@@ -48,27 +46,13 @@ def main(
 
     #print(f"{os.environ.get('PIKESQUARES_SCIE_BINDINGS')=}")
     #print(f"{os.environ.get('VIRTUAL_ENV')=}")
-
-    data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", ""))
-
     #pex_python = os.environ.get("PEX_PYTHON_PATH")
     #console.info(f"{pex_python=}")
 
-    if not (Path(data_dir) / "device-db.json").exists():
-        console.warning(f"conf db does not exist @ {data_dir}/device-db.json")
-        sys.exit()
-
-    conf_mapping = {}
-    pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
-    with TinyDB(data_dir / "device-db.json") as db:
-        try:
-            conf_mapping = db.table('configs').\
-                search(Query().version == pikesquares_version)[0]
-        except IndexError:
-            console.warning(f"unable to load v{pikesquares_version} conf from {str(data_dir)}/device-db.json")
-            raise typer.Exit()
-
-    conf = ClientConfig(**conf_mapping)
+    conf = load_client_conf()
+    if not conf:
+        console.warning("unable to load client config. exiting.")
+        typer.Exit()
     #console.info(conf.model_dump())
 
     if all([
@@ -76,7 +60,7 @@ def main(
         ensure_build_ca(conf),
         ensure_csr(conf),
         ensure_sign_req(conf),]):
-           console.info(f"Wildcard certificate created.")
+           console.success(f"Wildcard certificate created.")
 
     #for k, v in conf.model_dump().items():
     #    if k.endswith("_DIR"):
@@ -105,11 +89,13 @@ def up(
     conf = obj.get("conf")
     conf.DAEMONIZE = not foreground
 
-    # What should user see if device is already started?
-    #status = get_service_status(f"device", conf)
-    #if status == "running":
-    #    console.info("Your device is already running")
-    #    return
+    if get_service_status(Path(conf.RUN_DIR) / "device-stats.sock") == "running":
+        console.info("Looks like a PikeSquares Server is already running")
+        if questionary.confirm("Stop the running PikeSquares Server?").ask():
+            write_master_fifo(str(Path(conf.RUN_DIR) / "device-master-fifo"), "q")
+            console.success(f"PikeSquares Server has been shut down.")
+        else:
+            raise typer.Exit()
 
     device_up(conf, console)
 
@@ -153,12 +139,12 @@ def reset(
             router_config.unlink()
 
     if shutdown or questionary.confirm("Shutdown PikeSquares Server").ask():
-        device_write_fifo(conf, "q")
-        console.info(f"PikeSquares Server has been shut down.")
+        write_master_fifo(str(Path(conf.RUN_DIR) / "device-master-fifo"), "q")
+        console.success(f"PikeSquares Server has been shut down.")
         
 
 @app.command(rich_help_panel="Control", short_help="Write to master fifo")
-def write_master_fifo(
+def write_to_master_fifo(
     ctx: typer.Context, 
     service_id: Annotated[str, typer.Option("--service-id", "-s", help="Service ID to send the command to")],
     command: Annotated[str, typer.Option("--command", "-c", help="Command to send master fifo.")],
@@ -168,35 +154,7 @@ def write_master_fifo(
 
     service_id = service_id or "device"
     fifo_file = Path(conf.RUN_DIR) / f"{service_id}-master-fifo"
-
-    with open(fifo_file, "w") as master_fifo:
-       master_fifo.write(command)
-       console.log(f"sent command [{command}] to {service_id} master fifo")
-
-    #device_write_fifo(conf, command, console)
-
-    """
-    ‘0’ to ‘9’ - set the fifo slot (see below)
-    ‘+’ - increase the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
-    ‘-’ - decrease the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
-    ‘B’ - ask Emperor for reinforcement (broodlord mode, requires uWSGI >= 2.0.7)
-    ‘C’ - set cheap mode
-    ‘c’ - trigger chain reload
-    ‘E’ - trigger an Emperor rescan
-    ‘f’ - re-fork the master (dangerous, but very powerful)
-    ‘l’ - reopen log file (need –log-master and –logto/–logto2)
-    ‘L’ - trigger log rotation (need –log-master and –logto/–logto2)
-    ‘p’ - pause/resume the instance
-    ‘P’ - update pidfiles (can be useful after master re-fork)
-    ‘Q’ - brutally shutdown the instance
-    ‘q’ - gracefully shutdown the instance
-    ‘R’ - send brutal reload
-    ‘r’ - send graceful reload
-    ‘S’ - block/unblock subscriptions
-    ‘s’ - print stats in the logs
-    ‘W’ - brutally reload workers
-    ‘w’ - gracefully reload workers
-    """
+    write_master_fifo(fifo_file, command)
 
 
 @app.command(rich_help_panel="Control", short_help="Nuke installation")

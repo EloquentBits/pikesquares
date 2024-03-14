@@ -1,5 +1,5 @@
-import sys
 import traceback
+import sys
 import re
 import time
 import subprocess
@@ -30,6 +30,7 @@ from rich.progress import (
 
 from pikesquares import (
     get_service_status, 
+    read_stats,
     #get_first_available_port,
 )
 
@@ -85,7 +86,7 @@ class LanguageRuntime(str, Enum):
     php = "php"
     perl = "perl"
 
-CHOSE_FILE_MYSELF = "-- Chose the file myself --"
+CHOSE_FILE_MYSELF = "-- Select the file myself --"
 
 def run_steps(name, step_times, app_steps_task_id):
     """Run steps for a single app, and update corresponding progress bars."""
@@ -185,10 +186,7 @@ if 0:
         )
 
 def create_venv(venv_dir):
-    #pex_python = os.environ.get("PEX_PYTHON_PATH")
-    #pex_root = os.environ.get("PEX_ROOT")
-
-    result = subprocess.run(
+    subprocess.run(
         args=[
             sys.executable,
             "-m",
@@ -198,41 +196,6 @@ def create_venv(venv_dir):
         ],
         check=True,
     )
-    #print(result)
-    #print(vars(result))
-    #CompletedProcess(
-    #args=['/home/pk/.cache/nce/
-    #      bdac6c360ed6f8f06272139a07122a3170dfbf41e37b6b0fb5c80814e09d881f/
-    #      bindings/venvs/0.0.5.dev0/bin/python', 
-    #      '-m', 
-    #      'venv', 
-    #      '--clear', 
-    #      '/home/pk/.local/share/pikesquares/venvs/wsgi_app_cltkiddjs0000c1j1oqyyt832'], 
-    #returncode=0)
-
-def clone_to_dir(url: str, target_dir: str):
-    env = {
-        "GIT_SSL_NO_VERIFY": "true"
-    }
-    options =  []
-    #url = "ssh://git@github.com:psychotechnik/python-wsgi-test-01.git"
-    if not url:
-        url = "git@github.com:psychotechnik/python-wsgi-test-01.git"
-    #scheme = urlparse(url).scheme
-
-    executable, subcommand = "/usr/bin/git", "clone"
-
-    if not target_dir:
-        target_dir = "/tmp/python-wsgi-test-01"
-
-    subprocess_cmd_args = [executable, subcommand, url, target, *set(options)]
-    print(f"{subprocess_cmd_args=}")
-    subprocess.run(
-        subprocess_cmd_args,
-        env=env
-    )
-
-
 class NameValidator(questionary.Validator):
     def validate(self, document):
         if len(document.text) == 0:
@@ -336,9 +299,9 @@ def create(
         choices=[
             "Git Repository",
             "Local Filesystem Directory",
-            "PikeSquares App Template",
-            #questionary.Separator(),
-            #questionary.Choice("PikeSquares App Template", disabled="coming soon"),
+            #"PikeSquares App Template",
+            questionary.Separator(),
+            questionary.Choice("PikeSquares App Template", disabled="coming soon"),
         ],
         style=custom_style,
         use_shortcuts=True,
@@ -365,15 +328,14 @@ def create(
 
         def prompt_repo_url():
             return questionary.text(
-                "Enter your app git repository url: ", 
-                default="git@github.com:psychotechnik/python-wsgi-test-01.git",
+                "Enter your app git repository url:", 
+                default="",
+                instruction="""\nExamples:\n    https://host.xz/path/to/repo.git\n    ssh://host.xz/path/to/repo.git\n""",
                 style=custom_style,
                 validate=RepoAddressValidator,
             ).ask()
 
         repo_url = prompt_repo_url()
-        if not repo_url:
-            raise typer.Exit()
 
         def prompt_base_dir(repo_name: str) -> Path:
             return questionary.path(
@@ -392,12 +354,12 @@ def create(
                 if matcher:
                     return matcher.group(1)
 
-        repo_name = get_repo_name_from_url(repo_url)
+        repo_name:str = get_repo_name_from_url(repo_url) or ""
         if not repo_name:
-            console.warning(f"unable to extract repository name from url `{repo_url}`")
+            console.warning(f"The repository url `{repo_url}` is invalid. ")
             raise typer.Exit()
 
-        base_dir = prompt_base_dir(repo_name)
+        base_dir: Path = prompt_base_dir(repo_name)
         clone_into_dir = Path(base_dir) / repo_name
         if clone_into_dir.exists() and any(clone_into_dir.iterdir()):
             clone_into_dir_files = list(clone_into_dir.iterdir())
@@ -411,6 +373,7 @@ def create(
                     raise typer.Exit()
 
                 base_dir = prompt_base_dir(repo_name)
+
             elif len(clone_into_dir_files):
                 if not questionary.confirm(
                     f"Directory {str(clone_into_dir)} is not emptry. Continue?",
@@ -420,34 +383,36 @@ def create(
                 ).ask():
                     raise typer.Exit()
 
-        console.info(f"cloning `{repo_name}` repository into `{clone_into_dir}`")
+        #console.info(f"cloning `{repo_name}` repository into `{clone_into_dir}`")
 
-        while not repo:
-            try:
-                repo = git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
-            except git.GitCommandError as exc:
-                if "already exists and is not an empty directory" in exc.stderr:
-                    if questionary.confirm(
-                            "Continue with this directory?",
-                            instruction=f"A git repository exists at {base_dir}",
-                            default=True,
-                            auto_enter=True,
-                            style=custom_style,
-                            ).ask():
-                        break
-                    base_dir = prompt_base_dir(repo_name)
-                elif "Repository not found" in exc.stderr:
-                    console.warning(f"unable to locate a git repository at {repo_url}")
-                    repo_url = prompt_repo_url()
-                    if not repo_url:
-                        raise typer.Exit()
-                else:
-                    console.warning(f"error: unable to clone a git repository at {repo_url}")
-                    console.warning(f"{exc.stdout}")
-                    console.warning(f"{exc.stderr}")
-                    repo_url = prompt_repo_url()
-                    if not repo_url:
-                        raise typer.Exit()
+        with console.status(f"cloning `{repo_name}` repository into `{clone_into_dir}`", spinner="earth"):
+            while not repo:
+                try:
+                    repo = git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
+                except git.GitCommandError as exc:
+                    print(traceback.format_exc())
+                    if "already exists and is not an empty directory" in exc.stderr:
+                        if questionary.confirm(
+                                "Continue with this directory?",
+                                instruction=f"A git repository exists at {base_dir}",
+                                default=True,
+                                auto_enter=True,
+                                style=custom_style,
+                                ).ask():
+                            break
+                        base_dir = prompt_base_dir(repo_name)
+                    elif "Repository not found" in exc.stderr:
+                        console.warning(f"unable to locate a git repository at {repo_url}")
+                        repo_url = prompt_repo_url()
+                        if not repo_url:
+                            raise typer.Exit()
+                    else:
+                        console.warning(f"error: unable to clone a git repository at {repo_url}")
+                        console.warning(f"{exc.stdout}")
+                        console.warning(f"{exc.stderr}")
+                        repo_url = prompt_repo_url()
+                        if not repo_url:
+                            raise typer.Exit()
         if repo:
             #repo_working_dir = repo.working_dir
             base_dir = str(clone_into_dir)
@@ -536,10 +501,10 @@ def create(
     if len(wsgi_files_choices):
         wsgi_file = questionary.select(
                 "Select a WSGI file: ",
-            choices=[
-                CHOSE_FILE_MYSELF,
+            choices=wsgi_files_choices + [
                 questionary.Separator(),
-            ] + wsgi_files_choices,
+                CHOSE_FILE_MYSELF
+            ],
             style=custom_style,
         ).ask()
         if wsgi_file == CHOSE_FILE_MYSELF:
@@ -590,23 +555,36 @@ def create(
     app_options["pyvenv_dir"] = str(venv_dir)
 
     #console.info(app_options)
+    app_options["workers"] = 3
 
-    wsgi_app_up(
-        conf,
-        name,
-        service_id,
-        project_id,
-        **app_options,
-    )
 
-    try:
-        router_port = router_address.split(':')[-1]
-    except IndexError:
-        pass
-    else:
-        url = console.render_link(f'{name}.pikesquares.dev', port=router_port)
-        console.success(f"App `{name}` is starting up. ")
-        console.success(f"App is available at {url}")
+    with console.status(f"`{name}` is starting...", spinner="earth"):
+        wsgi_app_up(
+            conf,
+            name,
+            service_id,
+            project_id,
+            **app_options,
+        )
+
+        try:
+            router_port = router_address.split(':')[-1]
+        except IndexError:
+            pass
+        else:
+            url = console.render_link(f'{name}.pikesquares.dev', port=router_port)
+            for _ in range(10):
+                if get_service_status(
+                    (Path(conf.RUN_DIR) / f"{service_id}-stats.sock")) == "running":
+                    console.success(f"App is available at {url}")
+                    raise typer.Exit()
+                time.sleep(3)
+
+            app_config = Path(conf.CONFIG_DIR) / project_id / "apps" / f"{service_id}.json"
+            app_config.unlink()
+            console.warning(f"could not start app. giving up.")
+            console.info(f"removed app config {app_config}")
+
 
     # [uWSGI http pid 3758459] rounded-hip.pikesquares.dev:8443 => marking 127.0.0.1:4018 as failed
     # [notify-socket] [subscription ack] rounded-hip.pikesquares.dev:8443 => new node: 127.0.0.1:4018
@@ -660,6 +638,7 @@ def list_(
     
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")
+    custom_style = obj.get("cli-style")
 
     #if not project:
     #    available_projects = {
@@ -692,61 +671,72 @@ def list_(
     with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
         apps_out = []
         for app in db.table('apps').search(where('project_id') == project_id):
+            service_id = app.get("service_id")
+            stats_socket = Path(conf.RUN_DIR) / f"{service_id}-stats.sock"
+            print(read_stats(str(stats_socket)))
+            print(f"{stats_socket=} {service_id=}")
+            status = get_service_status(
+                (Path(conf.RUN_DIR) / f"{service_id}-stats.sock")
+            )
             apps_out.append({
                 'name': app.get('name'),
-                'status': "", #get_service_status(app.get('service_id'), conf) or "Unknown",
-                'id': app.get('service_id')
+                'status': status or "uknown", 
+                'id': service_id,
             })
-        console.print_response(
-            apps_out, 
-            title=f"Apps in project '{project}'", 
-            show_id=show_id, 
-            exclude=['parent_id', 'options']
-        )
+        if not apps_out:
+            console.info("You have not created any apps yet.")
+            console.info("Create apps using the `pikesquares apps create` command")
+        else:
+            console.print_response(
+                apps_out, 
+                title=f"Apps in project '{project}'", 
+                show_id=show_id, 
+                exclude=['parent_id', 'options']
+            )
 
 
-@apps_cmd.command("logs", short_help="Show app logs")
-def logs(
-    ctx: typer.Context,
-    project_id: Optional[str] = typer.Argument(""),
-    app_id: Optional[str] = typer.Argument("")
-):
+#@apps_cmd.command("logs", short_help="Show app logs")
+#def logs(
+#    ctx: typer.Context,
+#    project_id: Optional[str] = typer.Argument(""),
+#    app_id: Optional[str] = typer.Argument("")
+#):
 
-    obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
+#    obj = ctx.ensure_object(dict)
+#    conf = obj.get("conf")
 
-    if not project_id:
-        available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
-        if not available_projects:
-            console.warning(f"No projects were created, create at least one project first!")
-            raise typer.Exit()
-        project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
-        project_id = available_projects.get(project_name)
+#    if not project_id:
+#        available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
+#        if not available_projects:
+#            console.warning(f"No projects were created, create at least one project first!")
+#            raise typer.Exit()
+#        project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
+#        project_id = available_projects.get(project_name)
     
-    project_db = obj['project'](project_name)
+#    project_db = obj['project'](project_name)
 
-    if not app_id:
-        apps = {
-            a.get("name"): a.get("cuid")
-            for a in project_db.get(where('name') == project_name).get('apps')
-        }
-        app_name = console.choose("Choose app you want to view logs:", choices=apps)
-        app_id = apps.get(app_name)
+#    if not app_id:
+#        apps = {
+#            a.get("name"): a.get("cuid")
+#            for a in project_db.get(where('name') == project_name).get('apps')
+#        }
+#        app_name = console.choose("Choose app you want to view logs:", choices=apps)
+#        app_id = apps.get(app_name)
 
-    status = get_service_status(f"{app_id}", conf)
+#    status = get_service_status(f"{app_id}", conf)
 
-    project_log_file = Path(f"{conf.LOG_DIR}/{project_id}.log")
-    app_log_file = Path(f"{conf.LOG_DIR}/{app_id}.log")
-    if app_log_file.exists() and app_log_file.is_file():
-        console.pager(
-            app_log_file.read_text(),
-            status_bar_format=f"{app_log_file.resolve()} (status: {status})"
-        )
-    else:
-        console.error(
-            f"Error:\nLog file {app_log_file} not exists!",
-            hint=f"Check the project log file {project_log_file} for possible errors"
-        )
+#    project_log_file = Path(f"{conf.LOG_DIR}/{project_id}.log")
+#    app_log_file = Path(f"{conf.LOG_DIR}/{app_id}.log")
+#    if app_log_file.exists() and app_log_file.is_file():
+#        console.pager(
+#            app_log_file.read_text(),
+#            status_bar_format=f"{app_log_file.resolve()} (status: {status})"
+#        )
+#    else:
+#        console.error(
+#            f"Error:\nLog file {app_log_file} not exists!",
+#            hint=f"Check the project log file {project_log_file} for possible errors"
+#        )
 
 @apps_cmd.command(short_help="Start app.\nAliases:[i] run")
 @apps_cmd.command("run", hidden=True)
@@ -899,6 +889,7 @@ def delete(
     """
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")
+    custom_style = obj.get("cli-style")
 
     #if not proj_name:
     #    available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
@@ -935,7 +926,8 @@ def delete(
 
             for app_to_delete in questionary.checkbox(
                     f"Select the app(s) to be deleted?",
-                    choices=[p.get("name") for p in apps_all],
+                    choices=[f"{p.get('name')} [{p.get('service_id')}]" for p in apps_all],
+                    style=custom_style,
                     ).ask():
                 selected_app_cuid = get_app(app_to_delete).get("service_id")
                 #console.info(f"selected app to delete: {selected_app_cuid=}")
@@ -949,7 +941,6 @@ def delete(
                 selected_app_config_path = Path(conf.CONFIG_DIR) / \
                     f"{project_id}" / "apps" \
                     / f"{selected_app_cuid}.json"
-                console.info(f"{selected_app_config_path=}")
 
                 if Path(selected_app_config_path).exists():
                     selected_app_config_path.unlink(missing_ok=True)

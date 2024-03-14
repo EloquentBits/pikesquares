@@ -91,6 +91,7 @@ class HttpsRouterSection(Section):
         #self.set_plugins_params(plugins="http")
 
         self.master_process.set_basic_params(
+            no_orphans=True,
             enable=True,
             fifo_file = str(svc_model.fifo_file),
         )

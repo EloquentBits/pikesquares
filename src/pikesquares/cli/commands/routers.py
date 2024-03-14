@@ -198,37 +198,38 @@ def list_(
     for router in routers:
         routers_out.append({
             'name': router.get('name'),
-            'status': get_service_status(router.get('service_id'), conf) or "Unknown",
+            'status': get_service_status(
+                Path(conf.RUN_DIR) / router.get('service_id') + "-stats.sock",
+            ) or "Unknown",
             'id': router.get('service_id')
         })
     console.print_response(
         routers_out, title=f"Routers count: {len(routers)}", show_id=show_id
     )
 
-@routers_cmd.command("logs")
-def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
-    obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
+#@routers_cmd.command("logs")
+#def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
+#    obj = ctx.ensure_object(dict)
+#    conf = obj.get("conf")
 
-    if not project_id:
-        available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
-        project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
-        project_id = available_projects.get(project_name)
-
-    status = get_service_status(f"{project_id}-emperor", conf)
-
-    project_log_file = Path(f"{conf.LOG_DIR}/{project_id}.log")
-    if project_log_file.exists() and project_log_file.is_file():
-        console.pager(
-            project_log_file.read_text(),
-            status_bar_format=f"{project_log_file.resolve()} (status: {status})"
-        )
-    else:
-        console.error(
-            f"Error:\nLog file {project_log_file} not exists!",
-            hint=f"Check the device log file for possible errors"
-        )
-
+#    if not project_id:
+#        available_projects = {p.get("name"): p.get("cuid") for p in obj['projects']()}
+#        project_name = console.choose("Choose project which you want to view logs:", choices=available_projects)
+#        project_id = available_projects.get(project_name)
+#
+#    status = get_service_status(f"{project_id}-emperor", conf)
+#
+#    project_log_file = Path(f"{conf.LOG_DIR}/{project_id}.log")
+#    if project_log_file.exists() and project_log_file.is_file():
+#        console.pager(
+#            project_log_file.read_text(),
+#            status_bar_format=f"{project_log_file.resolve()} (status: {status})"
+#        )
+#    else:
+#        console.error(
+#            f"Error:\nLog file {project_log_file} not exists!",
+#            hint=f"Check the device log file for possible errors"
+#        )
 
 @routers_cmd.command(short_help="Delete router\nAliases:[i] delete, rm")
 @routers_cmd.command("rm", hidden=True)

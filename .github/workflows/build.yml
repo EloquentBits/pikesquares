@@ -183,7 +183,7 @@ jobs:
       #    message: |
       #      A new PR is raised [View all PR's](https://github.com/<user>/<repo>/pulls)
 
-      - name: Send Telegram Message Ok
+      - name: Announce on Telegram 📢 
         uses: appleboy/telegram-action@master
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
@@ -192,9 +192,6 @@ jobs:
           token: ${{ secrets.TELEGRAM_TOKEN }}
           format: markdown
           message: |
-            *A new release has been created*
-            *again. release created.*
-            Application: *Write something to be put inside your message*. The below lines still are part of your message.          
-            Branch: *${{ github.ref }}*
+            *  🚀 v${{steps.project-version.outputs.version}} release has been created*
             Repository: *${{ github.repository }}*
-            Owner: *${{ github.repository_owner }}*
+            Branch: *${{ github.ref }}*

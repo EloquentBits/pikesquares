@@ -39,6 +39,7 @@ class WsgiAppService(Handler):
     name: str
     service_id: str
     project_id: str
+    root_dir: Path
     pyvenv_dir: str = ""
     wsgi_file: str = ""
     wsgi_module: str = ""

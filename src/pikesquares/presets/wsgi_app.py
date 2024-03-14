@@ -187,6 +187,7 @@ class WsgiAppSection(BaseWsgiAppSection):
 
         self.master_process.set_basic_params( 
             enable=True,
+            no_orphans=True,
             fifo_file=str(svc_model.fifo_file)
         )
 
