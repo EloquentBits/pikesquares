@@ -3,6 +3,7 @@ gitpython
 questionary
 pydantic-settings
 randomname
+sentry-sdk
 tinydb
 typer[all]
 uWSGI
