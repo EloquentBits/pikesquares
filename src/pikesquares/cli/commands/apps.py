@@ -196,6 +196,27 @@ def create_venv(venv_dir):
         ],
         check=True,
     )
+
+def venv_pip_install(venv_dir: Path, service_id: str, *args: str, find_links: str | None) -> None:
+    subprocess.run(
+        args=[
+            str(venv_dir / "bin" / "python"),
+            "-sE",
+            "-m",
+            "pip",
+            "--disable-pip-version-check",
+            "--no-python-version-warning",
+            "--log",
+            str(venv_dir / f"{service_id}-pip-install.log"),
+            "install",
+            #"--quiet",
+            *(("--find-links", find_links) if find_links else ()),
+            *args,
+        ],
+        check=True,
+    )
+
+
 class NameValidator(questionary.Validator):
     def validate(self, document):
         if len(document.text) == 0:
@@ -481,41 +502,25 @@ def create(
     service_id = f"{service_type_prefix}_{cuid()}"
 
     # WSGI File
-    located_wsgi_files = glob(f"{base_dir}/**/*wsgi*.py", recursive=True)
-    wsgi_files_choices = []
-    wsgi_file = None
-    for f in located_wsgi_files:
-        if "tests" in f:
-            continue
-        wsgi_files_choices.append(f)
-        #f.replace(f"{os.getcwd()}/", "")] = f
-
-    def prompt_for_wsgi_file():
-        return questionary.path(
-            "Enter your app Python WSGI file relative to root directory: ", 
-            default=base_dir,
-            only_directories=False,
-            style=custom_style,
-        ).ask()
-
+    wsgi_file_q = questionary.path(
+        "Enter the location of your app Python WSGI file:", 
+        default=str(base_dir),
+        only_directories=False,
+        style=custom_style,
+    )
+    wsgi_files_choices = [f for f in glob(f"{base_dir}/**/*wsgi*.py", recursive=True) if not "tests" in f]
     if len(wsgi_files_choices):
         wsgi_file = questionary.select(
-                "Select a WSGI file: ",
-            choices=wsgi_files_choices + [
-                questionary.Separator(),
-                CHOSE_FILE_MYSELF
-            ],
+            "Select a WSGI file: ",
+            choices=wsgi_files_choices + [questionary.Separator(), CHOSE_FILE_MYSELF],
             style=custom_style,
         ).ask()
         if wsgi_file == CHOSE_FILE_MYSELF:
-            wsgi_file = prompt_for_wsgi_file()
+            wsgi_file = wsgi_file_q.ask()
     else:
-        wsgi_file = prompt_for_wsgi_file()
+        wsgi_file = wsgi_file_q.ask()
 
-    wsgi_file_path = Path(base_dir) / wsgi_file
-    assert wsgi_file_path.exists(), f"{wsgi_file_path} does not exist"
-
-    app_options["wsgi_file"] = str(wsgi_file_path)
+    app_options["wsgi_file"] = str(Path(base_dir) / wsgi_file)
 
     # WSGI Module
     wsgi_module = questionary.text(
@@ -524,6 +529,40 @@ def create(
         style=custom_style,
     ).ask()
     app_options["wsgi_module"] = wsgi_module
+
+    # pip deps
+    pip_req_file_q = questionary.path(
+        "Enter your app pip requirements file: ", 
+        default=str(base_dir),
+        only_directories=False,
+        style=custom_style,
+    )
+    pip_req_files = glob(f"{base_dir}/**/requirements.txt", recursive=True)
+    if len(pip_req_files):
+        pip_req_file = questionary.select(
+                "Select a pip requirements file: ",
+            choices=pip_req_files + [
+                questionary.Separator(),
+                CHOSE_FILE_MYSELF
+            ],
+            style=custom_style,
+        ).ask()
+        if pip_req_file == CHOSE_FILE_MYSELF:
+            pip_req_file = pip_req_file_q.ask()
+    else:
+        pip_req_file = pip_req_file_q.ask()
+
+    pip_req_file_path = Path(base_dir) / pip_req_file
+    if pip_req_file_path.exists():
+        venv_dir = Path(conf.DATA_DIR) / "venvs" / service_id
+        create_venv(venv_dir)
+        if not venv_dir.exists():
+            console.warning("unable to create python virtualenv")
+            raise typer.Exit()
+        app_options["pyvenv_dir"] = str(venv_dir)
+        app_reqs = list(filter(None, pip_req_file_path.read_text().split("\n")))
+        console.info(f"installing app dependencies")
+        venv_pip_install(venv_dir, service_id, "--progress-bar", "on", *app_reqs, find_links=None)
 
     # Router
     def get_router(addr):
@@ -546,13 +585,6 @@ def create(
     app_options["router_id"] = router_id
     #print(app_options)
 
-    venv_dir = Path(conf.DATA_DIR) / "venvs" / service_id
-    if not venv_dir.exists():
-        venv_dir.mkdir(parents=True, exist_ok=True)
-
-    create_venv(venv_dir)
-
-    app_options["pyvenv_dir"] = str(venv_dir)
 
     #console.info(app_options)
     app_options["workers"] = 3
