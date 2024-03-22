@@ -2,6 +2,8 @@
 #from pathlib import Path
 from typing import Any, Dict, Tuple, Type
 
+from questionary import Style as QuestionaryStyle
+
 from pydantic_settings import (
     BaseSettings, 
     #PydanticBaseSettingsSource,
@@ -73,8 +75,8 @@ class JsonConfigSettingsSource(InitSettingsSource, ConfigFileSourceMixin):
         with open(file_path, encoding=self.json_file_encoding) as json_file:
             return json.load(json_file)
 
-
 """
+
 
 class ClientConfig(BaseSettings):
 
@@ -95,25 +97,23 @@ class ClientConfig(BaseSettings):
     EASYRSA_DIR: str
     EMPEROR_ZMQ_ADDRESS: str
     PKI_DIR: str
-    CLI_STYLE: str = "dope"
+    #CLI_STYLE: QuestionaryStyle
     ENABLE_SENTRY: bool = True
     SENTRY_DSN: str = ""
     version: str
 
-    """
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: Type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        #dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> Tuple[PydanticBaseSettingsSource, ...]:
-        return (
-            init_settings,
-            JsonConfigSettingsSource(settings_cls),
-            env_settings,
-            file_secret_settings,
-        )
-    """
+    #@classmethod
+    #def settings_customise_sources(
+    #    cls,
+    #    settings_cls: Type[BaseSettings],
+    #    init_settings: PydanticBaseSettingsSource,
+    #    env_settings: PydanticBaseSettingsSource,
+    #    #dotenv_settings: PydanticBaseSettingsSource,
+    #    file_secret_settings: PydanticBaseSettingsSource,
+    #) -> Tuple[PydanticBaseSettingsSource, ...]:
+    #    return (
+    #        init_settings,
+    #        JsonConfigSettingsSource(settings_cls),
+    #        env_settings,
+    #        file_secret_settings,
+    #    )

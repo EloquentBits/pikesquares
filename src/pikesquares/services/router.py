@@ -12,6 +12,10 @@ from . import (
     HttpsRouter,
 )
 
+__all__ = (
+    "HttpsRouterService",
+)
+
 
 @HandlerFactory.register('Https-Router')
 class HttpsRouterService(Handler):

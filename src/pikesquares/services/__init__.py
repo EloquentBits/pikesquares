@@ -1,107 +1,188 @@
+import os
 import logging
 from typing import Protocol
 from abc import abstractmethod
 from pathlib import Path
+import subprocess
 
 import pydantic
 from uwsgiconf import uwsgi
+from tinydb import TinyDB, Query
+#from questionary import Style as QuestionaryStyle
 
+#from pikesquares.cli.console import console
 from .. import (
     #PathLike,
     get_first_available_port,
-    get_service_status,
+    #get_service_status,
 )
-from ..cli.pki import CERT_NAME
+#from ..cli.pki import CERT_NAME
 from ..conf import ClientConfig
+#from .. import load_client_conf
 
 logger = logging.getLogger(__name__)
+
+from pikesquares.cli.console import console
+from pikesquares import read_stats
+
+__all__ = (
+    "Handler",
+    "HandlerFactory",
+    "Project",
+    "Device",
+    "HttpsRouter",
+    "WsgiApp",
+)
+
 
 
 class BaseService(pydantic.BaseModel):
 
     service_id:str
-    conf: ClientConfig
     cache:str = "pikesquares-settings"
     parent_service_id:str = ""
+    cert_name:str = "_wildcard_pikesquares_dev"
 
-    @property
+    #cli_style: QuestionaryStyle = console.custom_style_dope
+
+    def load_client_conf(self) -> ClientConfig | None:
+        """
+        read TinyDB json
+        """
+
+        #console.info(f"loading config from db")
+
+        data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", ""))
+        if not (Path(data_dir) / "device-db.json").exists():
+            console.warning(f"conf db does not exist @ {data_dir}/device-db.json")
+            return
+
+        conf_mapping = {}
+        pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
+        with TinyDB(data_dir / "device-db.json") as db:
+            try:
+                conf_mapping = db.table('configs').\
+                    search(Query().version == pikesquares_version)[0]
+            except IndexError:
+                console.warning(f"unable to load v{pikesquares_version} conf from {str(data_dir)}/device-db.json")
+                return
+
+        return ClientConfig(**conf_mapping)
+
+    def get_service_status(self):
+        """
+        read stats socket
+        """
+        if self.stats_address.exists() and self.stats_address.is_socket():
+            return 'running' if read_stats(
+                str(self.stats_address)
+            ) else 'stopped'
+
+    @pydantic.computed_field
+    def conf(self) -> ClientConfig: 
+        return self.load_client_conf()
+
+    @pydantic.computed_field
+    def data_dir(self) -> Path:
+        return Path(self.conf.DATA_DIR)
+
+    @pydantic.computed_field
     def run_dir(self) -> Path:
         return Path(self.conf.RUN_DIR)
 
-    @property
+    @pydantic.computed_field
+    def plugins_dir(self) -> Path:
+        return Path(self.conf.PLUGINS_DIR)
+
+    @pydantic.computed_field
     def service_config(self) -> Path:
         return Path(self.conf.CONFIG_DIR) / f"{self.service_id}.json"
 
-    @property
+    @pydantic.computed_field
     def stats_address(self) -> Path:
         return Path(self.conf.RUN_DIR) / f"{self.service_id}-stats.sock"
 
-    @property
+    @pydantic.computed_field
     def socket_address(self) -> Path:
         return Path(self.conf.RUN_DIR) / f"{self.service_id}.sock"
 
-    @property
+    @pydantic.computed_field
     def notify_socket(self) -> Path:
         return Path(self.conf.RUN_DIR) / f"{self.service_id}-notify.sock"
 
-    @property
+    @pydantic.computed_field
     def uid(self) -> int:
         return self.conf.RUN_AS_UID
 
-    @property
+    @pydantic.computed_field
     def gid(self) -> int:
         return self.conf.RUN_AS_GID
 
-    @property
+    @pydantic.computed_field
     def touch_reload_file(self) -> Path:
-        return self.service_config
+        return Path(self.conf.CONFIG_DIR) / f"{self.service_id}.json"
 
-    @property
+    @pydantic.computed_field
     def pid_file(self) -> Path:
         return Path(self.conf.RUN_DIR) / f"{self.service_id}.pid"
 
-    @property
+    @pydantic.computed_field
     def log_file(self) -> Path:
         return Path(self.conf.LOG_DIR) / f"{self.service_id}.log"
 
-    @property
+    @pydantic.computed_field
     def fifo_file(self) -> Path:
         return Path(self.conf.RUN_DIR) / f"{self.service_id}-master-fifo"
 
-    @property
+    @pydantic.computed_field
     def device_db_path(self) -> Path:
         return Path(self.conf.DATA_DIR) / 'device-db.json'
 
-    @property
+    @pydantic.computed_field
+    def pki_dir(self) -> Path:
+        return Path(self.conf.PKI_DIR)
+
+    @pydantic.computed_field
     def certificate(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "issued" / f"{CERT_NAME}.crt"
+        return Path(self.conf.PKI_DIR) / "issued" / f"{self.cert_name}.crt"
 
-    @property
+    @pydantic.computed_field
     def certificate_key(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "private" / f"{CERT_NAME}.key"
+        return Path(self.conf.PKI_DIR) / "private" / f"{self.cert_name}.key"
 
-    @property
-    def client_ca(self) -> Path:
+    @pydantic.computed_field
+    def certificate_ca(self) -> Path:
         return Path(self.conf.PKI_DIR) / "ca.crt"
 
 
         
 
 class Device(BaseService):
-    pass
 
-    @property
-    def service_config(self):
+    @pydantic.computed_field
+    def easyrsa(self) -> str:
+        return str(Path(self.easyrsa_dir) / "EasyRSA-3.1.7" / "easyrsa")
+
+    @pydantic.computed_field
+    def enable_sentry(self) -> bool:
+        return self.conf.ENABLE_SENTRY
+
+    @pydantic.computed_field
+    def sentry_dsn(self) -> str:
+        return self.conf.SENTRY_DSN
+
+    @pydantic.computed_field
+    def service_config(self) -> Path:
         return Path(self.conf.CONFIG_DIR) / 'device.json'
 
-    @property
+    @pydantic.computed_field
     def spooler_dir(self) -> Path:
         dir = Path(self.conf.DATA_DIR) / 'spooler'
         if dir and not dir.exists():
             dir.mkdir(parents=True, exist_ok=True)
         return dir
 
-    @property
+    @pydantic.computed_field
     def apps_dir(self) -> Path:
         dir = Path(self.conf.CONFIG_DIR) / "projects"
         if dir and not dir.exists():
@@ -125,11 +206,11 @@ class Device(BaseService):
 class Project(BaseService):
     pass
 
-    @property
-    def service_config(self):
+    @pydantic.computed_field
+    def service_config(self) -> Path:
         return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
 
-    @property
+    @pydantic.computed_field
     def apps_dir(self) -> str:
         apps_dir = Path(self.conf.CONFIG_DIR) / f"{self.service_id}" / "apps"
         if apps_dir and not apps_dir.exists():
@@ -139,23 +220,23 @@ class Project(BaseService):
 class HttpsRouter(BaseService):
     pass
 
-    @property
-    def service_config(self):
+    @pydantic.computed_field
+    def service_config(self) -> Path:
         return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
 
-    @property
+    @pydantic.computed_field
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=3017)}"
 
-    @property
+    @pydantic.computed_field
     def stats_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=9897)}"
 
-    @property
+    @pydantic.computed_field
     def subscription_server_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=5600)}"
 
-    @property
+    @pydantic.computed_field
     def resubscribe_to(self) -> Path:
         #resubscribe_to: str = None,
         return Path()
@@ -165,21 +246,14 @@ class HttpsRouter(BaseService):
 class WsgiApp(BaseService):
 
     name: str
-    project_id: str
-    root_dir: Path
-    wsgi_module: str
-    wsgi_file: str
-    router_id: str
-    pyvenv_dir: str
 
-    @property
-    def service_config(self):
-        # FIXME use cuid instread of app name
+    @pydantic.computed_field
+    def service_config(self) -> Path:
         return Path(self.conf.CONFIG_DIR) / \
-                f"{self.project_id}" / "apps" \
+                f"{self.parent_service_id}" / "apps" \
                 / f"{self.service_id}.json"
 
-    @property
+    @pydantic.computed_field
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=4017)}"
 
@@ -198,8 +272,22 @@ class Handler(Protocol):
         ):
         self.svc_model = svc_model
 
-    def is_started(self):
-        return get_service_status(self.svc_model.service_id, self.svc_model.conf) == "running"
+        if 0: #self.svc_model.enable_sentry and self.svc_model.sentry_dsn:
+            try:
+                import sentry_sdk
+            except ImportError:
+                pass
+            else:
+                sentry_sdk.init(
+                    dsn=self.svc_model.sentry_dsn,
+                    traces_sample_rate=1.0
+                )
+                console.success("initialized sentry-sdk")
+
+    #def is_started(self):
+    #    return get_service_status(
+    #            self.svc_model.service_id, self.svc_model.conf
+    #    ) == "running"
 
     @abstractmethod
     def connect(self):
@@ -217,14 +305,39 @@ class Handler(Protocol):
     def stop(self):
         raise NotImplementedError
 
-    def write_fifo(self, command: str) -> None:
-        with open(self.svc_model.fifo_file, "w") as master_fifo:
-           master_fifo.write(command)
-           uwsgi.log(f"[pikesquares-services] : sent command [{command}] to master fifo")
+    def write_master_fifo(self, command:str) -> None:
+        """
+        Write command to master fifo named pipe
 
-    @property
-    def default_options(self):
-        return {}
+        ‘0’ to ‘9’ - set the fifo slot (see below)
+        ‘+’ - increase the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
+        ‘-’ - decrease the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
+        ‘B’ - ask Emperor for reinforcement (broodlord mode, requires uWSGI >= 2.0.7)
+        ‘C’ - set cheap mode
+        ‘c’ - trigger chain reload
+        ‘E’ - trigger an Emperor rescan
+        ‘f’ - re-fork the master (dangerous, but very powerful)
+        ‘l’ - reopen log file (need –log-master and –logto/–logto2)
+        ‘L’ - trigger log rotation (need –log-master and –logto/–logto2)
+        ‘p’ - pause/resume the instance
+        ‘P’ - update pidfiles (can be useful after master re-fork)
+        ‘Q’ - brutally shutdown the instance
+        ‘q’ - gracefully shutdown the instance
+        ‘R’ - send brutal reload
+        ‘r’ - send graceful reload
+        ‘S’ - block/unblock subscriptions
+        ‘s’ - print stats in the logs
+        ‘W’ - brutally reload workers
+        ‘w’ - gracefully reload workers
+        """
+
+        if not command in ["r", "q", "s"]:
+            console.warning("unknown master fifo command '{command}'")
+            return
+
+        with open(str(self.svc_model.run_dir), "w") as master_fifo:
+           master_fifo.write(command)
+           console.info(f"[pikesquares-services] : sent command [{command}] to master fifo")
 
     @property
     def handler_name(self):

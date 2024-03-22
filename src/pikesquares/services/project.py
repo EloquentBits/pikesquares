@@ -11,7 +11,10 @@ from ..conf import ClientConfig
 from . import (
     Handler, 
     HandlerFactory,
-    Project,
+)
+
+__all__ = (
+    "ProjectService",
 )
 
 
@@ -26,36 +29,13 @@ class ProjectService(Handler):
     #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
     config_json = {}
 
-    def prepare_service_config(self, name: str):
-        self.name = name
+    def up(self, name:str):
+        self.prepare_service_config(name)
+        self.save_config()
+        self.start()
 
+    def save_config(self):
         with TinyDB(self.svc_model.device_db_path) as db:
-            empjs = json.loads(ProjectSection(
-                    self.svc_model
-                ).as_configuration().format(formatter="json"))
-
-            self.svc_model.service_config.write_text(json.dumps(empjs))
-            self.config_json = json.loads(self.svc_model.service_config.read_text())
-
-            #stats_addr = self.config_json["uwsgi"]["emperor-stats-server"]
-            #self.config_json["uwsgi"]["emperor"] = zmq_addr #uwsgi.cache_get(zmq_addr_key, self.cache).decode()
-            #self.config_json["uwsgi"]["emperor"] = self.svc_model.apps_dir
-
-            #uwsgi.cache_update(f"{self.svc_model.service_id}-stats-addr", str(stats_addr), 0, self.svc_model.cache)
-
-            self.config_json["uwsgi"]["emperor-wrapper"] = \
-                str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
-
-            self.config_json["uwsgi"]["show-config"] = True
-            self.config_json["uwsgi"]["strict"] = True
-            # self.config_json["uwsgi"]["plugin"] = "logfile"
-
-            #if "logfile" in config_json["uwsgi"].get("plugin", ""):
-            #    config_json["uwsgi"].pop("plugin")
-
-            #self.svc_model.service_config.write_text(json.dumps(self.config_json))
-
-            print("Updating projects db.")
             projects_db = db.table('projects')
             projects_db.upsert(
                 {
@@ -66,7 +46,37 @@ class ProjectService(Handler):
                 },
                 Query().service_id == self.svc_model.service_id,
             )
-            print("Done updating projects db.")
+
+    #def write_config(self):
+    #    self.svc_model.service_config.write_text(
+    #        json.dumps(self.config_json)
+    #    )
+
+    def prepare_service_config(self, name: str):
+        self.name = name
+
+        empjs = json.loads(ProjectSection(
+                self.svc_model
+            ).as_configuration().format(formatter="json"))
+
+        self.svc_model.service_config.write_text(json.dumps(empjs))
+        self.config_json = json.loads(self.svc_model.service_config.read_text())
+
+        #stats_addr = self.config_json["uwsgi"]["emperor-stats-server"]
+        #self.config_json["uwsgi"]["emperor"] = zmq_addr #uwsgi.cache_get(zmq_addr_key, self.cache).decode()
+        #self.config_json["uwsgi"]["emperor"] = self.svc_model.apps_dir
+
+        #uwsgi.cache_update(f"{self.svc_model.service_id}-stats-addr", str(stats_addr), 0, self.svc_model.cache)
+
+        self.config_json["uwsgi"]["emperor-wrapper"] = \
+            str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
+
+        self.config_json["uwsgi"]["show-config"] = True
+        self.config_json["uwsgi"]["strict"] = True
+        # self.config_json["uwsgi"]["plugin"] = "logfile"
+        #if "logfile" in config_json["uwsgi"].get("plugin", ""):
+        #    config_json["uwsgi"].pop("plugin")
+
     
     def connect(self):
         pass
@@ -107,21 +117,6 @@ class ProjectService(Handler):
         #if self.is_started() and not str(self.svc_model.service_config.resolve()).endswith(".stopped"):
         #    shutil.move(self.svc_model.service_config, self.svc_model.service_config.with_suffix(".stopped"))
 
-def project_up(
-        conf: ClientConfig, 
-        name: str, 
-        service_id:str) -> None:
-
-    print(f'Starting {service_id}')
-
-    svc_model = Project(
-        service_id=service_id,
-        conf=conf,
-    )
-    svc = HandlerFactory.make_handler("Project")(svc_model)
-    svc.prepare_service_config(name)
-    svc.connect()
-    svc.start()
 
 def projects_all(conf: ClientConfig):
     with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:

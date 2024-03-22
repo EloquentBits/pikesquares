@@ -1,6 +1,4 @@
 import traceback
-import sys
-import os
 import logging
 
 try:
@@ -11,22 +9,38 @@ except ImportError:
 import socket
 import json
 import errno
-from pathlib import Path
-from typing import TypeVar
 import socket
+#from typing import TypeVar
 
-from tinydb import TinyDB, Query
 from uwsgi_tasks import set_uwsgi_callbacks
 set_uwsgi_callbacks()
-from uwsgiconf import uwsgi
+#from uwsgiconf import uwsgi
 
-from pikesquares.cli import console
-from .conf import ClientConfig
-
-PathLike = TypeVar("PathLike", str, Path, None)
+#PathLike = TypeVar("PathLike", str, Path, None)
 
 logger = logging.getLogger(__name__)
 
+
+__app_name__ = "PikeSquares"
+__version__ = "0.2.3"
+
+(
+    SUCCESS,
+    DIR_ERROR,
+    FILE_ERROR,
+    DB_READ_ERROR,
+    DB_WRITE_ERROR,
+    JSON_ERROR,
+    ID_ERROR,
+) = range(7)
+
+ERRORS = {
+    DIR_ERROR: "config directory error",
+    FILE_ERROR: "config file error",
+    DB_READ_ERROR: "database read error",
+    DB_WRITE_ERROR: "database write error",
+    ID_ERROR: "to-do id error",
+}
 
 def get_first_available_port(port: int=5500) -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -84,12 +98,15 @@ def read_stats(stats_addr):
         if s:
             s.close()
     except ConnectionRefusedError as e:
-        print('connection refused')
+        #print('connection refused')
+        pass
     except FileNotFoundError as e:
-        print(f"socket @ {addr} not available")
+        #print(f"socket @ {addr} not available")
+        pass
     except IOError as e:
         if e.errno != errno.EINTR:
-            uwsgi.log(f"socket @ {addr} not available")
+            #uwsgi.log(f"socket @ {addr} not available")
+            pass
     except Exception:
         print(traceback.format_exc())
     else:
@@ -99,67 +116,3 @@ def read_stats(stats_addr):
             print(traceback.format_exc())
             print(js)
 
-def get_service_status(stats_address: Path):
-    """
-    read stats socket
-    """
-    if stats_address.exists() and stats_address.is_socket():
-        return 'running' if read_stats(
-            str(stats_address)
-        ) else 'stopped'
-
-def load_client_conf():
-    """
-    read TinyDB json
-    """
-
-    data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", ""))
-    if not (Path(data_dir) / "device-db.json").exists():
-        console.warning(f"conf db does not exist @ {data_dir}/device-db.json")
-        return
-
-    conf_mapping = {}
-    pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
-    with TinyDB(data_dir / "device-db.json") as db:
-        try:
-            conf_mapping = db.table('configs').\
-                search(Query().version == pikesquares_version)[0]
-        except IndexError:
-            console.warning(f"unable to load v{pikesquares_version} conf from {str(data_dir)}/device-db.json")
-            return
-
-    return ClientConfig(**conf_mapping)
-
-
-def write_master_fifo(fifo_file, command):
-    """
-    Write command to master fifo named pipe
-
-    ‘0’ to ‘9’ - set the fifo slot (see below)
-    ‘+’ - increase the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
-    ‘-’ - decrease the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
-    ‘B’ - ask Emperor for reinforcement (broodlord mode, requires uWSGI >= 2.0.7)
-    ‘C’ - set cheap mode
-    ‘c’ - trigger chain reload
-    ‘E’ - trigger an Emperor rescan
-    ‘f’ - re-fork the master (dangerous, but very powerful)
-    ‘l’ - reopen log file (need –log-master and –logto/–logto2)
-    ‘L’ - trigger log rotation (need –log-master and –logto/–logto2)
-    ‘p’ - pause/resume the instance
-    ‘P’ - update pidfiles (can be useful after master re-fork)
-    ‘Q’ - brutally shutdown the instance
-    ‘q’ - gracefully shutdown the instance
-    ‘R’ - send brutal reload
-    ‘r’ - send graceful reload
-    ‘S’ - block/unblock subscriptions
-    ‘s’ - print stats in the logs
-    ‘W’ - brutally reload workers
-    ‘w’ - gracefully reload workers
-    """
-
-    if not command in ["r", "q", "s"]:
-        console.warning("unknown master fifo command '{command}'")
-        return
-
-    with open(fifo_file, "w") as master_fifo:
-       master_fifo.write(command)

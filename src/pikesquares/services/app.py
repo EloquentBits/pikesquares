@@ -14,8 +14,12 @@ from .data import VirtualHost
 from . import (
     Handler, 
     HandlerFactory, 
-    WsgiApp,
 )
+
+__all__ = (
+    "WsgiAppService",
+)
+
 
 
 @HandlerFactory.register('WSGI-App')
@@ -36,32 +40,20 @@ class WsgiAppService(Handler):
     is_enabled = True
     is_app = True
 
-    name: str
-    service_id: str
-    project_id: str
-    root_dir: Path
-    pyvenv_dir: str = ""
-    wsgi_file: str = ""
-    wsgi_module: str = ""
     virtual_hosts: list[VirtualHost] = []
-
     #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
-
     config_json = None
 
     def prepare_service_config(
         self,
         **app_options
     ):
-        self.name = self.svc_model.name
         self.service_id = self.svc_model.service_id
-        self.project_id = self.svc_model.project_id
-
         self.prepare_virtual_hosts()
 
         with TinyDB(self.svc_model.device_db_path) as db:
             routers_db = db.table('routers')
-            router = routers_db.get(Query().service_id == self.svc_model.router_id)
+            router = routers_db.get(Query().service_id == app_options.get("router_id"))
             https_router_address = router.get('address')
             subscription_server_address = router.get('service_config')['uwsgi']['http-subscription-server']
             subscription_notify_socket = router.get('service_config')['uwsgi']['notify-socket']
@@ -85,34 +77,17 @@ class WsgiAppService(Handler):
             apps_db = db.table('apps')
             apps_db.upsert({
                     'service_type': self.handler_name, 
-                    'name': self.name, 
-                    'service_id': self.service_id,
-                    'project_id': self.project_id,
+                    'name': self.svc_model.name, 
+                    'service_id': self.svc_model.service_id,
+                    'project_id': self.svc_model.parent_service_id,
                     'service_config': self.config_json,
                 },
                 Query().service_id == self.service_id,
             )
     
-    @property
-    def default_options(self):
-        """
-        Mapping of option key and its defaults
-        """
-        return {
-            "root_dir": "",
-            #"pyvenv_dir": "{root_dir}/.venv",
-            "wsgi_file": "{root_dir}/wsgi.py",
-            "wsgi_module": "application",
-            "python_version": "3.11"
-        }
-
-    def prepare_virtual_hosts(self, include_proj_in_url: bool=False):
-
+    def prepare_virtual_hosts(self):
         server_names = [
-            # f"{self.service_id}-{self.project_id}-vconf.local",
-            # f"{self.name}-{self.project_name}-vconf.local",
-             f"{self.name}.{self.project_id}.pikesquares.dev" \
-                if include_proj_in_url else f"{self.name}.pikesquares.dev",
+                f"{self.svc_model.name}.pikesquares.dev",
         ]
         self.virtual_hosts = [
             VirtualHost(
@@ -174,27 +149,6 @@ class WsgiAppService(Handler):
         #if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
         #    shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
 
-
-def wsgi_app_up(
-        conf: ClientConfig, 
-        name: str, 
-        service_id: str,
-        project_id: str,
-        **app_options
-    ) -> None:
-
-    svc_model = WsgiApp(
-        conf=conf,
-        name=name,
-        service_id=service_id,
-        project_id=project_id,
-        **app_options,
-    )
-
-    app = HandlerFactory.make_handler("WSGI-App")(svc_model)
-    app.prepare_service_config(**app_options)
-    app.connect()
-    app.start()
 
 def apps_all(conf: ClientConfig):
     with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:

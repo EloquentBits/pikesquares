@@ -91,7 +91,7 @@ class BaseWsgiAppSection(Section):
 
         self.main_process.set_basic_params(vacuum=True)
         self.main_process.set_naming_params(
-            autonaming=True,
+            autonaming=False,
             prefix=f'{process_prefix} ' if process_prefix else None,
         )
         self.master_process.set_basic_params(enable=True)
@@ -177,12 +177,12 @@ class WsgiAppSection(BaseWsgiAppSection):
             enable_threads=True,
             #search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
         )
-        if svc_model.pyvenv_dir:
+        if app_options.get("pyvenv_dir"):
             self.python.set_basic_params(
-                python_home=svc_model.pyvenv_dir,
+                python_home=app_options.get("pyvenv_dir"),
             )
 
-        self.main_process.change_dir(to=svc_model.root_dir)
+        self.main_process.change_dir(to=app_options.get("root_dir"))
         self.main_process.set_pid_file(str(svc_model.pid_file))
 
         self.master_process.set_basic_params( 
@@ -191,7 +191,7 @@ class WsgiAppSection(BaseWsgiAppSection):
             fifo_file=str(svc_model.fifo_file)
         )
 
-        self.set_plugins_params(search_dirs=svc_model.conf.PLUGINS_DIR)
+        self.set_plugins_params(search_dirs=svc_model.plugins_dir)
 
         #if app.wsgi_module and callable(app.wsgi_module):
         #    wsgi_callable = wsgi_module.__name__
@@ -211,8 +211,8 @@ class WsgiAppSection(BaseWsgiAppSection):
         #:param callable_name: Set WSGI callable name. Default: application.
 
         self.python.set_wsgi_params(
-            module=str(svc_model.wsgi_file), 
-            callable_name=svc_model.wsgi_module,
+            module=str(app_options.get("wsgi_file")), 
+            callable_name=app_options.get("wsgi_module"),
         )
         self.applications.set_basic_params(exit_if_none=require_app)
 

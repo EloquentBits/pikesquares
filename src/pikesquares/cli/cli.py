@@ -1,115 +1,21 @@
-import shutil
-#import os
+import os
 from typing import Optional
 
 import typer
 from typing_extensions import Annotated
-from tinydb import TinyDB, Query
+import questionary
 
-from .. import (
-    load_client_conf,
-    write_master_fifo,
-    get_service_status, 
-)
-from ..services.device import (
-    device_up, 
-)
+from pikesquares.services import HandlerFactory, Device
+
+from ..services.device import *
+from ..services.project import *
+from ..services.router import *
+from ..services.app import *
+
 from .console import console
-from .pki import (
-        ensure_pki,
-        ensure_build_ca,
-        ensure_csr,
-        ensure_sign_req,
-)
+from pikesquares import __app_name__, __version__
 
 app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich")
-@app.callback(invoke_without_command=True)
-def main(
-    ctx: typer.Context,
-    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose mode.")] = False,
-    version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit.")] = False,
-    cli_style: Annotated[str, typer.Option("--cli-style", "-c", help="Custom CLI Style")] = "dope",
-):
-    """
-    Welcome to Pike Squares
-    """
-
-    #for key, value in os.environ.items():
-    #    print(f'{key}: {value}')
-    if version:
-        from importlib import metadata
-        try:
-            console.info(metadata.version("pikesquares"))
-        except ModuleNotFoundError:
-            console.info("unable to import pikesquares module.")
-        raise typer.Exit()
-
-    #print(f"{os.environ.get('PIKESQUARES_SCIE_BINDINGS')=}")
-    #print(f"{os.environ.get('VIRTUAL_ENV')=}")
-    #pex_python = os.environ.get("PEX_PYTHON_PATH")
-    #console.info(f"{pex_python=}")
-
-    conf = load_client_conf()
-    if not conf:
-        console.warning("unable to load client config. exiting.")
-        typer.Exit()
-    #console.info(conf.model_dump())
-
-    if conf.ENABLE_SENTRY and conf.SENTRY_DSN:
-        try:
-            import sentry_sdk
-        except ImportError:
-            pass
-        else:
-            sentry_sdk.init(
-                dsn=conf.SENTRY_DSN,
-                traces_sample_rate=1.0
-            )
-
-    if all([
-        ensure_pki(conf),
-        ensure_build_ca(conf),
-        ensure_csr(conf),
-        ensure_sign_req(conf),]):
-           console.success(f"Wildcard certificate created.")
-
-    #for k, v in conf.model_dump().items():
-    #    if k.endswith("_DIR"):
-    #        Path(v).mkdir(mode=0o777, parents=True, exist_ok=True)
-
-    obj = ctx.ensure_object(dict)
-    obj["verbose"] = verbose
-    obj["conf"] = conf
-    obj["cli-style"] = getattr(
-        console, 
-        f"custom_style_{cli_style}", 
-        getattr(console, f"custom_style_{conf.CLI_STYLE}"),
-    )
-            
-
-@app.command(rich_help_panel="Control", short_help="Run device (if stopped)")
-def up(
-    ctx: typer.Context, 
-    foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
-):
-    """ Launch PikeSquares Server """
-
-    obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
-    conf.DAEMONIZE = not foreground
-
-    if get_service_status(Path(conf.RUN_DIR) / "device-stats.sock") == "running":
-        console.info("Looks like a PikeSquares Server is already running")
-        if questionary.confirm("Stop the running PikeSquares Server?").ask():
-            write_master_fifo(str(Path(conf.RUN_DIR) / "device-master-fifo"), "q")
-            console.success(f"PikeSquares Server has been shut down.")
-        else:
-            raise typer.Exit()
-
-    device_up(conf, console)
-
-    #for project_doc in db.table('projects'):
-    #    project_up(conf, project_doc.service_id)
 
 
 @app.command(rich_help_panel="Control", short_help="Reset device")
@@ -120,51 +26,23 @@ def reset(
     """ Reset PikeSquares Installation """
 
     obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
+
+    device_handler = HandlerFactory.make_handler("Device")(
+        Device(service_id="device")
+    )
 
     if not questionary.confirm("Reset PikeSquares Installation?").ask():
         raise typer.Exit()
 
     if questionary.confirm("Drop db tables?").ask():
-        with TinyDB(Path(conf.DATA_DIR) / "device-db.json") as db:
-            db.drop_table('projects')
-            db.drop_table('routers')
-            db.drop_table('apps')
+        device_handler.drop_db_tables()
 
     if questionary.confirm("Delete all configs").ask():
-        for proj_config in (Path(conf.CONFIG_DIR) / "projects").glob("project_*.json"):
-            for app_config in (Path(conf.CONFIG_DIR) / \
-                    proj_config.stem / "apps").glob("*.json"):
-                console.info(f"found loose app config. deleting {app_config.name}")
-                app_log = Path(conf.LOG_DIR) / app_config.stem / ".log"
-                app_log.unlink(missing_ok=True)
-                app_config.unlink()
-
-            console.info(f"found loose project config. deleting {proj_config.name}")
-            proj_config.unlink()
-
-        for router_config in (Path(conf.CONFIG_DIR) / "projects").glob("router_*.json"):
-            console.info(f"found loose router config. deleting {router_config.name}")
-            router_config.unlink()
+        device_handler.delete_configs()
 
     if shutdown or questionary.confirm("Shutdown PikeSquares Server").ask():
-        write_master_fifo(str(Path(conf.RUN_DIR) / "device-master-fifo"), "q")
+        device_handler.write_master_fifo("q")
         console.success(f"PikeSquares Server has been shut down.")
-        
-
-@app.command(rich_help_panel="Control", short_help="Write to master fifo")
-def write_to_master_fifo(
-    ctx: typer.Context, 
-    service_id: Annotated[str, typer.Option("--service-id", "-s", help="Service ID to send the command to")],
-    command: Annotated[str, typer.Option("--command", "-c", help="Command to send master fifo.")],
-):
-    obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
-
-    service_id = service_id or "device"
-    fifo_file = Path(conf.RUN_DIR) / f"{service_id}-master-fifo"
-    write_master_fifo(fifo_file, command)
-
 
 @app.command(rich_help_panel="Control", short_help="Nuke installation")
 def uninstall(
@@ -177,22 +55,25 @@ def uninstall(
     """ Delete the entire PikeSquares installation """
 
     obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
 
-    for user_dir in [
-            conf.DATA_DIR, 
-            conf.CONFIG_DIR, 
-            conf.RUN_DIR, 
-            conf.LOG_DIR,
-            conf.PLUGINS_DIR,
-            conf.PKI_DIR]:
-        if not dry_run:
-            try:
-                shutil.rmtree(user_dir)
-            except FileNotFoundError:
-                pass
-        console.info(f"removing {user_dir}")
+    device_handler = HandlerFactory.make_handler("Device")(
+        Device(service_id="device")
+    )
+    device_handler.uninstall(dry_run=dry_run)
     console.info("PikeSquares has been uninstalled.")
+
+#@app.command(rich_help_panel="Control", short_help="Write to master fifo")
+#def write_to_master_fifo(
+#    ctx: typer.Context, 
+#    service_id: Annotated[str, typer.Option("--service-id", "-s", help="Service ID to send the command to")],
+#    command: Annotated[str, typer.Option("--command", "-c", help="Command to send master fifo.")],
+#):
+#    obj = ctx.ensure_object(dict)
+#    conf = obj.get("conf")
+
+#    service_id = service_id or "device"
+#    fifo_file = Path(conf.RUN_DIR) / f"{service_id}-master-fifo"
+#    write_master_fifo(fifo_file, command)
 
 
 #@app.command(rich_help_panel="Control", short_help="Show logs of device")
@@ -222,10 +103,171 @@ def uninstall(
 #        log_func = console.error
 #    log_func(f"Device is [b]{status}[/b]")
 
-from .commands.routers import *
-from .commands.projects import *
-from .commands.apps import *
+@app.command(
+        rich_help_panel="Control", short_help="Launch the PikeSquares Server (if stopped)"
+)
+def up(
+    ctx: typer.Context, 
+    #foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
+):
+    """ Launch PikeSquares Server """
+
+    obj = ctx.ensure_object(dict)
+    obj["cli-style"] = console.custom_style_dope
+
+    device_handler = HandlerFactory.make_handler("Device")(
+        Device(service_id="device")
+    )
+
+    if device_handler.svc_model.get_service_status() == "running":
+        console.info("Looks like a PikeSquares Server is already running")
+        if questionary.confirm("Stop the running PikeSquares Server and launch a new instance?").ask():
+            device_handler.stop()
+            console.success(f"PikeSquares Server has been shut down.")
+        else:
+            raise typer.Exit()
+
+    device_handler.up()
+
+from ..services.device import *
+from .commands.apps import create
+#from .commands.apps import delete
+#from .commands.apps import ls
+
+app.add_typer(create.app, name="apps")
+#app.add_typer(delete.app, name="apps")
+#app.add_typer(ls.app, name="apps")
 
 
-if __name__ == "__main__":
-    app()
+def _version_callback(value: bool) -> None:
+    if value:
+        console.info(f"{__app_name__} v{__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        "-v",
+        help="Show PikeSquares version and exit.",
+        callback=_version_callback,
+        is_eager=True,
+    )
+) -> None:
+    """
+    Welcome to Pike Squares. Building blocks for your apps.
+    """
+    return
+
+"""
+@app.callback(invoke_without_command=True)
+def main_bak(
+    ctx: typer.Context,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose mode.")] = False,
+    version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit.")] = False,
+    #cli_style: Annotated[str, typer.Option("--cli-style", "-c", help="Custom CLI Style")] = "dope",
+):
+
+    for key, value in os.environ.items():
+        if key.startswith(('PIKESQUARES', 'SCIE', 'PEX')):
+            print(f'{key}: {value}')
+
+    # PIKESQUARES_VERSION: 0.0.13.dev0
+    # SCIE: /home/pk/dev/eqb/scie-pikesquares/dist/scie-pikesquares-linux-x86_64
+    # SCIE_ARGV0: /home/pk/dev/eqb/scie-pikesquares/dist/scie-pikesquares-linux-x86_64
+    # PIKESQUARES_BIN_NAME: scie-pikesquares
+    # PIKESQUARES_DEBUG:
+    # SCIE_PIKESQUARES_VERSION: 0.0.26
+    # PIKESQUARES_BUILDROOT_OVERRIDE:
+    # PIKESQUARES_SCIE_BINDINGS: /home/pk/.cache/nce/104e9a801b64d5745c20ec1181e26fd7afb0d0bdde7de368ff55ced1e0ea420a/bindings
+    # PEX_PYTHON_PATH: /home/pk/.cache/nce/57a37b57f8243caa4cdac016176189573ad7620f0b6da5941c5e40660f9468ab/cpython-3.12.2+20240224-x86_64-unknown-linux-gnu-install_only.tar.gz/python/bin/python3.12
+    # PEX_ROOT: /home/pk/.cache/nce/104e9a801b64d5745c20ec1181e26fd7afb0d0bdde7de368ff55ced1e0ea420a/bindings/pex_root
+    # PIKESQUARES_DATA_DIR: /home/pk/.local/share/pikesquares
+    # PIKESQUARES_EASY_RSA_DIR: /home/pk/.cache/nce/aaa48fadcbb77511b9c378554ef3eae09f8c7bc149d6f56ba209f1c9bab98c6e/easyrsa
+    # _PIKESQUARES_SERVER_EXE:
+
+    if version:
+        from importlib import metadata
+        try:
+            console.info(metadata.version("pikesquares"))
+        except ModuleNotFoundError:
+            console.info("unable to import pikesquares module.")
+        raise typer.Exit()
+
+    #print(f"{os.environ.get('PIKESQUARES_SCIE_BINDINGS')=}")
+    #print(f"{os.environ.get('VIRTUAL_ENV')=}")
+    #pex_python = os.environ.get("PEX_PYTHON_PATH")
+    #console.info(f"{pex_python=}")
+
+    #conf = load_client_conf(
+    #        #**{"CLI_STYLE": console.custom_style_dope}
+    #)
+    #if not conf:
+    #    console.warning("unable to load client config. exiting.")
+    #    typer.Exit()
+    #console.info(conf.model_dump())
+
+
+    #for k, v in conf.model_dump().items():
+    #    if k.endswith("_DIR"):
+    #        Path(v).mkdir(mode=0o777, parents=True, exist_ok=True)
+
+    obj = ctx.ensure_object(dict)
+    obj["verbose"] = verbose
+    #obj["device_handler"] = device_handler
+    #obj["conf"] = conf
+    #obj["cli-style"] = console.custom_style_dope
+    #getattr(
+    #    console, 
+    #    f"custom_style_{cli_style}", 
+    #    getattr(console, f"custom_style_{conf.CLI_STYLE}"),
+    #)
+            
+"""
+
+#from .commands.routers import *
+#from .commands.projects import *
+
+#ALIASES = ("applications", "app")
+#HELP = f"""
+#    Application commands.\n
+#    Aliases: [i]{', '.join(ALIASES)}[/i]
+#"""
+
+#apps_cmd = typer.Typer(
+#    no_args_is_help=True,
+#    rich_markup_mode="rich",
+#    name="apps",
+#    help=HELP
+#)
+#for alias in ALIASES:
+#    app.add_typer(
+#        apps_cmd,
+#        name=alias,
+#        help=HELP,
+#        hidden=True
+#    )
+
+#from .commands.apps import create
+#from .commands.apps import delete
+#from .commands.apps import ls
+
+#app.add_typer(create.app, name="apps")
+#app.add_typer(delete.app, name="apps")
+#app.add_typer(ls.app, name="apps")
+
+#app.add_typer(up.app, name="up")
+
+#for cmd in all_commands:
+#    app.add_typer(cmd)
+
+#apps_cmds = typer.Typer()
+#app.add_typer(apps_cmds, name="apps")
+
+#app = typer.Typer()
+#items_app = typer.Typer()
+#app.add_typer(items_app, name="items")
+#users_app = typer.Typer()
+#app.add_typer(users_app, name="users")
