@@ -13,8 +13,13 @@ import questionary
 import randomname
 from cuid import cuid
 
-from pikesquares.services import HandlerFactory
-#from pikesquares.services.router import https_routers_all
+from pikesquares import get_first_available_port
+
+from pikesquares.services import (
+    HandlerFactory,
+    Project, 
+    HttpsRouter,
+)
 from pikesquares.services import WsgiApp
 
 from .validators import (
@@ -30,6 +35,7 @@ from . import (
     gather_repo_details,
 )
 from ...console import console
+
 
 
 class CloneProgress(git.RemoteProgress):
@@ -211,21 +217,41 @@ def create(
     #response = questionary.confirm("Are you amazed?").skip_if(DISABLED, default=True).ask()
 
     project_id = None
+    project_name = None
     with TinyDB(wsgi_app_handler.svc_model.device_db_path) as db:
         projects = db.table('projects').all()
-        if len(projects) == 1:
-            project = "sandbox"
+
+        if not projects:
+            project_name = "sandbox"
+            project_handler = HandlerFactory.make_handler("Project")(
+                Project(service_id="project_sandbox")
+            )
+            project_handler.up(project_name)
+            cnt = 0
+            while cnt < 5 and project_handler.svc_model.get_service_status() != "running":
+                time.sleep(3)
+                cnt = cnt+1
+            if project_handler.svc_model.get_service_status() != "running":
+                project_handler.svc_model.service_config.unlink()
+                console.warning(f"could not start project. giving up.")
+                console.info(f"removed sandbox project config {project_handler.svc_model.service_config.name}")
+                raise typer.Exit()
+            console.success(f"sandbox project is up")
+            project_id = "project_sandbox"
+
+        elif len(projects) == 1:
+            project_name = "sandbox"
+            project_id = "project_sandbox"
         else:
-            project = project or questionary.select(
+            project_name = project or questionary.select(
                     "Select project where you want to create app: ", 
                     choices=[p.get("name") for p in projects],
                     style=custom_style,
                     ).ask()
-        project_id = db.table('projects').\
-            get(Query().name == project).get("service_id")
-
-    if not all([project, project_id]):
-        raise typer.Exit()
+    if not project_id:
+        with TinyDB(wsgi_app_handler.svc_model.device_db_path) as db:
+            project_id = db.table('projects').\
+                get(Query().name == project_name).get("service_id")
 
     wsgi_app_handler.svc_model.parent_service_id = project_id
 
@@ -320,11 +346,33 @@ def create(
     if not router_address:
         with TinyDB(wsgi_app_handler.svc_model.device_db_path) as db:
             routers_db = db.table('routers')
-            router_address = questionary.select(
-                "Select an ssl proxy for your app: ", 
-                choices=[r.get("address") for r in routers_db.all()],
-                style=custom_style,
-                ).ask()
+            if not routers_db.all():
+                https_router_port = str(get_first_available_port(port=8443))
+                console.info(f"no proxies exist. creating one on port [{https_router_port}]")
+                router_address = f"0.0.0.0:{https_router_port}"
+                router_handler = HandlerFactory.make_handler("Https-Router")(
+                    HttpsRouter(
+                        service_id=f"router_{cuid()}",
+                    )
+                )
+                router_handler.up(router_address)
+                cnt = 0
+                while cnt < 5 and router_handler.svc_model.get_service_status() != "running":
+                    time.sleep(3)
+                    cnt = cnt+1
+                if router_handler.svc_model.get_service_status() != "running":
+                    router_handler.svc_model.service_config.unlink()
+                    console.warning(f"could not start proxy. giving up.")
+                    console.info(f"removed sandbox proxy config {router_handler.svc_model.service_config.name}")
+                    raise typer.Exit()
+                console.success(f"proxy is up")
+
+            else:
+                router_address = questionary.select(
+                    "Select an ssl proxy for your app: ", 
+                    choices=[r.get("address") for r in routers_db.all()],
+                    style=custom_style,
+                    ).ask()
     try:
         router_id = get_router(router_address).get("service_id")
     except IndexError:

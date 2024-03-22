@@ -41,7 +41,7 @@ def reset(
         device_handler.delete_configs()
 
     if shutdown or questionary.confirm("Shutdown PikeSquares Server").ask():
-        device_handler.write_master_fifo("q")
+        device_handler.stop()
         console.success(f"PikeSquares Server has been shut down.")
 
 @app.command(rich_help_panel="Control", short_help="Nuke installation")

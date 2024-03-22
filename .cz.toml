@@ -2,8 +2,7 @@
 name = "cz_conventional_commits"
 version = "0.0.1"
 version_files = [
-    "src/pikesquares/__version__.py",
-    "src/pikesquares/VERSION",
+    "src/pikesquares/__init__.py:__version__",
     "src/pikesquares/pyproject.toml:version",
 ]
 tag_format = "v$version"

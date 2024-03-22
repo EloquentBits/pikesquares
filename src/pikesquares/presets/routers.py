@@ -144,7 +144,7 @@ class HttpsRouterSection(Section):
                 #key=subscription_server_address
             ),
             ciphers="HIGH",
-            client_ca=str(svc_model.client_ca),
+            client_ca=str(svc_model.certificate_ca),
         )
 
         self.router.set_basic_params(

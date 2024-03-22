@@ -83,12 +83,36 @@ class BaseService(pydantic.BaseModel):
         return self.load_client_conf()
 
     @pydantic.computed_field
+    def easyrsa(self) -> str:
+        return str(Path(self.easyrsa_dir) / "EasyRSA-3.1.7" / "easyrsa")
+
+    @pydantic.computed_field
+    def enable_sentry(self) -> bool:
+        return self.conf.ENABLE_SENTRY
+
+    @pydantic.computed_field
+    def sentry_dsn(self) -> str:
+        return self.conf.SENTRY_DSN
+
+    @pydantic.computed_field
     def data_dir(self) -> Path:
         return Path(self.conf.DATA_DIR)
 
     @pydantic.computed_field
+    def config_dir(self) -> Path:
+        return Path(self.conf.CONFIG_DIR)
+
+    @pydantic.computed_field
+    def log_dir(self) -> Path:
+        return Path(self.conf.LOG_DIR)
+
+    @pydantic.computed_field
     def run_dir(self) -> Path:
         return Path(self.conf.RUN_DIR)
+
+    @pydantic.computed_field
+    def easyrsa_dir(self) -> Path:
+        return Path(self.conf.EASYRSA_DIR)
 
     @pydantic.computed_field
     def plugins_dir(self) -> Path:
@@ -155,21 +179,8 @@ class BaseService(pydantic.BaseModel):
         return Path(self.conf.PKI_DIR) / "ca.crt"
 
 
-        
 
 class Device(BaseService):
-
-    @pydantic.computed_field
-    def easyrsa(self) -> str:
-        return str(Path(self.easyrsa_dir) / "EasyRSA-3.1.7" / "easyrsa")
-
-    @pydantic.computed_field
-    def enable_sentry(self) -> bool:
-        return self.conf.ENABLE_SENTRY
-
-    @pydantic.computed_field
-    def sentry_dsn(self) -> str:
-        return self.conf.SENTRY_DSN
 
     @pydantic.computed_field
     def service_config(self) -> Path:
@@ -228,8 +239,8 @@ class HttpsRouter(BaseService):
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=3017)}"
 
-    @pydantic.computed_field
-    def stats_address(self) -> str:
+    #@pydantic.computed_field
+    #def stats_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=9897)}"
 
     @pydantic.computed_field
@@ -282,7 +293,7 @@ class Handler(Protocol):
                     dsn=self.svc_model.sentry_dsn,
                     traces_sample_rate=1.0
                 )
-                console.success("initialized sentry-sdk")
+                #console.success("initialized sentry-sdk")
 
     #def is_started(self):
     #    return get_service_status(
@@ -335,7 +346,14 @@ class Handler(Protocol):
             console.warning("unknown master fifo command '{command}'")
             return
 
-        with open(str(self.svc_model.run_dir), "w") as master_fifo:
+        if not all([
+            self.svc_model.fifo_file,
+            self.svc_model.fifo_file.exists(),
+        ]):
+            console.warning(f"invalid fifo file @ {self.svc_model.fifo_file}")
+            return
+
+        with open(str(self.svc_model.fifo_file), "w") as master_fifo:
            master_fifo.write(command)
            console.info(f"[pikesquares-services] : sent command [{command}] to master fifo")
 

@@ -13,7 +13,6 @@ from pikesquares import (
     get_first_available_port
 )
 from ..presets.device import DeviceSection
-#from .router import https_router_up
 from . import Handler, HandlerFactory
 from pikesquares.cli.console import console
 
@@ -30,18 +29,18 @@ class DeviceService(Handler):
     config_json = {}
 
     def up(self):
-        from pikesquares.services.project import Project
-        #if all([
-        #    device_handler.ensure_pki(),
-        #    device_handler.ensure_build_ca(),
-        #    device_handler.ensure_csr(),
-        #    device_handler.ensure_sign_req(),]):
-        #       console.success(f"Wildcard certificate created.")
+        from pikesquares.services import (
+            Project, 
+            HttpsRouter,
+        )
         #conf.DAEMONIZE = not foreground
+        self.setup_pki()
 
         self.prepare_service_config()
         self.save_config()
         self.write_config()
+
+        self.sync_db_with_filesystem()
 
         with TinyDB(self.svc_model.device_db_path) as db:
             for project_doc in db.table('projects'):
@@ -50,6 +49,12 @@ class DeviceService(Handler):
                 )
                 name = project_doc.get("name")
                 project_handler.up(name)
+
+            for router_doc in db.table('routers'):
+                router_handler = HandlerFactory.make_handler("HttpsRouter")(
+                    HttpsRouter(service_id=router_doc.get("service_id"))
+                )
+                router_handler.up()
 
         self.start()
 
@@ -106,11 +111,12 @@ class DeviceService(Handler):
         ])
 
     def stop(self):
-        self.write_master_fifo("q")
+        if self.svc_model.get_service_status() == "running":
+            self.write_master_fifo("q")
 
         #res = device_config.main_process.actions.fifo_write(target, command)
 
-    def restore_db_tables(self):
+    def sync_db_with_filesystem(self):
         with TinyDB(self.svc_model.device_db_path) as db:
             if not db.table('projects').all():
                 for proj_config in (self.svc_model.config_dir / "projects").glob("project_*.json"):
@@ -120,7 +126,7 @@ class DeviceService(Handler):
                         app_config.unlink()
                     console.info(f"found loose project config. deleting {proj_config.name}")
                     proj_config.unlink()
-                console.info("creating sandbox project.")
+                #console.info("creating sandbox project.")
                 #project_up(conf, "sandbox", f"project_{cuid()}")
 
             if not db.table('routers').all():
@@ -128,13 +134,6 @@ class DeviceService(Handler):
                     console.info(f"found loose router config. deleting {router_config.name}")
                     router_config.unlink()
 
-                https_router_port = str(get_first_available_port(port=8443))
-                console.info(f"no routers exist. creating one on port [{https_router_port}]")
-                #https_router_up(
-                #    conf, 
-                #    f"router_{cuid()}", 
-                #    f"0.0.0.0:{https_router_port}",
-                #)
     def drop_db_tables(self):
         with TinyDB(self.svc_model.data_dir / "device-db.json") as db:
             db.drop_table('projects')
@@ -171,6 +170,14 @@ class DeviceService(Handler):
                 except FileNotFoundError:
                     pass
             console.info(f"removing {user_dir}")
+
+    def setup_pki(self):
+        if all([
+            self.ensure_pki(),
+            self.ensure_build_ca(),
+            self.ensure_csr(),
+            self.ensure_sign_req(),]):
+            console.success(f"Wildcard certificate created.")
 
     def ensure_pki(self):
         if self.svc_model.pki_dir.exists():

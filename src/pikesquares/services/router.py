@@ -19,6 +19,8 @@ __all__ = (
 
 @HandlerFactory.register('Https-Router')
 class HttpsRouterService(Handler):
+
+    address: str
     is_internal: bool = False
     is_enabled: bool = True
     is_app: bool = False
@@ -26,18 +28,35 @@ class HttpsRouterService(Handler):
     config_json = {}
     #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
 
+    def up(self, address:str):
+        self.address = address
+        self.prepare_service_config()
+        self.save_config()
+        self.start()
+
+    def save_config(self):
+        with TinyDB(self.svc_model.device_db_path) as db:
+            routers_db = db.table('routers')
+            routers_db.upsert(
+                {
+                    'service_type': self.handler_name, 
+                    'service_id': self.svc_model.service_id,
+                    'address': self.address,
+                    'service_config': self.config_json,
+                },
+                Query().service_id == self.svc_model.service_id,
+            )
+
     def prepare_service_config(
             self, 
-            address: str, 
             ) -> None:
-
 
         def https_router_provision_cert():
             pass
 
         https_router_provision_cert()
     
-        section = HttpsRouterSection(self.svc_model, address)
+        section = HttpsRouterSection(self.svc_model, self.address)
         self.config_json = json.loads(
                 section.as_configuration().format(formatter="json"))
         self.config_json["uwsgi"]["show-config"] = True
@@ -47,21 +66,7 @@ class HttpsRouterService(Handler):
         # print(f"{wsgi_app_opts=}")
         # print(f"wsgi app {self.config_json=}")
         #empjs["uwsgi"]["plugin"] = "emperor_zeromq"
-        print(self.config_json)
-
         #self.svc_model.service_config.write_text(json.dumps(self.config_json))
-
-        with TinyDB(self.svc_model.device_db_path) as db:
-            routers_db = db.table('routers')
-            routers_db.upsert(
-                {
-                    'service_type': self.handler_name, 
-                    'service_id': self.svc_model.service_id,
-                    'address': address,
-                    'service_config': self.config_json,
-                },
-                Query().service_id == self.svc_model.service_id,
-            )
 
     def connect(self):
         pass
@@ -121,27 +126,3 @@ class HttpsRouterService(Handler):
         if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
             shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
     """
-
-    
-def https_router_up(
-        conf: ClientConfig, 
-        service_id:str, 
-        address: str,
-        ) -> None:
-
-    svc_model = HttpsRouter(
-        service_id=service_id,
-        conf=conf,
-    )
-
-    https_router = HandlerFactory.make_handler("Https-Router")(svc_model)
-    https_router.prepare_service_config(address)
-    https_router.connect()
-    https_router.start()
-
-def https_routers_all(conf: ClientConfig):
-    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
-        routers_db = db.table('routers')
-        return routers_db.all()
-
-

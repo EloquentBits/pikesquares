@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 __app_name__ = "PikeSquares"
-__version__ = "0.2.3"
+__version__ = "0.4.6"
 
 (
     SUCCESS,
