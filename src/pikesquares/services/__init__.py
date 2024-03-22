@@ -272,7 +272,7 @@ class Handler(Protocol):
         ):
         self.svc_model = svc_model
 
-        if 0: #self.svc_model.enable_sentry and self.svc_model.sentry_dsn:
+        if self.svc_model.enable_sentry and self.svc_model.sentry_dsn:
             try:
                 import sentry_sdk
             except ImportError:
