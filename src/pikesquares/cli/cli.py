@@ -25,7 +25,7 @@ def reset(
 ):
     """ Reset PikeSquares Installation """
 
-    obj = ctx.ensure_object(dict)
+    #obj = ctx.ensure_object(dict)
 
     device_handler = HandlerFactory.make_handler("Device")(
         Device(service_id="device")
