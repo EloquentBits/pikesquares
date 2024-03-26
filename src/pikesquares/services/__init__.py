@@ -286,12 +286,14 @@ class Handler(Protocol):
         if self.svc_model.enable_sentry and self.svc_model.sentry_dsn:
             try:
                 import sentry_sdk
+                from pikesquares import __version__, __app_name__
             except ImportError:
                 pass
             else:
                 sentry_sdk.init(
                     dsn=self.svc_model.sentry_dsn,
                     traces_sample_rate=1.0
+                    release = f"{__app_name__} v{__version__}"
                 )
                 #console.success("initialized sentry-sdk")
 
