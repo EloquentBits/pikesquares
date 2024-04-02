@@ -9,9 +9,6 @@ from cuid import cuid
 from tinydb import TinyDB, Query
 #from uwsgiconf import uwsgi
 
-from pikesquares import (
-    get_first_available_port
-)
 from ..presets.device import DeviceSection
 from . import Handler, HandlerFactory
 from pikesquares.cli.console import console
@@ -32,9 +29,10 @@ class DeviceService(Handler):
         from pikesquares.services import (
             Project, 
             HttpsRouter,
+            HttpRouter,
         )
         #conf.DAEMONIZE = not foreground
-        self.setup_pki()
+        #self.setup_pki()
 
         self.prepare_service_config()
         self.save_config()
@@ -47,14 +45,22 @@ class DeviceService(Handler):
                 project_handler = HandlerFactory.make_handler("Project")(
                     Project(service_id=project_doc.get("service_id"))
                 )
-                name = project_doc.get("name")
-                project_handler.up(name)
+                project_handler.up(project_doc.get("name"))
 
             for router_doc in db.table('routers'):
-                router_handler = HandlerFactory.make_handler("HttpsRouter")(
-                    HttpsRouter(service_id=router_doc.get("service_id"))
-                )
-                router_handler.up()
+                handler_name = None
+                handler_class = None
+                if router_doc.get("service_type") == "HttpRouterService":
+                    handler_name = "Http-Router"
+                    handler_class = HttpRouter
+                elif router_doc.get("service_type") == "HttpRouterService":
+                    handler_name = "Https-Router"
+                    handler_class = HttpsRouter
+
+                if handler_name and handler_class:
+                    HandlerFactory.make_handler(handler_name)(
+                            handler_class(service_id=router_doc.get("service_id")
+                    )).up(router_doc.get("address").split("://")[-1])
 
         self.start()
 
@@ -68,7 +74,6 @@ class DeviceService(Handler):
                 },
                 Query().service_type == self.handler_name,
             )
-            print(f"DeviceService updated device_db")
 
     def write_config(self):
         self.svc_model.service_config.write_text(
@@ -144,17 +149,23 @@ class DeviceService(Handler):
         for proj_config in (self.svc_model.config_dir / "projects").glob("project_*.json"):
             for app_config in (self.svc_model.config_dir / \
                     proj_config.stem / "apps").glob("*.json"):
-                console.info(f"found loose app config. deleting {app_config.name}")
-                app_log = self.svc_model.log_dir / app_config.stem / ".log"
-                app_log.unlink(missing_ok=True)
+                console.info(f"deleting {app_config.name}")
                 app_config.unlink()
 
-            console.info(f"found loose project config. deleting {proj_config.name}")
+                # FIXME
+                #app_log = self.svc_model.log_dir / app_config.stem / ".log"
+                #app_log.unlink(missing_ok=True)
+                #console.info(f"deleting {app_log.name}")
+
+            console.info(f"deleting {proj_config.name}")
             proj_config.unlink()
 
         for router_config in (self.svc_model.config_dir / "projects").glob("router_*.json"):
-            console.info(f"found loose router config. deleting {router_config.name}")
+            console.info(f"found router config. deleting {router_config.name}")
             router_config.unlink()
+
+    #def delete_logs(self):
+    #    for logfile in self.svc_model.log_dir.glob("*.log"):
 
     def uninstall(self, dry_run=False):
         for user_dir in [
@@ -166,10 +177,10 @@ class DeviceService(Handler):
                 self.svc_model.pki_dir]:
             if not dry_run:
                 try:
-                    shutil.rmtree(user_dir)
+                    shutil.rmtree(str(user_dir))
+                    console.info(f"deleted {str(user_dir)}")
                 except FileNotFoundError:
                     pass
-            console.info(f"removing {user_dir}")
 
     def setup_pki(self):
         if all([
@@ -188,7 +199,7 @@ class DeviceService(Handler):
                 str(self.svc_model.easyrsa),
                 "init-pki",
             ],
-            cwd=self.svc_model.data_dir,
+            cwd=str(self.svc_model.data_dir),
             capture_output=True,
             check=True,
         )

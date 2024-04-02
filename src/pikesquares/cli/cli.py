@@ -30,19 +30,22 @@ def reset(
     device_handler = HandlerFactory.make_handler("Device")(
         Device(service_id="device")
     )
-
     if not questionary.confirm("Reset PikeSquares Installation?").ask():
         raise typer.Exit()
+
+    if all([
+        device_handler.svc_model.get_service_status() == "running",
+        shutdown or questionary.confirm("Shutdown PikeSquares Server").ask()
+        ]):
+        device_handler.stop()
+        console.success(f"PikeSquares Server has been shut down.")
 
     if questionary.confirm("Drop db tables?").ask():
         device_handler.drop_db_tables()
 
-    if questionary.confirm("Delete all configs").ask():
+    if questionary.confirm("Delete all configs and logs?").ask():
         device_handler.delete_configs()
 
-    if shutdown or questionary.confirm("Shutdown PikeSquares Server").ask():
-        device_handler.stop()
-        console.success(f"PikeSquares Server has been shut down.")
 
 @app.command(rich_help_panel="Control", short_help="Nuke installation")
 def uninstall(
@@ -113,12 +116,7 @@ def up(
     """ Launch PikeSquares Server """
 
     obj = ctx.ensure_object(dict)
-    obj["cli-style"] = console.custom_style_dope
-
-    device_handler = HandlerFactory.make_handler("Device")(
-        Device(service_id="device")
-    )
-
+    device_handler = obj["device-handler"]
     if device_handler.svc_model.get_service_status() == "running":
         console.info("Looks like a PikeSquares Server is already running")
         if questionary.confirm("Stop the running PikeSquares Server and launch a new instance?").ask():
@@ -126,18 +124,66 @@ def up(
             console.success(f"PikeSquares Server has been shut down.")
         else:
             raise typer.Exit()
-
     device_handler.up()
 
+@app.command(
+        rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)"
+)
+def down(
+    ctx: typer.Context, 
+    #foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
+):
+    """ Stop the PikeSquares Server """
+
+    obj = ctx.ensure_object(dict)
+    obj["cli-style"] = console.custom_style_dope
+
+    device_handler = HandlerFactory.make_handler("Device")(
+        Device(service_id="device")
+    )
+    if device_handler.svc_model.get_service_status() == "running":
+        if questionary.confirm("Stop the running PikeSquares Server?").ask():
+            device_handler.stop()
+            console.success(f"PikeSquares Server has been shut down.")
+        else:
+            raise typer.Exit()
+
+
+@app.command(
+        rich_help_panel="Control", short_help="tail the service log"
+)
+def tail_service_log(
+    ctx: typer.Context, 
+    #foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
+):
+    """ """
+
+    obj = ctx.ensure_object(dict)
+    obj["cli-style"] = console.custom_style_dope
+
+    device_handler = HandlerFactory.make_handler("Device")(
+        Device(service_id="device")
+    )
+    show_config_start_marker = ';uWSGI instance configuration\n'
+    show_config_end_marker = ';end of configuration\n'
+
+    latest_running_config, latest_startup_log = \
+            device_handler.svc_model.startup_log(
+                    show_config_start_marker, show_config_end_marker)
+    for line in latest_running_config:
+        console.info(line)
+
+    for line in latest_startup_log:
+        console.info(line)
+
+
 from ..services.device import *
-from .commands.apps import create
-#from .commands.apps import delete
-#from .commands.apps import ls
+from .commands import apps
 
-app.add_typer(create.app, name="apps")
-#app.add_typer(delete.app, name="apps")
-#app.add_typer(ls.app, name="apps")
-
+app.add_typer(
+        apps.app, 
+        name="apps"
+    )
 
 def _version_callback(value: bool) -> None:
     if value:
@@ -147,6 +193,7 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version: Optional[bool] = typer.Option(
         None,
         "--version",
@@ -159,20 +206,16 @@ def main(
     """
     Welcome to Pike Squares. Building blocks for your apps.
     """
-    return
+    obj = ctx.ensure_object(dict)
+    device_handler = HandlerFactory.make_handler("Device")(
+        Device(service_id="device")
+    )
+    obj["device-handler"] = device_handler
+    obj["cli-style"] = console.custom_style_dope
 
-"""
-@app.callback(invoke_without_command=True)
-def main_bak(
-    ctx: typer.Context,
-    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose mode.")] = False,
-    version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit.")] = False,
-    #cli_style: Annotated[str, typer.Option("--cli-style", "-c", help="Custom CLI Style")] = "dope",
-):
-
-    for key, value in os.environ.items():
-        if key.startswith(('PIKESQUARES', 'SCIE', 'PEX')):
-            print(f'{key}: {value}')
+    #for key, value in os.environ.items():
+    #    if key.startswith(('PIKESQUARES', 'SCIE', 'PEX')):
+    #        print(f'{key}: {value}')
 
     # PIKESQUARES_VERSION: 0.0.13.dev0
     # SCIE: /home/pk/dev/eqb/scie-pikesquares/dist/scie-pikesquares-linux-x86_64
@@ -188,43 +231,29 @@ def main_bak(
     # PIKESQUARES_EASY_RSA_DIR: /home/pk/.cache/nce/aaa48fadcbb77511b9c378554ef3eae09f8c7bc149d6f56ba209f1c9bab98c6e/easyrsa
     # _PIKESQUARES_SERVER_EXE:
 
-    if version:
-        from importlib import metadata
-        try:
-            console.info(metadata.version("pikesquares"))
-        except ModuleNotFoundError:
-            console.info("unable to import pikesquares module.")
-        raise typer.Exit()
-
     #print(f"{os.environ.get('PIKESQUARES_SCIE_BINDINGS')=}")
     #print(f"{os.environ.get('VIRTUAL_ENV')=}")
     #pex_python = os.environ.get("PEX_PYTHON_PATH")
     #console.info(f"{pex_python=}")
 
-    #conf = load_client_conf(
-    #        #**{"CLI_STYLE": console.custom_style_dope}
-    #)
-    #if not conf:
-    #    console.warning("unable to load client config. exiting.")
-    #    typer.Exit()
-    #console.info(conf.model_dump())
+    #console.info(device_handler.svc_model.model_dump())
 
-
-    #for k, v in conf.model_dump().items():
-    #    if k.endswith("_DIR"):
-    #        Path(v).mkdir(mode=0o777, parents=True, exist_ok=True)
-
-    obj = ctx.ensure_object(dict)
-    obj["verbose"] = verbose
-    #obj["device_handler"] = device_handler
-    #obj["conf"] = conf
-    #obj["cli-style"] = console.custom_style_dope
     #getattr(
     #    console, 
     #    f"custom_style_{cli_style}", 
     #    getattr(console, f"custom_style_{conf.CLI_STYLE}"),
     #)
-            
+
+    return
+
+"""
+@app.callback(invoke_without_command=True)
+def main_bak(
+    ctx: typer.Context,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose mode.")] = False,
+    version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit.")] = False,
+    #cli_style: Annotated[str, typer.Option("--cli-style", "-c", help="Custom CLI Style")] = "dope",
+):            
 """
 
 #from .commands.routers import *
@@ -249,25 +278,3 @@ def main_bak(
 #        help=HELP,
 #        hidden=True
 #    )
-
-#from .commands.apps import create
-#from .commands.apps import delete
-#from .commands.apps import ls
-
-#app.add_typer(create.app, name="apps")
-#app.add_typer(delete.app, name="apps")
-#app.add_typer(ls.app, name="apps")
-
-#app.add_typer(up.app, name="up")
-
-#for cmd in all_commands:
-#    app.add_typer(cmd)
-
-#apps_cmds = typer.Typer()
-#app.add_typer(apps_cmds, name="apps")
-
-#app = typer.Typer()
-#items_app = typer.Typer()
-#app.add_typer(items_app, name="items")
-#users_app = typer.Typer()
-#app.add_typer(users_app, name="users")

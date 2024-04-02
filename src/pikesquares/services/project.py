@@ -118,15 +118,10 @@ class ProjectService(Handler):
         #    shutil.move(self.svc_model.service_config, self.svc_model.service_config.with_suffix(".stopped"))
 
 
-def projects_all(conf: ClientConfig):
-    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
-        projects_db = db.table('projects')
-        return projects_db.all()
-
-def get_project(conf: ClientConfig, project_id):
-    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
-        return db.table('projects').\
-            get(Query().service_id == project_id)
+#def get_project(conf: ClientConfig, project_id):
+#    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+#        return db.table('projects').\
+#            get(Query().service_id == project_id)
 
 
 

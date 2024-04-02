@@ -1,9 +1,9 @@
 import os
+from functools import cached_property
 import logging
-from typing import Protocol
+from typing import Protocol, List, Tuple
 from abc import abstractmethod
 from pathlib import Path
-import subprocess
 
 import pydantic
 from uwsgiconf import uwsgi
@@ -11,14 +11,9 @@ from tinydb import TinyDB, Query
 #from questionary import Style as QuestionaryStyle
 
 #from pikesquares.cli.console import console
-from .. import (
-    #PathLike,
-    get_first_available_port,
-    #get_service_status,
-)
+from .. import get_first_available_port
 #from ..cli.pki import CERT_NAME
 from ..conf import ClientConfig
-#from .. import load_client_conf
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +26,7 @@ __all__ = (
     "Project",
     "Device",
     "HttpsRouter",
+    "HttpRouter",
     "WsgiApp",
 )
 
@@ -67,6 +63,7 @@ class BaseService(pydantic.BaseModel):
                 console.warning(f"unable to load v{pikesquares_version} conf from {str(data_dir)}/device-db.json")
                 return
 
+        print("loading config")
         return ClientConfig(**conf_mapping)
 
     def get_service_status(self):
@@ -78,7 +75,21 @@ class BaseService(pydantic.BaseModel):
                 str(self.stats_address)
             ) else 'stopped'
 
+    def startup_log(self, show_config_start_marker: str, show_config_end_marker: str) -> Tuple[List, List]:
+        """
+        read the output of `show-config` option from the service log
+        """
+        with open(str(self.log_file)) as f:
+            log_lines = f.readlines()
+            start_index = max(idx for idx, val in enumerate(log_lines) if val == show_config_start_marker)
+            end_index = max(idx for idx, val in enumerate(log_lines) if val == show_config_end_marker)
+            #print(f"{start_index} {end_index}")
+            latest_running_config = log_lines[start_index:end_index+1]
+            latest_startup_log = log_lines[end_index+1:]
+        return latest_running_config, latest_startup_log
+
     @pydantic.computed_field
+    @cached_property
     def conf(self) -> ClientConfig: 
         return self.load_client_conf()
 
@@ -254,12 +265,44 @@ class HttpsRouter(BaseService):
 
 
 
+class HttpRouter(BaseService):
+    pass
+
+    @pydantic.computed_field
+    def service_config(self) -> Path:
+        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
+
+    @pydantic.computed_field
+    def socket_address(self) -> str:
+        return f"127.0.0.1:{get_first_available_port(port=4017)}"
+
+    #@pydantic.computed_field
+    #def stats_address(self) -> str:
+        return f"127.0.0.1:{get_first_available_port(port=9897)}"
+
+    @pydantic.computed_field
+    def subscription_server_address(self) -> str:
+        return f"127.0.0.1:{get_first_available_port(port=6600)}"
+
+    @pydantic.computed_field
+    def resubscribe_to(self) -> Path:
+        #resubscribe_to: str = None,
+        return Path()
+
+
+
 class WsgiApp(BaseService):
 
     name: str
 
     @pydantic.computed_field
     def service_config(self) -> Path:
+        return Path(self.conf.CONFIG_DIR) / \
+                f"{self.parent_service_id}" / "apps" \
+                / f"{self.service_id}.json"
+
+    @pydantic.computed_field
+    def touch_reload_file(self) -> Path:
         return Path(self.conf.CONFIG_DIR) / \
                 f"{self.parent_service_id}" / "apps" \
                 / f"{self.service_id}.json"
@@ -400,6 +443,7 @@ class HandlerFactory:
     def register(cls, type_name):
         def deco(deco_cls):
             cls.handlers[type_name] = deco_cls
+            print(f"registered {type_name} {deco_cls}")
             return deco_cls
         return deco
 
