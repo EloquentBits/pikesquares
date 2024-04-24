@@ -1,5 +1,5 @@
 #import json
-#from pathlib import Path
+from pathlib import Path
 from typing import Any, Dict, Tuple, Type
 
 from questionary import Style as QuestionaryStyle
@@ -84,19 +84,21 @@ class ClientConfig(BaseSettings):
 
     RUN_AS_UID: int
     RUN_AS_GID: int
+    SERVER_RUN_AS_UID: int
+    SERVER_RUN_AS_GID: int
     APP_NAME: str = "pikesquares"
 
     DEBUG: bool = False
     DAEMONIZE: bool = False
-    DATA_DIR: str
-    RUN_DIR: str
-    LOG_DIR: str
-    CONFIG_DIR: str
-    PLUGINS_DIR: str
-    VIRTUAL_ENV: str
-    EASYRSA_DIR: str
-    EMPEROR_ZMQ_ADDRESS: str
-    PKI_DIR: str
+    DATA_DIR: Path
+    RUN_DIR: Path
+    LOG_DIR: Path
+    CONFIG_DIR: Path
+    PLUGINS_DIR: Path
+    VIRTUAL_ENV: Path
+    #EASYRSA_DIR: str
+    CADDY_DIR: str | None = None
+    #PKI_DIR: str
     #CLI_STYLE: QuestionaryStyle
     ENABLE_SENTRY: bool = True
     SENTRY_DSN: str = ""

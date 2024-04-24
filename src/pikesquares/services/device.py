@@ -57,7 +57,10 @@ class DeviceService(Handler):
                     handler_name = "Https-Router"
                     handler_class = HttpsRouter
 
-                if handler_name and handler_class:
+                if all([
+                    handler_name,  
+                    handler_name == "Http-Router", 
+                    handler_class]):
                     HandlerFactory.make_handler(handler_name)(
                             handler_class(service_id=router_doc.get("service_id")
                     )).up(router_doc.get("address").split("://")[-1])
@@ -110,6 +113,7 @@ class DeviceService(Handler):
         else:  # ah well, can't control how dlopen works here
             import pyuwsgi
 
+        console.info("starting PikeSquares Server")
         pyuwsgi.run([
             "--json",
             f"{str(self.svc_model.service_config.resolve())}"

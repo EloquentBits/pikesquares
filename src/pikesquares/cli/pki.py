@@ -4,7 +4,6 @@ from pathlib import Path
 from .console import console
 
 CERT_NAME = "_wildcard_pikesquares_dev"
-easyrsa = lambda dir: str(Path(dir) / "EasyRSA-3.1.7" / "easyrsa")
 
 def ensure_pki(conf):
     if Path(conf.PKI_DIR).exists():
@@ -12,7 +11,7 @@ def ensure_pki(conf):
 
     compl = subprocess.run(
         args=[
-            easyrsa(conf.EASYRSA_DIR),
+            str(Path(conf.EASYRSA_DIR) / "EasyRSA-3.1.7" / "easyrsa"),
             "init-pki",
         ],
         cwd=conf.DATA_DIR,
@@ -37,7 +36,7 @@ def ensure_build_ca(conf):
 
     compl = subprocess.run(
         args=[
-            easyrsa(conf.EASYRSA_DIR),
+            str(Path(conf.EASYRSA_DIR) / "EasyRSA-3.1.7" / "easyrsa"),
             '--req-cn=PikeSquares Proxy',
             "--batch",
             "--no-pass",
@@ -71,7 +70,7 @@ def ensure_csr(conf):
     console.info("generating CSR")
     compl = subprocess.run(
         args=[
-            easyrsa(conf.EASYRSA_DIR),
+            str(Path(conf.EASYRSA_DIR) / "EasyRSA-3.1.7" / "easyrsa"),
             "--batch",
             "--no-pass",
             "--silent",
@@ -93,21 +92,21 @@ def ensure_csr(conf):
 def ensure_sign_req(conf):
     if not all([Path(conf.PKI_DIR).exists(),
                 (Path(conf.PKI_DIR) / "ca.crt").exists(),
-                (Path(conf.PKI_DIR) / "reqs" / f"{CERT_NAME}.req").exists()]):
+                (Path(conf.PKI_DIR) / "reqs" / f"{}.req").exists()]):
         return
 
-    if (Path(conf.PKI_DIR) / "issued" / f"{CERT_NAME}.crt").exists():
+    if (Path(conf.PKI_DIR) / "issued" / "_wildcard_pikesquares_dev.crt").exists():
         return
 
     console.info("Signing CSR")
     compl = subprocess.run(
         args=[
-            easyrsa(conf.EASYRSA_DIR),
+            str(Path(conf.EASYRSA_DIR) / "EasyRSA-3.1.7" / "easyrsa"),
             "--batch",
             "--no-pass",
             "sign-req",
             "server",
-            CERT_NAME,
+            "_wildcard_pikesquares_dev",
         ],
         cwd=conf.DATA_DIR,
         capture_output=True,
@@ -119,4 +118,9 @@ def ensure_sign_req(conf):
     else: # (Path(conf.PKI_DIR) / "ca.crt").exists(): 
         console.info(f"csr signed")
         console.info(compl.stdout.decode())
+
+# easyrsa init-pki
+# easyrsa build-ca
+# easyrsa gen-req "*.pikesquares.dev"
+# easyrsa sign-req server *.pikesquares.dev
 

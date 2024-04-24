@@ -7,7 +7,6 @@ from tinydb import TinyDB, Query
 #from uwsgiconf import uwsgi
 
 from ..presets.project import ProjectSection
-from ..conf import ClientConfig
 from . import (
     Handler, 
     HandlerFactory,

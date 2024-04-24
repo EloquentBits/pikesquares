@@ -89,72 +89,61 @@ class Section(_Section):
 
 class ManagedServiceSection(Section):
 
-    def __init__(self, conf, project_id, service_id, command, pre_start_section=None, env_vars=None):
-        super().__init__(
-            name="uwsgi",
-            runtime_dir=conf.RUN_DIR,
-            owner=f"{conf.RUN_AS_UID}:{conf.RUN_AS_GID}",
-            touch_reload=str(
-                (Path(conf.CONFIG_DIR) / f"{project_id}" / "apps" / f"{service_id}.json").resolve()
-            )
-        )
-        self.project_id = project_id
-        self.service_id = service_id
+    def __init__(self, svc_model, command: str):
+        super().__init__(name="uwsgi")
+        self.svc_model = svc_model
+        self.command = command
 
-        self.conf = conf
+        #if pre_start_section:
+        #    self.include(pre_start_section)
+        #executable_path, *_ = command.split(' ')
+        #executable_name = Path(executable_path).stem
+        #self.main_process.run_command_on_event(f"touch {pid_path}")
+        #if env_vars:
+        #    self._setup_environment_variables(env_vars)
 
-        if pre_start_section:
-            self.include(pre_start_section)
-
-        executable_path, *_ = command.split(' ')
-        executable_name = Path(executable_path).stem
-        pid_path = Path(conf.RUN_DIR) / f"{executable_name}.pid"
-        self.main_process.run_command_on_event(f"touch {pid_path}")
-
-        if env_vars:
-            self._setup_environment_variables(env_vars)
-
-        self.master_process.attach_process_classic(
-            f"{pid_path} {command}",
-            background=True
-            # pidfile=pid_path,
-            # daemonize=True
+        self.master_process.attach_process(
+            self.command,
+            pidfile=svc_model.run_dir / f"{svc_model.name}.pid",
+            daemonize=True,
+            uid=svc_model.uid,
+            gid=svc_model.gid,
         )
 
         self.monitoring.set_stats_params(
-            address=str(Path(conf.RUN_DIR) / f"{service_id}-stats.sock"),
+            address=str(svc_model.stats_address)
         )
-        self.setup_loggers()
 
-    def setup_loggers(self):
         # self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(Path(self.conf.LOG_DIR) / f"{self.service_id}.log"))
+            self.logging.loggers.file(
+                filepath=str(svc_model.log_file)
+            )
         )
 
-    def _setup_environment_variables(self, env_vars):
-        for key, value in env_vars.items():
-            self.env(key, value)
+    #def _setup_environment_variables(self, env_vars):
+    #    for key, value in env_vars.items():
+    #        self.env(key, value)
 
 
 
-class CronJobSection(Section):
+#class CronJobSection(Section):
 
-    def _setup_environment_variables(self, env_vars):
-        for key, value in env_vars.items():
-            self.env(key, value)
+#    def _setup_environment_variables(self, env_vars):
+#        for key, value in env_vars.items():
+#            self.env(key, value)
 
-    def __init__(self, conf, command, env_vars=None, **kwargs):
-        super().__init__(
-            name="uwsgi",
-            runtime_dir=conf.RUN_DIR,
-            owner=f"{conf.RUN_AS_UID}:{conf.RUN_AS_GID}"
-        )
-        if env_vars is not None:
-            self._setup_environment_variables(env_vars)
+#    def __init__(self, conf, command, env_vars=None, **kwargs):
+#        super().__init__(
+#            name="uwsgi",
+#            runtime_dir=conf.RUN_DIR,
+#            owner=f"{conf.RUN_AS_UID}:{conf.RUN_AS_GID}"
+#        )
+#        if env_vars is not None:
+#            self._setup_environment_variables(env_vars)
 
         # -15 -1 -1 -1 -1 - every 15 minute (minus X means */X, minus 1 means *)
-        self.master_process.add_cron_task(
-            command,
-            **kwargs
-        )
+#        self.master_process.add_cron_task(
+#            command,
+#            **kwargs
+#        )

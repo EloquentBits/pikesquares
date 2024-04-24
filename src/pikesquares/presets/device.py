@@ -43,7 +43,10 @@ class DeviceSection(Section):
             #str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
         )
 
-        self.main_process.set_owner_params(uid=svc_model.uid, gid=svc_model.gid)
+        self.main_process.set_owner_params(
+            uid=svc_model.server_uid, 
+            gid=svc_model.server_gid,
+        )
         self.main_process.set_naming_params(
             prefix="[[ PikeSquares App ]] ",
             suffix="[suffix]",
@@ -117,9 +120,9 @@ class DeviceSection(Section):
 
         self.logging.add_logger(self.logging.loggers.stdio())
 
-        self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(svc_model.log_file))
-        )
+        #self.logging.add_logger(
+        #    self.logging.loggers.file(filepath=str(svc_model.log_file))
+        #)
 
         #self.run_fastrouter()
         #self.run_httpsrouter()

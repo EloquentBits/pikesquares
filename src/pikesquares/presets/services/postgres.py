@@ -1,7 +1,7 @@
-from .. import ManagedServiceSection, VConfSection, VConfConfiguration
+from .. import ManagedServiceSection, Section, Configuration
 
 
-class PostgresPreStartSection(VConfSection):
+class PostgresPreStartSection(Section):
     
     def __init__(self, pgsql_root, pgsql_db):
         super().__init__(name="check_db_initialized")
@@ -92,7 +92,7 @@ class PostgresMainSection(ManagedServiceSection):
             self.setup_virtual_hosts(virtual_hosts)
 
 
-class PostgresqlConfiguration(VConfConfiguration):
+class PostgresqlConfiguration(Configuration):
     
     def __init__(
             self,

@@ -306,14 +306,15 @@ class WsgiAppSection(BaseWsgiAppSection):
         except IndexError:
             pass
         
-        subscription_params = dict(
-            server=subscription_server_address,
-            address=str(svc_model.socket_address),  # address and port of wsgi app
-            key=f"{svc_model.name}.pikesquares.dev{https_router_port}",
-        )
         #print(f"{subscription_params=}")
 
-        self.subscriptions.subscribe(**subscription_params)
+        self.subscriptions.subscribe(
+            {
+                "server": subscription_server_address,
+                "address": str(svc_model.socket_address),  # address and port of wsgi app
+                "key": f"{svc_model.name}.pikesquares.dev{https_router_port}",
+            }
+        )
 
         """
         vhost_address = ""

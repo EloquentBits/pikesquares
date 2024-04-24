@@ -50,18 +50,20 @@ class BaseService(pydantic.BaseModel):
 
         data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", ""))
         if not (Path(data_dir) / "device-db.json").exists():
-            console.warning(f"conf db does not exist @ {data_dir}/device-db.json")
-            return
+            raise Exception(f"conf db does not exist @ {data_dir}/device-db.json")
 
         conf_mapping = {}
         pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
+
         with TinyDB(data_dir / "device-db.json") as db:
             try:
                 conf_mapping = db.table('configs').\
                     search(Query().version == pikesquares_version)[0]
             except IndexError:
-                console.warning(f"unable to load v{pikesquares_version} conf from {str(data_dir)}/device-db.json")
-                return
+                raise Exception(
+                    f"unable to load v{pikesquares_version} conf from {str(data_dir)}/device-db.json"
+                )
+                
 
         print("loading config")
         return ClientConfig(**conf_mapping)
@@ -93,9 +95,13 @@ class BaseService(pydantic.BaseModel):
     def conf(self) -> ClientConfig: 
         return self.load_client_conf()
 
+    #@pydantic.computed_field
+    #def easyrsa(self) -> str:
+    #    return str(Path(self.easyrsa_dir) / "EasyRSA-3.1.7" / "easyrsa")
+
     @pydantic.computed_field
-    def easyrsa(self) -> str:
-        return str(Path(self.easyrsa_dir) / "EasyRSA-3.1.7" / "easyrsa")
+    def caddy(self) -> Path | None:
+        return self.caddy_dir / "caddy"
 
     @pydantic.computed_field
     def enable_sentry(self) -> bool:
@@ -107,27 +113,32 @@ class BaseService(pydantic.BaseModel):
 
     @pydantic.computed_field
     def data_dir(self) -> Path:
-        return Path(self.conf.DATA_DIR)
+        return self.conf.DATA_DIR
 
     @pydantic.computed_field
     def config_dir(self) -> Path:
-        return Path(self.conf.CONFIG_DIR)
+        return self.conf.CONFIG_DIR
 
     @pydantic.computed_field
     def log_dir(self) -> Path:
-        return Path(self.conf.LOG_DIR)
+        return self.conf.LOG_DIR
 
     @pydantic.computed_field
     def run_dir(self) -> Path:
-        return Path(self.conf.RUN_DIR)
+        return self.conf.RUN_DIR
+
+    #@pydantic.computed_field
+    #def easyrsa_dir(self) -> Path:
+    #    return Path(self.conf.EASYRSA_DIR)
 
     @pydantic.computed_field
-    def easyrsa_dir(self) -> Path:
-        return Path(self.conf.EASYRSA_DIR)
+    def caddy_dir(self) -> Path | None:
+        if self.conf.CADDY_DIR and Path(self.conf.CADDY_DIR).exists():
+            return Path(self.conf.CADDY_DIR)
 
     @pydantic.computed_field
     def plugins_dir(self) -> Path:
-        return Path(self.conf.PLUGINS_DIR)
+        return self.conf.PLUGINS_DIR
 
     @pydantic.computed_field
     def service_config(self) -> Path:
@@ -154,6 +165,14 @@ class BaseService(pydantic.BaseModel):
         return self.conf.RUN_AS_GID
 
     @pydantic.computed_field
+    def server_uid(self) -> int:
+        return self.conf.SERVER_RUN_AS_UID
+
+    @pydantic.computed_field
+    def server_gid(self) -> int:
+        return self.conf.SERVER_RUN_AS_GID
+
+    @pydantic.computed_field
     def touch_reload_file(self) -> Path:
         return Path(self.conf.CONFIG_DIR) / f"{self.service_id}.json"
 
@@ -173,21 +192,21 @@ class BaseService(pydantic.BaseModel):
     def device_db_path(self) -> Path:
         return Path(self.conf.DATA_DIR) / 'device-db.json'
 
-    @pydantic.computed_field
-    def pki_dir(self) -> Path:
-        return Path(self.conf.PKI_DIR)
+    #@pydantic.computed_field
+    #def pki_dir(self) -> Path:
+    #    return Path(self.conf.PKI_DIR)
 
-    @pydantic.computed_field
-    def certificate(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "issued" / f"{self.cert_name}.crt"
+    #@pydantic.computed_field
+    #def certificate(self) -> Path:
+    #    return Path(self.conf.PKI_DIR) / "issued" / f"{self.cert_name}.crt"
 
-    @pydantic.computed_field
-    def certificate_key(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "private" / f"{self.cert_name}.key"
+    #@pydantic.computed_field
+    #def certificate_key(self) -> Path:
+    #    return Path(self.conf.PKI_DIR) / "private" / f"{self.cert_name}.key"
 
-    @pydantic.computed_field
-    def certificate_ca(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "ca.crt"
+    #@pydantic.computed_field
+    #def certificate_ca(self) -> Path:
+    #    return Path(self.conf.PKI_DIR) / "ca.crt"
 
 
 
@@ -225,6 +244,7 @@ class Device(BaseService):
     #    device.start()
 
 
+
 class Project(BaseService):
     pass
 
@@ -238,6 +258,8 @@ class Project(BaseService):
         if apps_dir and not apps_dir.exists():
             apps_dir.mkdir(parents=True, exist_ok=True)
         return str(apps_dir.resolve())
+
+
 
 class HttpsRouter(BaseService):
     pass
@@ -310,6 +332,29 @@ class WsgiApp(BaseService):
     @pydantic.computed_field
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=4017)}"
+
+
+
+class ManagedDaemon(BaseService):
+
+    name: str
+    command: str
+
+    #@pydantic.computed_field
+    #def service_config(self) -> Path:
+    #    return Path(self.conf.CONFIG_DIR) / \
+    #            f"{self.parent_service_id}" / "apps" \
+    #            / f"{self.service_id}.json"
+
+    #@pydantic.computed_field
+    #def touch_reload_file(self) -> Path:
+    #    return Path(self.conf.CONFIG_DIR) / \
+    #            f"{self.parent_service_id}" / "apps" \
+    #            / f"{self.service_id}.json"
+
+    #@pydantic.computed_field
+    #def socket_address(self) -> str:
+    #    return f"127.0.0.1:{get_first_available_port(port=4017)}"
 
 
 

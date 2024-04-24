@@ -179,10 +179,16 @@ def tail_service_log(
 
 from ..services.device import *
 from .commands import apps
+from .commands import managed_services
 
 app.add_typer(
         apps.app, 
         name="apps"
+    )
+
+app.add_typer(
+        managed_services.app, 
+        name="services"
     )
 
 def _version_callback(value: bool) -> None:
@@ -236,7 +242,7 @@ def main(
     #pex_python = os.environ.get("PEX_PYTHON_PATH")
     #console.info(f"{pex_python=}")
 
-    #console.info(device_handler.svc_model.model_dump())
+    console.info(device_handler.svc_model.model_dump())
 
     #getattr(
     #    console, 
