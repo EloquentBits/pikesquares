@@ -1,13 +1,22 @@
 import os
 from functools import cached_property
 import logging
-from typing import Protocol, List, Tuple
+from typing import (
+    Protocol, 
+    List, 
+    Tuple,
+    cast,
+    overload,
+)
+
 from abc import abstractmethod
+from collections.abc import Callable
 from pathlib import Path
 
 import pydantic
 from uwsgiconf import uwsgi
 from tinydb import TinyDB, Query
+import typer
 #from questionary import Style as QuestionaryStyle
 
 #from pikesquares.cli.console import console
@@ -31,13 +40,187 @@ __all__ = (
 )
 
 
+from svcs._core import (
+    _KEY_CONTAINER,
+    _KEY_REGISTRY,
+    T1,
+    T2,
+    T3,
+    T4,
+    T5,
+    T6,
+    T7,
+    T8,
+    T9,
+    T10,
+    Container,
+    Registry,
+    #ServicePing,
+)
+
+def init_context(context: dict):
+    context[_KEY_REGISTRY] = Registry()
+    return context
+
+def svcs_from(context: dict) -> Container:
+    print(f"svcs_from: {context=}")
+    if (cont := context.get(_KEY_CONTAINER, None)) is None:
+        cont = Container(context[_KEY_REGISTRY])
+        context[_KEY_CONTAINER] =  cont
+
+    return cont
+
+
+def register_factory(
+    context: dict,
+    svc_type: type,
+    factory: Callable,
+    *,
+    enter: bool = True,
+    ping: Callable | None = None,
+    on_registry_close: Callable | None = None,
+) -> None:
+
+    context[_KEY_REGISTRY].register_factory(
+        svc_type,
+        factory,
+        enter=enter,
+        ping=ping,
+        on_registry_close=on_registry_close,
+    )
+
+
+@overload
+def get(context: dict, svc_type: type[T1], /) -> T1: ...
+
+
+@overload
+def get(context: dict, svc_type1: type[T1], svc_type2: type[T2], /) -> tuple[T1, T2]: ...
+
+
+@overload
+def get(
+    context: dict,
+    svc_type1: type[T1], svc_type2: type[T2], svc_type3: type[T3], /
+) -> tuple[T1, T2, T3]: ...
+
+
+@overload
+def get(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    /,
+) -> tuple[T1, T2, T3, T4]: ...
+
+
+@overload
+def get(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    /,
+) -> tuple[T1, T2, T3, T4, T5]: ...
+
+
+@overload
+def get(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6]: ...
+
+
+@overload
+def get(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    svc_type7: type[T7],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6, T7]: ...
+
+
+@overload
+def get(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    svc_type7: type[T7],
+    svc_type8: type[T8],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6, T7, T8]: ...
+
+
+@overload
+def get(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    svc_type7: type[T7],
+    svc_type8: type[T8],
+    svc_type9: type[T9],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6, T7, T8, T9]: ...
+
+
+@overload
+def get(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    svc_type7: type[T7],
+    svc_type8: type[T8],
+    svc_type9: type[T9],
+    svc_type10: type[T10],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10]: ...
+
+
+def get (
+        context: dict,
+        *svc_types: type,
+    ) -> object:
+
+    print(f"svcs_get: {context=}")
+    print(f"svcs_get: {svc_types=}")
+    return svcs_from(context).get(*svc_types)
+
+
 
 class BaseService(pydantic.BaseModel):
 
+    conf: ClientConfig
     service_id:str
-    cache:str = "pikesquares-settings"
-    parent_service_id:str = ""
-    cert_name:str = "_wildcard_pikesquares_dev"
+    #cache:str = "pikesquares-settings"
+    #parent_service_id:str = ""
+    #cert_name:str = "_wildcard_pikesquares_dev"
 
     #cli_style: QuestionaryStyle = console.custom_style_dope
 
@@ -48,7 +231,9 @@ class BaseService(pydantic.BaseModel):
 
         #console.info(f"loading config from db")
 
-        data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", ""))
+        data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", 
+                            "/home/pk/.local/share/pikesquares")
+        )
         if not (Path(data_dir) / "device-db.json").exists():
             raise Exception(f"conf db does not exist @ {data_dir}/device-db.json")
 
@@ -63,7 +248,6 @@ class BaseService(pydantic.BaseModel):
                 raise Exception(
                     f"unable to load v{pikesquares_version} conf from {str(data_dir)}/device-db.json"
                 )
-                
 
         print("loading config")
         return ClientConfig(**conf_mapping)
@@ -90,10 +274,11 @@ class BaseService(pydantic.BaseModel):
             latest_startup_log = log_lines[end_index+1:]
         return latest_running_config, latest_startup_log
 
-    @pydantic.computed_field
-    @cached_property
-    def conf(self) -> ClientConfig: 
-        return self.load_client_conf()
+    #@pydantic.computed_field
+    #@cached_property
+    #def conf(self) -> ClientConfig: 
+    #    return self.load_client_conf()
+        
 
     #@pydantic.computed_field
     #def easyrsa(self) -> str:
@@ -101,7 +286,10 @@ class BaseService(pydantic.BaseModel):
 
     @pydantic.computed_field
     def caddy(self) -> Path | None:
-        return self.caddy_dir / "caddy"
+        try:
+            return self.caddy_dir / "caddy"
+        except TypeError:
+            pass
 
     @pydantic.computed_field
     def enable_sentry(self) -> bool:
@@ -363,7 +551,7 @@ class Handler(Protocol):
     svc_model: BaseService
 
     def __init__(self,
-            svc_model,
+            svc_model: BaseService,
             is_internal: bool = True,
             is_enabled: bool = False,
             is_app: bool = False,

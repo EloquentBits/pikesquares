@@ -26,11 +26,11 @@ class DeviceService(Handler):
     config_json = {}
 
     def up(self):
-        from pikesquares.services import (
-            Project, 
-            HttpsRouter,
-            HttpRouter,
-        )
+        #from pikesquares.services import (
+        #    Project, 
+        #    HttpsRouter,
+        #    HttpRouter,
+        #)
         #conf.DAEMONIZE = not foreground
         #self.setup_pki()
 
@@ -40,30 +40,32 @@ class DeviceService(Handler):
 
         self.sync_db_with_filesystem()
 
-        with TinyDB(self.svc_model.device_db_path) as db:
-            for project_doc in db.table('projects'):
-                project_handler = HandlerFactory.make_handler("Project")(
-                    Project(service_id=project_doc.get("service_id"))
-                )
-                project_handler.up(project_doc.get("name"))
+        #with TinyDB(self.svc_model.device_db_path) as db:
+        #    for project_doc in db.table('projects'):
+        #        project_handler = HandlerFactory.make_handler("Project")(
+        #            Project(
+        #                service_id=project_doc.get("service_id")
+        #            )
+        #        )
+        #        project_handler.up(project_doc.get("name"))
 
-            for router_doc in db.table('routers'):
-                handler_name = None
-                handler_class = None
-                if router_doc.get("service_type") == "HttpRouterService":
-                    handler_name = "Http-Router"
-                    handler_class = HttpRouter
-                elif router_doc.get("service_type") == "HttpRouterService":
-                    handler_name = "Https-Router"
-                    handler_class = HttpsRouter
+        #    for router_doc in db.table('routers'):
+        #        handler_name = None
+        #        handler_class = None
+        #        if router_doc.get("service_type") == "HttpRouterService":
+        #            handler_name = "Http-Router"
+        #            handler_class = HttpRouter
+        #        elif router_doc.get("service_type") == "HttpRouterService":
+        #            handler_name = "Https-Router"
+        #            handler_class = HttpsRouter
 
-                if all([
-                    handler_name,  
-                    handler_name == "Http-Router", 
-                    handler_class]):
-                    HandlerFactory.make_handler(handler_name)(
-                            handler_class(service_id=router_doc.get("service_id")
-                    )).up(router_doc.get("address").split("://")[-1])
+        #        if all([
+        #            handler_name,  
+        #            handler_name == "Http-Router", 
+        #            handler_class]):
+        #            HandlerFactory.make_handler(handler_name)(
+        #                    handler_class(service_id=router_doc.get("service_id")
+        #            )).up(router_doc.get("address").split("://")[-1])
 
         self.start()
 

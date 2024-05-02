@@ -1,10 +1,12 @@
 cuid
+circus
 gitpython
 giturlparse
 questionary
 pydantic-settings
 randomname
 sentry-sdk
+svcs
 tinydb
 typer[all]
 uWSGI

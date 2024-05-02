@@ -1,12 +1,20 @@
 import os
 from typing import Optional
+from pathlib import Path
 
 import typer
-from typing_extensions import Annotated
+#from typing_extensions import Annotated
 import questionary
+from tinydb import TinyDB, Query
 
 from pikesquares.services import HandlerFactory, Device
 
+from ..conf import ClientConfig
+from ..services import (
+    init_context,
+    register_factory,
+    get as svcs_get,
+)
 from ..services.device import *
 from ..services.project import *
 from ..services.router import *
@@ -116,7 +124,25 @@ def up(
     """ Launch PikeSquares Server """
 
     obj = ctx.ensure_object(dict)
-    device_handler = obj["device-handler"]
+
+    print(f"up: {obj=}")
+
+    db = svcs_get(obj, TinyDB)
+    #container = svcs.Container(registry)
+    #db = container.get(TinyDB)
+    if db.tables():
+        print("reading tables....")
+        for t in db.tables():
+            print(t)
+    else:
+        print(f"unable to read db: {db}")
+
+    conf = svcs_get(obj, ClientConfig)
+
+    print(conf)
+
+    #device_handler = obj["device-handler"]
+    device_handler = svcs_get(obj, DeviceService)
     if device_handler.svc_model.get_service_status() == "running":
         console.info("Looks like a PikeSquares Server is already running")
         if questionary.confirm("Stop the running PikeSquares Server and launch a new instance?").ask():
@@ -212,12 +238,52 @@ def main(
     """
     Welcome to Pike Squares. Building blocks for your apps.
     """
+
+    print(f"About to execute command: {ctx.invoked_subcommand}")
+
     obj = ctx.ensure_object(dict)
-    device_handler = HandlerFactory.make_handler("Device")(
-        Device(service_id="device")
+    obj = init_context(obj)
+
+    data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", 
+                        "/home/pk/.local/share/pikesquares")
     )
-    obj["device-handler"] = device_handler
+    db_path = Path(data_dir) / "device-db.json"
+    if not db_path.exists():
+        raise Exception(f"conf db does not exist @ {db_path}")
+
+    def tinydb_factory():
+        with TinyDB(db_path) as db:
+            yield db
+
+    register_factory(obj, TinyDB, tinydb_factory)
+
+    def conf_factory():
+        conf_mapping = {}
+        pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
+        db = svcs_get(obj, TinyDB)
+        try:
+            conf_mapping = db.table('configs').\
+                search(Query().version == pikesquares_version)[0]
+        except IndexError:
+            raise Exception(
+                f"unable to load v{pikesquares_version} conf from {str(db_path)}"
+            )
+        return ClientConfig(**conf_mapping)
+
+    register_factory(obj, ClientConfig, conf_factory)
+
+    def device_handler_factory():
+        return HandlerFactory.make_handler("Device")(
+                Device(
+                    conf=svcs_get(obj, ClientConfig),
+                    service_id="device",
+                )
+        )
+    register_factory(obj, DeviceService, device_handler_factory)
+    #obj["device-handler"] = device_handler
     obj["cli-style"] = console.custom_style_dope
+
+    
 
     #for key, value in os.environ.items():
     #    if key.startswith(('PIKESQUARES', 'SCIE', 'PEX')):
@@ -242,7 +308,7 @@ def main(
     #pex_python = os.environ.get("PEX_PYTHON_PATH")
     #console.info(f"{pex_python=}")
 
-    console.info(device_handler.svc_model.model_dump())
+    #console.info(device_handler.svc_model.model_dump())
 
     #getattr(
     #    console, 
