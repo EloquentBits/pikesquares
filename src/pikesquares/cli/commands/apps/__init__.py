@@ -55,6 +55,7 @@ def create_venv(venv_dir):
         check=True,
     )
 
+
 def venv_pip_install(venv_dir: Path, service_id: str, *args: str, find_links: str | None) -> None:
     subprocess.run(
         args=[
@@ -75,18 +76,18 @@ def venv_pip_install(venv_dir: Path, service_id: str, *args: str, find_links: st
     )
 
 
-def prompt_base_dir(repo_name: str, custom_style:questionary.Style) -> Path:
+def prompt_base_dir(repo_name: str, custom_style: questionary.Style) -> Path:
     return questionary.path(
-            f"Choose a directory to clone your `{repo_name}` git repository into: ", 
+            f"Choose a directory to clone your `{repo_name}` git repository into: ",
         default=os.getcwd(),
         only_directories=True,
         style=custom_style,
         validate=PathValidator,
     ).ask()
 
-def prompt_repo_url(custom_style:questionary.Style) -> str:
+def prompt_repo_url(custom_style: questionary.Style) -> str:
     repo_url_q = questionary.text(
-            "Enter your app git repository url:", 
+            "Enter your app git repository url:",
             default="",
             instruction="""\nExamples:\n    https://host.xz/path/to/repo.git\n    ssh://host.xz/path/to/repo.git\n>>>""",
             style=custom_style,
@@ -138,7 +139,7 @@ def provision_base_dir(custom_style):
         choices=[
             "Git Repository",
             "Local Filesystem Directory",
-            #"PikeSquares App Template",
+            # "PikeSquares App Template",
             questionary.Separator(),
             questionary.Choice("PikeSquares App Template", disabled="coming soon"),
         ],
@@ -146,14 +147,14 @@ def provision_base_dir(custom_style):
         use_shortcuts=True,
         use_indicator=True,
         show_selected=False,
-        #instruction="this is an instruction",
+        # instruction="this is an instruction",
     ).ask()
     if not provider:
         raise typer.Exit()
 
     if provider == "Local Filesystem Directory":
         return Path(questionary.path(
-                "Enter your app base directory: ", 
+                "Enter your app base directory: ",
             default=os.getcwd(),
             only_directories=True,
             validate=PathValidator,

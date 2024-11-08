@@ -117,7 +117,7 @@ jobs:
         run: |
           pex \
             dist/pikesquares-"${{steps.project-version.outputs.version}}"-py3-none-any.whl \
-            "https://pypi.vc.eloquentbits.com/packages/pikesquares_pyuwsgi-2.0.24.post0-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl" \
+            "https://pypi.vc.eloquentbits.com/packages/pyuwsgi-2.0.28.post0-${{ matrix.py }}-${{ matrix.py }}-${{ matrix.cibw-wheel-suffix}}.whl" \
             -r requirements.txt \
             --venv \
             --entry-point pikesquares.cli.cli:app \
