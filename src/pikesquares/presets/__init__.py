@@ -40,8 +40,10 @@ FORMATTERS: Dict[str, Type[FormatterBase]] = {formatter.alias: formatter for for
     IniFormatter,
     JSONFormatter,
 )}
-"""Available formatters by alias."""
+
+
 class Configuration(_Configuration):
+    """Available formatters by alias."""
 
     def format(self, *, do_print: bool = False, formatter: str = 'ini') -> Strlist:
         """Applies formatting to configuration.
@@ -83,8 +85,6 @@ class Section(_Section):
         
         """
         return Configuration([self], **kwargs)
-
-
 
 
 class ManagedServiceSection(Section):

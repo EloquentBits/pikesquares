@@ -1,11 +1,8 @@
-import os
-from functools import cached_property
 import logging
 from typing import (
-    Protocol, 
-    List, 
+    Protocol,
+    List,
     Tuple,
-    cast,
     overload,
 )
 
@@ -14,28 +11,29 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pydantic
+from pydantic.config import ConfigDict
 from uwsgiconf import uwsgi
-from tinydb import TinyDB, Query
-import typer
-#from questionary import Style as QuestionaryStyle
+from tinydb import TinyDB
 
-#from pikesquares.cli.console import console
+# from questionary import Style as QuestionaryStyle
+
 from .. import get_first_available_port
-#from ..cli.pki import CERT_NAME
+
+# from ..cli.pki import CERT_NAME
 from ..conf import ClientConfig
-
-logger = logging.getLogger(__name__)
-
 from pikesquares.cli.console import console
 from pikesquares import read_stats
 
+logger = logging.getLogger(__name__)
+
+
 __all__ = (
+    "Device",
     "Handler",
     "HandlerFactory",
-    "Project",
-    "Device",
-    "HttpsRouter",
     "HttpRouter",
+    "HttpsRouter",
+    "Project",
     "WsgiApp",
 )
 
@@ -55,18 +53,20 @@ from svcs._core import (
     T10,
     Container,
     Registry,
-    #ServicePing,
+    # ServicePing,
 )
+
 
 def init_context(context: dict):
     context[_KEY_REGISTRY] = Registry()
     return context
 
+
 def svcs_from(context: dict) -> Container:
     print(f"svcs_from: {context=}")
     if (cont := context.get(_KEY_CONTAINER, None)) is None:
         cont = Container(context[_KEY_REGISTRY])
-        context[_KEY_CONTAINER] =  cont
+        context[_KEY_CONTAINER] = cont
 
     return cont
 
@@ -99,10 +99,7 @@ def get(context: dict, svc_type1: type[T1], svc_type2: type[T2], /) -> tuple[T1,
 
 
 @overload
-def get(
-    context: dict,
-    svc_type1: type[T1], svc_type2: type[T2], svc_type3: type[T3], /
-) -> tuple[T1, T2, T3]: ...
+def get(context: dict, svc_type1: type[T1], svc_type2: type[T2], svc_type3: type[T3], /) -> tuple[T1, T2, T3]: ...
 
 
 @overload
@@ -203,63 +200,35 @@ def get(
 ) -> tuple[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10]: ...
 
 
-def get (
-        context: dict,
-        *svc_types: type,
-    ) -> object:
+def get(
+    context: dict,
+    *svc_types: type,
+) -> object:
 
     print(f"svcs_get: {context=}")
     print(f"svcs_get: {svc_types=}")
     return svcs_from(context).get(*svc_types)
 
 
-
 class BaseService(pydantic.BaseModel):
 
+    model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
+
     conf: ClientConfig
-    service_id:str
-    #cache:str = "pikesquares-settings"
-    #parent_service_id:str = ""
-    #cert_name:str = "_wildcard_pikesquares_dev"
+    db: TinyDB
+    service_id: str
+    # cache:str = "pikesquares-settings"
+    # parent_service_id:str = ""
+    # cert_name:str = "_wildcard_pikesquares_dev"
 
-    #cli_style: QuestionaryStyle = console.custom_style_dope
-
-    def load_client_conf(self) -> ClientConfig | None:
-        """
-        read TinyDB json
-        """
-
-        #console.info(f"loading config from db")
-
-        data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", 
-                            "/home/pk/.local/share/pikesquares")
-        )
-        if not (Path(data_dir) / "device-db.json").exists():
-            raise Exception(f"conf db does not exist @ {data_dir}/device-db.json")
-
-        conf_mapping = {}
-        pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
-
-        with TinyDB(data_dir / "device-db.json") as db:
-            try:
-                conf_mapping = db.table('configs').\
-                    search(Query().version == pikesquares_version)[0]
-            except IndexError:
-                raise Exception(
-                    f"unable to load v{pikesquares_version} conf from {str(data_dir)}/device-db.json"
-                )
-
-        print("loading config")
-        return ClientConfig(**conf_mapping)
+    # cli_style: QuestionaryStyle = console.custom_style_dope
 
     def get_service_status(self):
         """
         read stats socket
         """
         if self.stats_address.exists() and self.stats_address.is_socket():
-            return 'running' if read_stats(
-                str(self.stats_address)
-            ) else 'stopped'
+            return 'running' if read_stats(str(self.stats_address)) else 'stopped'
 
     def startup_log(self, show_config_start_marker: str, show_config_end_marker: str) -> Tuple[List, List]:
         """
@@ -269,19 +238,13 @@ class BaseService(pydantic.BaseModel):
             log_lines = f.readlines()
             start_index = max(idx for idx, val in enumerate(log_lines) if val == show_config_start_marker)
             end_index = max(idx for idx, val in enumerate(log_lines) if val == show_config_end_marker)
-            #print(f"{start_index} {end_index}")
-            latest_running_config = log_lines[start_index:end_index+1]
-            latest_startup_log = log_lines[end_index+1:]
+            # print(f"{start_index} {end_index}")
+            latest_running_config = log_lines[start_index : end_index + 1]
+            latest_startup_log = log_lines[end_index + 1 :]
         return latest_running_config, latest_startup_log
 
-    #@pydantic.computed_field
-    #@cached_property
-    #def conf(self) -> ClientConfig: 
-    #    return self.load_client_conf()
-        
-
-    #@pydantic.computed_field
-    #def easyrsa(self) -> str:
+    # @pydantic.computed_field
+    # def easyrsa(self) -> str:
     #    return str(Path(self.easyrsa_dir) / "EasyRSA-3.1.7" / "easyrsa")
 
     @pydantic.computed_field
@@ -315,8 +278,8 @@ class BaseService(pydantic.BaseModel):
     def run_dir(self) -> Path:
         return self.conf.RUN_DIR
 
-    #@pydantic.computed_field
-    #def easyrsa_dir(self) -> Path:
+    # @pydantic.computed_field
+    # def easyrsa_dir(self) -> Path:
     #    return Path(self.conf.EASYRSA_DIR)
 
     @pydantic.computed_field
@@ -380,33 +343,32 @@ class BaseService(pydantic.BaseModel):
     def device_db_path(self) -> Path:
         return Path(self.conf.DATA_DIR) / 'device-db.json'
 
-    #@pydantic.computed_field
-    #def pki_dir(self) -> Path:
+    # @pydantic.computed_field
+    # def pki_dir(self) -> Path:
     #    return Path(self.conf.PKI_DIR)
 
-    #@pydantic.computed_field
-    #def certificate(self) -> Path:
+    # @pydantic.computed_field
+    # def certificate(self) -> Path:
     #    return Path(self.conf.PKI_DIR) / "issued" / f"{self.cert_name}.crt"
 
-    #@pydantic.computed_field
-    #def certificate_key(self) -> Path:
+    # @pydantic.computed_field
+    # def certificate_key(self) -> Path:
     #    return Path(self.conf.PKI_DIR) / "private" / f"{self.cert_name}.key"
 
-    #@pydantic.computed_field
-    #def certificate_ca(self) -> Path:
+    # @pydantic.computed_field
+    # def certificate_ca(self) -> Path:
     #    return Path(self.conf.PKI_DIR) / "ca.crt"
-
 
 
 class Device(BaseService):
 
     @pydantic.computed_field
     def service_config(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / 'device.json'
+        return Path(self.conf.CONFIG_DIR) / "device.json"
 
     @pydantic.computed_field
     def spooler_dir(self) -> Path:
-        dir = Path(self.conf.DATA_DIR) / 'spooler'
+        dir = Path(self.conf.DATA_DIR) / "spooler"
         if dir and not dir.exists():
             dir.mkdir(parents=True, exist_ok=True)
         return dir
@@ -418,19 +380,18 @@ class Device(BaseService):
             dir.mkdir(parents=True, exist_ok=True)
         return dir
 
-    #def __init__(self, conf, *args, **kwargs):
+    # def __init__(self, conf, *args, **kwargs):
     #    self.conf = conf
 
-        #super().__init__(*args, **kwargs)
+    # super().__init__(*args, **kwargs)
 
-    #def up(self):
+    # def up(self):
     #    device = HandlerFactory.make_handler("Device")(
-    #        service_id="device", 
+    #        service_id="device",
     #        conf=self.conf,
     #    )
     #    device.prepare_service_config()
     #    device.start()
-
 
 
 class Project(BaseService):
@@ -448,7 +409,6 @@ class Project(BaseService):
         return str(apps_dir.resolve())
 
 
-
 class HttpsRouter(BaseService):
     pass
 
@@ -460,8 +420,8 @@ class HttpsRouter(BaseService):
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=3017)}"
 
-    #@pydantic.computed_field
-    #def stats_address(self) -> str:
+        # @pydantic.computed_field
+        # def stats_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=9897)}"
 
     @pydantic.computed_field
@@ -470,9 +430,8 @@ class HttpsRouter(BaseService):
 
     @pydantic.computed_field
     def resubscribe_to(self) -> Path:
-        #resubscribe_to: str = None,
+        # resubscribe_to: str = None,
         return Path()
-
 
 
 class HttpRouter(BaseService):
@@ -486,8 +445,8 @@ class HttpRouter(BaseService):
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=4017)}"
 
-    #@pydantic.computed_field
-    #def stats_address(self) -> str:
+        # @pydantic.computed_field
+        # def stats_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=9897)}"
 
     @pydantic.computed_field
@@ -496,9 +455,8 @@ class HttpRouter(BaseService):
 
     @pydantic.computed_field
     def resubscribe_to(self) -> Path:
-        #resubscribe_to: str = None,
+        # resubscribe_to: str = None,
         return Path()
-
 
 
 class WsgiApp(BaseService):
@@ -507,20 +465,15 @@ class WsgiApp(BaseService):
 
     @pydantic.computed_field
     def service_config(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / \
-                f"{self.parent_service_id}" / "apps" \
-                / f"{self.service_id}.json"
+        return Path(self.conf.CONFIG_DIR) / f"{self.parent_service_id}" / "apps" / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def touch_reload_file(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / \
-                f"{self.parent_service_id}" / "apps" \
-                / f"{self.service_id}.json"
+        return Path(self.conf.CONFIG_DIR) / f"{self.parent_service_id}" / "apps" / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=4017)}"
-
 
 
 class ManagedDaemon(BaseService):
@@ -528,35 +481,34 @@ class ManagedDaemon(BaseService):
     name: str
     command: str
 
-    #@pydantic.computed_field
-    #def service_config(self) -> Path:
+    # @pydantic.computed_field
+    # def service_config(self) -> Path:
     #    return Path(self.conf.CONFIG_DIR) / \
     #            f"{self.parent_service_id}" / "apps" \
     #            / f"{self.service_id}.json"
 
-    #@pydantic.computed_field
-    #def touch_reload_file(self) -> Path:
+    # @pydantic.computed_field
+    # def touch_reload_file(self) -> Path:
     #    return Path(self.conf.CONFIG_DIR) / \
     #            f"{self.parent_service_id}" / "apps" \
     #            / f"{self.service_id}.json"
 
-    #@pydantic.computed_field
-    #def socket_address(self) -> str:
+    # @pydantic.computed_field
+    # def socket_address(self) -> str:
     #    return f"127.0.0.1:{get_first_available_port(port=4017)}"
-
 
 
 class Handler(Protocol):
 
     svc_model: BaseService
 
-    def __init__(self,
-            svc_model: BaseService,
-            is_internal: bool = True,
-            is_enabled: bool = False,
-            is_app: bool = False,
-
-        ):
+    def __init__(
+        self,
+        svc_model: BaseService,
+        is_internal: bool = True,
+        is_enabled: bool = False,
+        is_app: bool = False,
+    ):
         self.svc_model = svc_model
 
         if self.svc_model.enable_sentry and self.svc_model.sentry_dsn:
@@ -571,9 +523,9 @@ class Handler(Protocol):
                     traces_sample_rate=1.0,
                     release=f"{__app_name__} v{__version__}",
                 )
-                #console.success("initialized sentry-sdk")
+                # console.success("initialized sentry-sdk")
 
-    #def is_started(self):
+    # def is_started(self):
     #    return get_service_status(
     #            self.svc_model.service_id, self.svc_model.conf
     #    ) == "running"
@@ -594,7 +546,7 @@ class Handler(Protocol):
     def stop(self):
         raise NotImplementedError
 
-    def write_master_fifo(self, command:str) -> None:
+    def write_master_fifo(self, command: str) -> None:
         """
         Write command to master fifo named pipe
 
@@ -624,24 +576,26 @@ class Handler(Protocol):
             console.warning("unknown master fifo command '{command}'")
             return
 
-        if not all([
-            self.svc_model.fifo_file,
-            self.svc_model.fifo_file.exists(),
-        ]):
+        if not all(
+            [
+                self.svc_model.fifo_file,
+                self.svc_model.fifo_file.exists(),
+            ]
+        ):
             console.warning(f"invalid fifo file @ {self.svc_model.fifo_file}")
             return
 
         with open(str(self.svc_model.fifo_file), "w") as master_fifo:
-           master_fifo.write(command)
-           console.info(f"[pikesquares-services] : sent command [{command}] to master fifo")
+            master_fifo.write(command)
+            console.info(f"[pikesquares-services] : sent command [{command}] to master fifo")
 
     @property
     def handler_name(self):
         return self.__class__.__name__
-    
+
     def __repr__(self):
         return self.handler_name
-    
+
     def __str__(self):
         return self.handler_name
 
@@ -657,10 +611,12 @@ class HandlerFactory:
         return {
             k
             for k in cls.handlers
-            if all([
-                cls.handlers[k].is_internal == False,
-                cls.handlers[k].is_enabled == True,
-                cls.handlers[k].is_app == True]
+            if all(
+                [
+                    cls.handlers[k].is_internal == False,
+                    cls.handlers[k].is_enabled == True,
+                    cls.handlers[k].is_app == True,
+                ]
             )
         }
 
@@ -680,8 +636,9 @@ class HandlerFactory:
             return deco_cls
         return deco
 
-#@HandlerFactory.register('WSGI-App')
-#class WSGIAppHandler(Handler):
 
-#@HandlerFactory.register('Managed-Service')
-#class WSGIAppHandler(Handler):
+# @HandlerFactory.register('WSGI-App')
+# class WSGIAppHandler(Handler):
+
+# @HandlerFactory.register('Managed-Service')
+# class WSGIAppHandler(Handler):

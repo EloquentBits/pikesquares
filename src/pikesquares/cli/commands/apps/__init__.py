@@ -5,8 +5,8 @@ import sys
 import subprocess
 from pathlib import Path
 from enum import Enum
-from typing import Optional, Tuple
 from typing_extensions import Annotated
+from typing import Optional
 from glob import glob
 
 import typer
@@ -18,20 +18,14 @@ from cuid import cuid
 from tinydb import TinyDB, where, Query
 
 from .validators import (
-    RepoAddressValidator, 
+    RepoAddressValidator,
     PathValidator,
-    #NameValidator,
+    # NameValidator,
 )
 
-from pikesquares import get_first_available_port
+from pikesquares import services, get_first_available_port
+from pikesquares.services import device
 
-from pikesquares.services import (
-    HandlerFactory,
-    Project, 
-    HttpsRouter,
-    HttpRouter,
-    WsgiApp,
-)
 from .validators import (
     NameValidator, 
     PathValidator,
@@ -44,6 +38,7 @@ class LanguageRuntime(str, Enum):
     ruby = "ruby"
     php = "php"
     perl = "perl"
+
 
 CHOSE_FILE_MYSELF = "-- Select the file myself --"
 
@@ -103,14 +98,13 @@ def prompt_repo_url(custom_style:questionary.Style) -> str:
 
 
 class CloneProgress(git.RemoteProgress):
-    def update(self, op_code, cur_count, max_count=None, message=''):
-        #console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
+    def update(self, op_code, cur_count, max_count=None, message=""):
+        # console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
         if message:
             console.info(f"Completed git clone {message}")
 
 
-
-def gather_repo_details(custom_style:questionary.Style) -> Tuple[str, str, Path]:
+def gather_repo_details(custom_style: questionary.Style) -> tuple[str, str, Path]:
     repo_url = prompt_repo_url(custom_style)
     giturl = giturlparse.parse(repo_url)
     base_dir = prompt_base_dir(giturl.name, custom_style)
@@ -224,25 +218,26 @@ def provision_base_dir(custom_style):
 
 app = typer.Typer()
 
+
 @app.command(short_help="Create new app\nAliases: [i] create, new")
 @app.command()
 def create(
     ctx: typer.Context,
-    project: Optional[str] = typer.Option("", "--in", "--in-project", 
+    project: Optional[str] = typer.Option("", "--in", "--in-project",
         help="Name or id of project to add new app"
     ),
     name: Annotated[str, typer.Option("--name", "-n", help="app name")] = "",
     source: Annotated[str, typer.Option("--source", "-s", help="app source")] = "",
-    #app_type: Annotated[str, typer.Option("--app-type", "-t", help="app source")] =  "",
-    #router_address: Annotated[str, typer.Option("--router-address", "-r", help="ssl router address")] =  "",
+    # app_type: Annotated[str, typer.Option("--app-type", "-t", help="app source")] =  "",
+    # router_address: Annotated[str, typer.Option("--router-address", "-r", help="ssl router address")] =  "",
 
     base_dir: Annotated[
-        Optional[Path], 
+        Path | None,
         typer.Option(
-            "--base-dir", 
-            "-d", 
+            "--base-dir",
+            "-d",
             exists=True,
-            #file_okay=True,
+            # file_okay=True,
             dir_okay=False,
             writable=False,
             readable=True,
@@ -274,7 +269,7 @@ def create(
     # APP Type
     #service_type = console.choose(
     #    "What type of app would you like to create?",
-    #    choices=HandlerFactory.user_visible_apps(),
+    #    choices=services.HandlerFactory.user_visible_apps(),
     #)
     service_type = "WSGI-App"
     # service ID
@@ -293,8 +288,8 @@ def create(
     if not name:
         raise typer.Exit()
 
-    wsgi_app_handler = HandlerFactory.make_handler("WSGI-App")(
-        WsgiApp(name=name, service_id=service_id)
+    wsgi_app_handler = services.HandlerFactory.make_handler("WSGI-App")(
+        services.WsgiApp(name=name, service_id=service_id)
     )
 
     project_id = None
@@ -304,8 +299,8 @@ def create(
 
         if not projects:
             project_name = "sandbox"
-            project_handler = HandlerFactory.make_handler("Project")(
-                Project(service_id="project_sandbox")
+            project_handler = services.HandlerFactory.make_handler("Project")(
+                services.Project(service_id="project_sandbox")
             )
             project_handler.up(project_name)
             cnt = 0
@@ -480,14 +475,14 @@ def create(
         router_handler_name = None
         if router_address.split(":")[-1].startswith("8"):
             router_handler_name = "Https-Router"
-            router_class = HttpsRouter
+            router_class = services.HttpsRouter
 
         if router_address.split(":")[-1].startswith("9"):
             router_handler_name = "Http-Router"
-            router_class = HttpRouter
+            router_class = services.HttpRouter
 
         if router_handler_name and router_class:
-            router_handler = HandlerFactory.make_handler(router_handler_name)(
+            router_handler = services.HandlerFactory.make_handler(router_handler_name)(
                 router_class(service_id=router_id)
             )
             router_handler.up(router_address)
@@ -571,19 +566,21 @@ def create(
 def ls(
     ctx: typer.Context,
     project: str = typer.Argument("", help="Project name"),
-    show_id: bool = False
+    show_id: bool = False,
 ):
     """
     Show all apps in specific project
 
     Aliases:[i] apps, app list
     """
-    
-    obj = ctx.ensure_object(dict)
-    device_handler = obj.get("device-handler")
-    custom_style = obj.get("cli-style")
+    context = ctx.ensure_object(dict)
+    # device_handler = obj.get("device-handler")
+    custom_style = context.get("cli-style")
 
-    #if not project:
+    db = services.get(context, TinyDB)
+    # device_handler = services.get(obj, device.DeviceService)
+
+    # if not project:
     #    available_projects = {
     #        p.get('name'): p.get('service_id') for p in projects_all(conf)
     #    }
@@ -591,53 +588,50 @@ def ls(
     #        console.warning(f"No projects were created, create at least one project first!")
     #        return
     #    project = console.choose(
-    #        "Select project where you want to list apps", 
+    #        "Select project where you want to list apps",
     #        choices=available_projects
     #    )
 
     def get_project_id(project):
-        with TinyDB(device_handler.svc_model.device_db_path) as db:
-            return db.table('projects').get(Query().name == project)
+        return db.table('projects').get(Query().name == project)
 
     project_id = None
     if not project:
-        with TinyDB(device_handler.svc_model.device_db_path) as db:
-            projects_db = db.table('projects')
-            project = questionary.select(
-                "Select project: ", 
-                choices=[p.get("name") for p in projects_db.all()],
-                style=custom_style,
-                ).ask()
-            project_id = get_project_id(project).get("service_id")
-            assert project_id
+        projects_db = db.table('projects')
+        project = questionary.select(
+            "Select project: ", 
+            choices=[p.get("name") for p in projects_db.all()],
+            style=custom_style,
+            ).ask()
+        project_id = get_project_id(project).get("service_id")
+        assert project_id
     else:
         project_id = get_project_id(project)
 
-    with TinyDB(device_handler.svc_model.device_db_path) as db:
-        apps_out = []
-        for app in db.table('apps').search(where('project_id') == project_id):
-            service_id = app.get("service_id")
-            #stats_socket = Path(conf.RUN_DIR) / f"{service_id}-stats.sock"
-            #print(read_stats(str(stats_socket)))
-            #print(f"{stats_socket=} {service_id=}")
-            #status = get_service_status(
-            #    (Path(conf.RUN_DIR) / f"{service_id}-stats.sock")
-            #)
-            apps_out.append({
-                'name': app.get('name'),
-                #'status': status or "uknown", 
-                'id': service_id,
-            })
-        if not apps_out:
-            console.info("You have not created any apps yet.")
-            console.info("Create apps using the `pikesquares apps create` command")
-        else:
-            console.print_response(
-                apps_out, 
-                title=f"Apps in project '{project}'", 
-                show_id=show_id, 
-                exclude=['parent_id', 'options']
-            )
+    apps_out = []
+    for app in db.table("apps").search(where("project_id") == project_id):
+        service_id = app.get("service_id")
+        # stats_socket = Path(conf.RUN_DIR) / f"{service_id}-stats.sock"
+        # print(read_stats(str(stats_socket)))
+        # print(f"{stats_socket=} {service_id=}")
+        # status = get_service_status(
+        #    (Path(conf.RUN_DIR) / f"{service_id}-stats.sock")
+        # )
+        apps_out.append({
+            "name": app.get("name"),
+            # 'status': status or "uknown",
+            "id": service_id,
+        })
+    if not apps_out:
+        console.info("You have not created any apps yet.")
+        console.info("Create apps using the `pikesquares apps create` command")
+    else:
+        console.print_response(
+            apps_out,
+            title=f"Apps in project '{project}'",
+            show_id=show_id,
+            exclude=["parent_id", "options"]
+        )
 
 @app.command(short_help="Delete existing app by name or id\nAliases:[i] delete, rm")
 @app.command()
@@ -651,49 +645,52 @@ def delete(
     Aliases:[i] delete, rm
     """
     obj = ctx.ensure_object(dict)
-    device_handler = obj.get("device-handler")
+    #device_handler = obj.get("device-handler")
     custom_style = obj.get("cli-style")
+
+    db = services.get(obj, TinyDB)
+    device_handler = services.get(obj, device.DeviceService)
 
     selected_app_cuid = None
     if not app_name:
-        with TinyDB(device_handler.svc_model.device_db_path) as db:
-            apps_db = db.table('apps')
-            apps_all = apps_db.all()
-            if not len(apps_all):
-                console.info("no apps available.")
-                raise typer.Exit()
+        #with TinyDB(device_handler.svc_model.device_db_path) as db:
+        apps_db = db.table("apps")
+        apps_all = apps_db.all()
+        if not len(apps_all):
+            console.info("no apps available.")
+            raise typer.Exit()
 
-            apps_choices = []
-            for app in apps_all:
-                apps_choices.append(
-                    questionary.Choice(
-                        f"{app.get('name')} [{app.get('service_id')}",
-                        value=app.get("service_id"),
-                    )
+        apps_choices = []
+        for app in apps_all:
+            apps_choices.append(
+                questionary.Choice(
+                    f"{app.get('name')} [{app.get('service_id')}",
+                    value=app.get("service_id"),
                 )
-            prompt_apps_to_delete = questionary.checkbox(
-                f"Select the app(s) to be deleted?",
-                choices=apps_choices,
-                style=custom_style,
             )
-            for selected_app_cuid in prompt_apps_to_delete.ask() or []:
-                console.info(f"selected app to delete: {selected_app_cuid=}")
+        prompt_apps_to_delete = questionary.checkbox(
+            "Select the app(s) to be deleted?",
+            choices=apps_choices,
+            style=custom_style,
+        )
+        for selected_app_cuid in prompt_apps_to_delete.ask() or []:
+            console.info(f"selected app to delete: {selected_app_cuid=}")
 
-                # rm app configs
-                app = apps_db.get(Query().service_id == selected_app_cuid)
-                project_id = app.get("project_id")
-                selected_app_config_path = device_handler.svc_model.config_dir / \
-                    f"{project_id}" / "apps" \
-                    / f"{selected_app_cuid}.json"
+            # rm app configs
+            app = apps_db.get(Query().service_id == selected_app_cuid)
+            project_id = app.get("project_id")
+            selected_app_config_path = device_handler.svc_model.config_dir / \
+                f"{project_id}" / "apps" \
+                / f"{selected_app_cuid}.json"
 
-                if selected_app_config_path.exists():
-                    selected_app_config_path.unlink(missing_ok=True)
-                    console.info(f"deleted app config @ {selected_app_cuid}")
-                else:
-                    console.info(f"{str(selected_app_config_path)} does not exist")
+            if selected_app_config_path.exists():
+                selected_app_config_path.unlink(missing_ok=True)
+                console.info(f"deleted app config @ {selected_app_cuid}")
+            else:
+                console.info(f"{str(selected_app_config_path)} does not exist")
 
-                apps_db.remove(where('service_id') == selected_app_cuid)
-                console.success(f"Removed app [{selected_app_cuid}]")
+            apps_db.remove(where("service_id") == selected_app_cuid)
+            console.success(f"Removed app [{selected_app_cuid}]")
 
 if __name__ == "__main__":
     app()

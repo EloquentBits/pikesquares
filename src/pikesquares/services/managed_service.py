@@ -26,7 +26,7 @@ class ManagedDaemonService(Handler):
     config_json = {}
     #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
 
-    def up(self, command:str):
+    def up(self, command: str):
         self.command = command
         self.prepare_service_config()
         self.save_config()
@@ -46,7 +46,7 @@ class ManagedDaemonService(Handler):
             )
 
     def prepare_service_config(
-            self, 
+            self,
             ) -> None:
 
         section = ManagedServiceSection(

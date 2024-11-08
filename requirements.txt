@@ -1,5 +1,6 @@
+anytree
 cuid
-circus
+#circus
 gitpython
 giturlparse
 questionary
@@ -9,7 +10,7 @@ sentry-sdk
 svcs
 tinydb
 typer[all]
-uWSGI
+#uwsgi
 uwsgiconf
 uwsgi-tasks @ git+https://github.com/EloquentBits/uwsgi_tasks@master
 #zmq

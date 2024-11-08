@@ -1,15 +1,15 @@
-#import json
+# import json
 from pathlib import Path
-from typing import Any, Dict, Tuple, Type
+from typing import Any, Dict, Tuple, Type, Optional
 
-from questionary import Style as QuestionaryStyle
+# from questionary import Style as QuestionaryStyle
 
 from pydantic_settings import (
-    BaseSettings, 
-    #PydanticBaseSettingsSource,
+    BaseSettings,
+    # PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
-#from pydantic.fields import FieldInfo
+# from pydantic.fields import FieldInfo
 
 """
 class JsonConfigSettingsSource(PydanticBaseSettingsSource):
@@ -96,23 +96,23 @@ class ClientConfig(BaseSettings):
     CONFIG_DIR: Path
     PLUGINS_DIR: Path
     VIRTUAL_ENV: Path
-    #EASYRSA_DIR: str
-    CADDY_DIR: str | None = None
-    #PKI_DIR: str
-    #CLI_STYLE: QuestionaryStyle
+    # EASYRSA_DIR: str
+    CADDY_DIR: Optional[str] = None
+    # PKI_DIR: str
+    # CLI_STYLE: QuestionaryStyle
     ENABLE_SENTRY: bool = True
     SENTRY_DSN: str = ""
     version: str
 
-    #@classmethod
-    #def settings_customise_sources(
+    # @classmethod
+    # def settings_customise_sources(
     #    cls,
     #    settings_cls: Type[BaseSettings],
     #    init_settings: PydanticBaseSettingsSource,
     #    env_settings: PydanticBaseSettingsSource,
     #    #dotenv_settings: PydanticBaseSettingsSource,
     #    file_secret_settings: PydanticBaseSettingsSource,
-    #) -> Tuple[PydanticBaseSettingsSource, ...]:
+    # ) -> Tuple[PydanticBaseSettingsSource, ...]:
     #    return (
     #        init_settings,
     #        JsonConfigSettingsSource(settings_cls),
