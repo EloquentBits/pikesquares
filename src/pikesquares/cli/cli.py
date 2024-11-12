@@ -112,24 +112,11 @@ def up(
     """Launch PikeSquares Server"""
 
     context = ctx.ensure_object(dict)
-
-    #context = services.init_context(ctx.ensure_object(dict))
-
-    print(f"up: {context=}")
-
     db = services.get(context, TinyDB)
-    # container = svcs.Container(registry)
-    # db = container.get(TinyDB)
-    if db.tables():
-        print("reading tables....")
-        for t in db.tables():
-            print(t)
-    else:
-        print(f"unable to read db: {db}")
+    if not db.tables():
+        raise Exception("unable to read db")
 
-    client_conf = services.get(context, conf.ClientConfig)
-    print(client_conf)
-
+    # client_conf = services.get(context, conf.ClientConfig)
     device_handler = services.get(context, device.DeviceService)
     if device_handler.svc_model.get_service_status() == "running":
         console.info("Looks like a PikeSquares Server is already running")
@@ -155,7 +142,7 @@ def down(
     if device_handler.svc_model.get_service_status() == "running":
         if questionary.confirm("Stop the running PikeSquares Server?").ask():
             device_handler.stop()
-            console.success(f"PikeSquares Server has been shut down.")
+            console.success("PikeSquares Server has been shut down.")
         else:
             raise typer.Exit()
 
@@ -171,8 +158,8 @@ def tail_service_log(
     obj["cli-style"] = console.custom_style_dope
 
     device_handler = services.HandlerFactory.make_handler("Device")(Device(service_id="device"))
-    show_config_start_marker = ';uWSGI instance configuration\n'
-    show_config_end_marker = ';end of configuration\n'
+    show_config_start_marker = ";uWSGI instance configuration\n"
+    show_config_end_marker = ";end of configuration\n"
 
     latest_running_config, latest_startup_log = device_handler.svc_model.startup_log(
         show_config_start_marker, show_config_end_marker
@@ -218,7 +205,10 @@ def main(
     print(f"About to execute command: {ctx.invoked_subcommand}")
     context = services.init_context(ctx.ensure_object(dict))
 
-    data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR", "/home/pk/.local/share/pikesquares"))
+    data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR"))
+    if not data_dir.exists():
+        raise Exception(f"data directory does not exist @ {data_dir}")
+
     db_path = Path(data_dir) / "device-db.json"
     if not db_path.exists():
         raise Exception(f"conf db does not exist @ {db_path}")
@@ -229,7 +219,7 @@ def main(
     services.register_factory(context, TinyDB, tinydb_factory)
 
     def conf_factory():
-        conf_mapping = {}
+        # conf_mapping = {"PKI_DIR": Path("/home/pk/.local/share/pikesquares/pki")}
         pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
         try:
             conf_mapping = services.get(context, TinyDB).\

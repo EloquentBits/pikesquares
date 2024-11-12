@@ -38,7 +38,7 @@ class DeviceService(services.Handler):
         #    HttpRouter,
         # )
         # conf.DAEMONIZE = not foreground
-        # self.setup_pki()
+        self.setup_pki()
 
         self.prepare_service_config()
         self.save_config()
@@ -100,9 +100,9 @@ class DeviceService(services.Handler):
         )
         self.config_json["uwsgi"]["show-config"] = True
 
-        # self.config_json["uwsgi"]["emperor-wrapper"] = str(
-        #    (Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve()
-        # )
+        self.config_json["uwsgi"]["emperor-wrapper"] = str(
+            (Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve()
+         )
 
         # empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}"
         # config["uwsgi"]["plugin"] = "emperor_zeromq"

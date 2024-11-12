@@ -97,11 +97,11 @@ class ClientConfig(BaseSettings):
     PLUGINS_DIR: Path
     VIRTUAL_ENV: Path
     # EASYRSA_DIR: str
-    CADDY_DIR: Optional[str] = None
-    # PKI_DIR: str
+    # CADDY_DIR: Optional[str] = None
+    PKI_DIR: Path
     # CLI_STYLE: QuestionaryStyle
     ENABLE_SENTRY: bool = True
-    SENTRY_DSN: str = ""
+    #SENTRY_DSN: str = ""
     version: str
 
     # @classmethod

@@ -247,15 +247,10 @@ def create(
         )
     ] = None,
 
-    #runtime: Annotated[str, typer.Option("--runtime", "-r", help="app language runtime")] = "",
+    # runtime: Annotated[str, typer.Option("--runtime", "-r", help="app language runtime")] = "",
     runtime: Annotated[
-        LanguageRuntime, 
-        typer.Option(
-            "--runtime", 
-            "-r", 
-            case_sensitive=False,
-            help="app language runtime"
-        )
+        LanguageRuntime,
+        typer.Option("--runtime", "-r", case_sensitive=False, help="app language runtime")
     ] = LanguageRuntime.python,
 ):
     """
@@ -263,25 +258,29 @@ def create(
 
     Aliases: [i] create, new
     """
-    obj = ctx.ensure_object(dict)
-    custom_style = obj.get("cli-style")
-    app_options = dict()
+    context = ctx.ensure_object(dict)
+
+    db = services.get(context, TinyDB)
+    conf = services.get(context, services.ClientConfig)
+
+    custom_style = context.get("cli-style")
+    app_options = {}
 
     # APP Type
-    #service_type = console.choose(
+    # service_type = console.choose(
     #    "What type of app would you like to create?",
     #    choices=services.HandlerFactory.user_visible_apps(),
-    #)
+    # )
     service_type = "WSGI-App"
     # service ID
-    service_type_prefix = service_type.replace('-', '_').lower()
+    service_type_prefix = service_type.replace("-", "_").lower()
     service_id = f"{service_type_prefix}_{cuid()}"
 
     base_dir = base_dir or provision_base_dir(custom_style)
     app_options["root_dir"] = str(base_dir)
     name = name or questionary.text(
-        "Choose a name for your app: ", 
-        default=randomname.get_name(),
+        "Choose a name for your app: ",
+        default=randomname.get_name().lower(),
         style=custom_style,
         validate=NameValidator,
     ).ask()
@@ -290,44 +289,42 @@ def create(
         raise typer.Exit()
 
     wsgi_app_handler = services.HandlerFactory.make_handler("WSGI-App")(
-        services.WsgiApp(name=name, service_id=service_id)
+        services.WsgiApp(name=name, service_id=service_id, conf=conf, db=db)
     )
 
     project_id = None
     project_name = None
-    with TinyDB(wsgi_app_handler.svc_model.device_db_path) as db:
-        projects = db.table('projects').all()
+    projects = db.table("projects").all()
 
-        if not projects:
-            project_name = "sandbox"
-            project_handler = services.HandlerFactory.make_handler("Project")(
-                services.Project(service_id="project_sandbox")
-            )
-            project_handler.up(project_name)
-            cnt = 0
-            while cnt < 5 and project_handler.svc_model.get_service_status() != "running":
-                time.sleep(3)
-                cnt = cnt+1
-            if project_handler.svc_model.get_service_status() != "running":
-                project_handler.svc_model.service_config.unlink()
-                console.warning(f"could not start project. giving up.")
-                console.info(f"removed sandbox project config {project_handler.svc_model.service_config.name}")
-                raise typer.Exit()
-            project_id = "project_sandbox"
+    if not projects:
+        project_name = "sandbox"
+        project_handler = services.HandlerFactory.make_handler("Project")(
+            services.Project(service_id="project_sandbox", conf=conf, db=db)
+        )
+        project_handler.up(name=project_name)
+        cnt = 0
+        while cnt < 5 and project_handler.svc_model.get_service_status() != "running":
+            time.sleep(3)
+            cnt += 1
+        if project_handler.svc_model.get_service_status() != "running":
+            project_handler.svc_model.service_config.unlink()
+            console.warning("unable not start project. giving up.")
+            console.info(f"removed sandbox project config {project_handler.svc_model.service_config.name}")
+            raise typer.Exit()
+        project_id = "project_sandbox"
 
-        elif len(projects) == 1:
-            project_name = "sandbox"
-            project_id = "project_sandbox"
-        else:
-            project_name = project or questionary.select(
-                    "Select project where you want to create app: ", 
-                    choices=[p.get("name") for p in projects],
-                    style=custom_style,
-                    ).ask()
+    elif len(projects) == 1:
+        project_name = "sandbox"
+        project_id = "project_sandbox"
+    else:
+        project_name = project or questionary.select(
+                "Select project where you want to create app: ",
+                choices=[p.get("name") for p in projects],
+                style=custom_style,
+                ).ask()
     if not project_id:
-        with TinyDB(wsgi_app_handler.svc_model.device_db_path) as db:
-            project_id = db.table('projects').\
-                get(Query().name == project_name).get("service_id")
+        project_id = db.table("projects").\
+            get(Query().name == project_name).get("service_id")
 
     wsgi_app_handler.svc_model.parent_service_id = project_id
 
@@ -348,7 +345,7 @@ def create(
 
     # WSGI File
     wsgi_file_q = questionary.path(
-        "Enter the location of your app Python WSGI file:", 
+        "Enter the location of your app Python WSGI file:",
         default=str(base_dir),
         only_directories=False,
         style=custom_style,
@@ -369,7 +366,7 @@ def create(
 
     # WSGI Module
     wsgi_module = questionary.text(
-            "Enter your app Python WSGI module name: ", 
+            "Enter your app Python WSGI module name: ",
         default="application",
         style=custom_style,
     ).ask()
@@ -377,7 +374,7 @@ def create(
 
     # pip deps
     pip_req_file_q = questionary.path(
-        "Enter your app pip requirements file: ", 
+        "Enter your app pip requirements file: ",
         default=str(base_dir),
         only_directories=False,
         style=custom_style,
@@ -386,10 +383,7 @@ def create(
     if len(pip_req_files):
         pip_req_file = questionary.select(
                 "Select a pip requirements file: ",
-            choices=pip_req_files + [
-                questionary.Separator(),
-                CHOSE_FILE_MYSELF
-            ],
+            choices=pip_req_files + [questionary.Separator(), CHOSE_FILE_MYSELF],
             style=custom_style,
         ).ask()
         if pip_req_file == CHOSE_FILE_MYSELF:
@@ -402,101 +396,100 @@ def create(
         #with console.status(f"creating a Python venv and installing dependencies", spinner="earth"):
         venv_dir = wsgi_app_handler.svc_model.data_dir / "venvs" / service_id
         create_venv(venv_dir)
-        console.info(f"Created a Python virtualenv")
+        console.info("Created a Python virtualenv")
         if not venv_dir.exists():
             console.warning("unable to create python virtualenv")
             raise typer.Exit()
         app_options["pyvenv_dir"] = str(venv_dir)
         app_reqs = list(filter(None, pip_req_file_path.read_text().split("\n")))
-        console.info(f"Installing app dependencies")
+        console.info("Installing app dependencies")
         venv_pip_install(venv_dir, service_id, "--progress-bar", "off", *app_reqs, find_links=None)
 
-    # Router 
+    # Router
     router_id = None
-    with TinyDB(wsgi_app_handler.svc_model.device_db_path) as db:
-        routers_db = db.table('routers')
+    routers_db = db.table("routers")
 
-        def build_app_url(name: str, address: str) -> str:
-            router_port = address.split(':')[-1]
-            protocol = "http" if router_port.startswith("9") else "https"
-            return f"{protocol}://{name}.pikesquares.dev:{router_port}"
+    def build_app_url(name: str, address: str) -> str:
+        router_port = address.split(":")[-1]
+        protocol = "http" if router_port.startswith("9") else "https"
+        return f"{protocol}://{name}.pikesquares.dev:{router_port}"
 
-        #def build_router_address(app_url: str) -> str:
-        #    router_port = app_url.split(":")[-1]
-        #    protocol = "http" if router_port.startswith("9") else "https"
-        #    return f"{protocol}://0.0.0.0:{router_port}"
+    #def build_router_address(app_url: str) -> str:
+    #    router_port = app_url.split(":")[-1]
+    #    protocol = "http" if router_port.startswith("9") else "https"
+    #    return f"{protocol}://0.0.0.0:{router_port}"
 
-        def prompt_routers_q():
-            app_url_choices = []
-            contains_https_router = False
-            for r in routers_db.all():
-                app_url_choices.append(
-                    questionary.Choice(
-                        build_app_url(name, r.get("address")),
-                        value=r.get("address"),
-                        checked=False,
-                    )
+    def prompt_routers_q():
+        app_url_choices = []
+        contains_https_router = False
+        for r in routers_db.all():
+            app_url_choices.append(
+                questionary.Choice(
+                    build_app_url(name, r.get("address")),
+                    value=r.get("address"),
+                    checked=False,
                 )
-                if r.get("address").split(":")[-1].startswith('8'):
-                    contains_https_router = True
-            if not app_url_choices:
-                http_router_addr = f"0.0.0.0:{str(get_first_available_port(port=9000))}"
-                app_url_choices.append(
-                    questionary.Choice(
-                        build_app_url(name, http_router_addr),
-                        value=http_router_addr,
-                        checked=False,
-                    )
-                )
-            if not contains_https_router:
-                https_router_addr = f"0.0.0.0:{str(get_first_available_port(port=8443))}"
-                app_url_choices.append(
-                    questionary.Choice(
-                        build_app_url(name, https_router_addr),
-                        value=https_router_addr,
-                        checked=False,
-                    )
-                )
-            return questionary.select(
-                "Select a Virtual Host URL for your app: ", 
-                app_url_choices,
-                instruction="" if contains_https_router else "pki install instructions",
-                style=custom_style,
-                )
-
-        router_address = prompt_routers_q().ask()
-        if not router_address:
-            raise typer.Exit()
-
-        router = routers_db.get(Query().address == router_address)
-        router_id = router.get("service_id") if router else f"router_{cuid()}"
-        app_options["router_id"] = router_id
-
-        router_class = None
-        router_handler_name = None
-        if router_address.split(":")[-1].startswith("8"):
-            router_handler_name = "Https-Router"
-            router_class = services.HttpsRouter
-
-        if router_address.split(":")[-1].startswith("9"):
-            router_handler_name = "Http-Router"
-            router_class = services.HttpRouter
-
-        if router_handler_name and router_class:
-            router_handler = services.HandlerFactory.make_handler(router_handler_name)(
-                router_class(service_id=router_id)
             )
-            router_handler.up(router_address)
-            cnt = 0
-            while cnt < 5 and router_handler.svc_model.get_service_status() != "running":
-                time.sleep(3)
-                cnt = cnt+1
-            if router_handler.svc_model.get_service_status() != "running":
-                router_handler.svc_model.service_config.unlink()
-                console.warning(f"could not start {router_handler_name}. giving up.")
-                console.info(f"removed proxy config {router_handler.svc_model.service_config.name}")
-                raise typer.Exit()
-            console.success(f"{router_handler_name} is up")
+            if r.get("address").split(":")[-1].startswith("8"):
+                contains_https_router = True
+        if not app_url_choices:
+            http_router_addr = f"0.0.0.0:{str(get_first_available_port(port=9000))}"
+            app_url_choices.append(
+                questionary.Choice(
+                    build_app_url(name, http_router_addr),
+                    value=http_router_addr,
+                    checked=False,
+                )
+            )
+        if not contains_https_router:
+            https_router_addr = f"0.0.0.0:{str(get_first_available_port(port=8443))}"
+            app_url_choices.append(
+                questionary.Choice(
+                    build_app_url(name, https_router_addr),
+                    value=https_router_addr,
+                    checked=False,
+                )
+            )
+        return questionary.select(
+            "Select a Virtual Host URL for your app: ",
+            app_url_choices,
+            instruction="" if contains_https_router else "pki install instructions",
+            style=custom_style,
+            )
+
+    router_address = prompt_routers_q().ask()
+    if not router_address:
+        raise typer.Exit()
+
+    router = routers_db.get(Query().address == router_address)
+    router_id = router.get("service_id") if router else f"router_{cuid()}"
+    app_options["router_id"] = router_id
+
+    router_class = None
+    router_handler_name = None
+    if router_address.split(":")[-1].startswith("8"):
+        router_handler_name = "Https-Router"
+        router_class = services.HttpsRouter
+
+    if router_address.split(":")[-1].startswith("9"):
+        router_handler_name = "Http-Router"
+        router_class = services.HttpRouter
+
+    if router_handler_name and router_class:
+        router_handler = services.HandlerFactory.make_handler(router_handler_name)(
+            router_class(service_id=router_id, conf=conf, db=db)
+        )
+        router_handler.up(router_address)
+        cnt = 0
+        while cnt < 5 and router_handler.svc_model.get_service_status() != "running":
+            time.sleep(3)
+            cnt += 1
+        if router_handler.svc_model.get_service_status() != "running":
+            router_handler.svc_model.service_config.unlink()
+            console.warning(f"could not start {router_handler_name}. giving up.")
+            console.info(f"removed proxy config {router_handler.svc_model.service_config.name}")
+            raise typer.Exit()
+        console.success(f"{router_handler_name} is up")
 
     console.info(app_options)
     app_options["workers"] = 3
@@ -507,12 +500,12 @@ def create(
         wsgi_app_handler.start()
 
         try:
-            router_port = router_address.split(':')[-1]
+            router_port = router_address.split(":")[-1]
         except IndexError:
             pass
         else:
             url = console.render_link(
-                f'{name}.pikesquares.dev', 
+                f"{name}.pikesquares.dev",
                 port=router_port,
                 protocol="http" if router_port.startswith("9") else "https"
             )
@@ -523,7 +516,7 @@ def create(
                 time.sleep(3)
 
             wsgi_app_handler.svc_model.service_config.unlink()
-            console.warning(f"could not start app. giving up.")
+            console.warning("could not start app. giving up.")
             console.info(f"removed app config {wsgi_app_handler.svc_model.service_config.name}")
 
 
@@ -646,7 +639,6 @@ def delete(
     Aliases:[i] delete, rm
     """
     obj = ctx.ensure_object(dict)
-    #device_handler = obj.get("device-handler")
     custom_style = obj.get("cli-style")
 
     db = services.get(obj, TinyDB)
@@ -654,7 +646,6 @@ def delete(
 
     selected_app_cuid = None
     if not app_name:
-        #with TinyDB(device_handler.svc_model.device_db_path) as db:
         apps_db = db.table("apps")
         apps_all = apps_db.all()
         if not len(apps_all):
@@ -692,6 +683,60 @@ def delete(
 
             apps_db.remove(where("service_id") == selected_app_cuid)
             console.success(f"Removed app [{selected_app_cuid}]")
+
+
+@app.command(short_help="Rebuild configs for an existing app by name or id\nAliases:[i] rebuild-config, rc")
+@app.command()
+def rebuild_config(
+    ctx: typer.Context,
+    app_name: Annotated[str, typer.Option("--name", "-n", help="Name of app to rebuild configs for")] = "",
+):
+    """
+    Rebuild config for an existing app by name or id
+
+    Aliases:[i] rebuild-config, rc
+    """
+    context = ctx.ensure_object(dict)
+    # custom_style = obj.get("cli-style")
+
+    db = services.get(context, TinyDB)
+    conf = services.get(context, services.ClientConfig)
+
+    selected_app_cuid = "wsgi_app_cm395zdj60000rvj13a6vn6ro"
+
+    apps_db = db.table("apps")
+    app = apps_db.get(Query().service_id == selected_app_cuid)
+
+    # "service_type": "WsgiAppService",
+    # "name": "equilateral-refraction",
+    # "service_id": "wsgi_app_cm3965vma000041j1g4a8wlfc",
+    # "project_id": "project_sandbox",
+
+    wsgi_app_handler = services.HandlerFactory.make_handler("WSGI-App")(
+        services.WsgiApp(
+            name=app.get("name"),
+            service_id=selected_app_cuid,
+            conf=conf,
+            db=db,
+        )
+    )
+    wsgi_app_handler.svc_model.parent_service_id = app.get("project_id")
+
+    service_config = app["service_config"]["uwsgi"]
+
+    app_options = {}
+    app_options["root_dir"] = service_config[""]
+    app_options["wsgi_file"] = service_config[""]
+    app_options["wsgi_module"] = service_config[""]
+    app_options["pyvenv_dir"] = service_config[""]
+    app_options["router_id"] = service_config[""]
+    app_options["workers"] = 3
+
+    wsgi_app_handler.prepare_service_config(**app_options)
+    wsgi_app_handler.connect()
+    wsgi_app_handler.start()
+
+
 
 if __name__ == "__main__":
     app()

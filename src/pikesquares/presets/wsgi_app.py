@@ -305,16 +305,20 @@ class WsgiAppSection(BaseWsgiAppSection):
             https_router_port = f':{https_router_address.split(":")[-1]}'
         except IndexError:
             pass
-        
-        #print(f"{subscription_params=}")
 
         self.subscriptions.subscribe(
-            {
-                "server": subscription_server_address,
-                "address": str(svc_model.socket_address),  # address and port of wsgi app
-                "key": f"{svc_model.name}.pikesquares.dev{https_router_port}",
-            }
+            server=subscription_server_address,
+            address=str(svc_model.socket_address),  # address and port of wsgi app
+            key=f"{svc_model.name}.pikesquares.dev{https_router_port}",
         )
+
+        # self.subscriptions.subscribe(
+        #    {
+        #        "server": subscription_server_address,
+        #        "address": str(svc_model.socket_address),  # address and port of wsgi app
+        #        "key": f"{svc_model.name}.pikesquares.dev{https_router_port}",
+        #    }
+        # )
 
         """
         vhost_address = ""

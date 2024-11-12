@@ -218,8 +218,8 @@ class BaseService(pydantic.BaseModel):
     db: TinyDB
     service_id: str
     # cache:str = "pikesquares-settings"
-    # parent_service_id:str = ""
-    # cert_name:str = "_wildcard_pikesquares_dev"
+    parent_service_id: str | None = None
+    cert_name: str = "_wildcard_pikesquares_dev"
 
     # cli_style: QuestionaryStyle = console.custom_style_dope
 
@@ -247,20 +247,20 @@ class BaseService(pydantic.BaseModel):
     # def easyrsa(self) -> str:
     #    return str(Path(self.easyrsa_dir) / "EasyRSA-3.1.7" / "easyrsa")
 
-    @pydantic.computed_field
-    def caddy(self) -> Path | None:
-        try:
-            return self.caddy_dir / "caddy"
-        except TypeError:
-            pass
+    #@pydantic.computed_field
+    #def caddy(self) -> Path | None:
+    #    try:
+    #        return self.caddy_dir / "caddy"
+    #    except TypeError:
+    #        pass
 
     @pydantic.computed_field
     def enable_sentry(self) -> bool:
         return self.conf.ENABLE_SENTRY
 
-    @pydantic.computed_field
-    def sentry_dsn(self) -> str:
-        return self.conf.SENTRY_DSN
+    #@pydantic.computed_field
+    #def sentry_dsn(self) -> str:
+    #    return self.conf.SENTRY_DSN
 
     @pydantic.computed_field
     def data_dir(self) -> Path:
@@ -282,10 +282,10 @@ class BaseService(pydantic.BaseModel):
     # def easyrsa_dir(self) -> Path:
     #    return Path(self.conf.EASYRSA_DIR)
 
-    @pydantic.computed_field
-    def caddy_dir(self) -> Path | None:
-        if self.conf.CADDY_DIR and Path(self.conf.CADDY_DIR).exists():
-            return Path(self.conf.CADDY_DIR)
+    #@pydantic.computed_field
+    #def caddy_dir(self) -> Path | None:
+    #    if self.conf.CADDY_DIR and Path(self.conf.CADDY_DIR).exists():
+    #        return Path(self.conf.CADDY_DIR)
 
     @pydantic.computed_field
     def plugins_dir(self) -> Path:
@@ -341,23 +341,23 @@ class BaseService(pydantic.BaseModel):
 
     @pydantic.computed_field
     def device_db_path(self) -> Path:
-        return Path(self.conf.DATA_DIR) / 'device-db.json'
+        return Path(self.conf.DATA_DIR) / "device-db.json"
 
-    # @pydantic.computed_field
-    # def pki_dir(self) -> Path:
-    #    return Path(self.conf.PKI_DIR)
+    @pydantic.computed_field
+    def pki_dir(self) -> Path:
+        return Path(self.conf.PKI_DIR)
 
-    # @pydantic.computed_field
-    # def certificate(self) -> Path:
-    #    return Path(self.conf.PKI_DIR) / "issued" / f"{self.cert_name}.crt"
+    @pydantic.computed_field
+    def certificate(self) -> Path:
+        return Path(self.conf.PKI_DIR) / "issued" / f"{self.cert_name}.crt"
 
-    # @pydantic.computed_field
-    # def certificate_key(self) -> Path:
-    #    return Path(self.conf.PKI_DIR) / "private" / f"{self.cert_name}.key"
+    @pydantic.computed_field
+    def certificate_key(self) -> Path:
+        return Path(self.conf.PKI_DIR) / "private" / f"{self.cert_name}.key"
 
-    # @pydantic.computed_field
-    # def certificate_ca(self) -> Path:
-    #    return Path(self.conf.PKI_DIR) / "ca.crt"
+    @pydantic.computed_field
+    def certificate_ca(self) -> Path:
+        return Path(self.conf.PKI_DIR) / "ca.crt"
 
 
 class Device(BaseService):
@@ -508,21 +508,22 @@ class Handler(Protocol):
         is_internal: bool = True,
         is_enabled: bool = False,
         is_app: bool = False,
+        name: str = "",
     ):
         self.svc_model = svc_model
 
-        if self.svc_model.enable_sentry and self.svc_model.sentry_dsn:
-            try:
-                import sentry_sdk
-                from pikesquares import __version__, __app_name__
-            except ImportError:
-                pass
-            else:
-                sentry_sdk.init(
-                    dsn=self.svc_model.sentry_dsn,
-                    traces_sample_rate=1.0,
-                    release=f"{__app_name__} v{__version__}",
-                )
+        # if self.svc_model.enable_sentry and self.svc_model.sentry_dsn:
+        #    try:
+        #        import sentry_sdk
+        #        from pikesquares import __version__, __app_name__
+        #    except ImportError:
+        #        pass
+        #    else:
+        #        sentry_sdk.init(
+        #            dsn=self.svc_model.sentry_dsn,
+        #            traces_sample_rate=1.0,
+        #            release=f"{__app_name__} v{__version__}",
+        #        )
                 # console.success("initialized sentry-sdk")
 
     # def is_started(self):
