@@ -1,11 +1,12 @@
-import shutil
 import json
 import os
-import sys
 from pathlib import Path
+import shutil
 import subprocess
+import sys
 
 # from cuid import cuid
+import pydantic
 from tinydb import Query
 
 #from circus.arbiter import Arbiter
@@ -16,20 +17,35 @@ from tinydb import Query
 # from uwsgiconf import uwsgi
 
 from pikesquares.presets import device
-from pikesquares import services
+from pikesquares.services.base import BaseService
 from pikesquares.cli.console import console
 
-__all__ = ("DeviceService",)
+__all__ = ("Device",)
 
 
-@services.HandlerFactory.register("Device")
-class DeviceService(services.Handler):
+class Device(BaseService):
 
     is_internal: bool = True
     is_enabled: bool = True
     is_app: bool = False
 
-    config_json = {}
+    @pydantic.computed_field
+    def service_config(self) -> Path:
+        return Path(self.conf.CONFIG_DIR) / "device.json"
+
+    @pydantic.computed_field
+    def spooler_dir(self) -> Path:
+        spdir = Path(self.conf.DATA_DIR) / "spooler"
+        if spdir and not spdir.exists():
+            spdir.mkdir(parents=True, exist_ok=True)
+        return spdir
+
+    @pydantic.computed_field
+    def apps_dir(self) -> Path:
+        appsdir = Path(self.conf.CONFIG_DIR) / "projects"
+        if appsdir and not appsdir.exists():
+            appsdir.mkdir(parents=True, exist_ok=True)
+        return appsdir
 
     def up(self):
         # from pikesquares.services import (
@@ -46,7 +62,7 @@ class DeviceService(services.Handler):
 
         self.sync_db_with_filesystem()
 
-        # with TinyDB(self.svc_model.device_db_path) as db:
+        # with TinyDB(self.device_db_path) as db:
         #    for project_doc in db.table('projects'):
         #        project_handler = HandlerFactory.make_handler("Project")(
         #            Project(
@@ -76,8 +92,8 @@ class DeviceService(services.Handler):
         self.start()
 
     def save_config(self):
-        # with TinyDB(self.svc_model.device_db_path) as db:
-        self.svc_model.db.table("devices").upsert(
+        # with TinyDB(self.device_db_path) as db:
+        self.db.table("devices").upsert(
             {
                 "service_type": self.handler_name,
                 "service_config": self.config_json,
@@ -86,22 +102,20 @@ class DeviceService(services.Handler):
         )
 
     def write_config(self):
-        self.svc_model.service_config.write_text(
+        self.service_config.write_text(
             json.dumps(self.config_json)
         )
 
     def prepare_service_config(self):
         self.config_json = json.loads(
-            device.DeviceSection(
-                self.svc_model,
-            )
+            device.DeviceSection(self)
             .as_configuration()
             .format(formatter="json")
         )
         self.config_json["uwsgi"]["show-config"] = True
 
         self.config_json["uwsgi"]["emperor-wrapper"] = str(
-            (Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve()
+            (Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve()
          )
 
         # empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}"
@@ -153,7 +167,6 @@ class DeviceService(services.Handler):
     #                pidfile.unlink()
 
     def start(self):
-
         # we import `pyuwsgi` with `dlopen` flags set to `os.RTLD_GLOBAL` such that
         # uwsgi plugins can discover uwsgi's globals (notably `extern ... uwsgi`)
         if hasattr(sys, "setdlopenflags"):
@@ -166,20 +179,22 @@ class DeviceService(services.Handler):
         else:  # ah well, can't control how dlopen works here
             import pyuwsgi
 
-        console.info("starting PikeSquares Server")
-        pyuwsgi.run(["--json", f"{str(self.svc_model.service_config.resolve())}"])
+        console.info("Starting PikeSquares Server")
+        pyuwsgi.run(["--json", f"{str(self.service_config.resolve())}"])
+
+    #def start(self):
+    #    print("device start")
 
     def stop(self):
-        if self.svc_model.get_service_status() == "running":
+        if self.get_service_status() == "running":
             self.write_master_fifo("q")
 
         # res = device_config.main_process.actions.fifo_write(target, command)
 
     def sync_db_with_filesystem(self):
-        #with TinyDB(self.svc_model.device_db_path) as db:
-        if not self.svc_model.db.table("projects").all():
-            for proj_config in (self.svc_model.config_dir / "projects").glob("project_*.json"):
-                for app_config in (self.svc_model.config_dir / proj_config.stem / "apps").glob("*.json"):
+        if not self.db.table("projects").all():
+            for proj_config in (self.config_dir / "projects").glob("project_*.json"):
+                for app_config in (self.config_dir / proj_config.stem / "apps").glob("*.json"):
                     console.info(f"found loose app config. deleting {app_config.name}")
                     app_config.unlink()
                 console.info(f"found loose project config. deleting {proj_config.name}")
@@ -187,47 +202,47 @@ class DeviceService(services.Handler):
             # console.info("creating sandbox project.")
             # project_up(conf, "sandbox", f"project_{cuid()}")
 
-        if not self.svc_model.db.table("routers").all():
-            for router_config in (self.svc_model.config_dir / "projects").glob("router_*.json"):
+        if not self.db.table("routers").all():
+            for router_config in (self.config_dir / "projects").glob("router_*.json"):
                 console.info(f"found loose router config. deleting {router_config.name}")
                 router_config.unlink()
 
     def drop_db_tables(self):
-        self.svc_model.db.drop_table("configs")
-        self.svc_model.db.drop_table("device")
-        self.svc_model.db.drop_table("projects")
-        self.svc_model.db.drop_table("routers")
-        self.svc_model.db.drop_table("apps")
+        self.db.drop_table("configs")
+        self.db.drop_table("device")
+        self.db.drop_table("projects")
+        self.db.drop_table("routers")
+        self.db.drop_table("apps")
 
     def delete_configs(self):
-        for proj_config in (self.svc_model.config_dir / "projects").glob("project_*.json"):
-            for app_config in (self.svc_model.config_dir / proj_config.stem / "apps").glob("*.json"):
+        for proj_config in (self.config_dir / "projects").glob("project_*.json"):
+            for app_config in (self.config_dir / proj_config.stem / "apps").glob("*.json"):
                 console.info(f"deleting {app_config.name}")
                 app_config.unlink()
 
                 # FIXME
-                # app_log = self.svc_model.log_dir / app_config.stem / ".log"
+                # app_log = self.log_dir / app_config.stem / ".log"
                 # app_log.unlink(missing_ok=True)
                 # console.info(f"deleting {app_log.name}")
 
             console.info(f"deleting {proj_config.name}")
             proj_config.unlink()
 
-        for router_config in (self.svc_model.config_dir / "projects").glob("router_*.json"):
+        for router_config in (self.config_dir / "projects").glob("router_*.json"):
             console.info(f"found router config. deleting {router_config.name}")
             router_config.unlink()
 
     # def delete_logs(self):
-    #    for logfile in self.svc_model.log_dir.glob("*.log"):
+    #    for logfile in self.log_dir.glob("*.log"):
 
     def uninstall(self, dry_run=False):
         for user_dir in [
-            self.svc_model.data_dir,
-            self.svc_model.config_dir,
-            self.svc_model.run_dir,
-            self.svc_model.log_dir,
-            self.svc_model.plugins_dir,
-            self.svc_model.pki_dir,
+            self.conf.DATA_DIR,
+            self.conf.CONFIG_DIR,
+            self.conf.RUN_DIR,
+            self.conf.LOG_DIR,
+            self.conf.PLUGINS_DIR,
+            self.conf.PKI_DIR,
         ]:
             if not dry_run:
                 try:
@@ -248,79 +263,79 @@ class DeviceService(services.Handler):
             console.success("Wildcard certificate created.")
 
     def ensure_pki(self):
-        if self.svc_model.pki_dir.exists():
+        if self.conf.PKI_DIR.exists():
             return
 
         compl = subprocess.run(
             args=[
-                str(self.svc_model.easyrsa),
+                str(self.easyrsa),
                 "init-pki",
             ],
-            cwd=str(self.svc_model.data_dir),
+            cwd=str(self.conf.DATA_DIR),
             capture_output=True,
             check=True,
         )
         if compl.returncode != 0:
             print(f"unable to initialize PKI")
         else:
-            print(f"Initialized PKI @ {self.svc_model.pki_dir}")
+            print(f"Initialized PKI @ {self.conf.PKI_DIR}")
         # set(compl.stdout.decode().split("\n"))
 
     def ensure_build_ca(self):
-        if not self.svc_model.pki_dir.exists():
+        if not self.conf.PKI_DIR.exists():
             print(f"Unable to create CA. PKI was not located.")
             return
 
-        if (self.svc_model.pki_dir / "ca.crt").exists():
+        if (self.conf.PKI_DIR / "ca.crt").exists():
             return
 
         print("building CA")
 
         compl = subprocess.run(
             args=[
-                str(self.svc_model.easyrsa),
+                str(self.easyrsa),
                 '--req-cn=PikeSquares Proxy',
                 "--batch",
                 "--no-pass",
                 "build-ca",
             ],
-            cwd=self.svc_model.data_dir,
+            cwd=self.conf.DATA_DIR,
             capture_output=True,
             check=True,
         )
         if compl.returncode != 0:
             print(f"unable to build CA")
             print(compl.stderr.decode())
-        elif (self.svc_model.pki_dir / "ca.crt").exists():
+        elif (self.conf.PKI_DIR / "ca.crt").exists():
             print(f"CA cert created")
             print(compl.stdout.decode())
 
         # set(compl.stdout.decode().split("\n"))
 
     def ensure_csr(self):
-        if not self.svc_model.pki_dir.exists():
+        if not self.conf.PKI_DIR.exists():
             print("Unable to create a CSR. PKI was not located.")
             return
 
-        if not (self.svc_model.pki_dir / "ca.crt").exists():
+        if not (self.conf.PKI_DIR / "ca.crt").exists():
             print("Unable to create a CSR. CA was not located.")
             return
 
-        if (self.svc_model.pki_dir / "reqs" / f"{self.svc_model.cert_name}.req").exists():
+        if (self.conf.PKI_DIR / "reqs" / f"{self.cert_name}.req").exists():
             return
 
         print("generating CSR")
         compl = subprocess.run(
             args=[
-                str(self.svc_model.easyrsa),
+                str(self.easyrsa),
                 "--batch",
                 "--no-pass",
                 "--silent",
                 "--subject-alt-name=DNS:*.pikesquares.dev",
                 "gen-req",
-                self.svc_model.cert_name,
+                self.cert_name,
             ],
-            cwd=self.svc_model.data_dir,
+            cwd=self.conf.DATA_DIR,
             capture_output=True,
             check=True,
         )
@@ -334,27 +349,27 @@ class DeviceService(services.Handler):
     def ensure_sign_req(self):
         if not all(
             [
-                self.svc_model.pki_dir.exists(),
-                (self.svc_model.pki_dir / "ca.crt").exists(),
-                (self.svc_model.pki_dir / "reqs" / f"{self.svc_model.cert_name}.req").exists(),
+                self.conf.PKI_DIR.exists(),
+                (self.conf.PKI_DIR / "ca.crt").exists(),
+                (self.conf.PKI_DIR / "reqs" / f"{self.cert_name}.req").exists(),
             ]
         ):
             return
 
-        if (self.svc_model.pki_dir / "issued" / f"{self.svc_model.cert_name}.crt").exists():
+        if (self.conf.PKI_DIR / "issued" / f"{self.cert_name}.crt").exists():
             return
 
         print("Signing CSR")
         compl = subprocess.run(
             args=[
-                str(self.svc_model.easyrsa),
+                str(self.easyrsa),
                 "--batch",
                 "--no-pass",
                 "sign-req",
                 "server",
-                self.svc_model.cert_name,
+                self.cert_name,
             ],
-            cwd=self.svc_model.data_dir,
+            cwd=self.conf.DATA_DIR,
             capture_output=True,
             check=True,
         )

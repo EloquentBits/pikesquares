@@ -1,71 +1,60 @@
 import json
-from pathlib import Path
+# from pathlib import Path
 
-#import zmq
-from tinydb import TinyDB, Query
+# import zmq
+from tinydb import Query
 
+from pikesquares.services import BaseService
 from ..presets.routers import HttpsRouterSection, HttpRouterSection
-from . import (
-    Handler, 
-    HandlerFactory, 
-)
 
 __all__ = (
-    "HttpsRouterService",
     "HttpRouterService",
+    "HttpsRouterService",
 )
 
 
-@HandlerFactory.register('Https-Router')
-class HttpsRouterService(Handler):
+class HttpsRouterService(BaseService):
 
     address: str
-    is_internal: bool = False
-    is_enabled: bool = True
-    is_app: bool = False
 
-    config_json = {}
-    #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
+    # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
 
-    def up(self, address:str):
+    def up(self, address: str):
         self.address = address
         self.prepare_service_config()
         self.save_config()
         self.start()
 
     def save_config(self):
-        with TinyDB(self.svc_model.device_db_path) as db:
-            routers_db = db.table('routers')
-            routers_db.upsert(
-                {
-                    'service_type': self.handler_name, 
-                    'service_id': self.svc_model.service_id,
-                    'address': self.address,
-                    'service_config': self.config_json,
-                },
-                Query().service_id == self.svc_model.service_id,
-            )
+        routers_db = self.db.table("routers")
+        routers_db.upsert(
+            {
+                "service_type": self.handler_name,
+                "service_id": self.service_id,
+                "address": self.address,
+                "service_config": self.config_json,
+            },
+            Query().service_id == self.service_id,
+        )
 
-    def prepare_service_config(
-            self, 
-            ) -> None:
+    def prepare_service_config(self) -> None:
 
         def https_router_provision_cert():
             pass
 
         https_router_provision_cert()
     
-        section = HttpsRouterSection(self.svc_model, self.address)
+        section = HttpsRouterSection(self.self, self.address)
         self.config_json = json.loads(
                 section.as_configuration().format(formatter="json"))
         self.config_json["uwsgi"]["show-config"] = True
         self.config_json["uwsgi"]["strict"] = True
-        self.config_json["uwsgi"]["notify-socket"] = str(self.svc_model.notify_socket)
+        self.config_json["uwsgi"]["notify-socket"] = str(self.notify_socket)
 
         # print(f"{wsgi_app_opts=}")
         # print(f"wsgi app {self.config_json=}")
         #empjs["uwsgi"]["plugin"] = "emperor_zeromq"
-        #self.svc_model.service_config.write_text(json.dumps(self.config_json))
+        #self.service_config.write_text(json.dumps(self.config_json))
 
     def connect(self):
         pass
@@ -92,8 +81,8 @@ class HttpsRouterService(Handler):
         #else:
         #    print(f"DID NOT SEND https router config to zmq {str(self.service_config.resolve())}")
 
-        self.svc_model.service_config.parent.mkdir(parents=True, exist_ok=True)
-        self.svc_model.service_config.write_text(json.dumps(self.config_json))
+        self.service_config.parent.mkdir(parents=True, exist_ok=True)
+        self.service_config.write_text(json.dumps(self.config_json))
 
     def stop(self):
         pass
@@ -127,8 +116,7 @@ class HttpsRouterService(Handler):
     """
 
 
-@HandlerFactory.register('Http-Router')
-class HttpRouterService(Handler):
+class HttpRouterService(BaseService):
 
     address: str
     is_internal: bool = False
@@ -145,33 +133,30 @@ class HttpRouterService(Handler):
         self.start()
 
     def save_config(self):
-        with TinyDB(self.svc_model.device_db_path) as db:
-            routers_db = db.table('routers')
-            routers_db.upsert(
-                {
-                    'service_type': self.handler_name, 
-                    'service_id': self.svc_model.service_id,
-                    'address': self.address,
-                    'service_config': self.config_json,
-                },
-                Query().service_id == self.svc_model.service_id,
-            )
+        routers_db = self.db.table('routers')
+        routers_db.upsert(
+            {
+                'service_type': self.handler_name, 
+                'service_id': self.service_id,
+                'address': self.address,
+                'service_config': self.config_json,
+            },
+            Query().service_id == self.service_id,
+        )
 
-    def prepare_service_config(
-            self, 
-            ) -> None:
+    def prepare_service_config(self) -> None:
 
-        section = HttpRouterSection(self.svc_model, self.address)
+        section = HttpRouterSection(self.self, self.address)
         self.config_json = json.loads(
                 section.as_configuration().format(formatter="json"))
         self.config_json["uwsgi"]["show-config"] = True
         self.config_json["uwsgi"]["strict"] = True
-        self.config_json["uwsgi"]["notify-socket"] = str(self.svc_model.notify_socket)
+        self.config_json["uwsgi"]["notify-socket"] = str(self.notify_socket)
 
         # print(f"{wsgi_app_opts=}")
         # print(f"wsgi app {self.config_json=}")
         #empjs["uwsgi"]["plugin"] = "emperor_zeromq"
-        #self.svc_model.service_config.write_text(json.dumps(self.config_json))
+        #self.service_config.write_text(json.dumps(self.config_json))
 
     def connect(self):
         pass
@@ -198,8 +183,8 @@ class HttpRouterService(Handler):
         #else:
         #    print(f"DID NOT SEND https router config to zmq {str(self.service_config.resolve())}")
 
-        self.svc_model.service_config.parent.mkdir(parents=True, exist_ok=True)
-        self.svc_model.service_config.write_text(json.dumps(self.config_json))
+        self.service_config.parent.mkdir(parents=True, exist_ok=True)
+        self.service_config.write_text(json.dumps(self.config_json))
 
     def stop(self):
         pass

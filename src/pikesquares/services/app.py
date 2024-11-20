@@ -4,21 +4,27 @@ from pathlib import Path
 
 # import zmq
 from tinydb import Query
+import pydantic
 
 # from .. import get_service_status
 # from .project import project_up
 from ..presets.wsgi_app import WsgiAppSection
 from .data import VirtualHost
-
-from pikesquares import services
-
-__all__ = (
-    "WsgiAppService",
-)
+from pikesquares.services import BaseService
 
 
-@services.HandlerFactory.register("WSGI-App")
-class WsgiAppService(services.Handler):
+class WsgiAppOptions(pydantic.BaseModel):
+
+    root_dir: Path
+    pyvenv_dir: Path
+    wsgi_file: Path
+    wsgi_module: str
+    router_id: str
+    project_id: str
+    workers: int = 3
+
+
+class WsgiApp(BaseService):
 
     # for k in config.keys():
     #    if k.endswith("_DIR"):
@@ -37,23 +43,33 @@ class WsgiAppService(services.Handler):
 
     virtual_hosts: list[VirtualHost] = []
     # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
-    config_json = None
 
-    def prepare_service_config(
-        self,
-        **app_options
-    ):
-        self.service_id = self.svc_model.service_id
+    @pydantic.computed_field
+    def service_config(self) -> Path:
+        return Path(self.conf.CONFIG_DIR) / f"{self.parent_service_id}" / "apps" / f"{self.service_id}.json"
+
+    @pydantic.computed_field
+    def touch_reload_file(self) -> Path:
+        return Path(self.conf.CONFIG_DIR) / f"{self.parent_service_id}" / "apps" / f"{self.service_id}.json"
+
+    @pydantic.computed_field
+    def socket_address(self) -> str:
+        return f"127.0.0.1:{get_first_available_port(port=4017)}"
+
+    def prepare_service_config(self, wsgi_app_options: WsgiAppOptions):
+        self.service_id = self.service_id
         self.prepare_virtual_hosts()
 
-        routers_db = self.svc_model.db.table("routers")
-        router = routers_db.get(Query().service_id == app_options.get("router_id"))
+        routers_db = self.db.table("routers")
+        router = routers_db.get(
+            Query().service_id == app_options.get("router_id")
+        )
         https_router_address = router.get("address")
         subscription_server_address = router.get("service_config")["uwsgi"]["http-subscription-server"]
         subscription_notify_socket = router.get("service_config")["uwsgi"]["notify-socket"]
 
         section = WsgiAppSection(
-            self.svc_model,
+            self,
             subscription_server_address,
             https_router_address,
             subscription_notify_socket,
@@ -65,15 +81,15 @@ class WsgiAppService(services.Handler):
         self.config_json["uwsgi"]["show-config"] = True
         self.config_json["uwsgi"]["strict"] = True
 
-        #print(self.config_json)
-        #self.service_config.write_text(json.dumps(self.config_json))
+        # print(self.config_json)
+        # self.service_config.write_text(json.dumps(self.config_json))
 
-        apps_db = self.svc_model.db.table('apps')
+        apps_db = self.db.table("apps")
         apps_db.upsert({
                 "service_type": self.handler_name,
-                "name": self.svc_model.name,
-                "service_id": self.svc_model.service_id,
-                "project_id": self.svc_model.parent_service_id,
+                "name": self.name,
+                "service_id": self.service_id,
+                "project_id": self.parent_service_id,
                 "service_config": self.config_json,
             },
             Query().service_id == self.service_id,
@@ -81,13 +97,13 @@ class WsgiAppService(services.Handler):
 
     def prepare_virtual_hosts(self):
         server_names = [
-                f"{self.svc_model.name}.pikesquares.dev",
+                f"{self.name}.pikesquares.dev",
         ]
         self.virtual_hosts = [
             VirtualHost(
-                address=self.svc_model.socket_address,
-                certificate_path=str(self.svc_model.certificate),
-                certificate_key=str(self.svc_model.certificate_key),
+                address=self.socket_address,
+                certificate_path=str(self.certificate),
+                certificate_key=str(self.certificate_key),
                 server_names=[sn for sn in server_names if "--" not in sn]
             )
         ]
@@ -111,8 +127,8 @@ class WsgiAppService(services.Handler):
         #    if project:
         #        project_up(self.conf, project.get('name'), self.project_id)
 
-        self.svc_model.service_config.parent.mkdir(parents=True, exist_ok=True)
-        self.svc_model.service_config.write_text(json.dumps(self.config_json))
+        self.service_config.parent.mkdir(parents=True, exist_ok=True)
+        self.service_config.write_text(json.dumps(self.config_json))
 
         """
         if all([

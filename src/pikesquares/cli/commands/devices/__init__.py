@@ -6,9 +6,51 @@ from typing_extensions import Annotated
 import questionary
 
 from pikesquares.cli.console import console
-from pikesquares.services import Device, HandlerFactory
+from pikesquares import services
+from pikesquares.services import device
 
-#app = typer.Typer()
+app = typer.Typer()
+
+
+@app.command(short_help="Launch the PikeSquares Server (if stopped)")
+@app.command()
+def up(
+    ctx: typer.Context,
+    # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
+):
+    """Launch PikeSquares Server"""
+
+    context = ctx.ensure_object(dict)
+    # client_conf = services.get(context, conf.ClientConfig)
+    device_service = services.get(context, device.Device)
+    if device_service.get_service_status() == "running":
+        console.info("Looks like a PikeSquares Server is already running")
+        if questionary.confirm("Stop the running PikeSquares Server and launch a new instance?").ask():
+            device_service.stop()
+            console.success("PikeSquares Server has been shut down.")
+        else:
+            raise typer.Exit()
+    device_service.up()
+
+
+@app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
+def down(
+    ctx: typer.Context,
+    # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
+):
+    """Stop the PikeSquares Server"""
+
+    obj = ctx.ensure_object(dict)
+    obj["cli-style"] = console.custom_style_dope
+
+    svc_device = services.get(obj, device.Device)
+    if svc_device.get_service_status() == "running":
+        if questionary.confirm("Stop the running PikeSquares Server?").ask():
+            svc_device.stop()
+            console.success("PikeSquares Server has been shut down.")
+        else:
+            raise typer.Exit()
+
 
 #@app.command(rich_help_panel="Control", short_help="Reset device")
 def reset(
@@ -17,24 +59,22 @@ def reset(
 ):
     """ Reset PikeSquares Installation """
 
-    obj = ctx.ensure_object(dict)
-
-    device_handler = HandlerFactory.make_handler("Device")(
-        Device(service_id="device")
-    )
+    context = ctx.ensure_object(dict)
+    svc_device = services.get(context, device.Device)
 
     if not questionary.confirm("Reset PikeSquares Installation?").ask():
         raise typer.Exit()
 
     if questionary.confirm("Drop db tables?").ask():
-        device_handler.drop_db_tables()
+        svc_device.drop_db_tables()
 
     if questionary.confirm("Delete all configs").ask():
-        device_handler.delete_configs()
+        svc_device.delete_configs()
 
     if shutdown or questionary.confirm("Shutdown PikeSquares Server").ask():
-        device_handler.write_master_fifo("q")
+        svc_device.write_master_fifo("q")
         console.success(f"PikeSquares Server has been shut down.")
+
 
 #@app.command(rich_help_panel="Control", short_help="Nuke installation")
 def uninstall(
@@ -46,13 +86,12 @@ def uninstall(
 ):
     """ Delete the entire PikeSquares installation """
 
-    obj = ctx.ensure_object(dict)
+    context = ctx.ensure_object(dict)
+    svc_device = services.get(context, device.Device)
 
-    device_handler = HandlerFactory.make_handler("Device")(
-        Device(service_id="device")
-    )
-    device_handler.uninstall(dry_run=dry_run)
+    svc_device.uninstall(dry_run=dry_run)
     console.info("PikeSquares has been uninstalled.")
+
 
 #@app.command(rich_help_panel="Control", short_help="Write to master fifo")
 #def write_to_master_fifo(

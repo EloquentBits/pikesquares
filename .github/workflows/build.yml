@@ -62,7 +62,7 @@ jobs:
               "py": "cp312", 
               "arch": "arm64", 
               "runner": "macos-14", 
-              "cibw-wheel-suffix": "macosx_13_0_arm64",
+              "cibw-wheel-suffix": "macosx_14_0_arm64",
               "pip-cache-path": "~/Library/Caches/pip"}
         exclude:
           - os: linux

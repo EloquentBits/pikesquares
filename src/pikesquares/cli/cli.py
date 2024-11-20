@@ -9,13 +9,13 @@ import questionary
 from tinydb import TinyDB, Query
 #from circus import Arbiter, get_arbiter
 
-from pikesquares import conf
+from pikesquares import conf, DEFAULT_DATA_DIR
 from pikesquares import services
-from pikesquares.services import device
-
-from ..services.project import *
-from ..services.router import *
-from ..services.app import *
+from pikesquares.services.device import Device
+from pikesquares.services import process_compose
+# from ..services.project import *
+# from ..services.router import *
+# from ..services.app import *
 
 from .console import console
 from pikesquares import __app_name__, __version__
@@ -31,25 +31,25 @@ def reset(
     """Reset PikeSquares Installation"""
 
     context = ctx.ensure_object(dict)
-    device_handler = services.get(context, device.DeviceService)
+    device = services.get(context, Device)
 
     if not questionary.confirm("Reset PikeSquares Installation?").ask():
         raise typer.Exit()
 
     if all(
         [
-            device_handler.svc_model.get_service_status() == "running",
+            device.get_service_status() == "running",
             shutdown or questionary.confirm("Shutdown PikeSquares Server").ask(),
         ]
     ):
-        device_handler.stop()
+        device.stop()
         console.success("PikeSquares Server has been shut down.")
 
     if questionary.confirm("Drop db tables?").ask():
-        device_handler.drop_db_tables()
+        device.drop_db_tables()
 
     if questionary.confirm("Delete all configs and logs?").ask():
-        device_handler.delete_configs()
+        device.delete_configs()
 
 
 @app.command(rich_help_panel="Control", short_help="Nuke installation")
@@ -57,8 +57,8 @@ def uninstall(ctx: typer.Context, dry_run: Optional[bool] = typer.Option(False, 
     """Delete the entire PikeSquares installation"""
 
     context = ctx.ensure_object(dict)
-    #device_handler = services.HandlerFactory.make_handler("Device")(services.Device(service_id="device"))
-    device_handler.uninstall(dry_run=dry_run)
+    # device= services.HandlerFactory.make_handler("Device")(services.Device(service_id="device"))
+    # device.uninstall(dry_run=dry_run)
     console.info("PikeSquares has been uninstalled.")
 
 
@@ -104,28 +104,33 @@ def uninstall(ctx: typer.Context, dry_run: Optional[bool] = typer.Option(False, 
 #    log_func(f"Device is [b]{status}[/b]")
 
 
-@app.command(rich_help_panel="Control", short_help="Launch the PikeSquares Server (if stopped)")
+@app.command(
+        rich_help_panel="Control",
+        short_help="Attach to the PikeSquares Server")
+def attach(
+    ctx: typer.Context,
+):
+    """Attach to PikeSquares Server"""
+
+    context = ctx.ensure_object(dict)
+    pc = services.get(context, process_compose.ProcessCompose)
+    pc.attach()
+
+
+@app.command(
+        rich_help_panel="Control",
+        short_help="Launch the PikeSquares Server (if stopped)")
 def up(
     ctx: typer.Context,
     # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
     """Launch PikeSquares Server"""
 
-    context = ctx.ensure_object(dict)
-    db = services.get(context, TinyDB)
-    if not db.tables():
-        raise Exception("unable to read db")
-
+    # context = ctx.ensure_object(dict)
     # client_conf = services.get(context, conf.ClientConfig)
-    device_handler = services.get(context, device.DeviceService)
-    if device_handler.svc_model.get_service_status() == "running":
-        console.info("Looks like a PikeSquares Server is already running")
-        if questionary.confirm("Stop the running PikeSquares Server and launch a new instance?").ask():
-            device_handler.stop()
-            console.success("PikeSquares Server has been shut down.")
-        else:
-            raise typer.Exit()
-    device_handler.up()
+    # nothing to do here
+    pass
+
 
 
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
@@ -134,17 +139,9 @@ def down(
     # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
     """Stop the PikeSquares Server"""
-
-    obj = ctx.ensure_object(dict)
-    obj["cli-style"] = console.custom_style_dope
-
-    device_handler = services.HandlerFactory.make_handler("Device")(Device(service_id="device"))
-    if device_handler.svc_model.get_service_status() == "running":
-        if questionary.confirm("Stop the running PikeSquares Server?").ask():
-            device_handler.stop()
-            console.success("PikeSquares Server has been shut down.")
-        else:
-            raise typer.Exit()
+    # obj = ctx.ensure_object(dict)
+    # nothing to do here
+    pass
 
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")
@@ -157,11 +154,11 @@ def tail_service_log(
     obj = ctx.ensure_object(dict)
     obj["cli-style"] = console.custom_style_dope
 
-    device_handler = services.HandlerFactory.make_handler("Device")(Device(service_id="device"))
+    device = services.get(obj, Device)
     show_config_start_marker = ";uWSGI instance configuration\n"
     show_config_end_marker = ";end of configuration\n"
 
-    latest_running_config, latest_startup_log = device_handler.svc_model.startup_log(
+    latest_running_config, latest_startup_log = device.startup_log(
         show_config_start_marker, show_config_end_marker
     )
     for line in latest_running_config:
@@ -171,12 +168,12 @@ def tail_service_log(
         console.info(line)
 
 
-from ..services.device import *
+from .commands import devices
 from .commands import apps
 from .commands import managed_services
 
 app.add_typer(apps.app, name="apps")
-
+app.add_typer(devices.app, name="devices")
 app.add_typer(managed_services.app, name="services")
 
 
@@ -201,44 +198,56 @@ def main(
     """
     Welcome to Pike Squares. Building blocks for your apps.
     """
+    for key, value in os.environ.items():
+        if key.startswith(("PIKESQUARES", "SCIE", "PEX")):
+            print(f"{key}: {value}")
 
     print(f"About to execute command: {ctx.invoked_subcommand}")
-    context = services.init_context(ctx.ensure_object(dict))
+    # context = services.init_context(ctx.ensure_object(dict))
 
-    data_dir = Path(os.environ.get("PIKESQUARES_DATA_DIR"))
-    if not data_dir.exists():
-        raise Exception(f"data directory does not exist @ {data_dir}")
+    context = services.init_app(ctx.ensure_object(dict))
+    pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
 
-    db_path = Path(data_dir) / "device-db.json"
-    if not db_path.exists():
-        raise Exception(f"conf db does not exist @ {db_path}")
+    data_dir = os.environ.get("PIKESQUARES_DATA_DIR")
+    dbname = "device-db.json"
+    if data_dir and Path(data_dir).exists():
+        db_path = Path(data_dir) / dbname
+    else:
+        db_path = DEFAULT_DATA_DIR / dbname
 
-    def tinydb_factory():
-        with TinyDB(db_path) as db:
-            yield db
-    services.register_factory(context, TinyDB, tinydb_factory)
+    services.register_db(context, db_path)
+    try:
+        conf_mapping = services.get(context, TinyDB).\
+                table("configs").\
+                search(Query().version == pikesquares_version)[0]
+    except IndexError:
+        print(f"unable to load v{pikesquares_version} conf from {str(db_path)}")
+        raise typer.Exit() from None
 
-    def conf_factory():
-        # conf_mapping = {"PKI_DIR": Path("/home/pk/.local/share/pikesquares/pki")}
-        pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
+    services.register_app_conf(context, conf_mapping)
+    client_conf = services.get(context, conf.ClientConfig)
+    # console.debug(client_conf.model_dump())
+    services.register_device(context, Device)
+
+    pc_api_port = 9555
+    process_compose.register_process_compose(context, client_conf, pc_api_port)
+    pc = services.get(context, process_compose.ProcessCompose)
+
+    for svc in services.get_pings(context):
+        print(f"pinging {svc.name=}")
         try:
-            conf_mapping = services.get(context, TinyDB).\
-                    table("configs").\
-                    search(Query().version == pikesquares_version)[0]
-        except IndexError:
-            raise Exception(f"unable to load v{pikesquares_version} conf from {str(db_path)}")
-        return services.ClientConfig(**conf_mapping)
-    services.register_factory(context, services.ClientConfig, conf_factory)
-
-    def device_handler_factory():
-        return services.HandlerFactory.make_handler("Device")(
-            services.Device(
-                conf=services.get(context, services.ClientConfig),
-                db=services.get(context, TinyDB),
-                service_id="device",
-            )
-        )
-    services.register_factory(context, device.DeviceService, device_handler_factory)
+            svc.ping()
+            print("process-compose is UP")
+            if ctx.invoked_subcommand == "up":
+                console.info("looks like PikeSquares Server is already running.")
+                console.info("try `pikesquares attach` to see running processes.")
+        except process_compose.ProcessComposeUnavailableException:
+            print(f"process-compose is DOWN")
+            # process-compose is not running
+            # launch process-compose if
+            pc.up()
+            if ctx.invoked_subcommand == "up":
+                raise typer.Exit() from None
 
     # def circus_arbiter_factory():
     #    watchers = []
@@ -259,29 +268,6 @@ def main(
 
     # obj["device-handler"] = device_handler
     context["cli-style"] = console.custom_style_dope
-
-    # for key, value in os.environ.items():
-    #    if key.startswith(('PIKESQUARES', 'SCIE', 'PEX')):
-    #        print(f'{key}: {value}')
-
-    # PIKESQUARES_VERSION: 0.0.13.dev0
-    # SCIE: /home/pk/dev/eqb/scie-pikesquares/dist/scie-pikesquares-linux-x86_64
-    # SCIE_ARGV0: /home/pk/dev/eqb/scie-pikesquares/dist/scie-pikesquares-linux-x86_64
-    # PIKESQUARES_BIN_NAME: scie-pikesquares
-    # PIKESQUARES_DEBUG:
-    # SCIE_PIKESQUARES_VERSION: 0.0.26
-    # PIKESQUARES_BUILDROOT_OVERRIDE:
-    # PIKESQUARES_SCIE_BINDINGS: /home/pk/.cache/nce/104e9a801b64d5745c20ec1181e26fd7afb0d0bdde7de368ff55ced1e0ea420a/bindings
-    # PEX_PYTHON_PATH: /home/pk/.cache/nce/57a37b57f8243caa4cdac016176189573ad7620f0b6da5941c5e40660f9468ab/cpython-3.12.2+20240224-x86_64-unknown-linux-gnu-install_only.tar.gz/python/bin/python3.12
-    # PEX_ROOT: /home/pk/.cache/nce/104e9a801b64d5745c20ec1181e26fd7afb0d0bdde7de368ff55ced1e0ea420a/bindings/pex_root
-    # PIKESQUARES_DATA_DIR: /home/pk/.local/share/pikesquares
-    # PIKESQUARES_EASY_RSA_DIR: /home/pk/.cache/nce/aaa48fadcbb77511b9c378554ef3eae09f8c7bc149d6f56ba209f1c9bab98c6e/easyrsa
-    # _PIKESQUARES_SERVER_EXE:
-
-    # print(f"{os.environ.get('PIKESQUARES_SCIE_BINDINGS')=}")
-    # print(f"{os.environ.get('VIRTUAL_ENV')=}")
-    # pex_python = os.environ.get("PEX_PYTHON_PATH")
-    # console.info(f"{pex_python=}")
 
     # console.info(device_handler.svc_model.model_dump())
 

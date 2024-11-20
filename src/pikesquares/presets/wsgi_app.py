@@ -87,12 +87,12 @@ class BaseWsgiAppSection(Section):
         self.workers.set_harakiri_params(verbose=True)
 
         # FIXME
-        #self.main_process.set_basic_params(show_config=True)
+        # self.main_process.set_basic_params(show_config=True)
 
         self.main_process.set_basic_params(vacuum=True)
         self.main_process.set_naming_params(
             autonaming=False,
-            prefix=f'{process_prefix} ' if process_prefix else None,
+            prefix=f"{process_prefix} " if process_prefix else None,
         )
         self.master_process.set_basic_params(enable=True)
         self.master_process.set_exit_events(sig_term=True)  # Respect the convention. Make Upstart and Co happy.
@@ -105,16 +105,15 @@ class BaseWsgiAppSection(Section):
             self.master_process.set_exception_handling_params(no_write_exception=True)
             self.logging.set_filters(write_errors=False, sigpipe=False)
 
-
-    def configure_owner(self, owner: str = 'www-data'):
+    def configure_owner(self, owner: str = "www-data"):
         """
         Shortcut to set process owner data.
 
         :param owner: Sets user and group. Default: ``www-data``. Also can be in format: `user:group`
         """
         if owner is not None:
-            if ':' in owner:
-                owner, group = owner.split(':')
+            if ":" in owner:
+                owner, group = owner.split(":")
                 self.main_process.set_owner_params(uid=owner, gid=group)
             else:
                 self.main_process.set_owner_params(uid=owner, gid=owner)

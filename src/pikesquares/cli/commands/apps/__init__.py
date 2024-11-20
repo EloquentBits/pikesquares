@@ -20,16 +20,10 @@ from tinydb import TinyDB, where, Query
 from .validators import (
     RepoAddressValidator,
     PathValidator,
-    # NameValidator,
+    NameValidator,
 )
 
-from pikesquares import services, get_first_available_port
-from pikesquares.services import device
-
-from .validators import (
-    NameValidator, 
-    PathValidator,
-)
+from pikesquares import conf, services, get_first_available_port
 from ...console import console
 
 
@@ -261,7 +255,7 @@ def create(
     context = ctx.ensure_object(dict)
 
     db = services.get(context, TinyDB)
-    conf = services.get(context, services.ClientConfig)
+    client_conf = services.get(context, conf.ClientConfig)
 
     custom_style = context.get("cli-style")
     app_options = {}
@@ -289,7 +283,7 @@ def create(
         raise typer.Exit()
 
     wsgi_app_handler = services.HandlerFactory.make_handler("WSGI-App")(
-        services.WsgiApp(name=name, service_id=service_id, conf=conf, db=db)
+        services.WsgiApp(name=name, service_id=service_id, conf=client_conf, db=db)
     )
 
     project_id = None
@@ -299,7 +293,7 @@ def create(
     if not projects:
         project_name = "sandbox"
         project_handler = services.HandlerFactory.make_handler("Project")(
-            services.Project(service_id="project_sandbox", conf=conf, db=db)
+            services.Project(service_id="project_sandbox", conf=client_conf, db=db)
         )
         project_handler.up(name=project_name)
         cnt = 0
@@ -493,9 +487,17 @@ def create(
 
     console.info(app_options)
     app_options["workers"] = 3
+    wsgi_app_options = services.WsgiAppOptions(
+        root_dir=app_options["root_dir"],
+        pyvenv_dir=app_options["pyvenv_dir"],
+        wsgi_file=app_options["wsgi_file"],
+        wsgi_module=app_options["wsgi_module"],
+        router_id=app_options["router_id"],
+        project_id=app_options["project_id"],
+    )
 
     with console.status(f"`{name}` is starting...", spinner="earth"):
-        wsgi_app_handler.prepare_service_config(**app_options)
+        wsgi_app_handler.prepare_service_config(wsgi_app_options)
         wsgi_app_handler.connect()
         wsgi_app_handler.start()
 
@@ -642,7 +644,7 @@ def delete(
     custom_style = obj.get("cli-style")
 
     db = services.get(obj, TinyDB)
-    device_handler = services.get(obj, device.DeviceService)
+    device = services.get(obj, services.Device)
 
     selected_app_cuid = None
     if not app_name:
@@ -671,7 +673,7 @@ def delete(
             # rm app configs
             app = apps_db.get(Query().service_id == selected_app_cuid)
             project_id = app.get("project_id")
-            selected_app_config_path = device_handler.svc_model.config_dir / \
+            selected_app_config_path = device.config_dir / \
                 f"{project_id}" / "apps" \
                 / f"{selected_app_cuid}.json"
 

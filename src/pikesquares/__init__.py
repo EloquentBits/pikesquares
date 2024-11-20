@@ -1,5 +1,6 @@
 import traceback
 import logging
+from pathlib import Path
 
 try:
     import urllib2
@@ -9,14 +10,20 @@ except ImportError:
 import socket
 import json
 import errno
-import socket
 #from typing import TypeVar
 
 from uwsgi_tasks import set_uwsgi_callbacks
 set_uwsgi_callbacks()
-#from uwsgiconf import uwsgi
+# from uwsgiconf import uwsgi
 
-#PathLike = TypeVar("PathLike", str, Path, None)
+from platformdirs import (
+    user_data_dir, 
+    site_runtime_dir,
+    user_config_dir,
+    user_log_dir,
+)
+
+# PathLike = TypeVar("PathLike", str, Path, None)
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +49,33 @@ ERRORS = {
     ID_ERROR: "to-do id error",
 }
 
-def get_first_available_port(port: int=5500) -> int:
+APP_NAME = "pikesquares"
+DEFAULT_DATA_DIR = Path(user_data_dir(APP_NAME, ensure_exists=True))
+DEFAULT_LOG_DIR = Path(user_log_dir(APP_NAME, ensure_exists=True))
+DEFAULT_RUN_DIR = Path(site_runtime_dir(APP_NAME, ensure_exists=True))
+DEFAULT_CONFIG_DIR = Path(user_config_dir(APP_NAME, ensure_exists=True))
+
+
+def get_first_available_port(port: int = 5500) -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         if s.connect_ex(("localhost", port)) == 0:
             return get_first_available_port(port=port + 1)
         else:
             return port
+
+
+def is_port_open(port: int, ip: str = "127.0.0.1") -> bool:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(5)
+    try:
+        is_open = s.connect_ex((ip, port)) == 0 # True if open, False if not
+        if is_open:
+            s.shutdown(socket.SHUT_RDWR)
+    except Exception:
+        is_open = False
+    s.close()
+    return is_open
+
 
 def inet_addr(arg):
     sfamily = socket.AF_INET

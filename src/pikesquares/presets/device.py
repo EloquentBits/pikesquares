@@ -9,14 +9,14 @@ from . import (
 
 class DeviceSection(Section):
 
-    def __init__(self, svc_model):
+    def __init__(self, device):
         super().__init__(
             name="uwsgi",                                       # uwsgi: [uwsgi] section header
             strict_config=True,                                 # uwsgi: strict = true
         )
-        self.svc_model = svc_model
+        self.device = device
         # env = project.env
-        self.set_runtime_dir(str(svc_model.run_dir))
+        self.set_runtime_dir(str(device.conf.RUN_DIR))
 
         # plugins = [
         #         "logfile",
@@ -31,7 +31,7 @@ class DeviceSection(Section):
         self.master_process.set_basic_params(
             enable=True,
             no_orphans=True,
-            fifo_file = str(svc_model.fifo_file),
+            fifo_file=str(device.fifo_file),
         )   # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
@@ -40,68 +40,63 @@ class DeviceSection(Section):
             self.main_process.set_basic_params(
                 binary_path=os.environ.get("PEX_PYTHON_PATH"),
             # place here correct emperor wrapper
-            #str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
+            # str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
         )
 
-        self.main_process.set_owner_params(
-            uid=svc_model.server_uid, 
-            gid=svc_model.server_gid,
-        )
+        self.main_process.set_owner_params(uid=device.conf.SERVER_RUN_AS_UID, gid=device.conf.SERVER_RUN_AS_GID)
         self.main_process.set_naming_params(
             prefix="[[ PikeSquares App ]] ",
             suffix="[suffix]",
             name="PikeSquares App [name]",
             autonaming=False
         )
-        #self.set_placeholder("vconf_run_dir", self.runtime_dir)
+        # self.set_placeholder("vconf_run_dir", self.runtime_dir)
         self.main_process.set_pid_file(
-            #str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve())
-            svc_model.pid_file,
+            # str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve())
+            device.pid_file,
         )
-        
-        if svc_model.conf.DAEMONIZE:
-            self.main_process.daemonize(log_into=str(svc_model.log_file))
+        if device.conf.DAEMONIZE:
+            self.main_process.daemonize(log_into=str(device.log_file))
 
         self.main_process.set_basic_params(
-            touch_reload=str(svc_model.touch_reload_file),
+            touch_reload=str(device.touch_reload_file),
         )
-
         self.networking.register_socket(
-            self.networking.sockets.default(str(svc_model.socket_address))
+            self.networking.sockets.default(str(device.socket_address))
         )
-        #routers_dir = Path(self.conf.CONFIG_DIR) / "routers"
-        #routers_dir.mkdir(parents=True, exist_ok=True)
-        #empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
+        # routers_dir = Path(self.conf.CONFIG_DIR) / "routers"
+        # routers_dir.mkdir(parents=True, exist_ok=True)
+        # empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
         self.empire.set_emperor_params(
-            vassals_home = str(svc_model.apps_dir),
-            #vassals_home = f"zmq://tcp://{svc_model.conf.EMPEROR_ZMQ_ADDRESS}",
-            name=f"PikeSquares Server",
+            vassals_home=str(device.apps_dir),
+            # vassals_home = f"zmq://tcp://{device.conf.EMPEROR_ZMQ_ADDRESS}",
+            name="PikeSquares Server",
             spawn_asap=True,
-            stats_address=str(svc_model.stats_address),
-            #str(Path(self._runtime_dir) / f"{svc_model.service_id}-stats.sock"),
-            #pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+            stats_address=str(device.stats_address),
+            # str(Path(self._runtime_dir) / f"{device.service_id}-stats.sock"),
+            # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
         )
 
-        #"--emperor=zmq://tcp://127.0.0.1:5250",
-        #self.empire.set_emperor_params(
+        # "--emperor=zmq://tcp://127.0.0.1:5250",
+        # self.empire.set_emperor_params(
         #    stats_address=str(Path(self._runtime_dir) / f"{self.service_id}-stats.sock")
-        #)
+        # )
 
-        #uwsgiconf.options.spooler.Spooler
+        # uwsgiconf.options.spooler.Spooler
         self.spooler.set_basic_params(
-            #touch_reload=str(""),
+            # touch_reload=str(""),
             quiet=False,
             process_count=1,
             max_tasks=10,
             harakiri=60,
-            #change_dir=str(""),
+            # change_dir=str(""),
             poll_interval=10,
-            #cheap=True,
-            #base_dir=str(""),
+            # cheap=True,
+            # base_dir=str(""),
         )
         self.spooler.add(
-            work_dir=str(svc_model.spooler_dir),
+            work_dir=str(device.spooler_dir),
             external=False
 
         )
@@ -113,19 +108,19 @@ class DeviceSection(Section):
         )
         self.workers.set_mules_params(mules=3)
 
-        #self.python.import_module(
-        #    ["pikesquares.daemons.launch_standalone"], 
+        # self.python.import_module(
+        #    ["pikesquares.daemons.launch_standalone"],
         #    shared=False,
-        #)
+        # )
 
         self.logging.add_logger(self.logging.loggers.stdio())
 
-        #self.logging.add_logger(
-        #    self.logging.loggers.file(filepath=str(svc_model.log_file))
-        #)
+        # self.logging.add_logger(
+        #    self.logging.loggers.file(filepath=str(device.log_file))
+        # )
 
-        #self.run_fastrouter()
-        #self.run_httpsrouter()
+        # self.run_fastrouter()
+        # self.run_httpsrouter()
 
 
     def as_string(self):

@@ -4,6 +4,8 @@ from typing import Any, Dict, Tuple, Type, Optional
 
 # from questionary import Style as QuestionaryStyle
 
+from pydantic import Field
+
 from pydantic_settings import (
     BaseSettings,
     # PydanticBaseSettingsSource,
@@ -80,29 +82,31 @@ class JsonConfigSettingsSource(InitSettingsSource, ConfigFileSourceMixin):
 
 class ClientConfig(BaseSettings):
 
-    model_config = SettingsConfigDict()
+    model_config = SettingsConfigDict(env_prefix='PIKESQUARES_')
 
-    RUN_AS_UID: int
-    RUN_AS_GID: int
-    SERVER_RUN_AS_UID: int
-    SERVER_RUN_AS_GID: int
+    version: str
+    RUN_AS_UID: int = Field(gt=0)
+    RUN_AS_GID: int = Field(gt=0)
+    SERVER_RUN_AS_UID: int = Field(gt=0)
+    SERVER_RUN_AS_GID: int = Field(gt=0)
     APP_NAME: str = "pikesquares"
 
-    DEBUG: bool = False
-    DAEMONIZE: bool = False
+    # DEBUG: bool = False
     DATA_DIR: Path
     RUN_DIR: Path
     LOG_DIR: Path
     CONFIG_DIR: Path
     PLUGINS_DIR: Path
     VIRTUAL_ENV: Path
-    # EASYRSA_DIR: str
+    EASYRSA_DIR: Path | None = None
     # CADDY_DIR: Optional[str] = None
-    PKI_DIR: Path
+    PKI_DIR: Path | None = None
+    PROCESS_COMPOSE_BIN: Path | None = None
+    UWSGI_BIN: Path | None = None
     # CLI_STYLE: QuestionaryStyle
-    ENABLE_SENTRY: bool = True
-    #SENTRY_DSN: str = ""
-    version: str
+    SENTRY_ENABLED: bool = False
+    SENTRY_DSN: str | None = None
+    DAEMONIZE: bool = False
 
     # @classmethod
     # def settings_customise_sources(

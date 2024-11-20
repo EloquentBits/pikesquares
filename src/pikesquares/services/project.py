@@ -4,26 +4,29 @@ from pathlib import Path
 
 # import zmq
 from tinydb import Query
+import pydantic
 # from uwsgiconf import uwsgi
 
+from pikesquares.services import BaseService
 from ..presets.project import ProjectSection
-from pikesquares import services
 
 __all__ = (
-    "ProjectService",
+    "Project",
 )
 
 
-@services.HandlerFactory.register("Project")
-class ProjectService(services.Handler):
+class Project(BaseService):
 
-    name: str
-    is_internal: bool = True
-    is_enabled: bool = True
-    is_app: bool = False
+    @pydantic.computed_field
+    def service_config(self) -> Path:
+        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
 
-    # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
-    config_json = {}
+    @pydantic.computed_field
+    def apps_dir(self) -> str:
+        apps_dir = Path(self.conf.CONFIG_DIR) / f"{self.service_id}" / "apps"
+        if apps_dir and not apps_dir.exists():
+            apps_dir.mkdir(parents=True, exist_ok=True)
+        return str(apps_dir.resolve())
 
     def up(self, name: str):
         self.prepare_service_config()
@@ -31,39 +34,38 @@ class ProjectService(services.Handler):
         self.start()
 
     def save_config(self, name: str):
-        projects_db = self.svc_model.db.table("projects")
+        projects_db = self.db.table("projects")
         projects_db.upsert(
             {
                 "service_type": self.handler_name,
-                "service_id": self.svc_model.service_id,
+                "service_id": self.service_id,
                 "service_config": self.config_json,
                 "name": name,
             },
-            Query().service_id == self.svc_model.service_id,
+            Query().service_id == self.service_id,
         )
 
     # def write_config(self):
-    #    self.svc_model.service_config.write_text(
+    #    self.service_config.write_text(
     #        json.dumps(self.config_json)
     #    )
 
     def prepare_service_config(self):
 
         empjs = json.loads(ProjectSection(
-                self.svc_model
-            ).as_configuration().format(formatter="json"))
+                self.as_configuration().format(formatter="json")))
 
-        self.svc_model.service_config.write_text(json.dumps(empjs))
-        self.config_json = json.loads(self.svc_model.service_config.read_text())
+        self.service_config.write_text(json.dumps(empjs))
+        self.config_json = json.loads(self.service_config.read_text())
 
         # stats_addr = self.config_json["uwsgi"]["emperor-stats-server"]
         # self.config_json["uwsgi"]["emperor"] = zmq_addr #uwsgi.cache_get(zmq_addr_key, self.cache).decode()
-        # self.config_json["uwsgi"]["emperor"] = self.svc_model.apps_dir
+        # self.config_json["uwsgi"]["emperor"] = self.apps_dir
 
-        # uwsgi.cache_update(f"{self.svc_model.service_id}-stats-addr", str(stats_addr), 0, self.svc_model.cache)
+        # uwsgi.cache_update(f"{self.service_id}-stats-addr", str(stats_addr), 0, self.cache)
 
         self.config_json["uwsgi"]["emperor-wrapper"] = \
-            str((Path(self.svc_model.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
+            str((Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
 
         self.config_json["uwsgi"]["show-config"] = True
         self.config_json["uwsgi"]["strict"] = True
@@ -73,15 +75,15 @@ class ProjectService(services.Handler):
 
     def connect(self):
         pass
-        # print(f"Connecting to zmq emperor  {self.svc_model.conf.EMPEROR_ZMQ_ADDRESS}")
-        # self.zmq_socket.connect(f"tcp://{self.svc_model.conf.EMPEROR_ZMQ_ADDRESS}")
+        # print(f"Connecting to zmq emperor  {self.conf.EMPEROR_ZMQ_ADDRESS}")
+        # self.zmq_socket.connect(f"tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}")
 
     def start(self):
         # print("sending msg to zmq")
         # self.zmq_socket.send_multipart(
         #    [
         #        b"touch",
-        #        f"{self.svc_model.service_id}.json".encode(),
+        #        f"{self.service_id}.json".encode(),
         #        json.dumps(self.config_json).encode(),
         #    ]
         # )
@@ -93,22 +95,22 @@ class ProjectService(services.Handler):
         #        self.service_config.removesuffix(".stopped")
         #    )
 
-        self.svc_model.service_config.parent.mkdir(parents=True, exist_ok=True)
-        self.svc_model.service_config.write_text(json.dumps(self.config_json))
+        self.service_config.parent.mkdir(parents=True, exist_ok=True)
+        self.service_config.write_text(json.dumps(self.config_json))
 
     def stop(self):
         pass
         # self.zmq_socket.send_multipart([
         #    b"destroy",
-        #    f"{self.svc_model.service_id}.json".encode(),
+        #    f"{self.service_id}.json".encode(),
         # ])
-        # if self.svc_model.service_config is None:
-        #    self.svc_model.service_config = Path(self.conf.CONFIG_DIR) / \
-        #            f"{self.svc_model.parent_service_id}" / "apps" \
-        #            / f"{self.svc_model.service_id}.json"
+        # if self.service_config is None:
+        #    self.service_config = Path(self.conf.CONFIG_DIR) / \
+        #            f"{self.parent_service_id}" / "apps" \
+        #            / f"{self.service_id}.json"
 
-        # if self.is_started() and not str(self.svc_model.service_config.resolve()).endswith(".stopped"):
-        #    shutil.move(self.svc_model.service_config, self.svc_model.service_config.with_suffix(".stopped"))
+        # if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
+        #    shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
 
 
 # def get_project(conf: ClientConfig, project_id):

@@ -1,16 +1,15 @@
-anytree
+#anytree
 cuid
 #circus
 gitpython
 giturlparse
 questionary
 pydantic-settings
+platformdirs
 randomname
 sentry-sdk
 svcs
 tinydb
-typer[all]
-#uwsgi
+typer
 uwsgiconf
 uwsgi-tasks @ git+https://github.com/EloquentBits/uwsgi_tasks@master
-#zmq
