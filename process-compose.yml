@@ -4,6 +4,14 @@ is_strict: true
 vars:
 log_location: "${PIKESQUARES_LOG_DIR}/process-compose.log"
 log_level: debug
+log_configuration:
+  fields_order: ["time", "level", "message"] # order of logging fields. The default is time, level, message
+  disable_json: true                         # output as plain text. The default is false
+  timestamp_format: "06-01-02 15:04:05.000"  # timestamp format. The default is RFC3339
+  no_metadata: true                          # don't log process name and replica number
+  add_timestamp: true                        # add timestamp to the logger. Default is false
+  no_color: true                             # disable ANSII colors in the logger. Default is false
+  flush_each_line: true                      # disable buffering and flush each line to the log file. Default is false
 environment:
 processes:
   #pc_log:

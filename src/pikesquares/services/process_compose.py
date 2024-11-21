@@ -2,13 +2,37 @@ import os
 import subprocess
 
 import pydantic
+import requests
 
 from pikesquares import conf, is_port_open
 from pikesquares.services import register_factory
 
 
-class ProcessComposeUnavailableException(Exception):
+class PCAPIUnavailableException(Exception):
     pass
+
+
+class PCDeviceUnavailableException(Exception):
+    pass
+
+
+
+class ProcessComposeProcessStats(pydantic.BaseModel):
+
+    IsRunning: bool
+    age: int
+    cpu: float
+    exit_code: int
+    is_elevated: bool
+    is_ready: str
+    mem: int
+    name: str
+    namespace: str
+    password_provided: bool
+    pid: int
+    restarts: int
+    status: str
+    system_time: str
 
 
 class ProcessCompose(pydantic.BaseModel):
@@ -26,7 +50,38 @@ class ProcessCompose(pydantic.BaseModel):
 
     def ping(self) -> None:
         if not is_port_open(self.api_port):
-            raise ProcessComposeUnavailableException()
+            raise PCAPIUnavailableException()
+
+    def ping_api(self) -> bool:
+
+        if not is_port_open(self.api_port):
+            raise PCAPIUnavailableException()
+
+        try:
+            url = f"http://127.0.0.1:{self.api_port}/processes"
+            response = requests.get(url, timeout=5)
+            print(f"ping process-compose api: {response.status_code}")
+            try:
+                print(response.json())
+            except ValueError:
+                print("not json. skipping")
+                return False
+            js = response.json()
+            try:
+                device_process = \
+                        next(filter(lambda p: p.get("name") == "Device", js.get("data", {})))
+                process_stats = ProcessComposeProcessStats(**device_process)
+                if process_stats.IsRunning and process_stats.status == "Running":
+                    return True
+            except (IndexError, StopIteration):
+                pass
+        except requests.ConnectionError:
+            print("connection error to process-compose api")
+        except requests.Timeout:
+            print("request to process-compose api timed out")
+
+        raise PCDeviceUnavailableException()
+
 
     def list_processes(self):
         # process-compose list --port 9555 --output json

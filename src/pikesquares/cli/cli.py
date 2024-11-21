@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Optional
 from pathlib import Path
 
@@ -243,11 +244,21 @@ def main(
             if ctx.invoked_subcommand == "up":
                 console.info("looks like PikeSquares Server is already running.")
                 console.info("try `pikesquares attach` to see running processes.")
-        except process_compose.ProcessComposeUnavailableException:
-            print(f"process-compose is DOWN")
+        except process_compose.PCAPIUnavailableException:
+            print("process-compose is DOWN")
             # process-compose is not running
             # launch process-compose if
-            pc.up()
+
+            with console.status("Launching the PikeSquares Server", spinner="earth"):
+                pc.up()
+                time.sleep(5)
+                for _ in range(2):
+                    try:
+                        pc.ping_api()
+                        console.success("🚀 PikeSquares Server is running.")
+                    except process_compose.PCDeviceUnavailableException:
+                        time.sleep(3)
+
             if ctx.invoked_subcommand == "up":
                 raise typer.Exit() from None
 

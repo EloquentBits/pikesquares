@@ -7,6 +7,7 @@ questionary
 pydantic-settings
 platformdirs
 randomname
+requests
 sentry-sdk
 svcs
 tinydb
