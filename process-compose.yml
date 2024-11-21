@@ -1,0 +1,21 @@
+version: "0.1"
+is_strict: true
+
+vars:
+log_location: "${PIKESQUARES_LOG_DIR}/process-compose.log"
+log_level: debug
+environment:
+processes:
+  #pc_log:
+  #  command: "tail -f -n100 process-compose-${USER}.log"
+  #  working_dir: "/tmp"
+  Device:
+    environment:
+    command: "${PIKESQUARES_PYTHON_PATH} ${PIKESQUARES_SERVER_EXE} devices up"
+
+    description: PikeSquares Server
+    working_dir: "${PIKESQUARES_DATA_DIR}"
+    is_daemon: false
+    disabled: false
+    availability:
+      restart: "always"
