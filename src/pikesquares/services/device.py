@@ -192,9 +192,10 @@ class Device(BaseService):
         # res = device_config.main_process.actions.fifo_write(target, command)
 
     def sync_db_with_filesystem(self):
+        config_dir = self.conf.CONFIG_DIR
         if not self.db.table("projects").all():
-            for proj_config in (self.config_dir / "projects").glob("project_*.json"):
-                for app_config in (self.config_dir / proj_config.stem / "apps").glob("*.json"):
+            for proj_config in (config_dir / "projects").glob("project_*.json"):
+                for app_config in (config_dir / proj_config.stem / "apps").glob("*.json"):
                     console.info(f"found loose app config. deleting {app_config.name}")
                     app_config.unlink()
                 console.info(f"found loose project config. deleting {proj_config.name}")
@@ -203,7 +204,7 @@ class Device(BaseService):
             # project_up(conf, "sandbox", f"project_{cuid()}")
 
         if not self.db.table("routers").all():
-            for router_config in (self.config_dir / "projects").glob("router_*.json"):
+            for router_config in (config_dir / "projects").glob("router_*.json"):
                 console.info(f"found loose router config. deleting {router_config.name}")
                 router_config.unlink()
 
@@ -215,8 +216,9 @@ class Device(BaseService):
         self.db.drop_table("apps")
 
     def delete_configs(self):
-        for proj_config in (self.config_dir / "projects").glob("project_*.json"):
-            for app_config in (self.config_dir / proj_config.stem / "apps").glob("*.json"):
+        config_dir = self.conf.CONFIG_DIR
+        for proj_config in (config_dir / "projects").glob("project_*.json"):
+            for app_config in (config_dir / proj_config.stem / "apps").glob("*.json"):
                 console.info(f"deleting {app_config.name}")
                 app_config.unlink()
 
@@ -228,7 +230,7 @@ class Device(BaseService):
             console.info(f"deleting {proj_config.name}")
             proj_config.unlink()
 
-        for router_config in (self.config_dir / "projects").glob("router_*.json"):
+        for router_config in (config_dir / "projects").glob("router_*.json"):
             console.info(f"found router config. deleting {router_config.name}")
             router_config.unlink()
 

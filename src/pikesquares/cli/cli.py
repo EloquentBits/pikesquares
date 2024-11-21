@@ -227,6 +227,7 @@ def main(
 
     services.register_app_conf(context, conf_mapping)
     client_conf = services.get(context, conf.ClientConfig)
+
     # console.debug(client_conf.model_dump())
     services.register_device(context, Device)
 
