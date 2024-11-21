@@ -198,15 +198,16 @@ def main(
     """
     Welcome to Pike Squares. Building blocks for your apps.
     """
+    pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
+
     for key, value in os.environ.items():
         if key.startswith(("PIKESQUARES", "SCIE", "PEX")):
             print(f"{key}: {value}")
 
-    print(f"About to execute command: {ctx.invoked_subcommand}")
+    print(f"PikeSquares: v{pikesquares_version} About to execute command: {ctx.invoked_subcommand}")
     # context = services.init_context(ctx.ensure_object(dict))
 
     context = services.init_app(ctx.ensure_object(dict))
-    pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
 
     data_dir = os.environ.get("PIKESQUARES_DATA_DIR")
     dbname = "device-db.json"
