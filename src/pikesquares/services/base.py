@@ -135,7 +135,7 @@ class BaseService(pydantic.BaseModel, ABC):
 
     @pydantic.computed_field
     def easyrsa(self) -> str:
-        return self.conf.EASYRSA_DIR / "EasyRSA-3.1.7" / "easyrsa"
+        return self.conf.EASYRSA_DIR / "EasyRSA-3.2.1" / "easyrsa"
 
     # @pydantic.computed_field
     # def caddy(self) -> Path | None:
