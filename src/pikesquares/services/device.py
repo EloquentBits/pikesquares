@@ -270,7 +270,7 @@ class Device(BaseService):
 
         compl = subprocess.run(
             args=[
-                str(self.easyrsa),
+                str(self.conf.EASYRSA_BIN),
                 "init-pki",
             ],
             cwd=str(self.conf.DATA_DIR),
@@ -295,7 +295,7 @@ class Device(BaseService):
 
         compl = subprocess.run(
             args=[
-                str(self.easyrsa),
+                str(self.conf.EASYRSA_BIN),
                 '--req-cn=PikeSquares Proxy',
                 "--batch",
                 "--no-pass",
@@ -329,7 +329,7 @@ class Device(BaseService):
         print("generating CSR")
         compl = subprocess.run(
             args=[
-                str(self.easyrsa),
+                str(self.conf.EASYRSA_BIN),
                 "--batch",
                 "--no-pass",
                 "--silent",
@@ -364,7 +364,7 @@ class Device(BaseService):
         print("Signing CSR")
         compl = subprocess.run(
             args=[
-                str(self.easyrsa),
+                str(self.conf.EASYRSA_BIN),
                 "--batch",
                 "--no-pass",
                 "sign-req",

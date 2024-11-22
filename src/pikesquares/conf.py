@@ -99,6 +99,7 @@ class ClientConfig(BaseSettings):
     PLUGINS_DIR: Path
     VIRTUAL_ENV: Path
     EASYRSA_DIR: Path | None = None
+    EASYRSA_BIN: Path | None = None
     # CADDY_DIR: Optional[str] = None
     PKI_DIR: Path | None = None
     PROCESS_COMPOSE_BIN: Path | None = None
