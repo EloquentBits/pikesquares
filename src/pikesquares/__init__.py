@@ -75,22 +75,25 @@ def is_port_open(port: int, ip: str = "127.0.0.1") -> bool:
 
 def inet_addr(arg):
     sfamily = socket.AF_INET
-    host, port = arg.rsplit(':', 1)
+    host, port = arg.rsplit(":", 1)
     addr = (host, int(port))
     return sfamily, addr, host
+
 
 def unix_addr(arg):
     sfamily = socket.AF_UNIX
     addr = arg
     return sfamily, addr, socket.gethostname()
 
+
 def abstract_unix_addr(arg):
     sfamily = socket.AF_UNIX
-    addr = '\0' + arg[1:]
+    addr = "\0" + arg[1:]
     return sfamily, addr, socket.gethostname()
 
+
 def read_stats(stats_addr):
-    js = ''
+    js = ""
     http_stats = False
     sfamily = None
     #stats_addr = args.address
@@ -139,4 +142,3 @@ def read_stats(stats_addr):
         except json.JSONDecodeError:
             print(traceback.format_exc())
             print(js)
-

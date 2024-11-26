@@ -8,9 +8,10 @@ import pydantic
 
 # from .. import get_service_status
 # from .project import project_up
+from pikesquares import get_first_available_port
 from ..presets.wsgi_app import WsgiAppSection
 from .data import VirtualHost
-from pikesquares.services import BaseService
+from pikesquares.services.base import BaseService
 
 
 class WsgiAppOptions(pydantic.BaseModel):
@@ -40,6 +41,7 @@ class WsgiApp(BaseService):
     is_internal = False
     is_enabled = True
     is_app = True
+    parent_service_id: str | None = None
 
     virtual_hosts: list[VirtualHost] = []
     # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)

@@ -7,7 +7,7 @@ from tinydb import Query
 import pydantic
 # from uwsgiconf import uwsgi
 
-from pikesquares.services import BaseService
+from pikesquares.services.base import BaseService
 from ..presets.project import ProjectSection
 
 __all__ = (
@@ -64,8 +64,8 @@ class Project(BaseService):
 
         # uwsgi.cache_update(f"{self.service_id}-stats-addr", str(stats_addr), 0, self.cache)
 
-        self.config_json["uwsgi"]["emperor-wrapper"] = \
-            str((Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
+        #self.config_json["uwsgi"]["emperor-wrapper"] = \
+        #    str((Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
 
         self.config_json["uwsgi"]["show-config"] = True
         self.config_json["uwsgi"]["strict"] = True

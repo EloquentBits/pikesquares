@@ -1,13 +1,11 @@
-from typing import Optional
+from typing import Optional, Annotated
 
 import typer
-from typing_extensions import Annotated
-
 import questionary
 
 from pikesquares.cli.console import console
 from pikesquares import services
-from pikesquares.services import device
+from pikesquares.services.device import Device, StatsUnavailableException
 
 app = typer.Typer()
 
@@ -19,33 +17,34 @@ def up(
     # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
     """Launch PikeSquares Server"""
-
     context = ctx.ensure_object(dict)
     # client_conf = services.get(context, conf.ClientConfig)
-    device_service = services.get(context, device.Device)
-    if device_service.get_service_status() == "running":
+    device = services.get(context, Device)
+    if device.get_service_status() == "running":
         console.info("Looks like a PikeSquares Server is already running")
         if questionary.confirm("Stop the running PikeSquares Server and launch a new instance?").ask():
-            device_service.stop()
+            device.stop()
             console.success("PikeSquares Server has been shut down.")
         else:
             raise typer.Exit()
-    device_service.up()
+    device.up()
 
 
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
 def down(
     ctx: typer.Context,
-    # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
+    noinput: Annotated[bool, typer.Option(help="Do not prompt.")] = False
 ):
     """Stop the PikeSquares Server"""
 
     obj = ctx.ensure_object(dict)
     obj["cli-style"] = console.custom_style_dope
 
-    svc_device = services.get(obj, device.Device)
+    svc_device = services.get(obj, Device)
     if svc_device.get_service_status() == "running":
-        if questionary.confirm("Stop the running PikeSquares Server?").ask():
+        if noinput:
+            svc_device.stop()
+        elif questionary.confirm("Stop the running PikeSquares Server?").ask():
             svc_device.stop()
             console.success("PikeSquares Server has been shut down.")
         else:
@@ -60,7 +59,7 @@ def reset(
     """ Reset PikeSquares Installation """
 
     context = ctx.ensure_object(dict)
-    svc_device = services.get(context, device.Device)
+    svc_device = services.get(context, Device)
 
     if not questionary.confirm("Reset PikeSquares Installation?").ask():
         raise typer.Exit()
@@ -73,25 +72,51 @@ def reset(
 
     if shutdown or questionary.confirm("Shutdown PikeSquares Server").ask():
         svc_device.write_master_fifo("q")
-        console.success(f"PikeSquares Server has been shut down.")
+        console.success("PikeSquares Server has been shut down.")
 
 
 #@app.command(rich_help_panel="Control", short_help="Nuke installation")
 def uninstall(
-    ctx: typer.Context, 
+    ctx: typer.Context,
     dry_run: Optional[bool] = typer.Option(
-        False, 
+        False,
         help="Uninstall dry run"
     )
 ):
     """ Delete the entire PikeSquares installation """
 
     context = ctx.ensure_object(dict)
-    svc_device = services.get(context, device.Device)
+    svc_device = services.get(context, Device)
 
     svc_device.uninstall(dry_run=dry_run)
     console.info("PikeSquares has been uninstalled.")
 
+
+@app.command(short_help="Show PikeSquares Server Stats)")
+@app.command()
+def info(
+    ctx: typer.Context,
+    # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
+):
+    """Show PikeSquares Server Stats"""
+
+    context = ctx.ensure_object(dict)
+    # client_conf = services.get(context, conf.ClientConfig)
+    device = services.get(context, Device)
+    try:
+        stats_js = device.stats()
+    except StatsUnavailableException:
+        console.warning(f"""Device stats @ {device.stats_address} are unavailable.\nIs the PikeSquares Server running?""")
+        raise typer.Exit() from None
+
+    vassals = stats_js.get("vassals", [])
+    console.info(f"{len(vassals)} vassals running")
+    for vs in vassals:
+        vassal_id = vs.get("id")
+        loyal = vs.get("loyal")
+        ready = vs.get("ready")
+        accepting = vs.get("accepting")
+        console.info(f"{vassal_id=} {loyal=} {ready=} {accepting=}")
 
 #@app.command(rich_help_panel="Control", short_help="Write to master fifo")
 #def write_to_master_fifo(

@@ -8,14 +8,27 @@ build-backend = "setuptools.build_meta"
 [project]
 
 name = "pikesquares"
-dynamic = [
-  "dependencies",
+dependencies = [
+    "cuid>=0.4",
+    "gitpython>=3.1.43",
+    "giturlparse>=0.12.0",
+    "platformdirs>=4.3.6",
+    "pydantic-settings>=2.6.1",
+    "questionary>=2.0.1",
+    "randomname>=0.2.1",
+    "requests>=2.32.3",
+    "sentry-sdk>=2.19.0",
+    "svcs>=24.1.0",
+    "tinydb>=4.8.2",
+    "typer[all,rich]>=0.13.1",
+    "uwsgiconf>=1.0.0",
+    "uwsgi-tasks",
 ]
 
 version = "0.8.0"
 description = ''
 #readme = "README.md"
-requires-python = ">=3.12"
+requires-python = "==3.12.*"
 keywords = []
 authors = [
   { name = "Philip Kalinsky", email = "philip.kalinsky@eloquentbits.com" },
@@ -26,7 +39,6 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: Implementation :: CPython",
 ]
-#dependencies = []
 [project.scripts]
 pikesquares = "pikesquares.cli.cli:app"
 
@@ -120,3 +132,6 @@ tag_format = "$version"
 version_scheme = "pep440"
 version_provider = "pep621"
 major_version_zero = true
+
+[tool.uv.sources]
+uwsgi-tasks = { git = "https://github.com/EloquentBits/uwsgi_tasks", rev = "master" }

@@ -251,7 +251,6 @@ class WsgiAppSection(BaseWsgiAppSection):
         self.monitoring.set_stats_params(
             address=str(svc_model.stats_address)
         )
-        
         # self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(
             self.logging.loggers.file(

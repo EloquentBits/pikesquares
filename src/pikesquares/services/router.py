@@ -42,8 +42,7 @@ class HttpsRouterService(BaseService):
         def https_router_provision_cert():
             pass
 
-        https_router_provision_cert()
-    
+        https_router_provision_cert() 
         section = HttpsRouterSection(self.self, self.address)
         self.config_json = json.loads(
                 section.as_configuration().format(formatter="json"))

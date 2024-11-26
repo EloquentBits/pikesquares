@@ -1,5 +1,5 @@
 import logging
-from typing import overload
+from typing import overload, NewType
 from collections.abc import Callable
 
 from tinydb import TinyDB
@@ -70,6 +70,29 @@ def register_factory(
         ping=ping,
         on_registry_close=on_registry_close,
     )
+
+
+def register_value(
+    context: dict,
+    svc_type: type,
+    value: object,
+    *,
+    enter: bool = False,
+    ping: Callable | None = None,
+    on_registry_close: Callable | None = None,
+) -> None:
+    """
+    Same as :meth:`svcs.Registry.register_value()`, but uses registry on *app*
+    that has been put there by :func:`init_app()`.
+    """
+    context[_KEY_REGISTRY].register_value(
+        svc_type,
+        value,
+        enter=enter,
+        ping=ping,
+        on_registry_close=on_registry_close,
+    )
+
 
 
 def get_pings(context: dict) -> list[ServicePing]:
@@ -223,6 +246,39 @@ def register_device(context, device_class):
         }
         return device_class(**data)
     register_factory(context, device_class, device_factory)
+
+
+def register_wsgi_app(context, app_class, service_id):
+    def app_factory():
+        data = {
+            "conf": get(context, conf.ClientConfig),
+            "db": get(context, TinyDB),
+            "service_id": service_id,
+        }
+        return app_class(**data)
+    register_factory(context, app_class, app_factory)
+
+
+def register_project(context, project_class, service_id):
+    def project_factory():
+        data = {
+            "conf": get(context, conf.ClientConfig),
+            "db": get(context, TinyDB),
+            "service_id": service_id,
+        }
+        return project_class(**data)
+    register_factory(context, project_class, project_factory)
+
+
+def register_sandbox_project(context, proj_class):
+    def sandbox_project_factory():
+        return proj_class(
+            conf=get(context, conf.ClientConfig),
+            db=get(context, TinyDB),
+            service_id="project_sandbox",
+        )
+    register_factory(context, proj_class, sandbox_project_factory)
+
 
 #def register_pc_api(context):
 #    def pc_api_factory():

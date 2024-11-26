@@ -16,7 +16,6 @@ class PCDeviceUnavailableException(Exception):
     pass
 
 
-
 class ProcessComposeProcessStats(pydantic.BaseModel):
 
     IsRunning: bool
@@ -53,7 +52,6 @@ class ProcessCompose(pydantic.BaseModel):
             raise PCAPIUnavailableException()
 
     def ping_api(self) -> bool:
-
         if not is_port_open(self.api_port):
             raise PCAPIUnavailableException()
 
@@ -130,13 +128,11 @@ class ProcessCompose(pydantic.BaseModel):
 
         if compl.returncode != 0:
             print("unable to launch process-compose")
-        else:
-            print("launched process-compose")
 
-        print(compl.stderr.decode())
-        print(compl.stdout.decode())
+        # print(compl.stderr.decode())
+        # print(compl.stdout.decode())
 
-    def attach(self) -> None:
+    def down(self) -> None:
         datadir = self.client_conf.DATA_DIR
         server_bin = os.environ.get("SCIE_ARGV0")
         # if server_bin and Path(server_bin).exists():
@@ -145,9 +141,40 @@ class ProcessCompose(pydantic.BaseModel):
             compl = subprocess.run(
                 server_bin,
                 env={
+                    "SCIE_BOOT": "process-compose-down",
+                    "COMPOSE_SHELL": compose_shell,
+                    "PIKESQUARES_VERSION": self.client_conf.version,
+                },
+                shell=True,
+                cwd=datadir,
+                capture_output=True,
+                check=True,
+                user=self.client_conf.SERVER_RUN_AS_UID,
+            )
+        except subprocess.CalledProcessError as cperr:
+            print(f"failed to shut down process-compose: {cperr.stderr.decode()}")
+            return
+
+        if compl.returncode != 0:
+            print("unable to shut down process-compose")
+
+        # print(compl.stderr.decode())
+        # print(compl.stdout.decode())
+
+    def attach(self) -> None:
+        datadir = self.client_conf.DATA_DIR
+        server_bin = os.environ.get("SCIE_ARGV0")
+        # if server_bin and Path(server_bin).exists():
+        compose_shell = "sh" #os.environ.get("SHELL")
+        #cmd = Path(server_bin) / ""
+        try:
+            compl = subprocess.run(
+                f"{server_bin}",
+                env={
                     "SCIE_BOOT": "process-compose-attach",
                     "COMPOSE_SHELL": compose_shell,
                     "PIKESQUARES_VERSION": self.client_conf.version,
+                    "XDG_CONFIG_HOME": "/home/pk/.config",
                 },
                 shell=True,
                 cwd=datadir,
@@ -167,8 +194,6 @@ class ProcessCompose(pydantic.BaseModel):
         print(compl.stderr.decode())
         print(compl.stdout.decode())
 
-
-
     def up_direct(self) -> None:
         datadir = self.client_conf.DATA_DIR
         logdir = self.client_conf.LOG_DIR
@@ -184,7 +209,7 @@ class ProcessCompose(pydantic.BaseModel):
         #  "--port",
         #  str(self.api_port),
         # ],
-        pc_config = str(datadir / 'process-compose.yml')
+        pc_config = str(datadir / "process-compose.yml")
 
         args_str = f"{str(self.client_conf.PROCESS_COMPOSE_BIN)} up --config {pc_config} --detached --port {str(self.api_port)}"
 

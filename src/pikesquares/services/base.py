@@ -118,7 +118,7 @@ class BaseService(pydantic.BaseModel, ABC):
         read stats socket
         """
         if self.stats_address.exists() and self.stats_address.is_socket():
-            return 'running' if read_stats(str(self.stats_address)) else 'stopped'
+            return "running" if read_stats(str(self.stats_address)) else "stopped"
 
     def startup_log(self, show_config_start_marker: str, show_config_end_marker: str) -> Tuple[List, List]:
         """
@@ -132,10 +132,6 @@ class BaseService(pydantic.BaseModel, ABC):
             latest_running_config = log_lines[start_index : end_index + 1]
             latest_startup_log = log_lines[end_index + 1 :]
         return latest_running_config, latest_startup_log
-
-    @pydantic.computed_field
-    def easyrsa(self) -> str:
-        return self.conf.EASYRSA_BIN
 
     # @pydantic.computed_field
     # def caddy(self) -> Path | None:

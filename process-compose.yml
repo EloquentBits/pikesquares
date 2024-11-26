@@ -2,6 +2,8 @@ version: "0.1"
 is_strict: true
 
 vars:
+  "PIKESQUARES_LOG_DIR":
+
 log_location: "${PIKESQUARES_LOG_DIR}/process-compose.log"
 log_level: debug
 log_configuration:
@@ -19,11 +21,94 @@ processes:
   #  working_dir: "/tmp"
   Device:
     environment:
-    command: "${PIKESQUARES_PYTHON_PATH} ${PIKESQUARES_SERVER_EXE} devices up"
-
+    command: "${PIKESQUARES_UWSGI_BIN} --json ${PIKESQUARES_CONFIG_DIR}/device.json"
     description: PikeSquares Server
     working_dir: "${PIKESQUARES_DATA_DIR}"
     is_daemon: false
     disabled: false
     availability:
-      restart: "always"
+      restart: no # other options: "on_failure", "exit_on_failure", "always", "no" (default)
+      # NOTE: `restart: exit_on_failure` is not needed since
+      # exit_on_end implies it.
+      exit_on_end: true
+      backoff_seconds: 2 # default: 1
+      max_restarts: 5 # default: 0 (unlimited)
+    depends_on:
+      bootstrap:
+        condition: process_completed_successfuly
+    shutdown:
+      command: "${PIKESQUARES_SERVER_EXE} devices down --noinput"
+      timeout_seconds: 10 # default 10
+      signal: 15 # default 15, but only if the 'command' is not defined or empty
+      parent_only: no  # default no. If yes, only signal the running process instead of its whole process group
+    #readiness_probe:
+    #  http_get:
+    #    host: "{{or \"${LIMS_API_BIND_ADDRESS}\" .LIMS_API_BIND_ADDRESS}}"
+    #    scheme: http
+    #    path: "/ht?format=json"
+    #    port: "{{or \"${LIMS_API_PORT}\" .LIMS_API_PORT}}"
+    #  initial_delay_seconds: 5
+    #  period_seconds: 10
+    #  timeout_seconds: 5
+    #  success_threshold: 1
+    #  failure_threshold: 3
+  bootstrap:
+    command: "${PIKESQUARES_SERVER_EXE} bootstrap"
+    disabled: false
+    availability:
+      restart: "exit_on_failure"
+
+################################################################
+  #sanitycheck:
+  #  command: "which go"
+  #  disabled: true
+  #  availability:
+  #    restart: "exit_on_failure"
+
+  #other_proc:
+  #  command: "go test ./..."
+  #  disabled: true
+  #  depends_on:
+  #    sanitycheck:
+  #      condition: process_completed_successfuly
+################################################################
+  #world:
+  #  command: "echo Connected"
+  #  disabled: true
+  #  depends_on:
+  #    hello:
+  #      condition: process_log_ready
+
+  #hello:
+  #  command: |
+  #    echo 'Preparing...'
+  #    sleep 1
+  #    echo 'I am ready to accept connections now'
+  #  ready_log_line: "ready to accept connections" # equal to *.ready to accept connections.*\n regex    
+  #  disabled: true
+
+################################################################
+  #tests:
+  #  command: tests-run
+  #  availability:
+      # NOTE: `restart: exit_on_failure` is not needed since
+      # exit_on_end implies it.
+  #    exit_on_end: true
+  #  depends_on:
+  #    redis: process_healthy
+  #    postgres: process_healthy
+  #  disabled: true
+
+  #redis:
+  #  command: redis-start
+  #  readiness_probe:
+  #    exec:
+  #      command: redis-health-check
+  #  disabled: true
+
+  #postgres:
+  #  command: postgres-start
+  #  readiness_probe:
+  #    exec:
+  #      command: postgres-health-check
+  #  disabled: true

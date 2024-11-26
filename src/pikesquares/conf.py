@@ -5,6 +5,7 @@ from typing import Any, Dict, Tuple, Type, Optional
 # from questionary import Style as QuestionaryStyle
 
 from pydantic import Field
+from tinydb import TinyDB, Query
 
 from pydantic_settings import (
     BaseSettings,
@@ -78,6 +79,15 @@ class JsonConfigSettingsSource(InitSettingsSource, ConfigFileSourceMixin):
             return json.load(json_file)
 
 """
+
+
+def get_conf_mapping(db: TinyDB, pikesquares_version: str):
+    try:
+        return db.\
+                table("configs").\
+                search(Query().version == pikesquares_version)[0]
+    except IndexError:
+        pass
 
 
 class ClientConfig(BaseSettings):

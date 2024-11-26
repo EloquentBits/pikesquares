@@ -13,21 +13,41 @@ class DeviceSection(Section):
         super().__init__(
             name="uwsgi",                                       # uwsgi: [uwsgi] section header
             strict_config=True,                                 # uwsgi: strict = true
+            embedded_plugins=False,
         )
         self.device = device
         # env = project.env
         self.set_runtime_dir(str(device.conf.RUN_DIR))
 
-        # plugins = [
-        #         "logfile",
-        #         # "avahi",
-        #         #"python",
-        #         #"emperor_zmq",
-        # ]
-        # self.set_plugins_params(
-        #     plugins=plugins,
-        #     search_dirs=[conf.PLUGINS_DIR,],
-        # )
+        # base
+        # = %(main_plugin)s,
+        # ping, cache, nagios, rrdtool, carbon, rpc,
+        # corerouter, fastrouter, http,
+        # ugreen, signal, syslog, rsyslog,
+        # logsocket,
+        # router_uwsgi, router_redirect, router_basicauth,
+        # zergpool, redislog, mongodblog,
+        # router_rewrite, router_http,
+        # logfile, router_cache, rawrouter, router_static, sslrouter,
+        # spooler, cheaper_busyness, symcall,
+        # transformation_tofile, transformation_gzip, transformation_chunked, transformation_offload,
+        # router_memcached, router_redis, router_hash, router_expires, router_metrics,
+        # transformation_template, stats_pusher_socket, router_fcgi
+
+        # all
+        # main_plugin = python,gevent,psgi,lua,php,rack,jvm,jwsgi,ring,mono,
+        # transformation_toupper,coroae,v8,cgi,xslt,webdav,ssi,ldap,gccgo,rados,pypy,zabbix,curl_cron,tornado,
+        # tuntap,pty,mongrel2,alarm_curl,router_radius,airbrake,gridfs
+
+        plugins = ["python312", "logfile"]
+        self.set_plugins_params(
+             plugins=plugins,
+             search_dirs=[str(device.conf.PLUGINS_DIR),],
+             autoload=True,
+             #required=True,
+        )
+        self.print_plugins()
+
         self.master_process.set_basic_params(
             enable=True,
             no_orphans=True,
@@ -36,12 +56,12 @@ class DeviceSection(Section):
         self.main_process.set_basic_params(
             vacuum=True,
         )
-        if os.environ.get("PEX_PYTHON_PATH"):
-            self.main_process.set_basic_params(
-                binary_path=os.environ.get("PEX_PYTHON_PATH"),
-            # place here correct emperor wrapper
-            # str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
-        )
+        # if os.environ.get("PEX_PYTHON_PATH"):
+        #    self.main_process.set_basic_params(
+        #        binary_path=os.environ.get("PEX_PYTHON_PATH"),
+        #   place here correct emperor wrapper
+        #   str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
+        #   )
 
         self.main_process.set_owner_params(uid=device.conf.SERVER_RUN_AS_UID, gid=device.conf.SERVER_RUN_AS_GID)
         self.main_process.set_naming_params(
@@ -104,9 +124,9 @@ class DeviceSection(Section):
         self.caching.add_cache("pikesquares-settings", max_items=100)
 
         self.workers.set_basic_params(
-            count=2
+            count=1
         )
-        self.workers.set_mules_params(mules=3)
+        # self.workers.set_mules_params(mules=3)
 
         # self.python.import_module(
         #    ["pikesquares.daemons.launch_standalone"],
@@ -121,7 +141,6 @@ class DeviceSection(Section):
 
         # self.run_fastrouter()
         # self.run_httpsrouter()
-
 
     def as_string(self):
         return self.as_configuration().print_ini()

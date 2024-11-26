@@ -1,27 +1,32 @@
 import os
 import time
-from typing import Optional
+from typing import Optional, Annotated, NewType
 from pathlib import Path
 
 import typer
-
-# from typing_extensions import Annotated
 import questionary
 from tinydb import TinyDB, Query
+from cuid import cuid
 #from circus import Arbiter, get_arbiter
 
 from pikesquares import conf, DEFAULT_DATA_DIR
 from pikesquares import services
 from pikesquares.services.device import Device
+from pikesquares.services.project import Project
 from pikesquares.services import process_compose
-# from ..services.project import *
 # from ..services.router import *
 # from ..services.app import *
 
 from .console import console
 from pikesquares import __app_name__, __version__
 
-app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich")
+app = typer.Typer(
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+    pretty_exceptions_enable=True,
+    pretty_exceptions_short=True,
+    pretty_exceptions_show_locals=True,
+)
 
 
 @app.command(rich_help_panel="Control", short_help="Reset device")
@@ -54,7 +59,10 @@ def reset(
 
 
 @app.command(rich_help_panel="Control", short_help="Nuke installation")
-def uninstall(ctx: typer.Context, dry_run: Optional[bool] = typer.Option(False, help="Uninstall dry run")):
+def uninstall(
+        ctx: typer.Context,
+        dry_run: bool = typer.Option(False, help="Uninstall dry run")
+    ):
     """Delete the entire PikeSquares installation"""
 
     context = ctx.ensure_object(dict)
@@ -112,10 +120,24 @@ def attach(
     ctx: typer.Context,
 ):
     """Attach to PikeSquares Server"""
-
     context = ctx.ensure_object(dict)
     pc = services.get(context, process_compose.ProcessCompose)
     pc.attach()
+
+
+@app.command(
+        rich_help_panel="Control",
+        short_help="Info on the PikeSquares Server")
+def info(
+    ctx: typer.Context,
+):
+    """Info on the PikeSquares Server"""
+    context = ctx.ensure_object(dict)
+
+    client_conf = services.get(context, conf.ClientConfig)
+
+    console.info(f"{client_conf.DATA_DIR=}")
+    console.info(f"{client_conf.VIRTUAL_ENV=}")
 
 
 @app.command(
@@ -133,17 +155,27 @@ def up(
     pass
 
 
-
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
 def down(
     ctx: typer.Context,
-    # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
     """Stop the PikeSquares Server"""
-    # obj = ctx.ensure_object(dict)
-    # nothing to do here
-    pass
+    context = ctx.ensure_object(dict)
+    pc = services.get(context, process_compose.ProcessCompose)
+    pc.down()
 
+
+@app.command(rich_help_panel="Control", short_help="Bootstrap the PikeSquares Server)")
+def bootstrap(
+    ctx: typer.Context,
+):
+    """Bootstrap the PikeSquares Server"""
+    context = ctx.ensure_object(dict)
+    console.info("running device bootstrap")
+    device = services.get(context, Device)
+    device.up()
+    print("bootstrap returning with 0 code")
+    raise typer.Exit(code=0)
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")
 def tail_service_log(
@@ -200,6 +232,9 @@ def main(
     Welcome to Pike Squares. Building blocks for your apps.
     """
     pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
+    if not pikesquares_version:
+        console.error("Unable to read the pikesquares version")
+        raise typer.Abort()
 
     for key, value in os.environ.items():
         if key.startswith(("PIKESQUARES", "SCIE", "PEX")):
@@ -207,6 +242,7 @@ def main(
 
     print(f"PikeSquares: v{pikesquares_version} About to execute command: {ctx.invoked_subcommand}")
     # context = services.init_context(ctx.ensure_object(dict))
+    print(vars(ctx))
 
     context = services.init_app(ctx.ensure_object(dict))
 
@@ -218,19 +254,28 @@ def main(
         db_path = DEFAULT_DATA_DIR / dbname
 
     services.register_db(context, db_path)
-    try:
-        conf_mapping = services.get(context, TinyDB).\
-                table("configs").\
-                search(Query().version == pikesquares_version)[0]
-    except IndexError:
-        print(f"unable to load v{pikesquares_version} conf from {str(db_path)}")
-        raise typer.Exit() from None
+    db = services.get(context, TinyDB)
+    conf_mapping = conf.get_conf_mapping(db, pikesquares_version)
+    if not conf_mapping:
+        console.error(f"unable to load v{pikesquares_version} conf from {str(db_path)}")
+        raise typer.Abort()
 
     services.register_app_conf(context, conf_mapping)
     client_conf = services.get(context, conf.ClientConfig)
 
     # console.debug(client_conf.model_dump())
     services.register_device(context, Device)
+    device = services.get(context, Device)
+
+    #SandboxProject = NewType("SandboxProject", Project)
+    #services.register_sandbox_project(context, SandboxProject)
+    #sandbox_project = services.get(context, SandboxProject)
+    #print(vars(sandbox_project))
+    #import pdb;pdb.set_trace()
+    #raise typer.Exit()
+
+    if ctx.invoked_subcommand == "bootstrap":
+        return
 
     pc_api_port = 9555
     process_compose.register_process_compose(context, client_conf, pc_api_port)
@@ -240,27 +285,34 @@ def main(
         print(f"pinging {svc.name=}")
         try:
             svc.ping()
-            print("process-compose is UP")
             if ctx.invoked_subcommand == "up":
                 console.info("looks like PikeSquares Server is already running.")
                 console.info("try `pikesquares attach` to see running processes.")
+                raise typer.Exit() from None
+            elif ctx.invoked_subcommand == "down":
+                console.info("Shutting down PikeSquares Server.")
+                pc.down()
+                raise typer.Exit() from None
         except process_compose.PCAPIUnavailableException:
-            print("process-compose is DOWN")
-            # process-compose is not running
-            # launch process-compose if
+            if ctx.invoked_subcommand == "down":
+                raise typer.Exit() from None
 
+        if ctx.invoked_subcommand == "up":
             with console.status("Launching the PikeSquares Server", spinner="earth"):
                 pc.up()
                 time.sleep(5)
-                for _ in range(2):
-                    try:
-                        pc.ping_api()
-                        console.success("🚀 PikeSquares Server is running.")
-                    except process_compose.PCDeviceUnavailableException:
-                        time.sleep(3)
+                try:
+                    pc.ping_api()
+                    console.success("🚀 PikeSquares Server is running.")
+                except (process_compose.PCDeviceUnavailableException, process_compose.PCAPIUnavailableException):
+                    console.info("process-compose api not available.")
+                    console.error("PikeSquares Server was unable to start.")
+                    raise typer.Exit() from None
 
-            if ctx.invoked_subcommand == "up":
-                raise typer.Exit() from None
+                if not device.get_service_status() == "running":
+                    console.warning(f"Device stats @ {device.stats_address} are unavailable.")
+                    console.error("PikeSquares Server was unable to start.")
+                    raise typer.Exit() from None
 
     # def circus_arbiter_factory():
     #    watchers = []
@@ -276,14 +328,11 @@ def main(
     #        stats_endpoint=stats_endpoint,
     #        check_delay = check_delay,
     #    )
-
-    #services.register_factory(context, Arbiter, get_arbiter)
-
+    # services.register_factory(context, Arbiter, get_arbiter)
     # obj["device-handler"] = device_handler
     context["cli-style"] = console.custom_style_dope
 
     # console.info(device_handler.svc_model.model_dump())
-
     # getattr(
     #    console,
     #    f"custom_style_{cli_style}",

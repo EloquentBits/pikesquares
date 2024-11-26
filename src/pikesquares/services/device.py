@@ -7,6 +7,7 @@ import sys
 
 # from cuid import cuid
 import pydantic
+import typer
 from tinydb import Query
 
 #from circus.arbiter import Arbiter
@@ -16,11 +17,16 @@ from tinydb import Query
 
 # from uwsgiconf import uwsgi
 
+from pikesquares import read_stats
 from pikesquares.presets import device
 from pikesquares.services.base import BaseService
 from pikesquares.cli.console import console
 
 __all__ = ("Device",)
+
+
+class StatsUnavailableException(Exception):
+    pass
 
 
 class Device(BaseService):
@@ -46,6 +52,16 @@ class Device(BaseService):
         if appsdir and not appsdir.exists():
             appsdir.mkdir(parents=True, exist_ok=True)
         return appsdir
+
+    def stats(self):
+        if not all([
+            self.stats_address.exists(),
+            self.stats_address.is_socket(),
+            self.get_service_status() == "running",
+            ]):
+            raise StatsUnavailableException()
+
+        return read_stats(str(self.stats_address))
 
     def up(self):
         # from pikesquares.services import (
@@ -89,7 +105,10 @@ class Device(BaseService):
         #                    handler_class(service_id=router_doc.get("service_id")
         #            )).up(router_doc.get("address").split("://")[-1])
 
-        self.start()
+        # self.start()
+
+    def start(self):
+        pass
 
     def save_config(self):
         # with TinyDB(self.device_db_path) as db:
@@ -105,18 +124,24 @@ class Device(BaseService):
         self.service_config.write_text(
             json.dumps(self.config_json)
         )
+        print(self.config_json)
 
     def prepare_service_config(self):
-        self.config_json = json.loads(
-            device.DeviceSection(self)
-            .as_configuration()
-            .format(formatter="json")
-        )
+        print("============  prepare_service_config   ============")
+
+        config = device.DeviceSection(
+                self,
+                )\
+                .as_configuration()\
+                .format(formatter="json")
+
+        print(config)
+        self.config_json = json.loads(config)
         self.config_json["uwsgi"]["show-config"] = True
 
-        self.config_json["uwsgi"]["emperor-wrapper"] = str(
-            (Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve()
-         )
+        # self.config_json["uwsgi"]["emperor-wrapper"] = str(
+        #    (Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve()
+        # )
 
         # empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}"
         # config["uwsgi"]["plugin"] = "emperor_zeromq"
@@ -166,7 +191,7 @@ class Device(BaseService):
     #            if pidfile is not None and restart is False:
     #                pidfile.unlink()
 
-    def start(self):
+    def start_pyuwsgi(self) -> bool:
         # we import `pyuwsgi` with `dlopen` flags set to `os.RTLD_GLOBAL` such that
         # uwsgi plugins can discover uwsgi's globals (notably `extern ... uwsgi`)
         if hasattr(sys, "setdlopenflags"):
@@ -178,12 +203,9 @@ class Device(BaseService):
                 sys.setdlopenflags(orig)
         else:  # ah well, can't control how dlopen works here
             import pyuwsgi
-
         console.info("Starting PikeSquares Server")
         pyuwsgi.run(["--json", f"{str(self.service_config.resolve())}"])
 
-    #def start(self):
-    #    print("device start")
 
     def stop(self):
         if self.get_service_status() == "running":
@@ -234,10 +256,10 @@ class Device(BaseService):
             console.info(f"found router config. deleting {router_config.name}")
             router_config.unlink()
 
-    # def delete_logs(self):
-    #    for logfile in self.log_dir.glob("*.log"):
+        for logfile in self.conf.LOG_DIR.glob("*.log"):
+            logfile.unlink()
 
-    def uninstall(self, dry_run=False):
+    def uninstall(self, dry_run: bool = False):
         for user_dir in [
             self.conf.DATA_DIR,
             self.conf.CONFIG_DIR,

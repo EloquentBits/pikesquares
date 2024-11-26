@@ -21,18 +21,32 @@ from uwsgiconf.formatters import (
 class JSONFormatter(FormatterBase):
     """Translates a configuration as JSON file."""
 
-    alias: str = 'json'
+    alias: str = "json"
 
     def format(self) -> str:
         config = {}
         for section_name, key, value in self.iter_options():
-            if key == 'plugin':
-                continue
+            print(f"{section_name=}, {str(key)=}, {value=}")
+
             if not section_name in config:
                 config[section_name] = {}
+
             if isinstance(key, tuple):
                 _, key = key
-            config[section_name][str(key)] =  str(value).strip()
+
+            if str(key) == "plugin":
+                try:
+                    existing_plugins = config[section_name]["plugin"]
+                except KeyError:
+                    config[section_name][str(key)] = str(value).strip()
+                else:
+                    existing_plugins = existing_plugins.split(",")
+                    existing_plugins.append(str(value).strip())
+                    config[section_name][str(key)] = ",".join(existing_plugins)
+                    print(config[section_name][str(key)])
+            else:
+                config[section_name][str(key)] = str(value).strip()
+
         return json.dumps(config)
 
 FORMATTERS: Dict[str, Type[FormatterBase]] = {formatter.alias: formatter for formatter in (
@@ -64,7 +78,7 @@ class Configuration(_Configuration):
 
 class Section(_Section):
 
-    def include(self, target: Union['Section', List['Section'], str, List[str]]) -> TypeSection:
+    def include(self, target: Union["Section", List["Section"], str, List[str]]) -> TypeSection:
         """Includes target contents into config.
 
         :param target: File path or Section to include.
@@ -72,17 +86,15 @@ class Section(_Section):
         """
         for target_ in listify(target):
             if isinstance(target_, Section):
-                target_ = ':' + target_.name
-            self._set('ini', f"%s:{target_}", multi=True)
+                target_ = ":" + target_.name
+            self._set("ini", f"%s:{target_}", multi=True)
 
         return self
 
-
-    def as_configuration(self, **kwargs) -> 'Configuration':
+    def as_configuration(self, **kwargs) -> "Configuration":
         """Returns configuration object including only one (this very) section.
 
         :param kwargs: Configuration objects initializer arguments.
-        
         """
         return Configuration([self], **kwargs)
 
