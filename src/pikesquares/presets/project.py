@@ -1,7 +1,6 @@
-from pathlib import Path
+# from pathlib import Path
 
 from . import Section
-
 
 
 class ProjectSection(Section):
@@ -13,22 +12,23 @@ class ProjectSection(Section):
         )
         self.project = project
 
-        self.set_runtime_dir(str(project.run_dir))
+        self.set_runtime_dir(str(self.project.conf.RUN_DIR))
 
-        # plugins = [
-        #         "logfile",
-        #         #"python",
-        #         "emperor_zmq",
-        # ]
-        # self.set_plugins_params(
-        #     plugins=plugins,
-        #     search_dirs=[conf.PLUGINS_DIR],
-        # )
+        plugins = [
+            "python312",
+            "logfile",
+            # "emperor_zmq",
+        ]
+        self.set_plugins_params(
+            plugins=plugins,
+            search_dirs=[self.project.conf.PLUGINS_DIR],
+        )
+        self.print_plugins()
 
         self.master_process.set_basic_params(
             enable=True,
             no_orphans=True,
-            fifo_file = str(project.fifo_file)
+            fifo_file=str(self.project.fifo_file)
         )   # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
@@ -37,12 +37,15 @@ class ProjectSection(Section):
             #binary_path=str((Path(self.project.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
 
         )
-        self.main_process.set_owner_params(uid=project.uid, gid=project.gid)
+        self.main_process.set_owner_params(
+                uid=self.project.conf.RUN_AS_UID,
+                gid=self.project.conf.RUN_AS_GID
+        )
 
-        self.main_process.set_pid_file(str(project.pid_file))
+        self.main_process.set_pid_file(str(self.project.pid_file))
 
         self.networking.register_socket(
-            self.networking.sockets.default(str(project.socket_address))
+            self.networking.sockets.default(str(self.project.socket_address))
         )
 
         self.empire.set_emperor_params(
@@ -54,11 +57,10 @@ class ProjectSection(Section):
             # stats_address=str(Path(self._runtime_dir) / f"{project.service_id}-stats.sock")
         )
         # self.run_fastrouter()
-        #self.logging.add_logger(self.logging.loggers.stdio())
+        # self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(project.log_file))
+            self.logging.loggers.file(filepath=str(self.project.log_file))
         )
-
 
     def as_string(self):
         return self.as_configuration().print_ini()

@@ -1,3 +1,4 @@
+import json
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Tuple, List
@@ -19,6 +20,10 @@ __all__ = (
 )
 
 
+class ServiceUnavailableError(Exception):
+    pass
+
+
 class BaseService(pydantic.BaseModel, ABC):
 
     conf: conf.ClientConfig
@@ -35,14 +40,14 @@ class BaseService(pydantic.BaseModel, ABC):
     # cli_style: QuestionaryStyle = console.custom_style_dope
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
 
-    #def __init__(self):
+    # def __init__(self):
     #    if self.conf.SENTRY_ENABLED and self.conf.SENTRY_DSN:
     #        sentry_sdk.init(
     #            dsn=self.conf.SENTRY_DSN,
     #            traces_sample_rate=1.0,
     #            release=f"{__app_name__} v{__version__}",
     #        )
-            # console.success("initialized sentry-sdk")
+    #       console.success("initialized sentry-sdk")
 
     @property
     def handler_name(self):
@@ -69,6 +74,12 @@ class BaseService(pydantic.BaseModel, ABC):
     @abstractmethod
     def stop(self):
         raise NotImplementedError
+
+    def write_config(self):
+        self.service_config.write_text(
+            json.dumps(self.config_json)
+        )
+        print(self.config_json)
 
     def write_master_fifo(self, command: str) -> None:
         """
@@ -112,6 +123,10 @@ class BaseService(pydantic.BaseModel, ABC):
         with open(str(self.fifo_file), "w") as master_fifo:
             master_fifo.write(command)
             console.info(f"[pikesquares-services] : sent command [{command}] to master fifo")
+
+    def ping(self) -> None:
+        if not self.get_service_status() == "running":
+            raise ServiceUnavailableError()
 
     def get_service_status(self):
         """

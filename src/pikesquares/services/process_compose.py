@@ -5,14 +5,15 @@ import pydantic
 import requests
 
 from pikesquares import conf, is_port_open
+from pikesquares.services.base import ServiceUnavailableError
 from pikesquares.services import register_factory
 
 
-class PCAPIUnavailableException(Exception):
+class PCAPIUnavailableError(ServiceUnavailableError):
     pass
 
 
-class PCDeviceUnavailableException(Exception):
+class PCDeviceUnavailableError(ServiceUnavailableError):
     pass
 
 
@@ -49,11 +50,11 @@ class ProcessCompose(pydantic.BaseModel):
 
     def ping(self) -> None:
         if not is_port_open(self.api_port):
-            raise PCAPIUnavailableException()
+            raise PCAPIUnavailableError()
 
     def ping_api(self) -> bool:
         if not is_port_open(self.api_port):
-            raise PCAPIUnavailableException()
+            raise PCAPIUnavailableError()
 
         try:
             url = f"http://127.0.0.1:{self.api_port}/processes"
@@ -78,7 +79,7 @@ class ProcessCompose(pydantic.BaseModel):
         except requests.Timeout:
             print("request to process-compose api timed out")
 
-        raise PCDeviceUnavailableException()
+        raise PCDeviceUnavailableError()
 
 
     def list_processes(self):

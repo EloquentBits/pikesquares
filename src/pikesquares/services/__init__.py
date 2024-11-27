@@ -270,17 +270,29 @@ def register_project(context, project_class, service_id):
     register_factory(context, project_class, project_factory)
 
 
-def register_sandbox_project(context, proj_class):
+def register_sandbox_project(context, proj_type, proj_class):
     def sandbox_project_factory():
         return proj_class(
             conf=get(context, conf.ClientConfig),
             db=get(context, TinyDB),
             service_id="project_sandbox",
         )
-    register_factory(context, proj_class, sandbox_project_factory)
+    register_factory(context, proj_type, sandbox_project_factory)
 
 
-#def register_pc_api(context):
+def register_default_router(context, address: str, router_class):
+    def default_router_factory():
+        router_alias = "https" if "https" in router_class.__name__.lower() else "http"
+        return router_class(
+            address=address,
+            conf=get(context, conf.ClientConfig),
+            db=get(context, TinyDB),
+            service_id=f"default_{router_alias}_router",
+        )
+    register_factory(context, router_class, default_router_factory)
+
+
+# def register_pc_api(context):
 #    def pc_api_factory():
 #        return "http://127.0.0.1:9555/"
 #    register_factory(context, device_class, device_factory)

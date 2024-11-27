@@ -71,27 +71,32 @@ class RouterHttps(_RouterHttp):
 
 
 class HttpsRouterSection(Section):
-    router_name = "[[ Pike Squares App / HTTPS Router ]]"
+    router_name: str = "[[ Pike Squares App / HTTPS Router ]]"
 
-    def __init__(self, router, address: str, **kwargs):
+    def __init__(self, router, **kwargs):
         super().__init__(
             strict_config=True,
             name="uwsgi",
-            runtime_dir=str(router.run_dir),
-            project_name=self.router_name,
+            # project_name=self.router_name,
             **kwargs,
         )
         self.router = router
 
         # self.service_id = service_id
         # self.conf = conf
-        self.set_runtime_dir(str(self.router.run_dir))
+        self.set_runtime_dir(str(self.router.conf.RUN_DIR))
 
-        plugins = ["https2",]
+        plugins = [
+            "python312",
+            "logfile",
+            "http",
+            # "corerouter", ??? does this not need to explicit
+        ]
         self.set_plugins_params(
              plugins=plugins,
-             search_dirs=[router.conf.PLUGINS_DIR,],
+             search_dirs=[self.router.conf.PLUGINS_DIR,],
         )
+        self.print_plugins()
 
         self.master_process.set_basic_params(
             no_orphans=True,
@@ -102,9 +107,9 @@ class HttpsRouterSection(Section):
         # self.main_process.set_basic_params(
         #    touch_reload="/srv/uwsgi/%n.http-router.ini"
         # )
-        self.main_process.set_owner_params(uid=router.conf.RUN_AS_UID, gid=router.conf.RUN_AS_GID)
+        self.main_process.set_owner_params(uid=self.router.conf.RUN_AS_UID, gid=self.router.conf.RUN_AS_GID)
         self.main_process.set_naming_params(
-            prefix=f"{self.router_name} {router.service_id} ",
+            prefix=f"{self.router_name} {self.router.service_id}",
             autonaming=True
         )
 
@@ -136,7 +141,7 @@ class HttpsRouterSection(Section):
             self.networking.sockets.default(str(router.socket_address))
         )
         # FIXME for when port is lower than the default on the cli
-        ssl_context = address #f"={(int(address.split(':')[-1]) - 8443)}"
+        ssl_context = router.address #f"={(int(address.split(':')[-1]) - 8443)}"
         self.router = RouterHttps(
             ssl_context,
             cert=str(router.certificate),
@@ -191,7 +196,7 @@ class HttpRouterSection(Section):
     #    **kwargs,
     # ):
 
-    def __init__(self, router, address: str, **kwargs):
+    def __init__(self, router, **kwargs):
         # self.name = name
         # self.runtime_dir = runtime_dir
         # super().__init__(
@@ -214,7 +219,11 @@ class HttpRouterSection(Section):
         self.set_runtime_dir(str(self.router.run_dir))
         router_cls = self.routing.routers.http
 
-        plugins = ["http",]
+        plugins = [
+            "python312",
+            "logfile",
+            "http",
+        ]
         self.set_plugins_params(
              plugins=plugins,
              search_dirs=[router.conf.PLUGINS_DIR,],
@@ -246,7 +255,7 @@ class HttpRouterSection(Section):
         #    )
 
         self.router = router_cls(
-            on=address,
+            on=router.address,
             forward_to=router_cls.forwarders.subscription_server(
                 address=str(router.subscription_server_address),
             ),

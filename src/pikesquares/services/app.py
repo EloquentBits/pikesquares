@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-#import shutil
+# from typing import NewType
+# import shutil
 
 # import zmq
 from tinydb import Query
@@ -9,20 +10,9 @@ import pydantic
 # from .. import get_service_status
 # from .project import project_up
 from pikesquares import get_first_available_port
-from ..presets.wsgi_app import WsgiAppSection
-from .data import VirtualHost
+from ..presets import wsgi_app as wsgi_app_preset
+from .data import VirtualHost, WsgiAppOptions
 from pikesquares.services.base import BaseService
-
-
-class WsgiAppOptions(pydantic.BaseModel):
-
-    root_dir: Path
-    pyvenv_dir: Path
-    wsgi_file: Path
-    wsgi_module: str
-    router_id: str
-    project_id: str
-    workers: int = 3
 
 
 class WsgiApp(BaseService):
@@ -38,45 +28,97 @@ class WsgiApp(BaseService):
     #   parser.exit(1, message=f"unable to locate VConf binary wrapper @ {emperor_wrapper}.")
     #    return
 
-    is_internal = False
-    is_enabled = True
-    is_app = True
-    parent_service_id: str | None = None
+    app_options: WsgiAppOptions
+    is_internal: bool = False
+    is_enabled: bool = True
+    is_app: bool = True
 
     virtual_hosts: list[VirtualHost] = []
     # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
 
     @pydantic.computed_field
     def service_config(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / f"{self.parent_service_id}" / "apps" / f"{self.service_id}.json"
+        return Path(self.conf.CONFIG_DIR) / f"{self.app_options.project_id}" / "apps" / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def touch_reload_file(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / f"{self.parent_service_id}" / "apps" / f"{self.service_id}.json"
+        return Path(self.conf.CONFIG_DIR) / f"{self.app_options.project_id}" / "apps" / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=4017)}"
 
-    def prepare_service_config(self, wsgi_app_options: WsgiAppOptions):
+    def up(self):
+        # if not self.is_started() and str(self.service_config.resolve()).endswith(".stopped"):
+        #    shutil.move(
+        #        str(self.service_config),
+        #        self.service_config.removesuffix(".stopped")
+        #    )
+
+        # if not get_service_status(self.project_id, self.conf) == "running":
+        #    project = get_project(self.conf, self.project_id)
+        #    if project:
+        #        project_up(self.conf, project.get('name'), self.project_id)
+
+        self.prepare_service_config()
+        self.save_config()
+        self.write_config()
+
+        """
+        if all([
+            self.service_config,
+            isinstance(self.service_config, Path),
+            self.service_config.exists()]):
+            msg = json.dumps(self.config_json).encode()
+            #self.service_config.read_text()
+            print(f"WSGI-App: TOUCH command {self.config_name} with config:\n{msg}")
+
+            self.zmq_socket.send_multipart(
+                [
+                    b"touch",
+                    self.config_name.encode(),
+                    msg,
+                ]
+            )
+        else:
+            print("no service config.")
+        """
+
+    def write_config(self):
+        self.service_config.parent.mkdir(parents=True, exist_ok=True)
+        self.service_config.write_text(json.dumps(self.config_json))
+
+    def save_config(self):
+        apps_db = self.db.table("apps")
+        apps_db.upsert({
+                "service_type": self.handler_name,
+                "name": self.name,
+                "service_id": self.service_id,
+                "project_id": self.app_options.project_id,
+                "service_config": self.config_json,
+            },
+            Query().service_id == self.service_id,
+        )
+
+    def prepare_service_config(self):
         self.service_id = self.service_id
         self.prepare_virtual_hosts()
 
         routers_db = self.db.table("routers")
         router = routers_db.get(
-            Query().service_id == app_options.get("router_id")
+            Query().service_id == self.wsgi_app_options.router_id
         )
         https_router_address = router.get("address")
         subscription_server_address = router.get("service_config")["uwsgi"]["http-subscription-server"]
         subscription_notify_socket = router.get("service_config")["uwsgi"]["notify-socket"]
 
-        section = WsgiAppSection(
+        section = wsgi_app_preset.WsgiAppSection(
             self,
             subscription_server_address,
             https_router_address,
             subscription_notify_socket,
             virtual_hosts=self.virtual_hosts,
-            **app_options
+            **self.wsgi_app_options.dump_model()
         ).as_configuration().format(formatter="json")
 
         self.config_json = json.loads(section)
@@ -85,17 +127,6 @@ class WsgiApp(BaseService):
 
         # print(self.config_json)
         # self.service_config.write_text(json.dumps(self.config_json))
-
-        apps_db = self.db.table("apps")
-        apps_db.upsert({
-                "service_type": self.handler_name,
-                "name": self.name,
-                "service_id": self.service_id,
-                "project_id": self.parent_service_id,
-                "service_config": self.config_json,
-            },
-            Query().service_id == self.service_id,
-        )
 
     def prepare_virtual_hosts(self):
         server_names = [
@@ -118,39 +149,7 @@ class WsgiApp(BaseService):
         # self.zmq_socket.connect(f'tcp://127.0.0.1:{zmq_port}')
 
     def start(self):
-        # if not self.is_started() and str(self.service_config.resolve()).endswith(".stopped"):
-        #    shutil.move(
-        #        str(self.service_config),
-        #        self.service_config.removesuffix(".stopped")
-        #    )
-
-        # if not get_service_status(self.project_id, self.conf) == "running":
-        #    project = get_project(self.conf, self.project_id)
-        #    if project:
-        #        project_up(self.conf, project.get('name'), self.project_id)
-
-        self.service_config.parent.mkdir(parents=True, exist_ok=True)
-        self.service_config.write_text(json.dumps(self.config_json))
-
-        """
-        if all([
-            self.service_config,
-            isinstance(self.service_config, Path),
-            self.service_config.exists()]):
-            msg = json.dumps(self.config_json).encode()
-            #self.service_config.read_text()
-            print(f"WSGI-App: TOUCH command {self.config_name} with config:\n{msg}")
-
-            self.zmq_socket.send_multipart(
-                [
-                    b"touch",
-                    self.config_name.encode(),
-                    msg,
-                ]
-            )
-        else:
-            print("no service config.")
-        """
+        pass
 
     def stop(self):
         pass

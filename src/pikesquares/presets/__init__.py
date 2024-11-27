@@ -26,7 +26,7 @@ class JSONFormatter(FormatterBase):
     def format(self) -> str:
         config = {}
         for section_name, key, value in self.iter_options():
-            print(f"{section_name=}, {str(key)=}, {value=}")
+            # print(f"{section_name=}, {str(key)=}, {value=}")
 
             if not section_name in config:
                 config[section_name] = {}
@@ -43,7 +43,7 @@ class JSONFormatter(FormatterBase):
                     existing_plugins = existing_plugins.split(",")
                     existing_plugins.append(str(value).strip())
                     config[section_name][str(key)] = ",".join(existing_plugins)
-                    print(config[section_name][str(key)])
+                    #p rint(config[section_name][str(key)])
             else:
                 config[section_name][str(key)] = str(value).strip()
 

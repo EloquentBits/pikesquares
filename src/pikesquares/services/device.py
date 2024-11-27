@@ -120,22 +120,10 @@ class Device(BaseService):
             Query().service_type == self.handler_name,
         )
 
-    def write_config(self):
-        self.service_config.write_text(
-            json.dumps(self.config_json)
-        )
-        print(self.config_json)
-
     def prepare_service_config(self):
-        print("============  prepare_service_config   ============")
-
-        config = device.DeviceSection(
-                self,
-                )\
+        config = device.DeviceSection(self)\
                 .as_configuration()\
                 .format(formatter="json")
-
-        print(config)
         self.config_json = json.loads(config)
         self.config_json["uwsgi"]["show-config"] = True
 
@@ -205,7 +193,6 @@ class Device(BaseService):
             import pyuwsgi
         console.info("Starting PikeSquares Server")
         pyuwsgi.run(["--json", f"{str(self.service_config.resolve())}"])
-
 
     def stop(self):
         if self.get_service_status() == "running":

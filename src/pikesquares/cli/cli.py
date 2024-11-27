@@ -12,13 +12,14 @@ from cuid import cuid
 from pikesquares import conf, DEFAULT_DATA_DIR
 from pikesquares import services
 from pikesquares.services.device import Device
-from pikesquares.services.project import Project
+from pikesquares.services.project import SandboxProject, Project
+from pikesquares.services.router import HttpsRouter
 from pikesquares.services import process_compose
 # from ..services.router import *
 # from ..services.app import *
 
 from .console import console
-from pikesquares import __app_name__, __version__
+from pikesquares import __app_name__, __version__, get_first_available_port
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -174,6 +175,13 @@ def bootstrap(
     console.info("running device bootstrap")
     device = services.get(context, Device)
     device.up()
+
+    sandbox_project = services.get(context, SandboxProject)
+    sandbox_project.up()
+
+    https_router = services.get(context, HttpsRouter)
+    https_router.up()
+
     print("bootstrap returning with 0 code")
     raise typer.Exit(code=0)
 
@@ -267,12 +275,24 @@ def main(
     services.register_device(context, Device)
     device = services.get(context, Device)
 
-    #SandboxProject = NewType("SandboxProject", Project)
-    #services.register_sandbox_project(context, SandboxProject)
-    #sandbox_project = services.get(context, SandboxProject)
-    #print(vars(sandbox_project))
-    #import pdb;pdb.set_trace()
-    #raise typer.Exit()
+    services.register_sandbox_project(
+        context,
+        proj_type=SandboxProject,
+        proj_class=Project,
+    )
+
+    https_router_address = f"0.0.0.0:{str(get_first_available_port(port=8443))}"
+    services.register_default_router(
+        context,
+        https_router_address,
+        router_class=HttpsRouter,
+    )
+    # services.register_default_router(
+    #    context,
+    #    router_class=HttpRouter,
+    # )
+
+    # sandbox_project = services.get(context, SandboxProject)
 
     if ctx.invoked_subcommand == "bootstrap":
         return
@@ -293,7 +313,8 @@ def main(
                 console.info("Shutting down PikeSquares Server.")
                 pc.down()
                 raise typer.Exit() from None
-        except process_compose.PCAPIUnavailableException:
+        except process_compose.ServiceUnavailableError:
+            console.info("=== ServiceUnavailableError ===")
             if ctx.invoked_subcommand == "down":
                 raise typer.Exit() from None
 
@@ -304,7 +325,7 @@ def main(
                 try:
                     pc.ping_api()
                     console.success("🚀 PikeSquares Server is running.")
-                except (process_compose.PCDeviceUnavailableException, process_compose.PCAPIUnavailableException):
+                except (process_compose.PCDeviceUnavailableError, process_compose.PCAPIUnavailableError):
                     console.info("process-compose api not available.")
                     console.error("PikeSquares Server was unable to start.")
                     raise typer.Exit() from None
