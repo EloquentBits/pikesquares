@@ -104,12 +104,13 @@ class HttpsRouterSection(Section):
             fifo_file=str(self.router.fifo_file),
         )
         self.master_process.set_exit_events(reload=True)
-        # self.main_process.set_basic_params(
-        #    touch_reload="/srv/uwsgi/%n.http-router.ini"
-        # )
+        self.main_process.set_basic_params(
+            # touch_reload="/srv/uwsgi/%n.http-router.ini"
+            touch_reload=str(self.router.touch_reload_file),
+        )
         self.main_process.set_owner_params(uid=self.router.conf.RUN_AS_UID, gid=self.router.conf.RUN_AS_GID)
         self.main_process.set_naming_params(
-            prefix=f"{self.router_name} {self.router.service_id}",
+            prefix=f"{self.router_name} {self.router.service_id} ",
             autonaming=True
         )
 
@@ -230,9 +231,11 @@ class HttpRouterSection(Section):
         )
         self.master_process.set_basic_params(enable=True)
         self.master_process.set_exit_events(reload=True)
-        # self.main_process.set_basic_params(
-        #    touch_reload="/srv/uwsgi/%n.http-router.ini"
-        # )
+
+        self.main_process.set_basic_params(
+            # touch_reload="/srv/uwsgi/%n.http-router.ini"
+            touch_reload=str(self.router.touch_reload_file),
+        )
         self.main_process.set_owner_params(
             uid=kwargs.pop("uid", "%U"),
             gid=kwargs.pop("gid", "%G")

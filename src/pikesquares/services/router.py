@@ -25,6 +25,10 @@ class HttpsRouter(BaseService):
     def service_config(self) -> Path:
         return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
 
+    @pydantic.computed_field
+    def touch_reload_file(self) -> Path:
+        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
+
     # @pydantic.computed_field
     # def socket_address(self) -> str:
     #    return f"127.0.0.1:{get_first_available_port(port=3017)}"

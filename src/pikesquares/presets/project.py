@@ -28,10 +28,11 @@ class ProjectSection(Section):
         self.master_process.set_basic_params(
             enable=True,
             no_orphans=True,
-            fifo_file=str(self.project.fifo_file)
+            fifo_file=str(self.project.fifo_file),
         )   # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
+            touch_reload=str(self.project.touch_reload_file),
             # place here correct emperor wrapper
             #binary_path=str((Path(self.conf.DATA_DIR) / ".venv/bin/uwsgi").resolve())
             #binary_path=str((Path(self.project.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
@@ -40,6 +41,10 @@ class ProjectSection(Section):
         self.main_process.set_owner_params(
                 uid=self.project.conf.RUN_AS_UID,
                 gid=self.project.conf.RUN_AS_GID
+        )
+        self.main_process.set_naming_params(
+            prefix=f"{self.project.name} {self.project.service_id} ",
+            autonaming=True
         )
 
         self.main_process.set_pid_file(str(self.project.pid_file))

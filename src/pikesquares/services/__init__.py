@@ -245,7 +245,12 @@ def register_device(context, device_class):
             "service_id": "device",
         }
         return device_class(**data)
-    register_factory(context, device_class, device_factory)
+    register_factory(
+        context,
+        device_class,
+        device_factory,
+        ping=lambda svc: svc.ping()
+    )
 
 
 def register_wsgi_app(context, app_class, service_id):
@@ -296,77 +301,3 @@ def register_default_router(context, address: str, router_class):
 #    def pc_api_factory():
 #        return "http://127.0.0.1:9555/"
 #    register_factory(context, device_class, device_factory)
-
-
-"""
-class HttpsRouter(BaseService):
-    pass
-
-    @pydantic.computed_field
-    def service_config(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
-
-    @pydantic.computed_field
-    def socket_address(self) -> str:
-        return f"127.0.0.1:{get_first_available_port(port=3017)}"
-
-        # @pydantic.computed_field
-        # def stats_address(self) -> str:
-        return f"127.0.0.1:{get_first_available_port(port=9897)}"
-
-    @pydantic.computed_field
-    def subscription_server_address(self) -> str:
-        return f"127.0.0.1:{get_first_available_port(port=5600)}"
-
-    @pydantic.computed_field
-    def resubscribe_to(self) -> Path:
-        # resubscribe_to: str = None,
-        return Path()
-
-
-class HttpRouter(BaseService):
-    pass
-
-    @pydantic.computed_field
-    def service_config(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
-
-    @pydantic.computed_field
-    def socket_address(self) -> str:
-        return f"127.0.0.1:{get_first_available_port(port=4017)}"
-
-        # @pydantic.computed_field
-        # def stats_address(self) -> str:
-        return f"127.0.0.1:{get_first_available_port(port=9897)}"
-
-    @pydantic.computed_field
-    def subscription_server_address(self) -> str:
-        return f"127.0.0.1:{get_first_available_port(port=6600)}"
-
-    @pydantic.computed_field
-    def resubscribe_to(self) -> Path:
-        # resubscribe_to: str = None,
-        return Path()
-
-
-class ManagedDaemon(BaseService):
-
-    name: str
-    command: str
-
-    # @pydantic.computed_field
-    # def service_config(self) -> Path:
-    #    return Path(self.conf.CONFIG_DIR) / \
-    #            f"{self.parent_service_id}" / "apps" \
-    #            / f"{self.service_id}.json"
-
-    # @pydantic.computed_field
-    # def touch_reload_file(self) -> Path:
-    #    return Path(self.conf.CONFIG_DIR) / \
-    #            f"{self.parent_service_id}" / "apps" \
-    #            / f"{self.service_id}.json"
-
-    # @pydantic.computed_field
-    # def socket_address(self) -> str:
-    #    return f"127.0.0.1:{get_first_available_port(port=4017)}"
-"""

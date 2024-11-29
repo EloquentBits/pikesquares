@@ -23,6 +23,10 @@ class Project(BaseService):
         return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
 
     @pydantic.computed_field
+    def touch_reload_file(self) -> Path:
+        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
+
+    @pydantic.computed_field
     def apps_dir(self) -> str:
         apps_dir = Path(self.conf.CONFIG_DIR) / f"{self.service_id}" / "apps"
         if apps_dir and not apps_dir.exists():

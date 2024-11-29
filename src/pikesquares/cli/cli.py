@@ -302,7 +302,7 @@ def main(
     pc = services.get(context, process_compose.ProcessCompose)
 
     for svc in services.get_pings(context):
-        print(f"pinging {svc.name=}")
+        # print(f"pinging {svc.name=}")
         try:
             svc.ping()
             if ctx.invoked_subcommand == "up":
@@ -314,26 +314,12 @@ def main(
                 pc.down()
                 raise typer.Exit() from None
         except process_compose.ServiceUnavailableError:
-            console.info("=== ServiceUnavailableError ===")
+            console.info(f"=== {svc.name} Service Unavailable ===")
             if ctx.invoked_subcommand == "down":
                 raise typer.Exit() from None
 
         if ctx.invoked_subcommand == "up":
-            with console.status("Launching the PikeSquares Server", spinner="earth"):
-                pc.up()
-                time.sleep(5)
-                try:
-                    pc.ping_api()
-                    console.success("🚀 PikeSquares Server is running.")
-                except (process_compose.PCDeviceUnavailableError, process_compose.PCAPIUnavailableError):
-                    console.info("process-compose api not available.")
-                    console.error("PikeSquares Server was unable to start.")
-                    raise typer.Exit() from None
-
-                if not device.get_service_status() == "running":
-                    console.warning(f"Device stats @ {device.stats_address} are unavailable.")
-                    console.error("PikeSquares Server was unable to start.")
-                    raise typer.Exit() from None
+            launch_pc(pc, device)
 
     # def circus_arbiter_factory():
     #    watchers = []
@@ -359,6 +345,24 @@ def main(
     #    f"custom_style_{cli_style}",
     #    getattr(console, f"custom_style_{conf.CLI_STYLE}"),
     # )
+
+
+def launch_pc(pc: process_compose.ProcessCompose, device: Device):
+    with console.status("Launching the PikeSquares Server", spinner="earth"):
+        pc.up()
+        time.sleep(5)
+        try:
+            pc.ping_api()
+            console.success("🚀 PikeSquares Server is running.")
+        except (process_compose.PCDeviceUnavailableError, process_compose.PCAPIUnavailableError):
+            console.info("process-compose api not available.")
+            console.error("PikeSquares Server was unable to start.")
+            raise typer.Exit() from None
+
+        if not device.get_service_status() == "running":
+            console.warning(f"Device stats @ {device.stats_address} are unavailable.")
+            console.error("PikeSquares Server was unable to start.")
+            raise typer.Exit() from None
 
 
 """
