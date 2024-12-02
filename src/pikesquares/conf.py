@@ -14,6 +14,8 @@ from pydantic_settings import (
 )
 # from pydantic.fields import FieldInfo
 
+from pikesquares.services import register_factory
+
 """
 class JsonConfigSettingsSource(PydanticBaseSettingsSource):
     '''
@@ -81,13 +83,17 @@ class JsonConfigSettingsSource(InitSettingsSource, ConfigFileSourceMixin):
 """
 
 
+class ClientConfigError(Exception):
+    pass
+
+
 def get_conf_mapping(db: TinyDB, pikesquares_version: str):
     try:
         return db.\
                 table("configs").\
                 search(Query().version == pikesquares_version)[0]
     except IndexError:
-        pass
+        raise ClientConfigError(f"unable to locate config in db for v{pikesquares_version}")
 
 
 class ClientConfig(BaseSettings):
@@ -134,3 +140,11 @@ class ClientConfig(BaseSettings):
     #        env_settings,
     #        file_secret_settings,
     #    )
+
+
+def register_app_conf(context: dict, pikesquares_version: str, db: TinyDB):
+    def conf_factory():
+        return ClientConfig(
+            **get_conf_mapping(db, pikesquares_version)
+        )
+    register_factory(context, ClientConfig, conf_factory)

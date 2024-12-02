@@ -10,6 +10,7 @@ import pydantic
 # from .. import get_service_status
 # from .project import project_up
 from pikesquares import get_first_available_port
+from pikesquares.services import register_factory
 from ..presets import wsgi_app as wsgi_app_preset
 from .data import VirtualHost, WsgiAppOptions
 from pikesquares.services.base import BaseService
@@ -29,9 +30,6 @@ class WsgiApp(BaseService):
     #    return
 
     app_options: WsgiAppOptions
-    is_internal: bool = False
-    is_enabled: bool = True
-    is_app: bool = True
 
     virtual_hosts: list[VirtualHost] = []
     # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
@@ -159,6 +157,23 @@ class WsgiApp(BaseService):
         #            / f"{self.service_id}.json"
         # if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
         #    shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
+
+
+def register_wsgi_app(
+    context,
+    app_class,
+    service_id,
+    client_conf,
+    db,
+    ):
+    def app_factory():
+        kwargs = {
+            "conf": client_conf,
+            "db": db,
+            "service_id": service_id,
+        }
+        return app_class(**kwargs)
+    register_factory(context, app_class, app_factory)
 
 
 # def apps_all(conf: ClientConfig):

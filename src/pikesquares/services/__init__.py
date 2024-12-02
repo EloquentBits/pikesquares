@@ -4,7 +4,6 @@ from collections.abc import Callable
 
 from tinydb import TinyDB
 
-from pikesquares import conf
 #from pikesquares.services.device import Device
 #from pikesquares.services.app import WsgiApp
 #from pikesquares.services.router import HttpRouter, HttpsRouter
@@ -224,77 +223,11 @@ def init_app(cli_context):
     return context
 
 
-def register_app_conf(context, conf_mapping):
-    def conf_factory():
-        return conf.ClientConfig(**conf_mapping)
-    register_factory(context, conf.ClientConfig, conf_factory)
-
-
 def register_db(context, db_path):
     def tinydb_factory():
         with TinyDB(db_path) as db:
             yield db
     register_factory(context, TinyDB, tinydb_factory)
-
-
-def register_device(context, device_class):
-    def device_factory():
-        data = {
-            "conf": get(context, conf.ClientConfig),
-            "db": get(context, TinyDB),
-            "service_id": "device",
-        }
-        return device_class(**data)
-    register_factory(
-        context,
-        device_class,
-        device_factory,
-        ping=lambda svc: svc.ping()
-    )
-
-
-def register_wsgi_app(context, app_class, service_id):
-    def app_factory():
-        data = {
-            "conf": get(context, conf.ClientConfig),
-            "db": get(context, TinyDB),
-            "service_id": service_id,
-        }
-        return app_class(**data)
-    register_factory(context, app_class, app_factory)
-
-
-def register_project(context, project_class, service_id):
-    def project_factory():
-        data = {
-            "conf": get(context, conf.ClientConfig),
-            "db": get(context, TinyDB),
-            "service_id": service_id,
-        }
-        return project_class(**data)
-    register_factory(context, project_class, project_factory)
-
-
-def register_sandbox_project(context, proj_type, proj_class):
-    def sandbox_project_factory():
-        return proj_class(
-            conf=get(context, conf.ClientConfig),
-            db=get(context, TinyDB),
-            service_id="project_sandbox",
-        )
-    register_factory(context, proj_type, sandbox_project_factory)
-
-
-def register_default_router(context, address: str, router_class):
-    def default_router_factory():
-        router_alias = "https" if "https" in router_class.__name__.lower() else "http"
-        return router_class(
-            address=address,
-            conf=get(context, conf.ClientConfig),
-            db=get(context, TinyDB),
-            service_id=f"default_{router_alias}_router",
-        )
-    register_factory(context, router_class, default_router_factory)
 
 
 # def register_pc_api(context):

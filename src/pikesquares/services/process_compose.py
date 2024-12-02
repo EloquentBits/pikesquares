@@ -1,5 +1,6 @@
 import os
 import subprocess
+from pathlib import Path
 
 import pydantic
 import requests
@@ -37,13 +38,14 @@ class ProcessComposeProcessStats(pydantic.BaseModel):
 
 class ProcessCompose(pydantic.BaseModel):
     api_port: int
+    uwsgi_bin: Path
     client_conf: conf.ClientConfig
     # db: TinyDB
 
     # model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
 
     def __repr__(self) -> str:
-        return f"process-compose 127.0.0.1:{self.api_port}"
+        return f"process-compose ... -p 127.0.0.1:{self.api_port}"
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -116,6 +118,7 @@ class ProcessCompose(pydantic.BaseModel):
                     "SCIE_BOOT": "process-compose-up",
                     "COMPOSE_SHELL": compose_shell,
                     "PIKESQUARES_VERSION": self.client_conf.version,
+                    "PIKESQUARES_UWSGI_BIN": self.uwsgi_bin,
                 },
                 shell=True,
                 cwd=datadir,
@@ -130,8 +133,8 @@ class ProcessCompose(pydantic.BaseModel):
         if compl.returncode != 0:
             print("unable to launch process-compose")
 
-        # print(compl.stderr.decode())
-        # print(compl.stdout.decode())
+        print(compl.stderr.decode())
+        print(compl.stdout.decode())
 
     def down(self) -> None:
         datadir = self.client_conf.DATA_DIR
@@ -269,12 +272,18 @@ class ProcessCompose(pydantic.BaseModel):
         print(compl.stdout.decode())
 
 
-def register_process_compose(context, client_conf, api_port: int = 9555):
+def register_process_compose(
+        context,
+        client_conf: conf.ClientConfig,
+        uwsgi_bin: Path,
+        api_port: int = 9555,
+    ):
 
     def process_compose_factory():
         return ProcessCompose(
             api_port=api_port,
             client_conf=client_conf,
+            uwsgi_bin=uwsgi_bin,
             # db=get(context, TinyDB),
         )
     register_factory(

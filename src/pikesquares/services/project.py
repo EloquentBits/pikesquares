@@ -4,11 +4,13 @@ from pathlib import Path
 from typing import NewType
 
 # import zmq
-from tinydb import Query
+from tinydb import Query, TinyDB
 import pydantic
 # from uwsgiconf import uwsgi
 
+from pikesquares import conf
 from pikesquares.services.base import BaseService
+from pikesquares.services import register_factory
 from ..presets.project import ProjectSection
 
 __all__ = (
@@ -125,3 +127,30 @@ class Project(BaseService):
 
 
 SandboxProject = NewType("SandboxProject", Project)
+
+
+def register_project(context, project_class, service_id, client_conf: conf.ClientConfig, db: TinyDB):
+    def project_factory():
+        kwargs = {
+            "conf": client_conf,
+            "db": db,
+            "service_id": service_id,
+        }
+        return project_class(**kwargs)
+    register_factory(context, project_class, project_factory)
+
+
+def register_sandbox_project(
+    context: dict,
+    proj_type: SandboxProject,
+    proj_class: Project,
+    client_conf: conf.ClientConfig,
+    db: TinyDB,
+    ) -> None:
+    def sandbox_project_factory():
+        return proj_class(
+            conf=client_conf,
+            db=db,
+            service_id="project_sandbox",
+        )
+    register_factory(context, proj_type, sandbox_project_factory)

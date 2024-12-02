@@ -33,9 +33,7 @@ class BaseService(pydantic.BaseModel, ABC):
     parent_service_id: str | None = None
     cert_name: str = "_wildcard_pikesquares_dev"
     name: str = ""
-    is_internal: bool = True
-    is_enabled: bool = False
-    is_app: bool = False
+    plugins: list = []
     config_json: pydantic.Json = {}
     # cli_style: QuestionaryStyle = console.custom_style_dope
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
@@ -85,30 +83,30 @@ class BaseService(pydantic.BaseModel, ABC):
         """
         Write command to master fifo named pipe
 
-        ‘0’ to ‘9’ - set the fifo slot (see below)
-        ‘+’ - increase the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
-        ‘-’ - decrease the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
-        ‘B’ - ask Emperor for reinforcement (broodlord mode, requires uWSGI >= 2.0.7)
-        ‘C’ - set cheap mode
-        ‘c’ - trigger chain reload
-        ‘E’ - trigger an Emperor rescan
-        ‘f’ - re-fork the master (dangerous, but very powerful)
-        ‘l’ - reopen log file (need –log-master and –logto/–logto2)
-        ‘L’ - trigger log rotation (need –log-master and –logto/–logto2)
-        ‘p’ - pause/resume the instance
-        ‘P’ - update pidfiles (can be useful after master re-fork)
-        ‘Q’ - brutally shutdown the instance
-        ‘q’ - gracefully shutdown the instance
-        ‘R’ - send brutal reload
-        ‘r’ - send graceful reload
-        ‘S’ - block/unblock subscriptions
-        ‘s’ - print stats in the logs
-        ‘W’ - brutally reload workers
-        ‘w’ - gracefully reload workers
+        '0' to '9' - set the fifo slot (see below)
+        '+' - increase the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
+        '-' - decrease the number of workers when in cheaper mode (add --cheaper-algo manual for full control)
+        'B' - ask Emperor for reinforcement (broodlord mode, requires uWSGI >= 2.0.7)
+        'C' - set cheap mode
+        'c' - trigger chain reload
+        'E' - trigger an Emperor rescan
+        'f' - re-fork the master (dangerous, but very powerful)
+        'l' - reopen log file (need -log-master and -logto/-logto2)
+        'L' - trigger log rotation (need -log-master and -logto/-logto2)
+        'p' - pause/resume the instance
+        'P' - update pidfiles (can be useful after master re-fork)
+        'Q' - brutally shutdown the instance
+        'q' - gracefully shutdown the instance
+        'R' - send brutal reload
+        'r' - send graceful reload
+        'S' - block/unblock subscriptions
+        's' - print stats in the logs
+        'W' - brutally reload workers
+        'w' - gracefully reload workers
         """
 
-        if not command in ["r", "q", "s"]:
-            console.warning("unknown master fifo command '{command}'")
+        if command not in {"r", "q", "s"}:
+            console.warning(f"unknown master fifo command '{command}'")
             return
 
         if not all(

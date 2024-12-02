@@ -18,9 +18,9 @@ class RouterHttps(_RouterHttp):
         with the uWSGI Subscription Server.
 
     """
-    alias = 'http'  # Shares options with http.
+    alias = "http"  # Shares options with http.
     plugin = alias
-    on_command = 'https2'
+    on_command = "https2"
 
     def __init__(
             self, on, *, cert, key, forward_to=None, ciphers=None, client_ca=None, session_context=None, use_spdy=None,
@@ -73,27 +73,19 @@ class RouterHttps(_RouterHttp):
 class HttpsRouterSection(Section):
     router_name: str = "[[ Pike Squares App / HTTPS Router ]]"
 
-    def __init__(self, router, **kwargs):
+    def __init__(self, router, plugins: list, **kwargs):
         super().__init__(
             strict_config=True,
             name="uwsgi",
-            # project_name=self.router_name,
             **kwargs,
         )
         self.router = router
+        self.plugins = plugins
 
-        # self.service_id = service_id
-        # self.conf = conf
         self.set_runtime_dir(str(self.router.conf.RUN_DIR))
 
-        plugins = [
-            "python312",
-            "logfile",
-            "http",
-            # "corerouter", ??? does this not need to explicit
-        ]
         self.set_plugins_params(
-             plugins=plugins,
+             plugins=self.plugins,
              search_dirs=[self.router.conf.PLUGINS_DIR,],
         )
         self.print_plugins()
@@ -142,7 +134,7 @@ class HttpsRouterSection(Section):
             self.networking.sockets.default(str(router.socket_address))
         )
         # FIXME for when port is lower than the default on the cli
-        ssl_context = router.address #f"={(int(address.split(':')[-1]) - 8443)}"
+        ssl_context = router.address  # f"={(int(address.split(':')[-1]) - 8443)}"
         self.router = RouterHttps(
             ssl_context,
             cert=str(router.certificate),
@@ -197,7 +189,7 @@ class HttpRouterSection(Section):
     #    **kwargs,
     # ):
 
-    def __init__(self, router, **kwargs):
+    def __init__(self, router, plugins: list, **kwargs):
         # self.name = name
         # self.runtime_dir = runtime_dir
         # super().__init__(
@@ -208,25 +200,15 @@ class HttpRouterSection(Section):
         #    **kwargs,
         # )
 
-        super().__init__(
-            strict_config=True,
-            name="uwsgi",
-            runtime_dir=str(router.run_dir),
-            project_name=self.router_name,
-            **kwargs,
-        )
+        super().__init__(strict_config=True, name="uwsgi", **kwargs)
         self.router = router
+        self.plugins = plugins
 
-        self.set_runtime_dir(str(self.router.run_dir))
+        self.set_runtime_dir(str(self.router.conf.RUN_DIR))
         router_cls = self.routing.routers.http
 
-        plugins = [
-            "python312",
-            "logfile",
-            "http",
-        ]
         self.set_plugins_params(
-             plugins=plugins,
+             plugins=self.plugins,
              search_dirs=[router.conf.PLUGINS_DIR,],
         )
         self.master_process.set_basic_params(enable=True)
@@ -245,11 +227,11 @@ class HttpRouterSection(Section):
             autonaming=True
         )
 
-        #host, port = address.split(':')
-        #if host in ('0.0.0.0', '127.0.0.1'):
+        # host, port = address.split(':')
+        # if host in ('0.0.0.0', '127.0.0.1'):
         #    address = f":{port}"
-        
-        #if resubscribe_to:
+
+        # if resubscribe_to:
         #    address = "=0"
         #    self.networking.register_socket(
         #        self.networking.sockets.shared(
@@ -268,7 +250,7 @@ class HttpRouterSection(Section):
             stats_server=str(router.stats_address),
             quiet=False,
             keepalive=5,
-            #resubscribe_addresses=resubscribe_to
+            # resubscribe_addresses=resubscribe_to
         )
         self.router.set_connections_params(
             timeout_socket=500,
@@ -282,11 +264,12 @@ class HttpRouterSection(Section):
         )
 
         self.logging.set_file_params(owner="true")
-        #self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
+        # self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
         self.logging.add_logger(
             self.logging.loggers.file(filepath=str(router.log_file))
         )
         self.routing.use_router(self.router)
+
 
 """
 class FastRouterSection(Section):

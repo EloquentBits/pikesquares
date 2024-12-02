@@ -9,11 +9,26 @@ from tinydb import TinyDB, Query
 from cuid import cuid
 #from circus import Arbiter, get_arbiter
 
-from pikesquares import conf, DEFAULT_DATA_DIR
+from pikesquares import DEFAULT_DATA_DIR
+from pikesquares.conf import (
+    ClientConfig,
+    register_app_conf,
+    ClientConfigError,
+)
 from pikesquares import services
-from pikesquares.services.device import Device
-from pikesquares.services.project import SandboxProject, Project
-from pikesquares.services.router import HttpsRouter
+from pikesquares.services.device import Device, register_device
+from pikesquares.services.project import (
+    SandboxProject,
+    Project,
+    register_sandbox_project,
+)
+from pikesquares.services.router import (
+    HttpsRouter,
+    HttpRouter,
+    DefaultHttpsRouter,
+    DefaultHttpRouter,
+    register_router,
+)
 from pikesquares.services import process_compose
 # from ..services.router import *
 # from ..services.app import *
@@ -24,9 +39,9 @@ from pikesquares import __app_name__, __version__, get_first_available_port
 app = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
-    pretty_exceptions_enable=True,
-    pretty_exceptions_short=True,
-    pretty_exceptions_show_locals=True,
+    pretty_exceptions_enable=False,
+    pretty_exceptions_short=False,
+    pretty_exceptions_show_locals=False,
 )
 
 
@@ -135,7 +150,7 @@ def info(
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
 
-    client_conf = services.get(context, conf.ClientConfig)
+    client_conf = services.get(context, ClientConfig)
 
     console.info(f"{client_conf.DATA_DIR=}")
     console.info(f"{client_conf.VIRTUAL_ENV=}")
@@ -172,18 +187,18 @@ def bootstrap(
 ):
     """Bootstrap the PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    console.info("running device bootstrap")
-    device = services.get(context, Device)
-    device.up()
-
-    sandbox_project = services.get(context, SandboxProject)
-    sandbox_project.up()
-
-    https_router = services.get(context, HttpsRouter)
-    https_router.up()
+    for svc_class in [
+            Device,
+            SandboxProject,
+            DefaultHttpsRouter,
+            DefaultHttpRouter,
+        ]:
+        svc = services.get(context, svc_class)
+        svc.up()
 
     print("bootstrap returning with 0 code")
     raise typer.Exit(code=0)
+
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")
 def tail_service_log(
@@ -263,34 +278,51 @@ def main(
 
     services.register_db(context, db_path)
     db = services.get(context, TinyDB)
-    conf_mapping = conf.get_conf_mapping(db, pikesquares_version)
-    if not conf_mapping:
-        console.error(f"unable to load v{pikesquares_version} conf from {str(db_path)}")
-        raise typer.Abort()
 
-    services.register_app_conf(context, conf_mapping)
-    client_conf = services.get(context, conf.ClientConfig)
+    try:
+        register_app_conf(context, pikesquares_version, db)
+    except ClientConfigError:
+        console.error(f"unable to load v{pikesquares_version} conf from {str(db_path)}")
+        raise typer.Abort() from None
+
+    client_conf = services.get(context, ClientConfig)
 
     # console.debug(client_conf.model_dump())
-    services.register_device(context, Device)
+    register_device(context, Device, client_conf, db)
     device = services.get(context, Device)
 
-    services.register_sandbox_project(
-        context,
-        proj_type=SandboxProject,
-        proj_class=Project,
-    )
+    register_sandbox_project(context, SandboxProject, Project, client_conf, db)
 
-    https_router_address = f"0.0.0.0:{str(get_first_available_port(port=8443))}"
-    services.register_default_router(
+    router_https_address = \
+        f"0.0.0.0:{str(get_first_available_port(port=8443))}"
+    router_https_subscription_server_address = \
+        f"127.0.0.1:{get_first_available_port(port=5600)}"
+    router_http_address = \
+        f"0.0.0.0:{str(get_first_available_port(port=8034))}"
+    router_http_subscription_server_address = \
+        f"127.0.0.1:{get_first_available_port(port=5700)}"
+
+    router_plugins = []
+    register_router(
         context,
-        https_router_address,
-        router_class=HttpsRouter,
+        router_https_address,
+        router_https_subscription_server_address,
+        router_plugins,
+        DefaultHttpsRouter,
+        HttpsRouter,
+        client_conf,
+        db
     )
-    # services.register_default_router(
-    #    context,
-    #    router_class=HttpRouter,
-    # )
+    register_router(
+        context,
+        router_http_address,
+        router_http_subscription_server_address,
+        router_plugins,
+        DefaultHttpRouter,
+        HttpRouter,
+        client_conf,
+        db,
+    )
 
     # sandbox_project = services.get(context, SandboxProject)
 
@@ -298,7 +330,16 @@ def main(
         return
 
     pc_api_port = 9555
-    process_compose.register_process_compose(context, client_conf, pc_api_port)
+    uwsgi_bin = os.environ.get("PIKESQUARES_UWSGI_BIN")
+    if not all([uwsgi_bin, Path(uwsgi_bin).exists()]):
+        raise Exception("unable to locate uwsgi binary @ {uwsgi_bin}")
+
+    process_compose.register_process_compose(
+        context,
+        client_conf,
+        Path(uwsgi_bin),
+        pc_api_port,
+    )
     pc = services.get(context, process_compose.ProcessCompose)
 
     for svc in services.get_pings(context):

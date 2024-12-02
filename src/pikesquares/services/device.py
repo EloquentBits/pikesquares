@@ -20,6 +20,7 @@ from tinydb import Query
 from pikesquares import read_stats
 from pikesquares.presets import device
 from pikesquares.services.base import BaseService
+from pikesquares.services import register_factory
 from pikesquares.cli.console import console
 
 __all__ = ("Device",)
@@ -30,10 +31,6 @@ class StatsUnavailableException(Exception):
 
 
 class Device(BaseService):
-
-    is_internal: bool = True
-    is_enabled: bool = True
-    is_app: bool = False
 
     @pydantic.computed_field
     def service_config(self) -> Path:
@@ -390,3 +387,19 @@ class Device(BaseService):
         else:  # (Path(conf.PKI_DIR) / "ca.crt").exists():
             print(f"csr signed")
             print(compl.stdout.decode())
+
+
+def register_device(context, device_class, client_conf, db):
+    def device_factory():
+        data = {
+            "conf": client_conf,
+            "db": db,
+            "service_id": "device",
+        }
+        return device_class(**data)
+    register_factory(
+        context,
+        device_class,
+        device_factory,
+        ping=lambda svc: svc.ping()
+    )
