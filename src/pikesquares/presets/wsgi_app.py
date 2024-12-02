@@ -3,11 +3,8 @@ from typing import Union
 
 from uwsgiconf.typehints import Strlist
 
-from . import (
-    Section, 
-)
-from ..services.data import VirtualHost
-
+from . import Section
+from ..services.data import VirtualHost, WsgiAppOptions
 
 
 class BaseWsgiAppSection(Section):
@@ -17,10 +14,10 @@ class BaseWsgiAppSection(Section):
         self,
         name: str = None,
         *,
-        touch_reload: Strlist =None,
-        workers: int = None,
+        touch_reload: Strlist = None,
+        workers: int = 1,
         threads: Union[int, bool] = None,
-        mules: int = None,
+        mules: int = 0,
         owner: str = None,
         log_into: str = "",
         log_dedicated: bool = None,
@@ -153,65 +150,62 @@ class WsgiAppSection(BaseWsgiAppSection):
     def __init__(
         self,
         svc_model,
-        subscription_server_address: str,
-        https_router_address: str,
-        subscription_notify_socket: str,
+        app_options: WsgiAppOptions,
         virtual_hosts: list[VirtualHost] = [],
-        **app_options,
     ):
         self.svc_model = svc_model
         self.virtual_hosts = virtual_hosts or []
 
         require_app = True
-        embedded_plugins = self.embedded_plugins_presets.BASIC + ['python', 'python2', 'python3']
+        embedded_plugins = self.embedded_plugins_presets.BASIC + ["python", "python2", "python3"]
 
         super().__init__(
-            name='uwsgi', 
-            embedded_plugins=embedded_plugins, 
-            owner=f"{svc_model.uid}:{svc_model.gid}",
+            name="uwsgi",
+            embedded_plugins=embedded_plugins,
+            owner=f"{svc_model.conf.RUN_AS_UID}:{svc_model.conf.RUN_AS_GID}",
             touch_reload=svc_model.touch_reload_file,
-            **app_options,
+            **app_options.model_dump(),
         )
         self.python.set_basic_params(
             enable_threads=True,
-            #search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
+            # search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
         )
-        if app_options.get("pyvenv_dir"):
+        if app_options.pyvenv_dir:
             self.python.set_basic_params(
-                python_home=app_options.get("pyvenv_dir"),
+                python_home=app_options.pyvenv_dir,
             )
 
-        self.main_process.change_dir(to=app_options.get("root_dir"))
+        self.main_process.change_dir(to=app_options.root_dir)
         self.main_process.set_pid_file(str(svc_model.pid_file))
 
-        self.master_process.set_basic_params( 
+        self.master_process.set_basic_params(
             enable=True,
             no_orphans=True,
             fifo_file=str(svc_model.fifo_file)
         )
 
-        self.set_plugins_params(search_dirs=svc_model.plugins_dir)
+        self.set_plugins_params(search_dirs=svc_model.conf.PLUGINS_DIR)
 
-        #if app.wsgi_module and callable(app.wsgi_module):
+        # if app.wsgi_module and callable(app.wsgi_module):
         #    wsgi_callable = wsgi_module.__name__
 
-        #self.set_plugins_params(
+        # self.set_plugins_params(
         #    plugins="python311",
         #    search_dirs=[conf.PLUGINS_DIR],
-        #)
+        # )
 
-        #:param module:
+        # :param module:
         #    * load .wsgi file as the Python application
         #    * load a WSGI module as the application.
         #    .. note:: The module (sans ``.py``) must be importable, ie. be in ``PYTHONPATH``.
         #    Examples:
         #        * mypackage.my_wsgi_module -- read from `application` attr of mypackage/my_wsgi_module.py
         #        * mypackage.my_wsgi_module:my_app -- read from `my_app` attr of mypackage/my_wsgi_module.py
-        #:param callable_name: Set WSGI callable name. Default: application.
+        # :param callable_name: Set WSGI callable name. Default: application.
 
         self.python.set_wsgi_params(
-            module=str(app_options.get("wsgi_file")), 
-            callable_name=app_options.get("wsgi_module"),
+            module=str(app_options.wsgi_file),
+            callable_name=app_options.wsgi_module
         )
         self.applications.set_basic_params(exit_if_none=require_app)
 
@@ -219,11 +213,11 @@ class WsgiAppSection(BaseWsgiAppSection):
             self.networking.sockets.default(svc_model.socket_address)
         )
 
-        #socket_path = str(Path(self.conf.RUN_DIR) / f"{service_id}.sock")
+        # socket_path = str(Path(self.conf.RUN_DIR) / f"{service_id}.sock")
 
-        #self.networking.register_socket(
+        # self.networking.register_socket(
         #    self.networking.sockets.default(socket_path)
-        #)
+        # )
         # self.subscriptions.subscribe(
         #     server=str(Path(self.conf.RUN_DIR) / f"SubscriptionServer-{project_id}.sock"),
         #     address=app_name,
@@ -239,14 +233,9 @@ class WsgiAppSection(BaseWsgiAppSection):
         # )
 
         # enable the notification socket
-        #notify-socket = /tmp/notify.socket
-        #; pass it in subscriptions
-        #subscription-notify-socket = /tmp/notify.socket
-
-        self.subscriptions.set_server_params(
-            #client_notify_address=str(svc_model.notify_socket),
-            client_notify_address=subscription_notify_socket,
-        )
+        # notify-socket = /tmp/notify.socket
+        # ; pass it in subscriptions
+        # subscription-notify-socket = /tmp/notify.socket
 
         self.monitoring.set_stats_params(
             address=str(svc_model.stats_address)
@@ -258,38 +247,38 @@ class WsgiAppSection(BaseWsgiAppSection):
             )
         )
 
-        #self.setup_virtual_hosts(virtual_hosts, socket_addr=socket_addr)
+        # self.setup_virtual_hosts(virtual_hosts, socket_addr=socket_addr)
 
-        #if ":" in address:
+        # if ":" in address:
         #    address, port = address.split(':')
 
-        #vhost = virtual_hosts[0]
-        #vhost_router_cls = self.routing.routers.http
-        #vhost_router_params = {}
-        #if vhost.is_https:
+        # vhost = virtual_hosts[0]
+        # vhost_router_cls = self.routing.routers.http
+        # vhost_router_params = {}
+        # if vhost.is_https:
         #    vhost_router_cls = RouterHttps
         #    vhost_router_params = {'cert': vhost.certificate_path, 'key': vhost.certificate_key}
-        #vhost_router = vhost_router_cls(
+        # vhost_router = vhost_router_cls(
         #    on=vhost.address,
         #    forward_to=socket_path,
         #    **vhost_router_params
-        #)
-        #self.routing.use_router(vhost_router)
+        # )
+        # self.routing.use_router(vhost_router)
 
-        #if vhost.static_files_mapping:
+        # if vhost.static_files_mapping:
         #    for mountpoint, target in vhost.static_files_mapping.items():
         #        self.statics.register_static_map(mountpoint, target)
-        
-        #for domain_name in vhost.server_names:
-            #self.set_domain_name(
-            #    address=vhost.address,
-            #    domain_name=name,
-            #    socket_path=socket_path,
-            #    socket_addr=socket_addr,
-            #)
-            #subscribe2=key=test-wsgi-app.pikesquares.dev,server=127.0.0.1:5777
 
-        #subscribe2=key=test-wsgi-app.pikesquares.dev,server=127.0.0.1:5777
+        # for domain_name in vhost.server_names:
+        #   self.set_domain_name(
+        #    address=vhost.address,
+        #    domain_name=name,
+        #    socket_path=socket_path,
+        #    socket_addr=socket_addr,
+        # )
+        #   subscribe2=key=test-wsgi-app.pikesquares.dev,server=127.0.0.1:5777
+
+        # subscribe2=key=test-wsgi-app.pikesquares.dev,server=127.0.0.1:5777
 
         #  subscribe2=
         #            key=test-wsgi-app.pikesquares.dev,
@@ -298,17 +287,15 @@ class WsgiAppSection(BaseWsgiAppSection):
         #            sni_crt=pikesquares.dev.pem,
         #            sni_ca=rootCA.pem
 
-        https_router_port = ""
-        try:
-            https_router_port = f':{https_router_address.split(":")[-1]}'
-        except IndexError:
-            pass
-
-        self.subscriptions.subscribe(
-            server=subscription_server_address,
-            address=str(svc_model.socket_address),  # address and port of wsgi app
-            key=f"{svc_model.name}.pikesquares.dev{https_router_port}",
-        )
+        for router in app_options.routers:
+            self.subscriptions.subscribe(
+                server=router.subscription_server_address,
+                address=str(svc_model.socket_address),  # address and port of wsgi app
+                key=router.subscription_server_key,
+            )
+            self.subscriptions.set_server_params(
+               client_notify_address=router.subscription_notify_socket,
+            )
 
         # self.subscriptions.subscribe(
         #    {

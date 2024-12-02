@@ -102,21 +102,18 @@ class WsgiApp(BaseService):
         self.service_id = self.service_id
         self.prepare_virtual_hosts()
 
-        routers_db = self.db.table("routers")
-        router = routers_db.get(
-            Query().service_id == self.wsgi_app_options.router_id
-        )
-        https_router_address = router.get("address")
-        subscription_server_address = router.get("service_config")["uwsgi"]["http-subscription-server"]
-        subscription_notify_socket = router.get("service_config")["uwsgi"]["notify-socket"]
+        # routers_db = self.db.table("routers")
+        # router = routers_db.get(
+        #    Query().service_id == self.wsgi_app_options.router_id
+        # )
+        # https_router_address = router.get("address")
+        # subscription_server_address = router.get("service_config")["uwsgi"]["http-subscription-server"]
+        # subscription_notify_socket = router.get("service_config")["uwsgi"]["notify-socket"]
 
         section = wsgi_app_preset.WsgiAppSection(
             self,
-            subscription_server_address,
-            https_router_address,
-            subscription_notify_socket,
+            self.app_options,
             virtual_hosts=self.virtual_hosts,
-            **self.wsgi_app_options.dump_model()
         ).as_configuration().format(formatter="json")
 
         self.config_json = json.loads(section)

@@ -100,7 +100,10 @@ class HttpsRouterSection(Section):
             # touch_reload="/srv/uwsgi/%n.http-router.ini"
             touch_reload=str(self.router.touch_reload_file),
         )
-        self.main_process.set_owner_params(uid=self.router.conf.RUN_AS_UID, gid=self.router.conf.RUN_AS_GID)
+        self.main_process.set_owner_params(
+            uid=self.router.conf.RUN_AS_UID,
+            gid=self.router.conf.RUN_AS_GID
+        )
         self.main_process.set_naming_params(
             prefix=f"{self.router_name} {self.router.service_id} ",
             autonaming=True
@@ -219,14 +222,13 @@ class HttpRouterSection(Section):
             touch_reload=str(self.router.touch_reload_file),
         )
         self.main_process.set_owner_params(
-            uid=kwargs.pop("uid", "%U"),
-            gid=kwargs.pop("gid", "%G")
+            uid=self.router.conf.RUN_AS_UID,
+            gid=self.router.conf.RUN_AS_GID
         )
         self.main_process.set_naming_params(
-            prefix=f"{self.router_name} ",
+            prefix=f"{self.router_name} {self.router.service_id} ",
             autonaming=True
         )
-
         # host, port = address.split(':')
         # if host in ('0.0.0.0', '127.0.0.1'):
         #    address = f":{port}"
@@ -238,7 +240,6 @@ class HttpRouterSection(Section):
         #            address="0.0.0.0:3435"
         #        )
         #    )
-
         self.router = router_cls(
             on=router.address,
             forward_to=router_cls.forwarders.subscription_server(

@@ -26,8 +26,13 @@ from .validators import (
 from pikesquares import conf, services, get_first_available_port
 from pikesquares.services.project import SandboxProject, Project
 from pikesquares.services.app import WsgiApp
-from pikesquares.services.router import HttpsRouter, HttpRouter
-from pikesquares.services.data import WsgiAppOptions
+from pikesquares.services.router import (
+    DefaultHttpsRouter,
+    DefaultHttpRouter,
+    HttpsRouter,
+    HttpRouter,
+)
+from pikesquares.services.data import WsgiAppOptions, Router
 from ...console import console
 
 
@@ -82,6 +87,7 @@ def prompt_base_dir(repo_name: str, custom_style: questionary.Style) -> Path:
         style=custom_style,
         validate=PathValidator,
     ).ask()
+
 
 def prompt_repo_url(custom_style: questionary.Style) -> str:
     repo_url_q = questionary.text(
@@ -495,41 +501,57 @@ def create(
 
     # Router
     # router = get_router(db, client_conf, app_name, custom_style)
-    router = services.get(context, HttpsRouter)
+
+    default_https_router = services.get(context, DefaultHttpsRouter)
+    default_http_router = services.get(context, DefaultHttpRouter)
+
+    https_router_kwargs = {
+        "router_id": default_https_router.service_id,
+        "subscription_server_address": default_https_router.subscription_server_address,
+        "subscription_notify_socket": default_https_router.notify_socket,
+        "app_name": app_name,
+    }
+    http_router_kwargs = {
+        "router_id": default_http_router.service_id,
+        "subscription_server_address": default_http_router.subscription_server_address,
+        "subscription_notify_socket": default_http_router.notify_socket,
+        "app_name": app_name,
+    }
+
+    routers = [
+        Router(**https_router_kwargs),
+        Router(**http_router_kwargs),
+    ]
+
+    app_options["routers"] = routers
+
     console.info(app_options)
     app_options["workers"] = 3
 
-    # root_dir=app_options["root_dir"],
-    # pyvenv_dir=app_options["pyvenv_dir"],
-    # wsgi_file=app_options["wsgi_file"],
-    # wsgi_module=app_options["wsgi_module"],
-    # router_id=app_options["router_id"],
-    # project_id=app_options["project_id"],
-    wsgi_app_options = WsgiAppOptions(**app_options)
     wsgi_app = WsgiApp(
             conf=services.get(context, conf.ClientConfig),
             db=db,
             service_id=service_id,
             name=app_name,
-            app_options=wsgi_app_options,
+            app_options=WsgiAppOptions(**app_options),
     )
-
     with console.status(f"`{app_name}` is starting...", spinner="earth"):
         wsgi_app.up()
-        url = console.render_link(
-            f"{app_name}.pikesquares.dev",
-            port=router.port,
-            protocol="http" if router.port.startswith("9") else "https"
-        )
         for _ in range(10):
             if wsgi_app.get_service_status() == "running":
-                console.success(f"🚀 App is available at {url}")
+                for router in routers:
+                    url = console.render_link(
+                        f"{router.app_name}.pikesquares.dev",
+                        port=str(router.subscription_server_port),
+                        protocol=router.subscription_server_protocol,
+                    )
+                    console.success(f"🚀 App is available at {url}")
                 raise typer.Exit()
             time.sleep(3)
 
-        #wsgi_app.service_config.unlink()
-        console.warning("could not start app. giving up.")
-        console.info(f"removed app config {wsgi_app.name}")
+        console.warning(f"could not start app [{app_name}]. giving up.")
+        # wsgi_app.service_config.unlink()
+        # console.info(f"removed app config {wsgi_app.name}")
 
 
     # [uWSGI http pid 3758459] rounded-hip.pikesquares.dev:8443 => marking 127.0.0.1:4018 as failed
