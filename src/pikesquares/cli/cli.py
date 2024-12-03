@@ -260,7 +260,7 @@ def main(
         raise typer.Abort()
 
     for key, value in os.environ.items():
-        if key.startswith(("PIKESQUARES", "SCIE", "PEX")):
+        if key.startswith(("PIKESQUARES", "SCIE", "PEX", "VIRTUAL_ENV")):
             print(f"{key}: {value}")
 
     print(f"PikeSquares: v{pikesquares_version} About to execute command: {ctx.invoked_subcommand}")

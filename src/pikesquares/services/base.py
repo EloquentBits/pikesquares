@@ -1,4 +1,7 @@
 import json
+import traceback
+import socket
+import errno
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Tuple, List
@@ -21,6 +24,10 @@ __all__ = (
 
 
 class ServiceUnavailableError(Exception):
+    pass
+
+
+class StatsReadError(Exception):
     pass
 
 
@@ -126,7 +133,7 @@ class BaseService(pydantic.BaseModel, ABC):
         if not self.get_service_status() == "running":
             raise ServiceUnavailableError()
 
-    def get_service_status(self):
+    def get_service_status(self) -> str:
         """
         read stats socket
         """
@@ -205,3 +212,44 @@ class BaseService(pydantic.BaseModel, ABC):
     @pydantic.computed_field
     def certificate_ca(self) -> Path:
         return Path(self.conf.PKI_DIR) / "ca.crt"
+
+    def read_stats(self):
+        if not all([self.stats_address.exists(), self.stats_address.is_socket()]):
+            raise StatsReadError(f"unable to read stats from {(self.stats_address)}")
+
+        def unix_addr(arg):
+            sfamily = socket.AF_UNIX
+            addr = arg
+            return sfamily, addr, socket.gethostname()
+
+        js = ""
+        sfamily, addr, host = unix_addr(self.stats_address)
+        print(f"{sfamily=} {addr=} {host=}")
+
+        try:
+            s = None
+            s = socket.socket(sfamily, socket.SOCK_STREAM)
+            s.connect(str(addr))
+            while True:
+                data = s.recv(4096)
+                if len(data) < 1:
+                    break
+                js += data.decode('utf8', 'ignore')
+            if s:
+                s.close()
+        except ConnectionRefusedError as e:
+            print('connection refused')
+        except FileNotFoundError as e:
+            print(f"socket @ {addr} not available")
+        except IOError as e:
+            if e.errno != errno.EINTR:
+                #uwsgi.log(f"socket @ {addr} not available")
+                pass
+        except Exception:
+            print(traceback.format_exc())
+        else:
+            try:
+                return json.loads(js)
+            except json.JSONDecodeError:
+                print(traceback.format_exc())
+                print(js)

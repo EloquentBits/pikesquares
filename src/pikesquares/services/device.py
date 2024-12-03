@@ -26,10 +26,6 @@ from pikesquares.cli.console import console
 __all__ = ("Device",)
 
 
-class StatsUnavailableException(Exception):
-    pass
-
-
 class Device(BaseService):
 
     @pydantic.computed_field
@@ -51,14 +47,7 @@ class Device(BaseService):
         return appsdir
 
     def stats(self):
-        if not all([
-            self.stats_address.exists(),
-            self.stats_address.is_socket(),
-            self.get_service_status() == "running",
-            ]):
-            raise StatsUnavailableException()
-
-        return read_stats(str(self.stats_address))
+        return self.read_stats()
 
     def up(self):
         # from pikesquares.services import (

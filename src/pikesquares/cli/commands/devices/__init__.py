@@ -5,7 +5,8 @@ import questionary
 
 from pikesquares.cli.console import console
 from pikesquares import services
-from pikesquares.services.device import Device, StatsUnavailableException
+from pikesquares.services.base import StatsReadError
+from pikesquares.services.device import Device
 
 app = typer.Typer()
 
@@ -104,19 +105,21 @@ def info(
     # client_conf = services.get(context, conf.ClientConfig)
     device = services.get(context, Device)
     try:
-        stats_js = device.stats()
-    except StatsUnavailableException:
+        device_stats = device.stats()
+    except StatsReadError:
         console.warning(f"""Device stats @ {device.stats_address} are unavailable.\nIs the PikeSquares Server running?""")
         raise typer.Exit() from None
 
-    vassals = stats_js.get("vassals", [])
-    console.info(f"{len(vassals)} vassals running")
-    for vs in vassals:
-        vassal_id = vs.get("id")
-        loyal = vs.get("loyal")
-        ready = vs.get("ready")
-        accepting = vs.get("accepting")
-        console.info(f"{vassal_id=} {loyal=} {ready=} {accepting=}")
+    print(device_stats)
+
+    #vassals = stats_js.get("vassals", [])
+    #console.info(f"{len(vassals)} vassals running")
+    #for vs in vassals:
+    #    vassal_id = vs.get("id")
+    #    loyal = vs.get("loyal")
+    #    ready = vs.get("ready")
+    #    accepting = vs.get("accepting")
+    #    console.info(f"{vassal_id=} {loyal=} {ready=} {accepting=}")
 
 #@app.command(rich_help_panel="Control", short_help="Write to master fifo")
 #def write_to_master_fifo(

@@ -1,6 +1,5 @@
 import traceback
 import logging
-from pathlib import Path
 
 try:
     import urllib2
@@ -10,15 +9,13 @@ except ImportError:
 import socket
 import json
 import errno
-#from typing import TypeVar
 
-from uwsgi_tasks import set_uwsgi_callbacks
-set_uwsgi_callbacks()
+# from uwsgi_tasks import set_uwsgi_callbacks
+# set_uwsgi_callbacks()
 # from uwsgiconf import uwsgi
 
 import platformdirs
 
-# PathLike = TypeVar("PathLike", str, Path, None)
 
 logger = logging.getLogger(__name__)
 
