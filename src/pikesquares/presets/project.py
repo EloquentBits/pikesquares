@@ -15,8 +15,8 @@ class ProjectSection(Section):
         self.set_runtime_dir(str(self.project.conf.RUN_DIR))
 
         plugins = [
-            "python312",
-            "logfile",
+            # "python312",
+            # "logfile",
             # "emperor_zmq",
         ]
         self.set_plugins_params(

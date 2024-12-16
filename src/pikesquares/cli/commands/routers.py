@@ -1,6 +1,6 @@
 from pathlib import Path
-from typing import Optional
-import shutil
+#from typing import Optional
+#import shutil
 
 import typer
 from typing_extensions import Annotated
@@ -55,7 +55,7 @@ def create(
     """
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")
-    #if not project_name:
+    # if not project_name:
     #    default_project_name = randomname.get_name()
     #    project_name = console.ask(
     #        f"Project name?",
@@ -69,8 +69,8 @@ def create(
         style=console.custom_style_dope,
     ).ask()
     https_router_up(
-        conf, 
-        f"router_{cuid()}", 
+        conf,
+        f"router_{cuid()}",
         f"0.0.0.0:{port}",
     )
 

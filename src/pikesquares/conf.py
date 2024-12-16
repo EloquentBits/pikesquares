@@ -1,3 +1,5 @@
+import os
+import traceback
 # import json
 from pathlib import Path
 from typing import Any, Dict, Tuple, Type, Optional
@@ -6,6 +8,7 @@ from typing import Any, Dict, Tuple, Type, Optional
 
 from pydantic import Field
 from tinydb import TinyDB, Query
+import platformdirs
 
 from pydantic_settings import (
     BaseSettings,
@@ -87,15 +90,6 @@ class ClientConfigError(Exception):
     pass
 
 
-def get_conf_mapping(db: TinyDB, pikesquares_version: str):
-    try:
-        return db.\
-                table("configs").\
-                search(Query().version == pikesquares_version)[0]
-    except IndexError:
-        raise ClientConfigError(f"unable to locate config in db for v{pikesquares_version}")
-
-
 class ClientConfig(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix='PIKESQUARES_')
@@ -113,7 +107,7 @@ class ClientConfig(BaseSettings):
     LOG_DIR: Path
     CONFIG_DIR: Path
     PLUGINS_DIR: Path
-    VIRTUAL_ENV: Path
+    VIRTUAL_ENV: Path | None = None
     EASYRSA_DIR: Path | None = None
     EASYRSA_BIN: Path | None = None
     # CADDY_DIR: Optional[str] = None
@@ -142,8 +136,55 @@ class ClientConfig(BaseSettings):
     #    )
 
 
+def get_conf_mapping(db: TinyDB, pikesquares_version: str) -> dict:
+    try:
+        configs = db.table("configs").get(Query().version == pikesquares_version) or {}
+        if not configs:
+            current_uid = os.getuid()
+            current_gid = os.getgid()
+            apps_run_as_uid = None
+            apps_run_as_gid = None
+            configs["RUN_AS_UID"] = apps_run_as_uid or current_uid
+            configs["RUN_AS_GID"] = apps_run_as_gid or current_gid
+
+            server_run_as_uid = current_uid
+            server_run_as_gid = current_gid
+            new_server_run_as_uid = None
+            new_server_run_as_gid = None
+            configs["SERVER_RUN_AS_UID"] = new_server_run_as_uid or server_run_as_uid
+            configs["SERVER_RUN_AS_GID"] = new_server_run_as_gid or server_run_as_gid
+
+            app_name = "pikesquares"
+            data_dir = platformdirs.user_data_path(app_name, ensure_exists=True)
+            configs["DATA_DIR"] = str(data_dir)
+            configs["RUN_DIR"] = str(platformdirs.user_runtime_path(app_name, ensure_exists=True))
+            configs["LOG_DIR"] = str(platformdirs.user_log_path(app_name, ensure_exists=True))
+            configs["CONFIG_DIR"] = str(platformdirs.user_config_path(app_name, ensure_exists=True))
+
+            plugins_dir = data_dir / "plugins"
+            plugins_dir.mkdir(mode=0o777, parents=True, exist_ok=True)
+            configs["PLUGINS_DIR"] = str(plugins_dir)
+
+            configs["PKI_DIR"] = str(data_dir / "pki")
+
+            configs["EASYRSA_DIR"] = os.environ.get("PIKESQUARES_EASYRSA_DIR")
+            configs["EASYRSA_BIN"] = os.environ.get("PIKESQUARES_EASYRSA_BIN")
+            configs["SENTRY_DSN"] = os.environ.get("PIKESQUARES_SENTRY_DSN")
+            configs["version"] = str(pikesquares_version)
+
+            if "VIRTUAL_ENV" in os.environ:
+                venv_dir = os.environ.get("VIRTUAL_ENV")
+                if venv_dir and Path(venv_dir).exists() and Path(venv_dir).is_dir():
+                    configs["VIRTUAL_ENV"] = venv_dir
+            db.table("configs").insert(configs)
+        return configs
+    except Exception:
+        traceback.print_exc()
+        raise ClientConfigError() from None
+
+
 def register_app_conf(context: dict, pikesquares_version: str, db: TinyDB):
-    def conf_factory():
+    def conf_factory() -> ClientConfig:
         return ClientConfig(
             **get_conf_mapping(db, pikesquares_version)
         )

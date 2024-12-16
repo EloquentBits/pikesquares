@@ -168,7 +168,6 @@ dependencies = [
     { name = "svcs" },
     { name = "tinydb" },
     { name = "typer" },
-    { name = "uwsgi-tasks" },
     { name = "uwsgiconf" },
 ]
 
@@ -186,7 +185,6 @@ requires-dist = [
     { name = "svcs", specifier = ">=24.1.0" },
     { name = "tinydb", specifier = ">=4.8.2" },
     { name = "typer", extras = ["all", "rich"], specifier = ">=0.13.1" },
-    { name = "uwsgi-tasks", git = "https://github.com/EloquentBits/uwsgi_tasks?rev=master" },
     { name = "uwsgiconf", specifier = ">=1.0.0" },
 ]
 
@@ -423,11 +421,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/ed/63/22ba4ebfe7430b763
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl", hash = "sha256:ca899ca043dcb1bafa3e262d73aa25c465bfb49e0bd9dd5d59f1d0acba2f8fac", size = 126338 },
 ]
-
-[[package]]
-name = "uwsgi-tasks"
-version = "0.7.3"
-source = { git = "https://github.com/EloquentBits/uwsgi_tasks?rev=master#bc887f9c12a5ddbdbcded3a6222e9744a015933c" }
 
 [[package]]
 name = "uwsgiconf"

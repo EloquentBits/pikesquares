@@ -38,7 +38,7 @@ class ProcessComposeProcessStats(pydantic.BaseModel):
 
 class ProcessCompose(pydantic.BaseModel):
     api_port: int
-    uwsgi_bin: Path
+    # uwsgi_bin: Path
     client_conf: conf.ClientConfig
     # db: TinyDB
 
@@ -111,15 +111,18 @@ class ProcessCompose(pydantic.BaseModel):
         server_bin = os.environ.get("SCIE_ARGV0")
         # if server_bin and Path(server_bin).exists():
         compose_shell = os.environ.get("SHELL")
+        cmd_env = {
+            "SCIE_BOOT": "process-compose-up",
+            "COMPOSE_SHELL": "/bin/zsh", # compose_shell,
+            "PIKESQUARES_VERSION": self.client_conf.version,
+            # "PIKESQUARES_UWSGI_BIN": str(self.uwsgi_bin),
+        }
+        print(cmd_env)
+        print(f"{server_bin=}")
         try:
             compl = subprocess.run(
                 server_bin,
-                env={
-                    "SCIE_BOOT": "process-compose-up",
-                    "COMPOSE_SHELL": compose_shell,
-                    "PIKESQUARES_VERSION": self.client_conf.version,
-                    "PIKESQUARES_UWSGI_BIN": self.uwsgi_bin,
-                },
+                env=cmd_env,
                 shell=True,
                 cwd=datadir,
                 capture_output=True,
@@ -130,8 +133,10 @@ class ProcessCompose(pydantic.BaseModel):
             print(f"failed to launch process-compose: {cperr.stderr.decode()}")
             return
 
-        if compl.returncode != 0:
-            print("unable to launch process-compose")
+        print(compl.args)
+
+        # if compl.returncode != 0:
+        #    print("unable to launch process-compose")
 
         print(compl.stderr.decode())
         print(compl.stdout.decode())
@@ -275,7 +280,7 @@ class ProcessCompose(pydantic.BaseModel):
 def register_process_compose(
         context,
         client_conf: conf.ClientConfig,
-        uwsgi_bin: Path,
+        # uwsgi_bin: Path,
         api_port: int = 9555,
     ):
 
@@ -283,7 +288,7 @@ def register_process_compose(
         return ProcessCompose(
             api_port=api_port,
             client_conf=client_conf,
-            uwsgi_bin=uwsgi_bin,
+            # uwsgi_bin=uwsgi_bin,
             # db=get(context, TinyDB),
         )
     register_factory(

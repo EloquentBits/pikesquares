@@ -97,7 +97,7 @@ def read_stats(stats_addr):
 
     if stats_addr.startswith('http://'):
         http_stats = True
-        addr = stats_addr
+        addr = stats_addrint
         host = addr.split('//')[1].split(':')[0]
     elif ':' in stats_addr:
         sfamily, addr, host = inet_addr(stats_addr)

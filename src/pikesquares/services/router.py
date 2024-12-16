@@ -7,6 +7,7 @@ from tinydb import Query, TinyDB
 import pydantic
 
 from pikesquares import conf, get_first_available_port
+from pikesquares.presets import Section
 from pikesquares.services.base import BaseService
 from pikesquares.services import register_factory
 from ..presets.routers import HttpsRouterSection, HttpRouterSection
@@ -21,14 +22,10 @@ class BaseRouter(BaseService):
 
     address: str
     subscription_server_address: str
+    tiny_db_table: str = "routers"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-    def up(self):
-        self.prepare_service_config()
-        self.save_config()
-        self.write_config()
 
     @pydantic.computed_field
     def service_config(self) -> Path:
@@ -38,7 +35,7 @@ class BaseRouter(BaseService):
     def touch_reload_file(self) -> Path:
         return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
 
-    def connect(self):
+    def zmq_connect(self):
         pass
         # print(f"Connecting to zmq emperor  {self.conf.EMPEROR_ZMQ_ADDRESS}")
         # self.zmq_socket.connect(f"tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}")
@@ -53,7 +50,8 @@ class BaseRouter(BaseService):
         #    self.config_name.encode(),
         # ])
 
-    def write_config(self):
+    def zmq_write_config(self):
+        pass
         # if all([
         #    self.service_config,
         #    isinstance(self.service_config, Path),
@@ -73,26 +71,20 @@ class BaseRouter(BaseService):
         # else:
         #    print(f"DID NOT SEND https router config to zmq {str(self.service_config.resolve())}")
 
-        self.service_config.parent.mkdir(parents=True, exist_ok=True)
-        self.service_config.write_text(json.dumps(self.config_json))
-
-    def save_config(self):
-        routers_db = self.db.table("routers")
-        routers_db.upsert(
-            {
-                "service_type": self.handler_name,
-                "service_id": self.service_id,
-                "address": self.address,
-                "service_config": self.config_json,
-            },
-            Query().service_id == self.service_id,
+    def save_config_to_tinydb(self, extra_data: dict = {}) -> None:
+        super().save_config_to_tinydb(
+            extra_data={"address": self.address.project_id}
         )
 
     def prepare_service_config(self) -> None:
 
         section = HttpRouterSection(self, self.plugins)
         self.config_json = json.loads(
-                section.as_configuration().format(formatter="json"))
+                section.as_configuration().format(
+                    formatter="json",
+                    do_print=True,
+                )
+        )
 
         # self.config_json["uwsgi"]["show-config"] = True
         # self.config_json["uwsgi"]["strict"] = True
@@ -117,6 +109,8 @@ class BaseRouter(BaseService):
 
 
 class HttpsRouter(BaseRouter):
+
+    config_section_class: Section = HttpsRouterSection
 
     # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
 
@@ -149,23 +143,8 @@ class HttpsRouter(BaseRouter):
     # def stats_address(self) -> str:
     # return f"127.0.0.1:{get_first_available_port(port=9897)}"
 
-    def prepare_service_config(self) -> None:
-
-        def https_router_provision_cert():
-            pass
-
-        https_router_provision_cert()
-        config = HttpsRouterSection(self, self.plugins).\
-                as_configuration().format(formatter="json")
-        self.config_json = json.loads(config)
-        #self.config_json["uwsgi"]["show-config"] = True
-        #self.config_json["uwsgi"]["strict"] = True
-        #self.config_json["uwsgi"]["notify-socket"] = str(self.notify_socket)
-
-        # print(f"{wsgi_app_opts=}")
-        # print(f"wsgi app {self.config_json=}")
-        # empjs["uwsgi"]["plugin"] = "emperor_zeromq"
-        # self.service_config.write_text(json.dumps(self.config_json))
+    def https_router_provision_cert(self):
+        pass
 
     """
     def connect(self):
@@ -195,11 +174,12 @@ class HttpsRouter(BaseRouter):
 
 class HttpRouter(BaseRouter):
 
-    #zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
+    # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
+
+    config_section_class: Section = HttpRouterSection
 
     def ping(self) -> None:
         print("== HttpRouter.ping ==")
-
 
     """
     def connect(self):

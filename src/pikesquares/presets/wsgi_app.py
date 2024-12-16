@@ -294,7 +294,7 @@ class WsgiAppSection(BaseWsgiAppSection):
                 key=router.subscription_server_key,
             )
             self.subscriptions.set_server_params(
-               client_notify_address=router.subscription_notify_socket,
+               client_notify_address=svc_model.subscription_notify_socket,
             )
 
         # self.subscriptions.subscribe(

@@ -11,6 +11,7 @@ import pydantic
 from pikesquares import conf
 from pikesquares.services.base import BaseService
 from pikesquares.services import register_factory
+from pikesquares.presets import Section
 from ..presets.project import ProjectSection
 
 __all__ = (
@@ -19,6 +20,8 @@ __all__ = (
 
 
 class Project(BaseService):
+    config_section_class: Section = ProjectSection
+    tiny_db_table: str = "projects"
 
     @pydantic.computed_field
     def service_config(self) -> Path:
@@ -35,12 +38,8 @@ class Project(BaseService):
             apps_dir.mkdir(parents=True, exist_ok=True)
         return str(apps_dir.resolve())
 
-    def up(self):
-        self.prepare_service_config()
-        self.save_config()
-        self.write_config()
-
-    def write_config(self):
+    def zmq_write_config(self):
+        pass
         # print("sending msg to zmq")
         # self.zmq_socket.send_multipart(
         #    [
@@ -57,47 +56,20 @@ class Project(BaseService):
         #        self.service_config.removesuffix(".stopped")
         #    )
 
-        self.service_config.parent.mkdir(parents=True, exist_ok=True)
-        self.service_config.write_text(json.dumps(self.config_json))
+    # stats_addr = self.config_json["uwsgi"]["emperor-stats-server"]
+    # self.config_json["uwsgi"]["emperor"] = zmq_addr #uwsgi.cache_get(zmq_addr_key, self.cache).decode()
+    # self.config_json["uwsgi"]["emperor"] = self.apps_dir
+    # uwsgi.cache_update(f"{self.service_id}-stats-addr", str(stats_addr), 0, self.cache)
+    # self.config_json["uwsgi"]["emperor-wrapper"] = \
+    #    str((Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
 
-    def save_config(self):
-        projects_db = self.db.table("projects")
-        projects_db.upsert(
-            {
-                "service_type": self.handler_name,
-                "service_id": self.service_id,
-                "service_config": self.config_json,
-                "name": self.name,
-            },
-            Query().service_id == self.service_id,
-        )
+    # self.config_json["uwsgi"]["show-config"] = True
+    # self.config_json["uwsgi"]["strict"] = True
+    # self.config_json["uwsgi"]["plugin"] = "logfile"
+    # if "logfile" in config_json["uwsgi"].get("plugin", ""):
+    #    config_json["uwsgi"].pop("plugin")
 
-    # def write_config(self):
-    #    self.service_config.write_text(
-    #        json.dumps(self.config_json)
-    #    )
-
-    def prepare_service_config(self):
-        section = ProjectSection(self).\
-                as_configuration().format(formatter="json")
-        empjs = json.loads(section)
-        self.service_config.write_text(json.dumps(empjs))
-        self.config_json = json.loads(self.service_config.read_text())
-
-        # stats_addr = self.config_json["uwsgi"]["emperor-stats-server"]
-        # self.config_json["uwsgi"]["emperor"] = zmq_addr #uwsgi.cache_get(zmq_addr_key, self.cache).decode()
-        # self.config_json["uwsgi"]["emperor"] = self.apps_dir
-        # uwsgi.cache_update(f"{self.service_id}-stats-addr", str(stats_addr), 0, self.cache)
-        # self.config_json["uwsgi"]["emperor-wrapper"] = \
-        #    str((Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
-
-        # self.config_json["uwsgi"]["show-config"] = True
-        # self.config_json["uwsgi"]["strict"] = True
-        # self.config_json["uwsgi"]["plugin"] = "logfile"
-        # if "logfile" in config_json["uwsgi"].get("plugin", ""):
-        #    config_json["uwsgi"].pop("plugin")
-
-    def connect(self):
+    def zmq_connect(self):
         pass
         # print(f"Connecting to zmq emperor  {self.conf.EMPEROR_ZMQ_ADDRESS}")
         # self.zmq_socket.connect(f"tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}")

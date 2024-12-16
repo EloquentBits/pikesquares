@@ -22,7 +22,9 @@ dependencies = [
     "tinydb>=4.8.2",
     "typer[all,rich]>=0.13.1",
     "uwsgiconf>=1.0.0",
-    "uwsgi-tasks",
+  #"uwsgi-tasks",
+  #"pyuwsgi",
+  #"pyuwsgi==2.0.28.post1",
 ]
 
 version = "0.8.0"
@@ -133,5 +135,15 @@ version_scheme = "pep440"
 version_provider = "pep621"
 major_version_zero = true
 
+[tool.uv]
+allow-insecure-host = ["pypi.vc.eloquentbits.com"]
+
 [tool.uv.sources]
-uwsgi-tasks = { git = "https://github.com/EloquentBits/uwsgi_tasks", rev = "master" }
+#uwsgi-tasks = { git = "https://github.com/EloquentBits/uwsgi_tasks", rev = "master" }
+pyuwsgi = { index = "eloquentbits-pypi" }
+
+[[tool.uv.index]]
+name = "eloquentbits-pypi"
+url = "https://pypy.vc.eloquentbits.com/simple/"
+explicit = true
+

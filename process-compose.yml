@@ -21,7 +21,8 @@ processes:
   #  working_dir: "/tmp"
   Device:
     environment:
-    command: "${PIKESQUARES_UWSGI_BIN} --json ${PIKESQUARES_CONFIG_DIR}/device.json"
+      #command: "${PIKESQUARES_UWSGI_BIN} --json ${PIKESQUARES_CONFIG_DIR}/device.json"
+    command: "${PIKESQUARES_SERVER_EXE} devices up"
     description: PikeSquares Server
     working_dir: "${PIKESQUARES_DATA_DIR}"
     is_daemon: false

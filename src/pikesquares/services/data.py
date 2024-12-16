@@ -22,7 +22,6 @@ class VirtualHost(pydantic.BaseModel):
 class Router(pydantic.BaseModel):
     router_id: str
     subscription_server_address: str
-    subscription_notify_socket: Path
     app_name: str
 
     @pydantic.computed_field

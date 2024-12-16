@@ -8,12 +8,13 @@ from typing import Tuple, List
 
 import pydantic
 from pydantic.config import ConfigDict
-from tinydb import TinyDB
+from tinydb import TinyDB, Query
 from uwsgiconf import uwsgi
 import sentry_sdk
 
 from pikesquares import __version__, __app_name__
 from pikesquares import conf
+from pikesquares.presets import Section
 from pikesquares import read_stats
 from pikesquares.cli.console import console
 
@@ -41,7 +42,10 @@ class BaseService(pydantic.BaseModel, ABC):
     cert_name: str = "_wildcard_pikesquares_dev"
     name: str = ""
     plugins: list = []
+    tiny_db_table: str = ""
+    config_section_class: Section
     config_json: pydantic.Json = {}
+    flush_config_on_init: bool = False
     # cli_style: QuestionaryStyle = console.custom_style_dope
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
 
@@ -54,6 +58,25 @@ class BaseService(pydantic.BaseModel, ABC):
     #        )
     #       console.success("initialized sentry-sdk")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        flush_config = kwargs.get("flush_config_on_init")
+        if flush_config:
+            self.config_json = self.prepare_service_config()
+            self.flush_config_to_disk()
+            console.warning("flushing service config to db")
+        else:
+            self.db = kwargs.get("db")
+            service = self.db.\
+                    table(self.tiny_db_table).\
+                    get(Query().service_id == self.service_id)
+            if service:
+                self.config_json = service.get("service_config")
+            else:
+                self.config_json = self.prepare_service_config()
+                self.flush_config_to_disk()
+
     @property
     def handler_name(self):
         return self.__class__.__name__
@@ -64,13 +87,40 @@ class BaseService(pydantic.BaseModel, ABC):
     def __str__(self):
         return self.handler_name
 
-    @abstractmethod
-    def connect(self):
-        raise NotImplementedError
+    def prepare_service_config(self) -> dict:
+        section = self.config_section_class(self)
+        config_json = json.loads(
+            section.as_configuration().format(
+                formatter="json",
+                do_print=True,
+            )
+        )
+        config_json["uwsgi"]["show-config"] = True
+        return config_json
 
-    @abstractmethod
-    def prepare_service_config(self):
-        raise NotImplementedError
+    def flush_config_to_disk(self) -> None:
+        self.service_config.parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        self.service_config.write_text(
+                json.dumps(self.config_json)
+        )
+
+    def save_config_to_tinydb(self, extra_data: dict = {}) -> None:
+        common_data = {
+                "service_type": self.handler_name,
+                "name": self.name,
+                "service_id": self.service_id,
+                "service_config": self.config_json,
+        }
+        db = self.db.table(self.tiny_db_table)
+        db.upsert(
+            common_data.update(extra_data),
+            Query().service_id == self.service_id,
+        )
+
+    def up(self):
+        pass
 
     @abstractmethod
     def start(self):
@@ -79,12 +129,6 @@ class BaseService(pydantic.BaseModel, ABC):
     @abstractmethod
     def stop(self):
         raise NotImplementedError
-
-    def write_config(self):
-        self.service_config.write_text(
-            json.dumps(self.config_json)
-        )
-        print(self.config_json)
 
     def write_master_fifo(self, command: str) -> None:
         """
@@ -212,6 +256,13 @@ class BaseService(pydantic.BaseModel, ABC):
     @pydantic.computed_field
     def certificate_ca(self) -> Path:
         return Path(self.conf.PKI_DIR) / "ca.crt"
+
+    @pydantic.computed_field
+    def spooler_dir(self) -> Path:
+        spdir = Path(self.conf.DATA_DIR) / "spooler"
+        if not spdir.exists():
+            spdir.mkdir(parents=True, exist_ok=True)
+        return spdir
 
     def read_stats(self):
         if not all([self.stats_address.exists(), self.stats_address.is_socket()]):

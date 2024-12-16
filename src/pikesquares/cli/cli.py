@@ -48,7 +48,11 @@ app = typer.Typer(
 @app.command(rich_help_panel="Control", short_help="Reset device")
 def reset(
     ctx: typer.Context,
-    shutdown: Optional[str] = typer.Option("", "--shutdown", help="Shutdown PikeSquares server after reset."),
+    shutdown: Optional[str] = typer.Option(
+        "",
+        "--shutdown",
+        help="Shutdown PikeSquares server after reset."
+    ),
 ):
     """Reset PikeSquares Installation"""
 
@@ -181,23 +185,23 @@ def down(
     pc.down()
 
 
-@app.command(rich_help_panel="Control", short_help="Bootstrap the PikeSquares Server)")
-def bootstrap(
-    ctx: typer.Context,
-):
-    """Bootstrap the PikeSquares Server"""
-    context = ctx.ensure_object(dict)
-    for svc_class in [
-            Device,
-            SandboxProject,
-            DefaultHttpsRouter,
-            DefaultHttpRouter,
-        ]:
-        svc = services.get(context, svc_class)
-        svc.up()
+# @app.command(rich_help_panel="Control", short_help="Bootstrap the PikeSquares Server)")
+# def bootstrap(
+#     ctx: typer.Context,
+# ):
+#     """Bootstrap the PikeSquares Server"""
+#     context = ctx.ensure_object(dict)
+#     for svc_class in [
+#             Device,
+#             SandboxProject,
+#             DefaultHttpsRouter,
+#             DefaultHttpRouter,
+#         ]:
+#         svc = services.get(context, svc_class)
+#         svc.up()
+#     print("bootstrap done")
 
-    print("bootstrap returning with 0 code")
-    raise typer.Exit(code=0)
+#     raise typer.Exit(code=0)
 
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")
@@ -250,6 +254,7 @@ def main(
         callback=_version_callback,
         is_eager=True,
     ),
+    flush_configs: bool = typer.Option(False, help="Write configs to disk"),
 ) -> None:
     """
     Welcome to Pike Squares. Building blocks for your apps.
@@ -269,14 +274,10 @@ def main(
 
     context = services.init_app(ctx.ensure_object(dict))
 
-    data_dir = os.environ.get("PIKESQUARES_DATA_DIR")
-    dbname = "device-db.json"
-    if data_dir and Path(data_dir).exists():
-        db_path = Path(data_dir) / dbname
-    else:
-        db_path = DEFAULT_DATA_DIR / dbname
-
-    services.register_db(context, db_path)
+    services.register_db(
+        context,
+        Path(os.environ.get("PIKESQUARES_DATA_DIR", DEFAULT_DATA_DIR)) / "device-db.json"
+    )
     db = services.get(context, TinyDB)
 
     try:
@@ -288,15 +289,28 @@ def main(
     client_conf = services.get(context, ClientConfig)
 
     # console.debug(client_conf.model_dump())
-    register_device(context, Device, client_conf, db)
+    register_device(
+        context,
+        Device,
+        client_conf,
+        db,
+        flush_config_on_init=flush_configs,
+    )
     device = services.get(context, Device)
+    print(f"{device.service_config=}")
 
-    register_sandbox_project(context, SandboxProject, Project, client_conf, db)
+    register_sandbox_project(
+        context,
+        SandboxProject,
+        Project,
+        client_conf, db
+    )
 
     router_https_address = \
         f"0.0.0.0:{str(get_first_available_port(port=8443))}"
     router_https_subscription_server_address = \
         f"127.0.0.1:{get_first_available_port(port=5600)}"
+
     router_http_address = \
         f"0.0.0.0:{str(get_first_available_port(port=8034))}"
     router_http_subscription_server_address = \
@@ -326,22 +340,32 @@ def main(
 
     # sandbox_project = services.get(context, SandboxProject)
 
-    if ctx.invoked_subcommand == "bootstrap":
+    # if ctx.invoked_subcommand == "bootstrap":
+    #    return
+
+    if ctx.invoked_subcommand == "apps":
         return
 
     pc_api_port = 9555
-    uwsgi_bin = os.environ.get("PIKESQUARES_UWSGI_BIN")
-    if not all([uwsgi_bin, Path(uwsgi_bin).exists()]):
-        raise Exception("unable to locate uwsgi binary @ {uwsgi_bin}")
+    # uwsgi_bin = os.environ.get("PIKESQUARES_UWSGI_BIN")
+    # if not all([uwsgi_bin, Path(uwsgi_bin).exists()]):
+    #    raise Exception("unable to locate uwsgi binary @ {uwsgi_bin}")
 
     process_compose.register_process_compose(
         context,
         client_conf,
-        Path(uwsgi_bin),
+        # Path(uwsgi_bin),
         pc_api_port,
     )
     pc = services.get(context, process_compose.ProcessCompose)
+    try:
+        pc.ping()
+    except process_compose.PCAPIUnavailableError:
+        launch_pc(pc, device)
+    except process_compose.PCDeviceUnavailableError:
+        pass  # device.up()
 
+    """
     for svc in services.get_pings(context):
         # print(f"pinging {svc.name=}")
         try:
@@ -361,6 +385,7 @@ def main(
 
         if ctx.invoked_subcommand == "up":
             launch_pc(pc, device)
+    """
 
     # def circus_arbiter_factory():
     #    watchers = []
@@ -391,19 +416,20 @@ def main(
 def launch_pc(pc: process_compose.ProcessCompose, device: Device):
     with console.status("Launching the PikeSquares Server", spinner="earth"):
         pc.up()
-        time.sleep(5)
+        time.sleep(10)
         try:
             pc.ping_api()
             console.success("🚀 PikeSquares Server is running.")
-        except (process_compose.PCDeviceUnavailableError, process_compose.PCAPIUnavailableError):
+        except process_compose.PCAPIUnavailableError:
             console.info("process-compose api not available.")
+        except process_compose.PCDeviceUnavailableError:
             console.error("PikeSquares Server was unable to start.")
             raise typer.Exit() from None
 
-        if not device.get_service_status() == "running":
-            console.warning(f"Device stats @ {device.stats_address} are unavailable.")
-            console.error("PikeSquares Server was unable to start.")
-            raise typer.Exit() from None
+        # if not device.get_service_status() == "running":
+        #    console.warning(f"Device stats @ {device.stats_address} are unavailable.")
+        #    console.error("PikeSquares Server was unable to start.")
+        #    raise typer.Exit() from None
 
 
 """

@@ -39,13 +39,13 @@ class DeviceSection(Section):
         # transformation_toupper,coroae,v8,cgi,xslt,webdav,ssi,ldap,gccgo,rados,pypy,zabbix,curl_cron,tornado,
         # tuntap,pty,mongrel2,alarm_curl,router_radius,airbrake,gridfs
 
-        plugins = ["python312", "logfile"]
-        self.set_plugins_params(
-             plugins=plugins,
-             search_dirs=[str(device.conf.PLUGINS_DIR),],
-             autoload=True,
-             #required=True,
-        )
+        # plugins = ["python312", "logfile"]
+        # self.set_plugins_params(
+        #     plugins=plugins,
+        #     search_dirs=[str(device.conf.PLUGINS_DIR),],
+        #     autoload=True,
+        # required=True,
+        # )
         self.print_plugins()
 
         self.master_process.set_basic_params(
@@ -63,7 +63,10 @@ class DeviceSection(Section):
         #   str((Path(env.data_dir) / ".venv/bin/uwsgi").resolve())
         #   )
 
-        self.main_process.set_owner_params(uid=device.conf.SERVER_RUN_AS_UID, gid=device.conf.SERVER_RUN_AS_GID)
+        self.main_process.set_owner_params(
+            uid=device.conf.SERVER_RUN_AS_UID,
+            gid=device.conf.SERVER_RUN_AS_GID,
+        )
         self.main_process.set_naming_params(
             prefix="[[ PikeSquares App ]] ",
             suffix="[suffix]",
@@ -135,9 +138,9 @@ class DeviceSection(Section):
 
         self.logging.add_logger(self.logging.loggers.stdio())
 
-        self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(device.log_file))
-        )
+        # self.logging.add_logger(
+        #    self.logging.loggers.file(filepath=str(device.log_file))
+        # )
 
         # self.run_fastrouter()
         # self.run_httpsrouter()
@@ -145,7 +148,7 @@ class DeviceSection(Section):
     def as_string(self):
         return self.as_configuration().print_ini()
 
-    #def run_httpsrouter(self):
+    # def run_httpsrouter(self):
     #    fw = self.routing.routers.https.forwarders.subscription_server(
     #        address=self.conf.HTTPS_ROUTER_SUBSCRIPTION_SERVER
     #    )

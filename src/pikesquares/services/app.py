@@ -10,6 +10,7 @@ import pydantic
 # from .. import get_service_status
 # from .project import project_up
 from pikesquares import get_first_available_port
+from pikesquares.presets import Section
 from pikesquares.services import register_factory
 from ..presets import wsgi_app as wsgi_app_preset
 from .data import VirtualHost, WsgiAppOptions
@@ -17,6 +18,9 @@ from pikesquares.services.base import BaseService
 
 
 class WsgiApp(BaseService):
+
+    config_section_class: Section = wsgi_app_preset.WsgiAppSection
+    tiny_db_table: str = "wsgi-apps"
 
     # for k in config.keys():
     #    if k.endswith("_DIR"):
@@ -46,7 +50,11 @@ class WsgiApp(BaseService):
     def socket_address(self) -> str:
         return f"127.0.0.1:{get_first_available_port(port=4017)}"
 
-    def up(self):
+    @pydantic.computed_field
+    def subscription_notify_socket(self) -> Path:
+        return Path(self.conf.RUN_DIR) / f"{self.service_id}-subscription-notify.sock"
+
+    def zmq_up(self):
         # if not self.is_started() and str(self.service_config.resolve()).endswith(".stopped"):
         #    shutil.move(
         #        str(self.service_config),
@@ -57,10 +65,6 @@ class WsgiApp(BaseService):
         #    project = get_project(self.conf, self.project_id)
         #    if project:
         #        project_up(self.conf, project.get('name'), self.project_id)
-
-        self.prepare_service_config()
-        self.save_config()
-        self.write_config()
 
         """
         if all([
@@ -82,20 +86,9 @@ class WsgiApp(BaseService):
             print("no service config.")
         """
 
-    def write_config(self):
-        self.service_config.parent.mkdir(parents=True, exist_ok=True)
-        self.service_config.write_text(json.dumps(self.config_json))
-
-    def save_config(self):
-        apps_db = self.db.table("apps")
-        apps_db.upsert({
-                "service_type": self.handler_name,
-                "name": self.name,
-                "service_id": self.service_id,
-                "project_id": self.app_options.project_id,
-                "service_config": self.config_json,
-            },
-            Query().service_id == self.service_id,
+    def save_config_to_tinydb(self, extra_data: dict = {}) -> None:
+        super().save_config_to_tinydb(
+            extra_data={"project_id": self.app_options.project_id}
         )
 
     def prepare_service_config(self):
@@ -110,11 +103,14 @@ class WsgiApp(BaseService):
         # subscription_server_address = router.get("service_config")["uwsgi"]["http-subscription-server"]
         # subscription_notify_socket = router.get("service_config")["uwsgi"]["notify-socket"]
 
-        section = wsgi_app_preset.WsgiAppSection(
+        section = self.config_section_class(
             self,
             self.app_options,
             virtual_hosts=self.virtual_hosts,
-        ).as_configuration().format(formatter="json")
+        ).as_configuration().format(
+            formatter="json",
+            do_print=True,
+        )
 
         self.config_json = json.loads(section)
         self.config_json["uwsgi"]["show-config"] = True
@@ -136,7 +132,7 @@ class WsgiApp(BaseService):
             )
         ]
 
-    def connect(self):
+    def zmq_connect(self):
         pass
         # emperor_zmq_opt = uwsgi.opt.get('emperor', b'').decode()
         # zmq_port = emperor_zmq_opt.split(":")[-1]
