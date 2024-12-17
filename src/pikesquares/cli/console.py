@@ -8,14 +8,10 @@ from rich.text import Text
 from rich.table import Table
 
 import questionary
-#import os
-
-from pathlib import Path
-from typing import List
+# import os
 
 
-
-def pluralize(count: int, words: List[str], show_count: bool = True):
+def pluralize(count: int, words: list[str], show_count: bool = True):
     cases = (2, 0, 1, 1, 1, 2)
     plural_word = words[2 if 5 <= (count % 100) < 20 else cases[min(count % 10, 5)]]
     if show_count:
@@ -156,16 +152,16 @@ class Console(BaseConsole, _RenderMixin):
             self.info(f"It should be:\n\t{example}")
         if hint:
             self.warning(f"[i]Hint: {hint}[/i]")
-    
+
     def info(self, *args, **kwargs):
         self.print(*args, **kwargs, style='blue')
-    
+
     def success(self, *args, **kwargs):
         self.print(*args, **kwargs, style='green')
-    
+
     def warning(self, *args, **kwargs):
         self.print(*args, **kwargs, style='yellow')
-    
+
     def ask(self, *args, **kwargs):
         repeat = kwargs.pop('repeat', False)
         validators = kwargs.pop('validators', [])

@@ -48,7 +48,6 @@ class Device(BaseService, DevicePKIMixin):
         self.setup_pki()
         super().up()
         self.sync_db_with_filesystem()
-        self.start()
 
     # self.config_json["uwsgi"]["emperor-wrapper"] = str(
     #    (Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve()
@@ -58,7 +57,10 @@ class Device(BaseService, DevicePKIMixin):
     # config["uwsgi"]["plugin"] = "emperor_zeromq"
     # self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
-    def start(self) -> bool:
+    def start(self):
+        pass
+
+    def start_pyuwsgi(self) -> bool:
         # we import `pyuwsgi` with `dlopen` flags set to `os.RTLD_GLOBAL` such that
         # uwsgi plugins can discover uwsgi's globals (notably `extern ... uwsgi`)
         if hasattr(sys, "setdlopenflags"):
@@ -149,14 +151,14 @@ def register_device(
     device_class: Device,
     client_conf: ClientConfig,
     db: TinyDB,
-    flush_config_on_init: bool | None,
+    build_config_on_init: bool | None,
     ) -> None:
     def device_factory():
         data = {
             "conf": client_conf,
             "db": db,
             "service_id": "device",
-            "flush_config_on_init": flush_config_on_init,
+            "build_config_on_init": build_config_on_init,
         }
         return device_class(**data)
     register_factory(

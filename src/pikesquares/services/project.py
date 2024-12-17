@@ -121,13 +121,13 @@ def register_sandbox_project(
     proj_class: Project,
     client_conf: conf.ClientConfig,
     db: TinyDB,
-    flush_config_on_init: bool | None,
+    build_config_on_init: bool | None,
     ) -> None:
     def sandbox_project_factory():
         return proj_class(
             conf=client_conf,
             db=db,
             service_id="project_sandbox",
-            flush_config_on_init=flush_config_on_init,
+            build_config_on_init=build_config_on_init,
         )
     register_factory(context, proj_type, sandbox_project_factory)

@@ -45,7 +45,7 @@ class BaseService(pydantic.BaseModel, ABC):
     tiny_db_table: str = ""
     config_section_class: Section
     config_json: pydantic.Json = {}
-    flush_config_on_init: bool = False
+    build_config_on_init: bool = False
     # cli_style: QuestionaryStyle = console.custom_style_dope
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
 
@@ -60,21 +60,13 @@ class BaseService(pydantic.BaseModel, ABC):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        flush_config = kwargs.get("flush_config_on_init")
-        if flush_config:
+        service_config = self.load_config_from_tinydb()
+        if not service_config or self.build_config_on_init:
             self.config_json = self.prepare_service_config()
-            self.flush_config_to_disk()
+            self.save_config_to_filesystem()
+            self.save_config_to_tinydb()
         else:
-            self.db = kwargs.get("db")
-            service = self.db.\
-                    table(self.tiny_db_table).\
-                    get(Query().service_id == self.service_id)
-            if service:
-                self.config_json = service.get("service_config")
-            else:
-                self.config_json = self.prepare_service_config()
-                self.flush_config_to_disk()
+            self.config_json = service_config.get("service_config")
 
     @property
     def handler_name(self):
@@ -97,7 +89,7 @@ class BaseService(pydantic.BaseModel, ABC):
         config_json["uwsgi"]["show-config"] = True
         return config_json
 
-    def flush_config_to_disk(self) -> None:
+    def save_config_to_filesystem(self) -> None:
         console.warning(f"flushing {self.service_id} service config to db")
         self.service_config.parent.mkdir(
             parents=True, exist_ok=True
@@ -106,6 +98,11 @@ class BaseService(pydantic.BaseModel, ABC):
                 json.dumps(self.config_json)
         )
 
+    def load_config_from_tinydb(self):
+        return self.db.\
+            table(self.tiny_db_table).\
+            get(Query().service_id == self.service_id)
+
     def save_config_to_tinydb(self, extra_data: dict = {}) -> None:
         common_data = {
                 "service_type": self.handler_name,
@@ -113,10 +110,16 @@ class BaseService(pydantic.BaseModel, ABC):
                 "service_id": self.service_id,
                 "service_config": self.config_json,
         }
-        db = self.db.table(self.tiny_db_table)
-        db.upsert(
-            common_data.update(extra_data),
-            Query().service_id == self.service_id,
+        print(f"{self.tiny_db_table=}")
+
+        common_data.update(extra_data)
+        print(common_data)
+
+        self.db.table(
+                self.tiny_db_table
+        ).upsert(
+            common_data,
+            Query().service_id == self.service_id
         )
 
     def up(self):

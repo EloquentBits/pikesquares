@@ -8,6 +8,7 @@ import requests
 from pikesquares import conf, is_port_open
 from pikesquares.services.base import ServiceUnavailableError
 from pikesquares.services import register_factory
+from pikesquares.cli.console import console
 
 
 class PCAPIUnavailableError(ServiceUnavailableError):
@@ -77,9 +78,9 @@ class ProcessCompose(pydantic.BaseModel):
             except (IndexError, StopIteration):
                 pass
         except requests.ConnectionError:
-            print("connection error to process-compose api")
+            console.warning("Connection Error to process-compose API")
         except requests.Timeout:
-            print("request to process-compose api timed out")
+            console.warning("Request to process-compose API timed out")
 
         raise PCDeviceUnavailableError()
 
@@ -117,8 +118,6 @@ class ProcessCompose(pydantic.BaseModel):
             "PIKESQUARES_VERSION": self.client_conf.version,
             #"PIKESQUARES_UWSGI_BIN": str(self.client_conf.UWSGI_BIN),
         }
-        print(cmd_env)
-        print(f"{server_bin=}")
         try:
             compl = subprocess.run(
                 server_bin,
@@ -130,30 +129,33 @@ class ProcessCompose(pydantic.BaseModel):
                 user=self.client_conf.SERVER_RUN_AS_UID,
             )
         except subprocess.CalledProcessError as cperr:
-            print(f"failed to launch process-compose: {cperr.stderr.decode()}")
+            console.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
             return
-
-        print(compl.args)
 
         # if compl.returncode != 0:
         #    print("unable to launch process-compose")
-
-        print(compl.stderr.decode())
-        print(compl.stdout.decode())
+        if compl.stderr:
+            console.info(compl.stderr.decode())
+        if compl.stdout:
+            console.info(compl.stdout.decode())
 
     def down(self) -> None:
         datadir = self.client_conf.DATA_DIR
         server_bin = os.environ.get("SCIE_ARGV0")
         # if server_bin and Path(server_bin).exists():
         compose_shell = os.environ.get("SHELL")
+        console.info(f"{compose_shell=}")
+        cmd_env = {
+            "SCIE_BOOT": "process-compose-down",
+            "COMPOSE_SHELL": compose_shell,
+            "PIKESQUARES_VERSION": self.client_conf.version,
+        }
+        console.info(cmd_env)
+        console.info(f"{server_bin=}")
         try:
             compl = subprocess.run(
                 server_bin,
-                env={
-                    "SCIE_BOOT": "process-compose-down",
-                    "COMPOSE_SHELL": compose_shell,
-                    "PIKESQUARES_VERSION": self.client_conf.version,
-                },
+                env=cmd_env,
                 shell=True,
                 cwd=datadir,
                 capture_output=True,
@@ -161,14 +163,18 @@ class ProcessCompose(pydantic.BaseModel):
                 user=self.client_conf.SERVER_RUN_AS_UID,
             )
         except subprocess.CalledProcessError as cperr:
-            print(f"failed to shut down process-compose: {cperr.stderr.decode()}")
+            console.warning(f"failed to shut down process-compose: {cperr.stderr.decode()}")
             return
 
-        if compl.returncode != 0:
-            print("unable to shut down process-compose")
+        # if compl.returncode != 0:
+        #    print("unable to shut down process-compose")
+        print(compl.args)
+        print(compl)
 
-        # print(compl.stderr.decode())
-        # print(compl.stdout.decode())
+        if compl.stderr:
+            console.info(compl.stderr.decode())
+        if compl.stdout:
+            console.info(compl.stdout.decode())
 
     def attach(self) -> None:
         datadir = self.client_conf.DATA_DIR

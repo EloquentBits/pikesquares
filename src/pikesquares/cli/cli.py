@@ -182,26 +182,33 @@ def down(
     """Stop the PikeSquares Server"""
     context = ctx.ensure_object(dict)
     pc = services.get(context, process_compose.ProcessCompose)
-    pc.down()
+    try:
+        pc.ping()
+        console.info("Shutting down PikeSquares Server.")
+        pc.down()
+    except process_compose.PCAPIUnavailableError:
+        pass
+    except process_compose.PCDeviceUnavailableError:
+        pass  # device.up()
 
 
-# @app.command(rich_help_panel="Control", short_help="Bootstrap the PikeSquares Server)")
-# def bootstrap(
-#     ctx: typer.Context,
-# ):
-#     """Bootstrap the PikeSquares Server"""
-#     context = ctx.ensure_object(dict)
-#     for svc_class in [
-#             Device,
-#             SandboxProject,
-#             DefaultHttpsRouter,
-#             DefaultHttpRouter,
-#         ]:
-#         svc = services.get(context, svc_class)
-#         svc.up()
-#     print("bootstrap done")
+@app.command(rich_help_panel="Control", short_help="Bootstrap the PikeSquares Server)")
+def bootstrap(
+     ctx: typer.Context,
+):
+    """Bootstrap the PikeSquares Server"""
+    context = ctx.ensure_object(dict)
+    for svc_class in [
+             Device,
+             SandboxProject,
+             DefaultHttpsRouter,
+             DefaultHttpRouter,
+         ]:
+        svc = services.get(context, svc_class)
+        svc.up()
+    console.info("bootstrap done")
 
-#     raise typer.Exit(code=0)
+    raise typer.Exit(code=0)
 
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")
@@ -254,14 +261,14 @@ def main(
         callback=_version_callback,
         is_eager=True,
     ),
-    flush_configs: Optional[bool] = typer.Option(
-        False,
-        help="Write configs to disk"
-    ),
-    disable_process_compose: Optional[bool] = typer.Option(
-        False,
-        help="Run without process-compose"
-    ),
+    # build_configs: Optional[bool] = typer.Option(
+    #    False,
+    #    help="Write configs to disk"
+    # ),
+    # disable_process_compose: Optional[bool] = typer.Option(
+    #    False,
+    #    help="Run without process-compose"
+    # ),
 ) -> None:
     """
     Welcome to Pike Squares. Building blocks for your apps.
@@ -304,14 +311,14 @@ def main(
     client_conf = services.get(context, ClientConfig)
 
     # console.debug(client_conf.model_dump())
-    console.info(f"{flush_configs=}")
-    flush_configs = True
+
+    build_configs = True if ctx.invoked_subcommand == "up" else False
     register_device(
         context,
         Device,
         client_conf,
         db,
-        flush_config_on_init=flush_configs,
+        build_config_on_init=build_configs,
     )
     device = services.get(context, Device)
 
@@ -321,7 +328,7 @@ def main(
         Project,
         client_conf,
         db,
-        flush_config_on_init=flush_configs,
+        build_config_on_init=build_configs,
     )
     sandbox_project = services.get(context, SandboxProject)
 
@@ -345,7 +352,7 @@ def main(
         HttpsRouter,
         client_conf,
         db,
-        flush_config_on_init=flush_configs,
+        build_config_on_init=build_configs,
     )
     register_router(
         context,
@@ -356,7 +363,7 @@ def main(
         HttpRouter,
         client_conf,
         db,
-        flush_config_on_init=flush_configs,
+        build_config_on_init=build_configs,
     )
 
     http_router = services.get(context, DefaultHttpRouter)
@@ -379,16 +386,20 @@ def main(
         # Path(uwsgi_bin),
         pc_api_port,
     )
+
+    if ctx.invoked_subcommand == "down":
+        return
+
     pc = services.get(context, process_compose.ProcessCompose)
     try:
         pc.ping()
     except process_compose.PCAPIUnavailableError:
-        launch_pc(pc, device)
+        if ctx.invoked_subcommand == "up":
+            launch_pc(pc, device)
     except process_compose.PCDeviceUnavailableError:
         pass  # device.up()
         console.info("-- PCDeviceUnavailableError --")
         sandbox_project.ping()
-
 
     """
     for svc in services.get_pings(context):

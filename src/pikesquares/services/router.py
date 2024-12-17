@@ -73,12 +73,11 @@ class BaseRouter(BaseService):
 
     def save_config_to_tinydb(self, extra_data: dict = {}) -> None:
         super().save_config_to_tinydb(
-            extra_data={"address": self.address.project_id}
+            extra_data={"address": self.address}
         )
 
     def prepare_service_config(self) -> dict:
-
-        section = HttpRouterSection(self, self.plugins)
+        section = self.config_section_class(self, self.plugins)
         config_json = json.loads(
                 section.as_configuration().format(
                     formatter="json",
@@ -220,7 +219,7 @@ def register_router(
         router_class: HttpsRouter | HttpRouter,
         client_conf: conf.ClientConfig,
         db: TinyDB,
-        flush_config_on_init: bool | None,
+        build_config_on_init: bool | None,
     ) -> None:
 
     def default_router_factory():
@@ -232,7 +231,7 @@ def register_router(
             "db": db,
             "plugins": plugins,
             "service_id": f"default_{router_alias}_router",
-            "flush_config_on_init": flush_config_on_init,
+            "build_config_on_init": build_config_on_init,
         }
         return router_class(**kwargs)
 
