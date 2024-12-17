@@ -2,7 +2,6 @@ version: "0.1"
 is_strict: true
 
 vars:
-  "PIKESQUARES_LOG_DIR":
 
 log_location: "${PIKESQUARES_LOG_DIR}/process-compose.log"
 log_level: debug
@@ -21,8 +20,8 @@ processes:
   #  working_dir: "/tmp"
   Device:
     environment:
-      #command: "${PIKESQUARES_UWSGI_BIN} --json ${PIKESQUARES_CONFIG_DIR}/device.json"
-    command: "${PIKESQUARES_SERVER_EXE} devices up"
+    command: "${PIKESQUARES_UWSGI_BIN} --json ${PIKESQUARES_CONFIG_DIR}/device.json"
+    #command: "${PIKESQUARES_SERVER_EXE} devices up"
     description: PikeSquares Server
     working_dir: "${PIKESQUARES_DATA_DIR}"
     is_daemon: false
@@ -34,9 +33,9 @@ processes:
       exit_on_end: true
       backoff_seconds: 2 # default: 1
       max_restarts: 5 # default: 0 (unlimited)
-    depends_on:
-      bootstrap:
-        condition: process_completed_successfuly
+    #depends_on:
+    #  bootstrap:
+    #    condition: process_completed_successfuly
     shutdown:
       command: "${PIKESQUARES_SERVER_EXE} devices down --noinput"
       timeout_seconds: 10 # default 10
@@ -53,11 +52,11 @@ processes:
     #  timeout_seconds: 5
     #  success_threshold: 1
     #  failure_threshold: 3
-  bootstrap:
-    command: "${PIKESQUARES_SERVER_EXE} bootstrap"
-    disabled: false
-    availability:
-      restart: "exit_on_failure"
+  #bootstrap:
+  #  command: "${PIKESQUARES_SERVER_EXE} bootstrap"
+  #  disabled: false
+  #  availability:
+  #    restart: "exit_on_failure"
 
 ################################################################
   #sanitycheck:

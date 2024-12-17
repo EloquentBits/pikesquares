@@ -254,7 +254,14 @@ def main(
         callback=_version_callback,
         is_eager=True,
     ),
-    flush_configs: bool = typer.Option(False, help="Write configs to disk"),
+    flush_configs: Optional[bool] = typer.Option(
+        False,
+        help="Write configs to disk"
+    ),
+    disable_process_compose: Optional[bool] = typer.Option(
+        False,
+        help="Run without process-compose"
+    ),
 ) -> None:
     """
     Welcome to Pike Squares. Building blocks for your apps.
@@ -274,6 +281,14 @@ def main(
 
     context = services.init_app(ctx.ensure_object(dict))
 
+    # and not all([
+    #    Path(process_compose_dir),
+    #    Path(process_compose_dir).is_dir()]):
+    process_compose_dir = os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")
+    if not process_compose_dir:
+        console.error(f"unable to locate process-compose directory @ {process_compose_dir}")
+        raise typer.Abort()
+
     services.register_db(
         context,
         Path(os.environ.get("PIKESQUARES_DATA_DIR", DEFAULT_DATA_DIR)) / "device-db.json"
@@ -289,6 +304,8 @@ def main(
     client_conf = services.get(context, ClientConfig)
 
     # console.debug(client_conf.model_dump())
+    console.info(f"{flush_configs=}")
+    flush_configs = True
     register_device(
         context,
         Device,
@@ -297,14 +314,16 @@ def main(
         flush_config_on_init=flush_configs,
     )
     device = services.get(context, Device)
-    print(f"{device.service_config=}")
 
     register_sandbox_project(
         context,
         SandboxProject,
         Project,
-        client_conf, db
+        client_conf,
+        db,
+        flush_config_on_init=flush_configs,
     )
+    sandbox_project = services.get(context, SandboxProject)
 
     router_https_address = \
         f"0.0.0.0:{str(get_first_available_port(port=8443))}"
@@ -325,7 +344,8 @@ def main(
         DefaultHttpsRouter,
         HttpsRouter,
         client_conf,
-        db
+        db,
+        flush_config_on_init=flush_configs,
     )
     register_router(
         context,
@@ -336,9 +356,11 @@ def main(
         HttpRouter,
         client_conf,
         db,
+        flush_config_on_init=flush_configs,
     )
 
-    # sandbox_project = services.get(context, SandboxProject)
+    http_router = services.get(context, DefaultHttpRouter)
+    https_router = services.get(context, DefaultHttpsRouter)
 
     # if ctx.invoked_subcommand == "bootstrap":
     #    return
@@ -364,6 +386,9 @@ def main(
         launch_pc(pc, device)
     except process_compose.PCDeviceUnavailableError:
         pass  # device.up()
+        console.info("-- PCDeviceUnavailableError --")
+        sandbox_project.ping()
+
 
     """
     for svc in services.get_pings(context):

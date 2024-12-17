@@ -65,7 +65,6 @@ class BaseService(pydantic.BaseModel, ABC):
         if flush_config:
             self.config_json = self.prepare_service_config()
             self.flush_config_to_disk()
-            console.warning("flushing service config to db")
         else:
             self.db = kwargs.get("db")
             service = self.db.\
@@ -99,6 +98,7 @@ class BaseService(pydantic.BaseModel, ABC):
         return config_json
 
     def flush_config_to_disk(self) -> None:
+        console.warning(f"flushing {self.service_id} service config to db")
         self.service_config.parent.mkdir(
             parents=True, exist_ok=True
         )

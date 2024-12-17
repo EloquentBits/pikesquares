@@ -76,16 +76,15 @@ class BaseRouter(BaseService):
             extra_data={"address": self.address.project_id}
         )
 
-    def prepare_service_config(self) -> None:
+    def prepare_service_config(self) -> dict:
 
         section = HttpRouterSection(self, self.plugins)
-        self.config_json = json.loads(
+        config_json = json.loads(
                 section.as_configuration().format(
                     formatter="json",
                     do_print=True,
                 )
         )
-
         # self.config_json["uwsgi"]["show-config"] = True
         # self.config_json["uwsgi"]["strict"] = True
         # self.config_json["uwsgi"]["notify-socket"] = str(self.notify_socket)
@@ -94,6 +93,7 @@ class BaseRouter(BaseService):
         # print(f"wsgi app {self.config_json=}")
         # empjs["uwsgi"]["plugin"] = "emperor_zeromq"
         # self.service_config.write_text(json.dumps(self.config_json))
+        return config_json
 
     # @pydantic.computed_field
     # def resubscribe_to(self) -> Path:
@@ -220,6 +220,7 @@ def register_router(
         router_class: HttpsRouter | HttpRouter,
         client_conf: conf.ClientConfig,
         db: TinyDB,
+        flush_config_on_init: bool | None,
     ) -> None:
 
     def default_router_factory():
@@ -231,6 +232,7 @@ def register_router(
             "db": db,
             "plugins": plugins,
             "service_id": f"default_{router_alias}_router",
+            "flush_config_on_init": flush_config_on_init,
         }
         return router_class(**kwargs)
 

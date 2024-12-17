@@ -172,8 +172,10 @@ def get_conf_mapping(db: TinyDB, pikesquares_version: str) -> dict:
             configs["SENTRY_DSN"] = os.environ.get("PIKESQUARES_SENTRY_DSN")
             configs["version"] = str(pikesquares_version)
 
-            if "VIRTUAL_ENV" in os.environ:
-                venv_dir = os.environ.get("VIRTUAL_ENV")
+            configs["UWSGI_BIN"] = os.environ.get("PIKESQUARES_UWSGI_BIN")
+
+            if "PIKESQUARES_VIRTUAL_ENV" in os.environ:
+                venv_dir = os.environ.get("PIKESQUARES_VIRTUAL_ENV")
                 if venv_dir and Path(venv_dir).exists() and Path(venv_dir).is_dir():
                     configs["VIRTUAL_ENV"] = venv_dir
             db.table("configs").insert(configs)

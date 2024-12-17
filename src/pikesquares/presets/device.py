@@ -1,5 +1,5 @@
 import os
-#from pathlib import Path
+from pathlib import Path
 
 from . import (
     Section, 
@@ -48,6 +48,8 @@ class DeviceSection(Section):
         # )
         self.print_plugins()
 
+        self.set_plugins_params(search_dirs=device.conf.PLUGINS_DIR)
+
         self.master_process.set_basic_params(
             enable=True,
             no_orphans=True,
@@ -56,6 +58,11 @@ class DeviceSection(Section):
         self.main_process.set_basic_params(
             vacuum=True,
         )
+        # binary_path = device.conf.VIRTUAL_ENV / "bin/pyuwsgi"
+        # print(f"{binary_path=}")
+        # self.main_process.set_basic_params(
+        #    binary_path=str(binary_path),
+        # )
         # if os.environ.get("PEX_PYTHON_PATH"):
         #    self.main_process.set_basic_params(
         #        binary_path=os.environ.get("PEX_PYTHON_PATH"),
@@ -84,6 +91,9 @@ class DeviceSection(Section):
         self.main_process.set_basic_params(
             touch_reload=str(device.touch_reload_file),
         )
+
+        self.main_process.change_dir(to=device.conf.DATA_DIR)
+
         self.networking.register_socket(
             self.networking.sockets.default(str(device.socket_address))
         )
@@ -113,7 +123,7 @@ class DeviceSection(Section):
             process_count=1,
             max_tasks=10,
             harakiri=60,
-            # change_dir=str(""),
+            # change_dir=str(device.conf.DATA_DIR),
             poll_interval=10,
             # cheap=True,
             # base_dir=str(""),
@@ -138,9 +148,9 @@ class DeviceSection(Section):
 
         self.logging.add_logger(self.logging.loggers.stdio())
 
-        # self.logging.add_logger(
-        #    self.logging.loggers.file(filepath=str(device.log_file))
-        # )
+        self.logging.add_logger(
+            self.logging.loggers.file(filepath=str(device.log_file))
+        )
 
         # self.run_fastrouter()
         # self.run_httpsrouter()

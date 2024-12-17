@@ -115,7 +115,7 @@ class ProcessCompose(pydantic.BaseModel):
             "SCIE_BOOT": "process-compose-up",
             "COMPOSE_SHELL": "/bin/zsh", # compose_shell,
             "PIKESQUARES_VERSION": self.client_conf.version,
-            # "PIKESQUARES_UWSGI_BIN": str(self.uwsgi_bin),
+            #"PIKESQUARES_UWSGI_BIN": str(self.client_conf.UWSGI_BIN),
         }
         print(cmd_env)
         print(f"{server_bin=}")

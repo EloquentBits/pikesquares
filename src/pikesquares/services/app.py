@@ -54,6 +54,9 @@ class WsgiApp(BaseService):
     def subscription_notify_socket(self) -> Path:
         return Path(self.conf.RUN_DIR) / f"{self.service_id}-subscription-notify.sock"
 
+    def ping(self) -> None:
+        print("== WsgiApp.ping ==")
+
     def zmq_up(self):
         # if not self.is_started() and str(self.service_config.resolve()).endswith(".stopped"):
         #    shutil.move(
@@ -91,7 +94,7 @@ class WsgiApp(BaseService):
             extra_data={"project_id": self.app_options.project_id}
         )
 
-    def prepare_service_config(self):
+    def prepare_service_config(self) -> dict:
         self.service_id = self.service_id
         self.prepare_virtual_hosts()
 
@@ -111,10 +114,11 @@ class WsgiApp(BaseService):
             formatter="json",
             do_print=True,
         )
+        config_json = json.loads(section)
+        config_json["uwsgi"]["show-config"] = True
+        config_json["uwsgi"]["strict"] = True
 
-        self.config_json = json.loads(section)
-        self.config_json["uwsgi"]["show-config"] = True
-        self.config_json["uwsgi"]["strict"] = True
+        return config_json
 
         # print(self.config_json)
         # self.service_config.write_text(json.dumps(self.config_json))
