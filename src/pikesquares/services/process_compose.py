@@ -180,14 +180,12 @@ class ProcessCompose(pydantic.BaseModel):
         datadir = self.client_conf.DATA_DIR
         server_bin = os.environ.get("SCIE_ARGV0")
         # if server_bin and Path(server_bin).exists():
-        compose_shell = "sh" #os.environ.get("SHELL")
-        #cmd = Path(server_bin) / ""
         try:
             compl = subprocess.run(
                 f"{server_bin}",
                 env={
                     "SCIE_BOOT": "process-compose-attach",
-                    "COMPOSE_SHELL": compose_shell,
+                    "COMPOSE_SHELL": os.environ.get("SHELL"),
                     "PIKESQUARES_VERSION": self.client_conf.version,
                     "XDG_CONFIG_HOME": "/home/pk/.config",
                 },
@@ -198,16 +196,20 @@ class ProcessCompose(pydantic.BaseModel):
                 user=self.client_conf.SERVER_RUN_AS_UID,
             )
         except subprocess.CalledProcessError as cperr:
-            print(f"failed to attach to process-compose: {cperr.stderr.decode()}")
+            console.warning(f"failed to attach to process-compose: {cperr.stderr.decode()}")
             return
 
-        if compl.returncode != 0:
-            print("unable to attach to process-compose")
-        else:
-            print("attached to process-compose")
+        # if compl.returncode != 0:
+        #    print("unable to attach to process-compose")
+        # else:
 
-        print(compl.stderr.decode())
-        print(compl.stdout.decode())
+        print(compl.args)
+        print(compl)
+
+        if compl.stderr:
+            console.info(compl.stderr.decode())
+        if compl.stdout:
+            console.info(compl.stdout.decode())
 
     def up_direct(self) -> None:
         datadir = self.client_conf.DATA_DIR

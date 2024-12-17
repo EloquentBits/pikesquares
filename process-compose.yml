@@ -33,9 +33,9 @@ processes:
       exit_on_end: true
       backoff_seconds: 2 # default: 1
       max_restarts: 5 # default: 0 (unlimited)
-    #depends_on:
-    #  bootstrap:
-    #    condition: process_completed_successfuly
+    depends_on:
+      bootstrap:
+        condition: process_completed_successfuly
     shutdown:
       command: "${PIKESQUARES_SERVER_EXE} devices down --noinput"
       timeout_seconds: 10 # default 10
