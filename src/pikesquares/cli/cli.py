@@ -134,10 +134,10 @@ def uninstall(
 
 
 @app.command(
-        rich_help_panel="Control",
-        short_help="Attach to the PikeSquares Server")
+         rich_help_panel="Control",
+         short_help="Attach to the PikeSquares Server")
 def attach(
-    ctx: typer.Context,
+     ctx: typer.Context,
 ):
     """Attach to PikeSquares Server"""
     context = ctx.ensure_object(dict)

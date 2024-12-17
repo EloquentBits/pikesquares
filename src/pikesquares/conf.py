@@ -107,13 +107,15 @@ class ClientConfig(BaseSettings):
     LOG_DIR: Path
     CONFIG_DIR: Path
     PLUGINS_DIR: Path
+
+    # PROCESS_COMPOSE_BIN: Path
+    UWSGI_BIN: Path
+
     VIRTUAL_ENV: Path | None = None
     EASYRSA_DIR: Path | None = None
     EASYRSA_BIN: Path | None = None
     # CADDY_DIR: Optional[str] = None
     PKI_DIR: Path | None = None
-    PROCESS_COMPOSE_BIN: Path | None = None
-    UWSGI_BIN: Path | None = None
     # CLI_STYLE: QuestionaryStyle
     SENTRY_ENABLED: bool = False
     SENTRY_DSN: str | None = None
@@ -173,6 +175,7 @@ def get_conf_mapping(db: TinyDB, pikesquares_version: str) -> dict:
             configs["version"] = str(pikesquares_version)
 
             configs["UWSGI_BIN"] = os.environ.get("PIKESQUARES_UWSGI_BIN")
+            # configs["PROCESS_COMPOSE_BIN"] = os.environ.get("PIKESQUARES_PROCESS_COMPOSE_BIN")
 
             if "PIKESQUARES_VIRTUAL_ENV" in os.environ:
                 venv_dir = os.environ.get("PIKESQUARES_VIRTUAL_ENV")

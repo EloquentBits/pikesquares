@@ -119,25 +119,42 @@ class ProcessCompose(pydantic.BaseModel):
             #"PIKESQUARES_UWSGI_BIN": str(self.client_conf.UWSGI_BIN),
         }
         try:
-            compl = subprocess.run(
+            #compl = subprocess.run(
+            #    server_bin,
+            #    env=cmd_env,
+            #    shell=True,
+            #    cwd=datadir,
+            #    capture_output=True,
+            #    check=True,
+            #    user=self.client_conf.SERVER_RUN_AS_UID,
+            #)
+
+            console.info("running subprocess.Popen")
+
+            popen = subprocess.Popen(
                 server_bin,
                 env=cmd_env,
-                shell=True,
                 cwd=datadir,
-                capture_output=True,
-                check=True,
-                user=self.client_conf.SERVER_RUN_AS_UID,
+                stdout=subprocess.PIPE,
+                bufsize=1,
+                universal_newlines=True,
             )
+            for line in iter(popen.stdout.readline, ""):
+                print(line, end="")
+
+            popen.stdout.close()
+            popen.wait()
+
         except subprocess.CalledProcessError as cperr:
             console.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
             return
 
         # if compl.returncode != 0:
         #    print("unable to launch process-compose")
-        if compl.stderr:
-            console.info(compl.stderr.decode())
-        if compl.stdout:
-            console.info(compl.stdout.decode())
+        # if compl.stderr:
+        #    console.info(compl.stderr.decode())
+        # if compl.stdout:
+        #    console.info(compl.stdout.decode())
 
     def down(self) -> None:
         datadir = self.client_conf.DATA_DIR
@@ -168,41 +185,6 @@ class ProcessCompose(pydantic.BaseModel):
 
         # if compl.returncode != 0:
         #    print("unable to shut down process-compose")
-        print(compl.args)
-        print(compl)
-
-        if compl.stderr:
-            console.info(compl.stderr.decode())
-        if compl.stdout:
-            console.info(compl.stdout.decode())
-
-    def attach(self) -> None:
-        datadir = self.client_conf.DATA_DIR
-        server_bin = os.environ.get("SCIE_ARGV0")
-        # if server_bin and Path(server_bin).exists():
-        try:
-            compl = subprocess.run(
-                f"{server_bin}",
-                env={
-                    "SCIE_BOOT": "process-compose-attach",
-                    "COMPOSE_SHELL": os.environ.get("SHELL"),
-                    "PIKESQUARES_VERSION": self.client_conf.version,
-                    "XDG_CONFIG_HOME": "/home/pk/.config",
-                },
-                shell=True,
-                cwd=datadir,
-                capture_output=True,
-                check=True,
-                user=self.client_conf.SERVER_RUN_AS_UID,
-            )
-        except subprocess.CalledProcessError as cperr:
-            console.warning(f"failed to attach to process-compose: {cperr.stderr.decode()}")
-            return
-
-        # if compl.returncode != 0:
-        #    print("unable to attach to process-compose")
-        # else:
-
         print(compl.args)
         print(compl)
 
@@ -261,11 +243,13 @@ class ProcessCompose(pydantic.BaseModel):
         print(compl.stderr.decode())
         print(compl.stdout.decode())
 
-    def attach_direct(self) -> None:
+    def attach(self) -> None:
+
         try:
             compl = subprocess.run(
                 args=[
-                  str(self.client_conf.PROCESS_COMPOSE_BIN),
+                  # str(self.client_conf.PROCESS_COMPOSE_BIN),
+                  str(Path(os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")) / "process-compose"),
                   "attach",
                   "--port",
                   str(self.api_port),
