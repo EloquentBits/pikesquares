@@ -148,9 +148,9 @@ class DeviceSection(Section):
 
         self.logging.add_logger(self.logging.loggers.stdio())
 
-        self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(device.log_file))
-        )
+        # self.logging.add_logger(
+        #    self.logging.loggers.file(filepath=str(device.log_file))
+        # )
 
         # self.run_fastrouter()
         # self.run_httpsrouter()
