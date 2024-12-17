@@ -94,7 +94,8 @@ class WsgiApp(BaseService):
             extra_data={"project_id": self.app_options.project_id}
         )
 
-    def prepare_service_config(self) -> dict:
+    @pydantic.computed_field
+    def default_config_json(self) -> dict:
         self.service_id = self.service_id
         self.prepare_virtual_hosts()
 

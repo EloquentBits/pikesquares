@@ -62,7 +62,7 @@ class BaseService(pydantic.BaseModel, ABC):
         super().__init__(**kwargs)
         service_config = self.load_config_from_tinydb()
         if not service_config or self.build_config_on_init:
-            self.config_json = self.prepare_service_config()
+            self.config_json = self.default_config_json
             self.save_config_to_filesystem()
             self.save_config_to_tinydb()
         else:
@@ -78,7 +78,8 @@ class BaseService(pydantic.BaseModel, ABC):
     def __str__(self):
         return self.handler_name
 
-    def prepare_service_config(self) -> dict:
+    @pydantic.computed_field
+    def default_config_json(self) -> dict:
         section = self.config_section_class(self)
         config_json = json.loads(
             section.as_configuration().format(

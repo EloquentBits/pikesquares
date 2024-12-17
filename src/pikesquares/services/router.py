@@ -76,7 +76,8 @@ class BaseRouter(BaseService):
             extra_data={"address": self.address}
         )
 
-    def prepare_service_config(self) -> dict:
+    @pydantic.computed_field
+    def default_config_json(self) -> dict:
         section = self.config_section_class(self, self.plugins)
         config_json = json.loads(
                 section.as_configuration().format(

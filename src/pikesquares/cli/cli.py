@@ -287,6 +287,7 @@ def main(
     print(vars(ctx))
 
     context = services.init_app(ctx.ensure_object(dict))
+    context["cli-style"] = console.custom_style_dope
 
     # and not all([
     #    Path(process_compose_dir),
@@ -312,7 +313,7 @@ def main(
 
     # console.debug(client_conf.model_dump())
 
-    build_configs = True if ctx.invoked_subcommand == "up" else False
+    build_configs = ctx.invoked_subcommand == "bootstrap"
     register_device(
         context,
         Device,
@@ -366,11 +367,8 @@ def main(
         build_config_on_init=build_configs,
     )
 
-    http_router = services.get(context, DefaultHttpRouter)
-    https_router = services.get(context, DefaultHttpsRouter)
-
-    # if ctx.invoked_subcommand == "bootstrap":
-    #    return
+    # http_router = services.get(context, DefaultHttpRouter)
+    # https_router = services.get(context, DefaultHttpsRouter)
 
     if ctx.invoked_subcommand == "apps":
         return
@@ -387,19 +385,19 @@ def main(
         pc_api_port,
     )
 
-    if ctx.invoked_subcommand == "down":
+    if ctx.invoked_subcommand == "up":
+        pc = services.get(context, process_compose.ProcessCompose)
+        try:
+            pc.ping()
+        except process_compose.PCAPIUnavailableError:
+            if ctx.invoked_subcommand == "up":
+                launch_pc(pc, device)
+        except process_compose.PCDeviceUnavailableError:
+            pass  # device.up()
+            console.info("-- PCDeviceUnavailableError --")
+            sandbox_project.ping()
+    elif ctx.invoked_subcommand in ["down", "bootstrap"]:
         return
-
-    pc = services.get(context, process_compose.ProcessCompose)
-    try:
-        pc.ping()
-    except process_compose.PCAPIUnavailableError:
-        if ctx.invoked_subcommand == "up":
-            launch_pc(pc, device)
-    except process_compose.PCDeviceUnavailableError:
-        pass  # device.up()
-        console.info("-- PCDeviceUnavailableError --")
-        sandbox_project.ping()
 
     """
     for svc in services.get_pings(context):
@@ -439,7 +437,6 @@ def main(
     #    )
     # services.register_factory(context, Arbiter, get_arbiter)
     # obj["device-handler"] = device_handler
-    context["cli-style"] = console.custom_style_dope
 
     # console.info(device_handler.svc_model.model_dump())
     # getattr(
