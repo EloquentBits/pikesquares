@@ -62,13 +62,12 @@ class ProcessCompose(pydantic.BaseModel):
         try:
             url = f"http://127.0.0.1:{self.api_port}/processes"
             response = requests.get(url, timeout=5)
-            print(f"ping process-compose api: {response.status_code}")
+            # print(f"ping process-compose api: {response.status_code}")
             try:
-                print(response.json())
+                js = response.json()
             except ValueError:
-                print("not json. skipping")
+                console.warning(f"process-compose proceses API did not return valid json. {response=}")
                 return False
-            js = response.json()
             try:
                 device_process = \
                         next(filter(lambda p: p.get("name") == "Device", js.get("data", {})))

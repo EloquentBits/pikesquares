@@ -15,7 +15,7 @@ import sentry_sdk
 from pikesquares import __version__, __app_name__
 from pikesquares import conf
 from pikesquares.presets import Section
-from pikesquares import read_stats
+#from pikesquares import read_stats
 from pikesquares.cli.console import console
 
 
@@ -186,7 +186,7 @@ class BaseService(pydantic.BaseModel, ABC):
         read stats socket
         """
         if self.stats_address.exists() and self.stats_address.is_socket():
-            return "running" if read_stats(str(self.stats_address)) else "stopped"
+            return "running" if self.read_stats(str(self.stats_address)) else "stopped"
 
     def startup_log(self, show_config_start_marker: str, show_config_end_marker: str) -> Tuple[List, List]:
         """
@@ -279,7 +279,7 @@ class BaseService(pydantic.BaseModel, ABC):
 
         js = ""
         sfamily, addr, host = unix_addr(self.stats_address)
-        print(f"{sfamily=} {addr=} {host=}")
+        console.info(f"{sfamily=} {str(addr)=} {host=}")
 
         try:
             s = None

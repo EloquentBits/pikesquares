@@ -33,7 +33,9 @@ class Router(pydantic.BaseModel):
 
     @pydantic.computed_field
     def subscription_server_key(self) -> str:
-        return f"{self.app_name}.pikesquares.dev:{self.subscription_server_port}"
+        # return f"{self.app_name}.pikesquares.dev:{self.subscription_server_port}"
+        print("subscription_server_key")
+        return f"{self.app_name}.pikesquares.dev"
 
     @pydantic.computed_field
     def subscription_server_protocol(self) -> str:

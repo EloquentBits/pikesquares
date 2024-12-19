@@ -30,6 +30,9 @@ from pikesquares.services.router import (
     register_router,
 )
 from pikesquares.services import process_compose
+from pikesquares.services.data import (
+    RouterStats,
+)
 # from ..services.router import *
 # from ..services.app import *
 
@@ -156,8 +159,28 @@ def info(
 
     client_conf = services.get(context, ClientConfig)
 
-    console.info(f"{client_conf.DATA_DIR=}")
-    console.info(f"{client_conf.VIRTUAL_ENV=}")
+    console.info(f"data_dir={str(client_conf.DATA_DIR)}")
+    console.info(f"virtualenv={str(client_conf.DATA_DIR)}")
+
+    pc = services.get(context, process_compose.ProcessCompose)
+    try:
+        pc.ping_api()
+        console.success("🚀 PikeSquares Server is running.")
+    except (process_compose.PCAPIUnavailableError,
+            process_compose.PCDeviceUnavailableError):
+        console.warning("PikeSquares Server is not running.")
+        # raise typer.Exit() from None
+
+    http_router = services.get(context, DefaultHttpRouter)
+    stats = http_router.read_stats()
+    http_router_stats = RouterStats(**stats)
+    console.info(http_router_stats.model_dump())
+
+    # https_router = services.get(context, DefaultHttpsRouter)
+    # https_router_stats = RouterStats(https_router.read_stats())
+    # console.info(https_router_stats.model_dump())
+
+
 
 
 @app.command(
@@ -278,13 +301,14 @@ def main(
         console.error("Unable to read the pikesquares version")
         raise typer.Abort()
 
-    for key, value in os.environ.items():
-        if key.startswith(("PIKESQUARES", "SCIE", "PEX", "VIRTUAL_ENV")):
-            print(f"{key}: {value}")
+    #for key, value in os.environ.items():
+    #    if key.startswith(("PIKESQUARES", "SCIE", "PEX", "VIRTUAL_ENV")):
+    #        print(f"{key}: {value}")
 
-    print(f"PikeSquares: v{pikesquares_version} About to execute command: {ctx.invoked_subcommand}")
+    console.info(f"PikeSquares: v{pikesquares_version}")
+    console.info(f"About to execute command: {ctx.invoked_subcommand}")
     # context = services.init_context(ctx.ensure_object(dict))
-    print(vars(ctx))
+    # print(vars(ctx))
 
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
@@ -394,9 +418,9 @@ def main(
                 launch_pc(pc, device)
         except process_compose.PCDeviceUnavailableError:
             pass  # device.up()
-            console.info("-- PCDeviceUnavailableError --")
-            sandbox_project.ping()
-    elif ctx.invoked_subcommand in ["down", "bootstrap"]:
+            # console.info("-- PCDeviceUnavailableError --")
+            # sandbox_project.ping()
+    elif ctx.invoked_subcommand in set({"down", "bootstrap"}):
         return
 
     """
