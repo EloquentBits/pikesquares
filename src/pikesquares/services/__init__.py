@@ -8,6 +8,8 @@ from tinydb import TinyDB
 #from pikesquares.services.app import WsgiApp
 #from pikesquares.services.router import HttpRouter, HttpsRouter
 
+#from pikesquares.services.base import StatsReadError
+
 logger = logging.getLogger(__name__)
 
 

@@ -16,6 +16,7 @@ from pikesquares.conf import (
     ClientConfigError,
 )
 from pikesquares import services
+from pikesquares.services.base import StatsReadError
 from pikesquares.services.device import Device, register_device
 from pikesquares.services.project import (
     SandboxProject,
@@ -157,24 +158,27 @@ def info(
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
 
-    client_conf = services.get(context, ClientConfig)
+    # client_conf = services.get(context, ClientConfig)
+    # console.info(f"data_dir={str(client_conf.DATA_DIR)}")
+    # console.info(f"virtualenv={str(client_conf.DATA_DIR)}")
 
-    console.info(f"data_dir={str(client_conf.DATA_DIR)}")
-    console.info(f"virtualenv={str(client_conf.DATA_DIR)}")
-
-    pc = services.get(context, process_compose.ProcessCompose)
+    device = services.get(context, Device)
+    # pc = services.get(context, process_compose.ProcessCompose)
     try:
-        pc.ping_api()
-        console.success("🚀 PikeSquares Server is running.")
-    except (process_compose.PCAPIUnavailableError,
-            process_compose.PCDeviceUnavailableError):
+        # pc.ping_api()
+        if device.stats:
+            console.success("🚀 PikeSquares Server is running.")
+    except StatsReadError:
         console.warning("PikeSquares Server is not running.")
-        # raise typer.Exit() from None
+    # except (process_compose.PCAPIUnavailableError,
+    #        process_compose.PCDeviceUnavailableError):
+    #    console.warning("PikeSquares Server is not running.")
+    #    raise typer.Exit() from None
 
-    http_router = services.get(context, DefaultHttpRouter)
-    stats = http_router.read_stats()
-    http_router_stats = RouterStats(**stats)
-    console.info(http_router_stats.model_dump())
+    # http_router = services.get(context, DefaultHttpRouter)
+    # stats = http_router.read_stats()
+    # http_router_stats = RouterStats(**stats)
+    # console.info(http_router_stats.model_dump())
 
     # https_router = services.get(context, DefaultHttpsRouter)
     # https_router_stats = RouterStats(https_router.read_stats())
@@ -305,8 +309,8 @@ def main(
     #    if key.startswith(("PIKESQUARES", "SCIE", "PEX", "VIRTUAL_ENV")):
     #        print(f"{key}: {value}")
 
-    console.info(f"PikeSquares: v{pikesquares_version}")
-    console.info(f"About to execute command: {ctx.invoked_subcommand}")
+    # console.info(f"PikeSquares: v{pikesquares_version}")
+    # console.info(f"About to execute command: {ctx.invoked_subcommand}")
     # context = services.init_context(ctx.ensure_object(dict))
     # print(vars(ctx))
 

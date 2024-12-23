@@ -22,6 +22,7 @@ from pikesquares.presets import Section
 from pikesquares.presets.device import DeviceSection
 from pikesquares.services.base import BaseService
 from pikesquares.services import register_factory
+from pikesquares.services.data import DeviceStats
 from pikesquares.cli.console import console
 
 from .mixins.pki import DevicePKIMixin
@@ -41,8 +42,9 @@ class Device(BaseService, DevicePKIMixin):
             appsdir.mkdir(parents=True, exist_ok=True)
         return appsdir
 
-    def stats(self):
-        return self.read_stats()
+    @pydantic.computed_field
+    def stats(self) -> DeviceStats:
+        return DeviceStats(**self.read_stats())
 
     def up(self):
         self.setup_pki()

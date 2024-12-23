@@ -15,7 +15,6 @@ import sentry_sdk
 from pikesquares import __version__, __app_name__
 from pikesquares import conf
 from pikesquares.presets import Section
-#from pikesquares import read_stats
 from pikesquares.cli.console import console
 
 
@@ -279,7 +278,7 @@ class BaseService(pydantic.BaseModel, ABC):
 
         js = ""
         sfamily, addr, host = unix_addr(self.stats_address)
-        console.info(f"{sfamily=} {str(addr)=} {host=}")
+        # console.info(f"{sfamily=} {str(addr)=} {host=}")
 
         try:
             s = None
