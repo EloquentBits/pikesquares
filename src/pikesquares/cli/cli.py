@@ -158,9 +158,9 @@ def info(
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
 
-    # client_conf = services.get(context, ClientConfig)
+    client_conf = services.get(context, ClientConfig)
     # console.info(f"data_dir={str(client_conf.DATA_DIR)}")
-    # console.info(f"virtualenv={str(client_conf.DATA_DIR)}")
+    console.info(f"virtualenv={str(client_conf.VIRTUAL_ENV)}")
 
     device = services.get(context, Device)
     # pc = services.get(context, process_compose.ProcessCompose)
