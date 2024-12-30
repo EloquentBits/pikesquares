@@ -110,10 +110,9 @@ class ProcessCompose(pydantic.BaseModel):
         datadir = self.client_conf.DATA_DIR
         server_bin = os.environ.get("SCIE_ARGV0")
         # if server_bin and Path(server_bin).exists():
-        compose_shell = os.environ.get("SHELL")
         cmd_env = {
             "SCIE_BOOT": "process-compose-up",
-            "COMPOSE_SHELL": "/bin/zsh", # compose_shell,
+            "COMPOSE_SHELL": os.environ.get("SHELL"),
             "PIKESQUARES_VERSION": self.client_conf.version,
             #"PIKESQUARES_UWSGI_BIN": str(self.client_conf.UWSGI_BIN),
         }
