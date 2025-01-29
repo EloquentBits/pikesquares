@@ -40,11 +40,11 @@ class WsgiApp(BaseService):
 
     @pydantic.computed_field
     def service_config(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / f"{self.app_options.project_id}" / "apps" / f"{self.service_id}.json"
+        return Path(self.conf.config_dir) / f"{self.app_options.project_id}" / "apps" / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def touch_reload_file(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / f"{self.app_options.project_id}" / "apps" / f"{self.service_id}.json"
+        return Path(self.conf.config_dir) / f"{self.app_options.project_id}" / "apps" / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def socket_address(self) -> str:
@@ -52,7 +52,7 @@ class WsgiApp(BaseService):
 
     @pydantic.computed_field
     def subscription_notify_socket(self) -> Path:
-        return Path(self.conf.RUN_DIR) / f"{self.service_id}-subscription-notify.sock"
+        return Path(self.conf.run_dir) / f"{self.service_id}-subscription-notify.sock"
 
     def ping(self) -> None:
         print("== WsgiApp.ping ==")
@@ -161,12 +161,12 @@ def register_wsgi_app(
     context,
     app_class,
     service_id,
-    client_conf,
+    conf,
     db,
     ):
     def app_factory():
         kwargs = {
-            "conf": client_conf,
+            "conf": conf,
             "db": db,
             "service_id": service_id,
         }

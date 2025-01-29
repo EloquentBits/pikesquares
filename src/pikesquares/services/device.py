@@ -17,7 +17,7 @@ from tinydb import TinyDB, Query
 
 # from uwsgiconf import uwsgi
 
-from pikesquares.conf import ClientConfig
+from pikesquares.conf import AppConfig
 from pikesquares.presets import Section
 from pikesquares.presets.device import DeviceSection
 from pikesquares.services.base import BaseService
@@ -37,7 +37,7 @@ class Device(BaseService, DevicePKIMixin):
 
     @pydantic.computed_field
     def apps_dir(self) -> Path:
-        appsdir = Path(self.conf.CONFIG_DIR) / "projects"
+        appsdir = Path(self.conf.config_dir) / "projects"
         if appsdir and not appsdir.exists():
             appsdir.mkdir(parents=True, exist_ok=True)
         return appsdir
@@ -86,7 +86,7 @@ class Device(BaseService, DevicePKIMixin):
         # res = device_config.main_process.actions.fifo_write(target, command)
 
     def sync_db_with_filesystem(self):
-        config_dir = self.conf.CONFIG_DIR
+        config_dir = self.conf.config_dir
         if not self.db.table("projects").all():
             for proj_config in (config_dir / "projects").glob("project_*.json"):
                 for app_config in (config_dir / proj_config.stem / "apps").glob("*.json"):
@@ -110,7 +110,7 @@ class Device(BaseService, DevicePKIMixin):
         self.db.drop_table("apps")
 
     def delete_configs(self):
-        config_dir = self.conf.CONFIG_DIR
+        config_dir = self.conf.config_dir
         for proj_config in (config_dir / "projects").glob("project_*.json"):
             for app_config in (config_dir / proj_config.stem / "apps").glob("*.json"):
                 console.info(f"deleting {app_config.name}")
@@ -128,17 +128,17 @@ class Device(BaseService, DevicePKIMixin):
             console.info(f"found router config. deleting {router_config.name}")
             router_config.unlink()
 
-        for logfile in self.conf.LOG_DIR.glob("*.log"):
+        for logfile in self.conf.log_dir.glob("*.log"):
             logfile.unlink()
 
     def uninstall(self, dry_run: bool = False):
         for user_dir in [
-            self.conf.DATA_DIR,
-            self.conf.CONFIG_DIR,
-            self.conf.RUN_DIR,
-            self.conf.LOG_DIR,
-            self.conf.PLUGINS_DIR,
-            self.conf.PKI_DIR,
+            self.conf.data_dir,
+            self.conf.config_dir,
+            self.conf.run_dir,
+            self.conf.log_dir,
+            #self.conf.PLUGINS_DIR,
+            self.conf.pki_dir,
         ]:
             if not dry_run:
                 try:
@@ -151,13 +151,13 @@ class Device(BaseService, DevicePKIMixin):
 def register_device(
     context: dict,
     device_class: Device,
-    client_conf: ClientConfig,
+    conf: AppConfig,
     db: TinyDB,
     build_config_on_init: bool | None,
     ) -> None:
     def device_factory():
         data = {
-            "conf": client_conf,
+            "conf": conf,
             "db": db,
             "service_id": "device",
             "build_config_on_init": build_config_on_init,

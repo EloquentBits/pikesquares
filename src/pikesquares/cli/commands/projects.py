@@ -127,7 +127,7 @@ def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
 
     status = get_service_status(f"{project_id}-emperor", conf)
 
-    project_log_file = Path(f"{conf.LOG_DIR}/{project_id}.log")
+    project_log_file = Path(f"{conf.log_dir}/{project_id}.log")
     if project_log_file.exists() and project_log_file.is_file():
         console.pager(
             project_log_file.read_text(),

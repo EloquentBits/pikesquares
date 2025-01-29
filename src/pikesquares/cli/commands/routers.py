@@ -199,7 +199,7 @@ def list_(
         routers_out.append({
             'name': router.get('name'),
             'status': get_service_status(
-                Path(conf.RUN_DIR) / router.get('service_id') + "-stats.sock",
+                Path(conf.run_dir) / router.get('service_id') + "-stats.sock",
             ) or "Unknown",
             'id': router.get('service_id')
         })
@@ -246,10 +246,10 @@ def delete(
     conf = obj.get("conf")
 
     def get_router(addr):
-        with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+        with TinyDB(f"{Path(conf.data_dir) / 'device-db.json'}") as db:
             return db.table('routers').get(Query().address == addr)
 
-    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+    with TinyDB(f"{Path(conf.data_dir) / 'device-db.json'}") as db:
         routers_db = db.table('routers')
         routers_all = routers_db.all()
         if not len(routers_all):

@@ -14,9 +14,6 @@ import errno
 # set_uwsgi_callbacks()
 # from uwsgiconf import uwsgi
 
-import platformdirs
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -42,11 +39,6 @@ ERRORS = {
 }
 
 APP_NAME = "pikesquares"
-
-DEFAULT_DATA_DIR = platformdirs.user_data_path(APP_NAME, ensure_exists=True)
-DEFAULT_LOG_DIR = platformdirs.user_log_path(APP_NAME, ensure_exists=True)
-DEFAULT_RUN_DIR = platformdirs.user_runtime_path(APP_NAME, ensure_exists=True)
-DEFAULT_CONFIG_DIR = platformdirs.user_config_path(APP_NAME, ensure_exists=True)
 
 
 def get_first_available_port(port: int = 5500) -> int:

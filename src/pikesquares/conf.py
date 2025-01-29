@@ -1,14 +1,12 @@
+import json
 import os
-import traceback
-# import json
+import pwd
 from pathlib import Path
 from typing import Any, Dict, Tuple, Type, Optional
 
 # from questionary import Style as QuestionaryStyle
 
-from pydantic import Field
-from tinydb import TinyDB, Query
-import platformdirs
+import pydantic
 
 from pydantic_settings import (
     BaseSettings,
@@ -18,6 +16,7 @@ from pydantic_settings import (
 # from pydantic.fields import FieldInfo
 
 from pikesquares.services import register_factory
+from pikesquares.cli.console import console
 
 """
 class JsonConfigSettingsSource(PydanticBaseSettingsSource):
@@ -85,41 +84,207 @@ class JsonConfigSettingsSource(InitSettingsSource, ConfigFileSourceMixin):
 
 """
 
+"""
 
-class ClientConfigError(Exception):
+      "RUN_AS_UID": 1000,
+      "RUN_AS_GID": 1000,
+      "SERVER_RUN_AS_UID": 1000,
+      "SERVER_RUN_AS_GID": 1000,
+      "DATA_DIR": "/home/pk/.local/share/pikesquares",
+      "RUN_DIR": "/run/user/1000/pikesquares",
+      "LOG_DIR": "/home/pk/.local/state/pikesquares/log",
+      "CONFIG_DIR": "/home/pk/.config/pikesquares",
+      "PLUGINS_DIR": "/home/pk/.local/share/pikesquares/plugins",
+      "PKI_DIR": "/home/pk/.local/share/pikesquares/pki",
+      "EASYRSA_DIR": "/home/pk/.cache/nce/ec0fdca46c07afef341e0e0eeb2bf0cfe74a11322b77163e5d764d28cb4eec89/easyrsa",
+      "EASYRSA_BIN": "/home/pk/.cache/nce/ec0fdca46c07afef341e0e0eeb2bf0cfe74a11322b77163e5d764d28cb4eec89/easyrsa/EasyRSA-3.2.1/easyrsa",
+      "SENTRY_DSN": "123",
+      "version": "0.0.38.dev0",
+      "UWSGI_BIN": "/home/pk/.cache/nce/fafc9b47294ed168f7c6d827aa0a4a6b2fccb523c47301a08d64ba14e283109a/uwsgi/uwsgi",
+      "VIRTUAL_ENV": "/home/pk/.cache/nce/ccdb0dbe69a24abb4f4ad5bc8bf57dd9fb683143ed6c6c4fbcd8ec8b0a15d651/bindings/venvs/0.0.38.dev0"
+
+"""
+
+
+class AppConfigError(Exception):
     pass
 
 
-class ClientConfig(BaseSettings):
+# directory layout
+# root
+#       data_dir = /var/lib/pikesquares
+#       run_dir = /var/run/pikesquares
+#       conf_dir = /etc/pikesquares
+#       log_dir = /var/log/pikesquares
 
-    model_config = SettingsConfigDict(env_prefix='PIKESQUARES_')
+def make_system_dir(
+        newdir: Path | str,
+        owner_uid: str = "root",
+        owner_gid: str = "pikesquares",
+    ) -> Path:
+    if isinstance(newdir, str):
+        newdir = Path(newdir)
 
-    version: str
-    RUN_AS_UID: int = Field(gt=0)
-    RUN_AS_GID: int = Field(gt=0)
-    SERVER_RUN_AS_UID: int = Field(gt=0)
-    SERVER_RUN_AS_GID: int = Field(gt=0)
-    APP_NAME: str = "pikesquares"
+    if newdir.exists():
+        return newdir
+
+    newdir.mkdir(mode=0o755, parents=True, exist_ok=True)
+    os.chown(
+        newdir,
+        pwd.getpwnam(owner_uid).pw_uid,
+        pwd.getpwnam(owner_gid).pw_gid
+    )
+    return newdir
+
+
+def get_lift_file_section(lift_file: Path, lift_file_key: str):
+
+    # {
+    #  "name": "easyrsa",
+    #  "size": 79917,
+    #  "hash": "ec0fdca46c07afef341e0e0eeb2bf0cfe74a11322b77163e5d764d28cb4eec89",
+    #  "type": "tar.gz",
+    #  "source": "fetch"
+    # },
+
+    # os_name = "macos" if os.uname().sysname.lower() == "darwin" else "linux"
+    # platform = f"{os_name}-{os.uname().machine}"
+
+    if not all([lift_file, Path(lift_file).exists()]):
+        console.warning("unable to locate scie lift file")
+        raise AppConfigError("unable to locate scie lift file") from None
+
+    with open(lift_file, encoding="utf-8") as lf:
+        lift_json = json.loads(lf.read())
+        lift_files = lift_json["scie"]["lift"]["files"]
+        return next(filter(lambda x: x.get("key") == lift_file_key, lift_files))
+
+
+class AppConfig(BaseSettings):
+
+    model_config = SettingsConfigDict(
+        env_prefix="PIKESQUARES_",
+        env_file=".env",
+        extra="ignore",
+    )
+
+    app_name: str = pydantic.Field(default="pikesquares")
+    VERSION: str = pydantic.Field()
+    server_run_as_uid: str = pydantic.Field(default="root")
+    server_run_as_gid: str = pydantic.Field(default="root")
 
     # DEBUG: bool = False
-    DATA_DIR: Path
-    RUN_DIR: Path
-    LOG_DIR: Path
-    CONFIG_DIR: Path
-    PLUGINS_DIR: Path
-
     # PROCESS_COMPOSE_BIN: Path
-    UWSGI_BIN: Path
+    uwsgi_bin: pydantic.FilePath = pydantic.Field()
 
-    VIRTUAL_ENV: Path | None = None
-    EASYRSA_DIR: Path | None = None
-    EASYRSA_BIN: Path | None = None
+    data_dir: pydantic.DirectoryPath = pydantic.Field(
+            default=Path("/var/lib/pikesquares"),
+            alias="PIKESQUARES_DATA_DIR"
+    )
+
+    log_dir: pydantic.DirectoryPath = pydantic.Field(
+            default=Path("/var/log/pikesquares"),
+            alias="PIKESQUARES_LOG_DIR"
+    )
+
+    config_dir: pydantic.DirectoryPath = pydantic.Field(
+            default=Path("/etc/pikesquares"),
+            alias="PIKESQUARES_CONFIG_DIR"
+    )
+
+    run_dir: pydantic.DirectoryPath = pydantic.Field(
+            default=Path("/var/run/pikesquares"),
+            alias="PIKESQUARES_RUN_DIR"
+    )
+
+    SCIE_BASE: pydantic.DirectoryPath = pydantic.Field()
+    SCIE_LIFT_FILE: pydantic.FilePath = pydantic.Field()
+    EASYRSA_DIR: pydantic.DirectoryPath = pydantic.Field()
+    DNSMASQ_BIN: pydantic.FilePath = pydantic.Field()
+    CADDY_BIN: pydantic.FilePath = pydantic.Field()
+    PROCESS_COMPOSE_DIR: pydantic.DirectoryPath = pydantic.Field()
+    PROCESS_COMPOSE_CONFIG: pydantic.FilePath = pydantic.Field()
+    PC_PORT_NUM: int = 9555
+
+    VIRTUAL_ENV: pydantic.DirectoryPath = pydantic.Field()
+
+    # EASYRSA_DIR: Path | None = None
+    # EASYRSA_BIN: Path | None = None
     # CADDY_DIR: Optional[str] = None
-    PKI_DIR: Path | None = None
     # CLI_STYLE: QuestionaryStyle
-    SENTRY_ENABLED: bool = False
-    SENTRY_DSN: str | None = None
-    DAEMONIZE: bool = False
+    sentry_enabled: bool = False
+    sentry_dsn: str | None = None
+    daemonize: bool = False
+
+    @pydantic.computed_field
+    @property
+    def default_app_run_as_uid(self) -> int:
+        return pwd.getpwnam("pikesquares").pw_uid
+
+    @pydantic.computed_field
+    @property
+    def default_app_run_as_gid(self) -> int:
+        return pwd.getpwnam("pikesquares").pw_gid
+
+    #@pydantic.computed_field
+    #@property
+    #def data_dir(self) -> Path:
+        #return make_system_dir("/var/lib/pikesquares")
+
+    #@pydantic.computed_field
+    #@property
+    #def log_dir(self) -> Path:
+    #    return make_system_dir("/var/log/pikesquares")
+
+    #@pydantic.computed_field
+    #@property
+    #def config_dir(self) -> Path:
+    #    return make_system_dir("/etc/pikesquares")
+
+    #@pydantic.computed_field
+    #@property
+    #def run_dir(self) -> Path:
+    #    return make_system_dir("/var/run/pikesquares")
+
+    @pydantic.computed_field
+    @property
+    def pki_dir(self) -> Path:
+        return make_system_dir(self.data_dir / "pki")
+
+    @pydantic.computed_field
+    @property
+    def plugins_dir(self) -> Path:
+        return make_system_dir(self.data_dir / "plugins")
+
+    @pydantic.computed_field
+    @property
+    def lift_file(self) -> Path | None:
+        if self.SCIE_LIFT_FILE:
+            return self.SCIE_LIFT_FILE
+        elif self.SCIE_BASE:
+            return self.SCIE_BASE / "lift.json"
+
+    @pydantic.computed_field
+    @property
+    def easyrsa_bin(self) -> Path:
+        easyrsa_relative_path = "easyrsa/EasyRSA-3.2.1/easyrsa"
+        if self.EASYRSA_DIR:
+            bin_path = self.EASYRSA_DIR / easyrsa_relative_path
+            if not bin_path.exists():
+                raise AppConfigError(f"unable to locate the EasyRSA script at {bin_path}") from None
+        else:
+            if not self.lift_file:
+                raise AppConfigError("unable to locate scie lift file") from None
+
+            file_section = get_lift_file_section(self.lift_file, "easyrsa")
+            if self.SCIE_BASE and not self.SCIE_BASE.exists():
+                raise AppConfigError("unable to locate SCIE_BASE directory") from None
+
+            bin_path = self.SCIE_BASE / file_section.get("hash") / easyrsa_relative_path
+            print(bin_path)
+            if not bin_path.exists():
+                raise AppConfigError(f"unable to locate the EasyRSA script at {bin_path}") from None
+        return bin_path
 
     # @classmethod
     # def settings_customise_sources(
@@ -138,59 +303,27 @@ class ClientConfig(BaseSettings):
     #    )
 
 
-def get_conf_mapping(db: TinyDB, pikesquares_version: str) -> dict:
-    try:
-        configs = db.table("configs").get(Query().version == pikesquares_version) or {}
-        if not configs:
-            current_uid = os.getuid()
-            current_gid = os.getgid()
-            apps_run_as_uid = None
-            apps_run_as_gid = None
-            configs["RUN_AS_UID"] = apps_run_as_uid or current_uid
-            configs["RUN_AS_GID"] = apps_run_as_gid or current_gid
+def register_app_conf(
+        context: dict,
+        override_settings: dict,
+    ):
+    def conf_factory() -> AppConfig:
+        #configs = db.table("configs").get(
+        #    Query().version == pikesquares_version
+        #) or {}
+        #if not configs:
+        #    configs["server_run_as_uid"] = server_run_as_uid
+        #    configs["server_run_as_gid"] = server_run_as_gid
+        #    configs["version"] = str(pikesquares_version)
+        #    configs["uwsgi_bin"] = os.environ.get("PIKESQUARES_UWSGI_BIN")
+            # if "PIKESQUARES_VIRTUAL_ENV" in os.environ:
+            #    venv_dir = os.environ.get("PIKESQUARES_VIRTUAL_ENV")
+            #    if venv_dir and Path(venv_dir).exists() and Path(venv_dir).is_dir():
+            #        configs["VIRTUAL_ENV"] = venv_dir
+            #db.table("configs").insert(configs)
 
-            server_run_as_uid = current_uid
-            server_run_as_gid = current_gid
-            new_server_run_as_uid = None
-            new_server_run_as_gid = None
-            configs["SERVER_RUN_AS_UID"] = new_server_run_as_uid or server_run_as_uid
-            configs["SERVER_RUN_AS_GID"] = new_server_run_as_gid or server_run_as_gid
+        # raise AppConfigError() from None
+        print(override_settings)
+        return AppConfig(**override_settings)
 
-            app_name = "pikesquares"
-            data_dir = platformdirs.user_data_path(app_name, ensure_exists=True)
-            configs["DATA_DIR"] = str(data_dir)
-            configs["RUN_DIR"] = str(platformdirs.user_runtime_path(app_name, ensure_exists=True))
-            configs["LOG_DIR"] = str(platformdirs.user_log_path(app_name, ensure_exists=True))
-            configs["CONFIG_DIR"] = str(platformdirs.user_config_path(app_name, ensure_exists=True))
-
-            plugins_dir = data_dir / "plugins"
-            plugins_dir.mkdir(mode=0o777, parents=True, exist_ok=True)
-            configs["PLUGINS_DIR"] = str(plugins_dir)
-
-            configs["PKI_DIR"] = str(data_dir / "pki")
-
-            configs["EASYRSA_DIR"] = os.environ.get("PIKESQUARES_EASYRSA_DIR")
-            configs["EASYRSA_BIN"] = os.environ.get("PIKESQUARES_EASYRSA_BIN")
-            configs["SENTRY_DSN"] = os.environ.get("PIKESQUARES_SENTRY_DSN")
-            configs["version"] = str(pikesquares_version)
-
-            configs["UWSGI_BIN"] = os.environ.get("PIKESQUARES_UWSGI_BIN")
-            # configs["PROCESS_COMPOSE_BIN"] = os.environ.get("PIKESQUARES_PROCESS_COMPOSE_BIN")
-
-            if "PIKESQUARES_VIRTUAL_ENV" in os.environ:
-                venv_dir = os.environ.get("PIKESQUARES_VIRTUAL_ENV")
-                if venv_dir and Path(venv_dir).exists() and Path(venv_dir).is_dir():
-                    configs["VIRTUAL_ENV"] = venv_dir
-            db.table("configs").insert(configs)
-        return configs
-    except Exception:
-        traceback.print_exc()
-        raise ClientConfigError() from None
-
-
-def register_app_conf(context: dict, pikesquares_version: str, db: TinyDB):
-    def conf_factory() -> ClientConfig:
-        return ClientConfig(
-            **get_conf_mapping(db, pikesquares_version)
-        )
-    register_factory(context, ClientConfig, conf_factory)
+    register_factory(context, AppConfig, conf_factory)

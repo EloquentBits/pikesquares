@@ -17,7 +17,7 @@ class DeviceSection(Section):
         )
         self.device = device
         # env = project.env
-        self.set_runtime_dir(str(device.conf.RUN_DIR))
+        self.set_runtime_dir(str(device.conf.run_dir))
 
         # base
         # = %(main_plugin)s,
@@ -42,13 +42,13 @@ class DeviceSection(Section):
         # plugins = ["python312", "logfile"]
         # self.set_plugins_params(
         #     plugins=plugins,
-        #     search_dirs=[str(device.conf.PLUGINS_DIR),],
+        #     search_dirs=[str(device.conf.plugins_dir),],
         #     autoload=True,
         # required=True,
         # )
         self.print_plugins()
 
-        self.set_plugins_params(search_dirs=device.conf.PLUGINS_DIR)
+        self.set_plugins_params(search_dirs=device.conf.plugins_dir)
 
         self.master_process.set_basic_params(
             enable=True,
@@ -71,8 +71,8 @@ class DeviceSection(Section):
         #   )
 
         self.main_process.set_owner_params(
-            uid=device.conf.SERVER_RUN_AS_UID,
-            gid=device.conf.SERVER_RUN_AS_GID,
+            uid=device.conf.server_run_as_uid,
+            gid=device.conf.server_run_as_gid,
         )
         self.main_process.set_naming_params(
             prefix="[[ PikeSquares App ]] ",
@@ -82,17 +82,17 @@ class DeviceSection(Section):
         )
         # self.set_placeholder("vconf_run_dir", self.runtime_dir)
         self.main_process.set_pid_file(
-            # str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve())
+            # str((Path(conf.run_dir) / f"{self.service_id}.pid").resolve())
             device.pid_file,
         )
-        if device.conf.DAEMONIZE:
+        if device.conf.daemonize:
             self.main_process.daemonize(log_into=str(device.log_file))
 
         self.main_process.set_basic_params(
             touch_reload=str(device.touch_reload_file),
         )
 
-        self.main_process.change_dir(to=device.conf.DATA_DIR)
+        self.main_process.change_dir(to=device.conf.data_dir)
 
         self.networking.register_socket(
             self.networking.sockets.default(str(device.socket_address))

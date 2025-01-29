@@ -6,7 +6,8 @@ from typing import NewType
 from tinydb import Query, TinyDB
 import pydantic
 
-from pikesquares import conf, get_first_available_port
+from pikesquares import get_first_available_port
+from pikesquares.conf import AppConfig
 from pikesquares.presets import Section
 from pikesquares.services.base import BaseService
 from pikesquares.services import register_factory
@@ -29,11 +30,11 @@ class BaseRouter(BaseService):
 
     @pydantic.computed_field
     def service_config(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
+        return Path(self.conf.config_dir) / "projects" / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def touch_reload_file(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
+        return Path(self.conf.config_dir) / "projects" / f"{self.service_id}.json"
 
     def zmq_connect(self):
         pass
@@ -166,7 +167,7 @@ class HttpsRouter(BaseRouter):
 
     def stop(self):
         if self.service_config is None:
-            self.service_config = Path(self.conf.CONFIG_DIR) /  "routers" / f"{self.service_id}.json"
+            self.service_config = Path(self.conf.config_dir) /  "routers" / f"{self.service_id}.json"
         if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
             shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
     """
@@ -201,7 +202,7 @@ class HttpRouter(BaseRouter):
 
     def stop(self):
         if self.service_config is None:
-            self.service_config = Path(self.conf.CONFIG_DIR) /  "routers" / f"{self.service_id}.json"
+            self.service_config = Path(self.conf.config_dir) /  "routers" / f"{self.service_id}.json"
         if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
             shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
     """
@@ -218,7 +219,7 @@ def register_router(
         plugins: list,
         router_type: DefaultHttpsRouter | DefaultHttpRouter,
         router_class: HttpsRouter | HttpRouter,
-        client_conf: conf.ClientConfig,
+        conf: AppConfig,
         db: TinyDB,
         build_config_on_init: bool | None,
     ) -> None:
@@ -228,7 +229,7 @@ def register_router(
         kwargs = {
             "address": address,
             "subscription_server_address": subscription_server_address,
-            "conf": client_conf,
+            "conf": conf,
             "db": db,
             "plugins": plugins,
             "service_id": f"default_{router_alias}_router",

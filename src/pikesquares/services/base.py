@@ -33,7 +33,7 @@ class StatsReadError(Exception):
 
 class BaseService(pydantic.BaseModel, ABC):
 
-    conf: conf.ClientConfig
+    conf: conf.AppConfig
     db: TinyDB
     service_id: str
     # cache:str = "pikesquares-settings"
@@ -90,7 +90,6 @@ class BaseService(pydantic.BaseModel, ABC):
         return config_json
 
     def save_config_to_filesystem(self) -> None:
-        console.warning(f"flushing {self.service_id} service config to db")
         self.service_config.parent.mkdir(
             parents=True, exist_ok=True
         )
@@ -110,11 +109,7 @@ class BaseService(pydantic.BaseModel, ABC):
                 "service_id": self.service_id,
                 "service_config": self.config_json,
         }
-        print(f"{self.tiny_db_table=}")
-
         common_data.update(extra_data)
-        print(common_data)
-
         self.db.table(
                 self.tiny_db_table
         ).upsert(
@@ -214,55 +209,55 @@ class BaseService(pydantic.BaseModel, ABC):
 
     @pydantic.computed_field
     def service_config(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / f"{self.service_id}.json"
+        return Path(self.conf.config_dir) / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def stats_address(self) -> Path:
-        return Path(self.conf.RUN_DIR) / f"{self.service_id}-stats.sock"
+        return Path(self.conf.run_dir) / f"{self.service_id}-stats.sock"
 
     @pydantic.computed_field
     def socket_address(self) -> Path:
-        return Path(self.conf.RUN_DIR) / f"{self.service_id}.sock"
+        return Path(self.conf.run_dir) / f"{self.service_id}.sock"
 
     @pydantic.computed_field
     def notify_socket(self) -> Path:
-        return Path(self.conf.RUN_DIR) / f"{self.service_id}-notify.sock"
+        return Path(self.conf.run_dir) / f"{self.service_id}-notify.sock"
 
     @pydantic.computed_field
     def touch_reload_file(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / f"{self.service_id}.json"
+        return Path(self.conf.config_dir) / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def pid_file(self) -> Path:
-        return Path(self.conf.RUN_DIR) / f"{self.service_id}.pid"
+        return Path(self.conf.run_dir) / f"{self.service_id}.pid"
 
     @pydantic.computed_field
     def log_file(self) -> Path:
-        return Path(self.conf.LOG_DIR) / f"{self.service_id}.log"
+        return Path(self.conf.log_dir) / f"{self.service_id}.log"
 
     @pydantic.computed_field
     def fifo_file(self) -> Path:
-        return Path(self.conf.RUN_DIR) / f"{self.service_id}-master-fifo"
+        return Path(self.conf.run_dir) / f"{self.service_id}-master-fifo"
 
     # @pydantic.computed_field
     # def device_db_path(self) -> Path:
-    #    return Path(self.conf.DATA_DIR) / "device-db.json"
+    #    return Path(self.conf.data_dir) / "device-db.json"
 
     @pydantic.computed_field
     def certificate(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "issued" / f"{self.cert_name}.crt"
+        return Path(self.conf.pki_dir) / "issued" / f"{self.cert_name}.crt"
 
     @pydantic.computed_field
     def certificate_key(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "private" / f"{self.cert_name}.key"
+        return Path(self.conf.pki_dir) / "private" / f"{self.cert_name}.key"
 
     @pydantic.computed_field
     def certificate_ca(self) -> Path:
-        return Path(self.conf.PKI_DIR) / "ca.crt"
+        return Path(self.conf.pki_dir) / "ca.crt"
 
     @pydantic.computed_field
     def spooler_dir(self) -> Path:
-        spdir = Path(self.conf.DATA_DIR) / "spooler"
+        spdir = Path(self.conf.data_dir) / "spooler"
         if not spdir.exists():
             spdir.mkdir(parents=True, exist_ok=True)
         return spdir
@@ -288,22 +283,22 @@ class BaseService(pydantic.BaseModel, ABC):
                 data = s.recv(4096)
                 if len(data) < 1:
                     break
-                js += data.decode('utf8', 'ignore')
+                js += data.decode("utf8", "ignore")
             if s:
                 s.close()
         except ConnectionRefusedError as e:
-            print('connection refused')
+            raise StatsReadError(f"Connection refused @ {(self.stats_address)}")
         except FileNotFoundError as e:
-            print(f"socket @ {addr} not available")
+            raise StatsReadError(f"Socket not available @ {(self.stats_address)}")
         except IOError as e:
             if e.errno != errno.EINTR:
-                #uwsgi.log(f"socket @ {addr} not available")
+                # uwsgi.log(f"socket @ {addr} not available")
                 pass
         except Exception:
-            print(traceback.format_exc())
+            console.error(traceback.format_exc())
         else:
             try:
                 return json.loads(js)
             except json.JSONDecodeError:
-                print(traceback.format_exc())
-                print(js)
+                console.error(traceback.format_exc())
+                console.info(js)

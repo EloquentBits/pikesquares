@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import overload, NewType
 from collections.abc import Callable
 
@@ -225,7 +226,7 @@ def init_app(cli_context):
     return context
 
 
-def register_db(context, db_path):
+def register_db(context, db_path: Path):
     def tinydb_factory():
         with TinyDB(db_path) as db:
             yield db

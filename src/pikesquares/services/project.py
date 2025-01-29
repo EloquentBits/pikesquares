@@ -8,7 +8,7 @@ from tinydb import Query, TinyDB
 import pydantic
 # from uwsgiconf import uwsgi
 
-from pikesquares import conf
+from pikesquares.conf import AppConfig
 from pikesquares.services.base import BaseService
 from pikesquares.services import register_factory
 from pikesquares.presets import Section
@@ -25,15 +25,15 @@ class Project(BaseService):
 
     @pydantic.computed_field
     def service_config(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
+        return Path(self.conf.config_dir) / "projects" / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def touch_reload_file(self) -> Path:
-        return Path(self.conf.CONFIG_DIR) / "projects" / f"{self.service_id}.json"
+        return Path(self.conf.config_dir) / "projects" / f"{self.service_id}.json"
 
     @pydantic.computed_field
     def apps_dir(self) -> str:
-        apps_dir = Path(self.conf.CONFIG_DIR) / f"{self.service_id}" / "apps"
+        apps_dir = Path(self.conf.config_dir) / f"{self.service_id}" / "apps"
         if apps_dir and not apps_dir.exists():
             apps_dir.mkdir(parents=True, exist_ok=True)
         return str(apps_dir.resolve())
@@ -87,7 +87,7 @@ class Project(BaseService):
         #    f"{self.service_id}.json".encode(),
         # ])
         # if self.service_config is None:
-        #    self.service_config = Path(self.conf.CONFIG_DIR) / \
+        #    self.service_config = Path(self.conf.config_dir) / \
         #            f"{self.parent_service_id}" / "apps" \
         #            / f"{self.service_id}.json"
 
@@ -96,7 +96,7 @@ class Project(BaseService):
 
 
 # def get_project(conf: ClientConfig, project_id):
-#    with TinyDB(f"{Path(conf.DATA_DIR) / 'device-db.json'}") as db:
+#    with TinyDB(f"{Path(conf.data_dir) / 'device-db.json'}") as db:
 #        return db.table('projects').\
 #            get(Query().service_id == project_id)
 
@@ -104,10 +104,16 @@ class Project(BaseService):
 SandboxProject = NewType("SandboxProject", Project)
 
 
-def register_project(context, project_class, service_id, client_conf: conf.ClientConfig, db: TinyDB):
+def register_project(
+    context,
+    project_class,
+    service_id,
+    conf: AppConfig,
+    db: TinyDB
+    ):
     def project_factory():
         kwargs = {
-            "conf": client_conf,
+            "conf": conf,
             "db": db,
             "service_id": service_id,
         }
@@ -119,13 +125,13 @@ def register_sandbox_project(
     context: dict,
     proj_type: SandboxProject,
     proj_class: Project,
-    client_conf: conf.ClientConfig,
+    conf: AppConfig,
     db: TinyDB,
     build_config_on_init: bool | None,
     ) -> None:
     def sandbox_project_factory():
         return proj_class(
-            conf=client_conf,
+            conf=conf,
             db=db,
             service_id="project_sandbox",
             build_config_on_init=build_config_on_init,

@@ -23,7 +23,8 @@ from .validators import (
     NameValidator,
 )
 
-from pikesquares import conf, services, get_first_available_port
+from pikesquares.conf import AppConfig
+from pikesquares import services, get_first_available_port
 from pikesquares.services.project import SandboxProject, Project
 from pikesquares.services.app import WsgiApp
 from pikesquares.services.router import (
@@ -219,7 +220,7 @@ def provision_base_dir(custom_style):
 
 def get_project(
         db: TinyDB,
-        client_conf: conf.ClientConfig,
+        conf: AppConfig,
         project: str | None,
         sandbox_project: SandboxProject,
         custom_style: questionary.Style,
@@ -255,7 +256,7 @@ def get_project(
             get(Query().name == project_name).get("service_id")
 
     return Project(
-            conf=client_conf,
+            conf=conf,
             db=db,
             service_id=project_id,
             name=project_name,
@@ -264,7 +265,7 @@ def get_project(
 
 def get_router(
         db: TinyDB,
-        client_conf: conf.ClientConfig,
+        conf: AppConfig,
         app_name: str,
         custom_style: questionary.Style,
         ) -> HttpRouter | HttpsRouter | None:
@@ -331,7 +332,7 @@ def get_router(
     if router_class:
         return router_class(
                 address=router_address,
-                conf=client_conf,
+                conf=conf,
                 db=db,
                 service_id=router_id,
         )
@@ -385,7 +386,7 @@ def create(
     context = ctx.ensure_object(dict)
 
     db = services.get(context, TinyDB)
-    client_conf = services.get(context, conf.ClientConfig)
+    conf = services.get(context, AppConfig)
 
     custom_style = context.get("cli-style")
     app_options = {}
@@ -414,7 +415,7 @@ def create(
 
     # app_project = get_project(
     #    db,
-    #    client_conf,
+    #    conf,
     #    project,
     #    services.get(context, SandboxProject),
     #    custom_style,
@@ -488,7 +489,7 @@ def create(
     pip_req_file_path = base_dir / pip_req_file
     if pip_req_file_path.exists():
         # with console.status(f"creating a Python venv and installing dependencies", spinner="earth"):
-        venv_dir = client_conf.DATA_DIR / "venvs" / service_id
+        venv_dir = conf.data_dir / "venvs" / service_id
         create_venv(venv_dir)
         console.info("Created a Python virtualenv")
         if not venv_dir.exists():
@@ -500,7 +501,7 @@ def create(
         venv_pip_install(venv_dir, service_id, "--progress-bar", "off", *app_reqs, find_links=None)
 
     # Router
-    # router = get_router(db, client_conf, app_name, custom_style)
+    # router = get_router(db, conf, app_name, custom_style)
 
     default_https_router = services.get(context, DefaultHttpsRouter)
     default_http_router = services.get(context, DefaultHttpRouter)
@@ -529,7 +530,7 @@ def create(
     app_options["workers"] = 3
 
     wsgi_app = WsgiApp(
-            conf=services.get(context, conf.ClientConfig),
+            conf=services.get(context, AppConfig),
             db=db,
             service_id=service_id,
             name=app_name,

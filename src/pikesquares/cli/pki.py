@@ -14,7 +14,7 @@ def ensure_pki(conf):
             str(Path(conf.EASYRSA_DIR) / "EasyRSA-3.1.7" / "easyrsa"),
             "init-pki",
         ],
-        cwd=conf.DATA_DIR,
+        cwd=conf.data_dir,
         capture_output=True,
         check=True,
     )
@@ -42,7 +42,7 @@ def ensure_build_ca(conf):
             "--no-pass",
             "build-ca",
         ],
-        cwd=conf.DATA_DIR,
+        cwd=conf.data_dir,
         capture_output=True,
         check=True,
     )
@@ -78,7 +78,7 @@ def ensure_csr(conf):
             "gen-req",
             CERT_NAME,
         ],
-        cwd=conf.DATA_DIR,
+        cwd=conf.data_dir,
         capture_output=True,
         check=True,
     )
@@ -108,7 +108,7 @@ def ensure_sign_req(conf):
             "server",
             "_wildcard_pikesquares_dev",
         ],
-        cwd=conf.DATA_DIR,
+        cwd=conf.data_dir,
         capture_output=True,
         check=True,
     )

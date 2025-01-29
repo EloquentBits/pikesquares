@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 from pikesquares.cli.console import console
@@ -17,71 +18,68 @@ class DevicePKIMixin:
             console.success("Wildcard certificate created.")
 
     def ensure_pki(self):
-        if self.conf.PKI_DIR.exists():
-            return
+        try:
+            if self.conf.pki_dir.exists() and next(self.conf.pki_dir.iterdir()):
+                return
+        except StopIteration:
+            # need to remove the pki root dir. it should be empty.
+            # easyrsa does not have --no-input option and will try to recreate the directory.
+            os.rmdir(self.conf.pki_dir)
 
         compl = subprocess.run(
             args=[
-                str(self.conf.EASYRSA_BIN),
+                str(self.conf.easyrsa_bin),
                 "init-pki",
             ],
-            cwd=str(self.conf.DATA_DIR),
+            cwd=str(self.conf.data_dir),
             capture_output=True,
             check=True,
         )
         if compl.returncode != 0:
             print(f"unable to initialize PKI")
         else:
-            print(f"Initialized PKI @ {self.conf.PKI_DIR}")
+            print(f"Initialized PKI @ {self.conf.pki_dir}")
         # set(compl.stdout.decode().split("\n"))
 
     def ensure_build_ca(self):
-        if not self.conf.PKI_DIR.exists():
-            print(f"Unable to create CA. PKI was not located.")
-            return
-
-        if (self.conf.PKI_DIR / "ca.crt").exists():
+        if (self.conf.pki_dir / "ca.crt").exists():
             return
 
         print("building CA")
 
         compl = subprocess.run(
             args=[
-                str(self.conf.EASYRSA_BIN),
+                str(self.conf.easyrsa_bin),
                 '--req-cn=PikeSquares Proxy',
                 "--batch",
                 "--no-pass",
                 "build-ca",
             ],
-            cwd=self.conf.DATA_DIR,
+            cwd=self.conf.data_dir,
             capture_output=True,
             check=True,
         )
         if compl.returncode != 0:
-            print(f"unable to build CA")
+            print("unable to build CA")
             print(compl.stderr.decode())
-        elif (self.conf.PKI_DIR / "ca.crt").exists():
-            print(f"CA cert created")
+        elif (self.conf.pki_dir / "ca.crt").exists():
+            print("CA cert created")
             print(compl.stdout.decode())
 
         # set(compl.stdout.decode().split("\n"))
 
     def ensure_csr(self):
-        if not self.conf.PKI_DIR.exists():
-            print("Unable to create a CSR. PKI was not located.")
-            return
-
-        if not (self.conf.PKI_DIR / "ca.crt").exists():
+        if not (self.conf.pki_dir / "ca.crt").exists():
             print("Unable to create a CSR. CA was not located.")
             return
 
-        if (self.conf.PKI_DIR / "reqs" / f"{self.cert_name}.req").exists():
+        if (self.conf.pki_dir / "reqs" / f"{self.cert_name}.req").exists():
             return
 
         print("generating CSR")
         compl = subprocess.run(
             args=[
-                str(self.conf.EASYRSA_BIN),
+                str(self.conf.easyrsa_bin),
                 "--batch",
                 "--no-pass",
                 "--silent",
@@ -89,47 +87,47 @@ class DevicePKIMixin:
                 "gen-req",
                 self.cert_name,
             ],
-            cwd=self.conf.DATA_DIR,
+            cwd=self.conf.data_dir,
             capture_output=True,
             check=True,
         )
         if compl.returncode != 0:
             print(f"unable to generate csr")
             print(compl.stderr.decode())
-        else:  # (Path(conf.PKI_DIR) / "ca.crt").exists():
+        else:  # (Path(conf.pki_dir) / "ca.crt").exists():
             print(f"csr created")
             print(compl.stdout.decode())
 
     def ensure_sign_req(self):
         if not all(
             [
-                self.conf.PKI_DIR.exists(),
-                (self.conf.PKI_DIR / "ca.crt").exists(),
-                (self.conf.PKI_DIR / "reqs" / f"{self.cert_name}.req").exists(),
+                self.conf.pki_dir.exists(),
+                (self.conf.pki_dir / "ca.crt").exists(),
+                (self.conf.pki_dir / "reqs" / f"{self.cert_name}.req").exists(),
             ]
         ):
             return
 
-        if (self.conf.PKI_DIR / "issued" / f"{self.cert_name}.crt").exists():
+        if (self.conf.pki_dir / "issued" / f"{self.cert_name}.crt").exists():
             return
 
         print("Signing CSR")
         compl = subprocess.run(
             args=[
-                str(self.conf.EASYRSA_BIN),
+                str(self.conf.easyrsa_bin),
                 "--batch",
                 "--no-pass",
                 "sign-req",
                 "server",
                 self.cert_name,
             ],
-            cwd=self.conf.DATA_DIR,
+            cwd=self.conf.data_dir,
             capture_output=True,
             check=True,
         )
         if compl.returncode != 0:
             print(f"unable to sign csr")
             print(compl.stderr.decode())
-        else:  # (Path(conf.PKI_DIR) / "ca.crt").exists():
+        else:  # (Path(conf.pki_dir) / "ca.crt").exists():
             print(f"csr signed")
             print(compl.stdout.decode())

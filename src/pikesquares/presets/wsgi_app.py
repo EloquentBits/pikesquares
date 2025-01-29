@@ -162,7 +162,7 @@ class WsgiAppSection(BaseWsgiAppSection):
         super().__init__(
             name="uwsgi",
             embedded_plugins=embedded_plugins,
-            owner=f"{svc_model.conf.RUN_AS_UID}:{svc_model.conf.RUN_AS_GID}",
+            owner=f"{svc_model.conf.default_app_run_as_uid}:{svc_model.conf.default_app_run_as_gid}",
             touch_reload=svc_model.touch_reload_file,
             **app_options.model_dump(),
         )
@@ -184,14 +184,14 @@ class WsgiAppSection(BaseWsgiAppSection):
             fifo_file=str(svc_model.fifo_file)
         )
 
-        self.set_plugins_params(search_dirs=svc_model.conf.PLUGINS_DIR)
+        self.set_plugins_params(search_dirs=svc_model.conf.plugins_dir)
 
         # if app.wsgi_module and callable(app.wsgi_module):
         #    wsgi_callable = wsgi_module.__name__
 
         # self.set_plugins_params(
         #    plugins="python311",
-        #    search_dirs=[conf.PLUGINS_DIR],
+        #    search_dirs=[conf.plugins_dir],
         # )
 
         # :param module:
@@ -213,13 +213,13 @@ class WsgiAppSection(BaseWsgiAppSection):
             self.networking.sockets.default(svc_model.socket_address)
         )
 
-        # socket_path = str(Path(self.conf.RUN_DIR) / f"{service_id}.sock")
+        # socket_path = str(Path(self.conf.run_dir) / f"{service_id}.sock")
 
         # self.networking.register_socket(
         #    self.networking.sockets.default(socket_path)
         # )
         # self.subscriptions.subscribe(
-        #     server=str(Path(self.conf.RUN_DIR) / f"SubscriptionServer-{project_id}.sock"),
+        #     server=str(Path(self.conf.run_dir) / f"SubscriptionServer-{project_id}.sock"),
         #     address=app_name,
         #     key=service_id
         # )

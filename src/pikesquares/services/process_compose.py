@@ -5,7 +5,8 @@ from pathlib import Path
 import pydantic
 import requests
 
-from pikesquares import conf, is_port_open
+from pikesquares import is_port_open
+from pikesquares.conf import AppConfig
 from pikesquares.services.base import ServiceUnavailableError
 from pikesquares.services import register_factory
 from pikesquares.cli.console import console
@@ -40,7 +41,7 @@ class ProcessComposeProcessStats(pydantic.BaseModel):
 class ProcessCompose(pydantic.BaseModel):
     api_port: int
     # uwsgi_bin: Path
-    client_conf: conf.ClientConfig
+    conf: AppConfig
     # db: TinyDB
 
     # model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
@@ -107,35 +108,134 @@ class ProcessCompose(pydantic.BaseModel):
         pass
 
     def up(self) -> None:
-        datadir = self.client_conf.DATA_DIR
+        #  str(self.conf.PROCESS_COMPOSE_BIN),
+        #  "up",
+        #  "--config",
+        #  str(datadir / "process-compose.yml"),
+        #  "--detached",
+        #  "--port",
+        #  str(self.api_port),
+        # ],
+
+        pc_config = self.conf.PROCESS_COMPOSE_CONFIG
+        pc_bin = self.conf.PROCESS_COMPOSE_DIR / "process-compose"
+
+        cmd_env = {
+            "COMPOSE_SHELL": os.environ.get("SHELL"),
+            "PIKESQUARES_VERSION": self.conf.VERSION,
+            "PIKESQUARES_UWSGI_BIN": str(self.conf.uwsgi_bin),
+            "PIKESQUARES_VIRTUAL_ENV": str(self.conf.VIRTUAL_ENV),
+            "PIKESQUARES_CADDY_BIN": str(self.conf.CADDY_BIN),
+            "PIKESQUARES_DNSMASQ_BIN": str(self.conf.DNSMASQ_BIN),
+            "PIKESQUARES_SCIE_BASE": str(self.conf.SCIE_BASE),
+            "PIKESQUARES_SCIE_LIFT_FILE": str(self.conf.SCIE_LIFT_FILE),
+            "PIKESQUARES_EASYRSA_DIR": str(self.conf.EASYRSA_DIR),
+            "PIKESQUARES_PROCESS_COMPOSE_DIR": str(self.conf.PROCESS_COMPOSE_DIR),
+        }
+        cmd_args = [
+            str(pc_bin),
+            "up",
+            "--config",
+            str(pc_config),
+            "--log-file",
+            str(self.conf.log_dir / "process-compose.log"),
+            "--detached",
+            "--hide-disabled",
+            "--port",
+            str(self.conf.PC_PORT_NUM),
+        ]
+        print("calling process-compose up")
+        print(cmd_env)
+        print(cmd_args)
+
+        try:
+            popen = subprocess.Popen(
+                cmd_args,
+                env=cmd_env,
+                cwd=self.conf.data_dir,
+                stdout=subprocess.PIPE,
+                bufsize=1,
+                universal_newlines=True,
+                user=self.conf.server_run_as_uid,
+                group=self.conf.server_run_as_gid,
+            )
+            for line in iter(popen.stdout.readline, ""):
+                print(line, end="")
+
+            popen.stdout.close()
+            popen.wait()
+
+        except subprocess.CalledProcessError as cperr:
+            console.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
+            print(f"failed to launch process-compose: {cperr.stderr.decode()}")
+            return
+        """
+
+        args_str = f"{str(self.conf.PROCESS_COMPOSE_BIN)} up --config {pc_config} --detached --port {str(self.api_port)}"
+
+        print(f"{args_str=}")
+
+        try:
+            compl = subprocess.run(
+                args_str,
+                env={
+                    "DATA_DIR": str(self.conf.data_dir),
+                    "LOG_DIR": str(self.conf.log_dir),
+                    "SERVER_EXE": os.environ.get("SCIE_ARGV0"),
+                    "COMPOSE_SHELL": "/usr/bin/sh",
+                    "PIKESQUARES_VERSION": self.conf.version,
+
+                },
+                shell=True,
+                cwd=self.conf.data_dir,
+                capture_output=True,
+                check=True,
+                user=self.conf.server_run_as_uid,
+            )
+        except subprocess.CalledProcessError as cperr:
+            print(f"failed to launch process-compose: {cperr.stderr.decode()}")
+            return
+
+        if compl.returncode != 0:
+            print("unable to launch process-compose")
+        else:
+            print("launched process-compose")
+
+        print(compl.stderr.decode())
+        print(compl.stdout.decode())
+        """
+
+    def up_scie(self) -> None:
         server_bin = os.environ.get("SCIE_ARGV0")
         # if server_bin and Path(server_bin).exists():
+        console.info(f"{os.environ.get("SHELL")=}")
+        console.info(f"{self.conf.uwsgi_bin=}")
         cmd_env = {
             "SCIE_BOOT": "process-compose-up",
             "COMPOSE_SHELL": os.environ.get("SHELL"),
-            "PIKESQUARES_VERSION": self.client_conf.version,
-            #"PIKESQUARES_UWSGI_BIN": str(self.client_conf.UWSGI_BIN),
+            "PIKESQUARES_VERSION": self.conf.VERSION,
+            "PIKESQUARES_UWSGI_BIN": str(self.conf.uwsgi_bin),
         }
         try:
-            #compl = subprocess.run(
+            # compl = subprocess.run(
             #    server_bin,
             #    env=cmd_env,
             #    shell=True,
             #    cwd=datadir,
             #    capture_output=True,
             #    check=True,
-            #    user=self.client_conf.SERVER_RUN_AS_UID,
-            #)
-
-            console.info("running subprocess.Popen")
+            #    user=self.conf.server_run_as_uid,
+            # )
 
             popen = subprocess.Popen(
                 server_bin,
                 env=cmd_env,
-                cwd=datadir,
+                cwd=self.conf.data_dir,
                 stdout=subprocess.PIPE,
                 bufsize=1,
                 universal_newlines=True,
+                user=0,
+                group=0,
             )
             for line in iter(popen.stdout.readline, ""):
                 print(line, end="")
@@ -154,8 +254,9 @@ class ProcessCompose(pydantic.BaseModel):
         # if compl.stdout:
         #    console.info(compl.stdout.decode())
 
+
     def down(self) -> None:
-        datadir = self.client_conf.DATA_DIR
+        datadir = self.conf.data_dir
         server_bin = os.environ.get("SCIE_ARGV0")
         # if server_bin and Path(server_bin).exists():
         compose_shell = os.environ.get("SHELL")
@@ -163,7 +264,7 @@ class ProcessCompose(pydantic.BaseModel):
         cmd_env = {
             "SCIE_BOOT": "process-compose-down",
             "COMPOSE_SHELL": compose_shell,
-            "PIKESQUARES_VERSION": self.client_conf.version,
+            "PIKESQUARES_VERSION": self.conf.VERSION,
         }
         console.info(cmd_env)
         console.info(f"{server_bin=}")
@@ -175,7 +276,7 @@ class ProcessCompose(pydantic.BaseModel):
                 cwd=datadir,
                 capture_output=True,
                 check=True,
-                user=self.client_conf.SERVER_RUN_AS_UID,
+                user=self.conf.server_run_as_uid,
             )
         except subprocess.CalledProcessError as cperr:
             console.warning(f"failed to shut down process-compose: {cperr.stderr.decode()}")
@@ -187,18 +288,12 @@ class ProcessCompose(pydantic.BaseModel):
         print(compl)
 
         if compl.stderr:
-            console.info(compl.stderr.decode())
+            console.warning(compl.stderr.decode())
         if compl.stdout:
             console.info(compl.stdout.decode())
 
     def up_direct(self) -> None:
-        datadir = self.client_conf.DATA_DIR
-        logdir = self.client_conf.LOG_DIR
-        server_bin = os.environ.get("SCIE_ARGV0")
-        # if server_bin and Path(server_bin).exists():
-        print(f"{server_bin=}")
-        # args = [
-        #  str(self.client_conf.PROCESS_COMPOSE_BIN),
+        #  str(self.conf.PROCESS_COMPOSE_BIN),
         #  "up",
         #  "--config",
         #  str(datadir / "process-compose.yml"),
@@ -206,9 +301,9 @@ class ProcessCompose(pydantic.BaseModel):
         #  "--port",
         #  str(self.api_port),
         # ],
-        pc_config = str(datadir / "process-compose.yml")
+        pc_config = str(self.conf.data_dir / "process-compose.yml")
 
-        args_str = f"{str(self.client_conf.PROCESS_COMPOSE_BIN)} up --config {pc_config} --detached --port {str(self.api_port)}"
+        args_str = f"{str(self.conf.PROCESS_COMPOSE_BIN)} up --config {pc_config} --detached --port {str(self.api_port)}"
 
         print(f"{args_str=}")
 
@@ -216,18 +311,18 @@ class ProcessCompose(pydantic.BaseModel):
             compl = subprocess.run(
                 args_str,
                 env={
-                    "DATA_DIR": str(datadir),
-                    "LOG_DIR": str(logdir),
-                    "SERVER_EXE": server_bin,
+                    "DATA_DIR": str(self.conf.data_dir),
+                    "LOG_DIR": str(self.conf.log_dir),
+                    "SERVER_EXE": os.environ.get("SCIE_ARGV0"),
                     "COMPOSE_SHELL": "/usr/bin/sh",
-                    "PIKESQUARES_VERSION": self.client_conf.version,
+                    "PIKESQUARES_VERSION": self.conf.VERSION,
 
                 },
                 shell=True,
-                cwd=datadir,
+                cwd=self.conf.data_dir,
                 capture_output=True,
                 check=True,
-                user=self.client_conf.SERVER_RUN_AS_UID,
+                user=self.conf.server_run_as_uid,
             )
         except subprocess.CalledProcessError as cperr:
             print(f"failed to launch process-compose: {cperr.stderr.decode()}")
@@ -246,13 +341,13 @@ class ProcessCompose(pydantic.BaseModel):
         try:
             compl = subprocess.run(
                 args=[
-                  # str(self.client_conf.PROCESS_COMPOSE_BIN),
+                  # str(self.conf.PROCESS_COMPOSE_BIN),
                   str(Path(os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")) / "process-compose"),
                   "attach",
                   "--port",
                   str(self.api_port),
                 ],
-                cwd=str(self.client_conf.DATA_DIR),
+                cwd=str(self.conf.data_dir),
                 capture_output=True,
                 check=True,
             )
@@ -269,7 +364,7 @@ class ProcessCompose(pydantic.BaseModel):
 
 def register_process_compose(
         context,
-        client_conf: conf.ClientConfig,
+        conf: AppConfig,
         # uwsgi_bin: Path,
         api_port: int = 9555,
     ):
@@ -277,7 +372,7 @@ def register_process_compose(
     def process_compose_factory():
         return ProcessCompose(
             api_port=api_port,
-            client_conf=client_conf,
+            conf=conf,
             # uwsgi_bin=uwsgi_bin,
             # db=get(context, TinyDB),
         )

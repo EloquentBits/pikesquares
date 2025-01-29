@@ -1,4 +1,5 @@
 import os
+import traceback
 import time
 from typing import Optional, Annotated, NewType
 from pathlib import Path
@@ -9,11 +10,11 @@ from tinydb import TinyDB, Query
 from cuid import cuid
 #from circus import Arbiter, get_arbiter
 
-from pikesquares import DEFAULT_DATA_DIR
 from pikesquares.conf import (
-    ClientConfig,
+    AppConfig,
+    AppConfigError,
     register_app_conf,
-    ClientConfigError,
+    make_system_dir,
 )
 from pikesquares import services
 from pikesquares.services.base import StatsReadError
@@ -158,9 +159,9 @@ def info(
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
 
-    client_conf = services.get(context, ClientConfig)
-    # console.info(f"data_dir={str(client_conf.DATA_DIR)}")
-    console.info(f"virtualenv={str(client_conf.VIRTUAL_ENV)}")
+    conf = services.get(context, AppConfig)
+    # console.info(f"data_dir={str(conf.DATA_DIR)}")
+    console.info(f"virtualenv={str(conf.VIRTUAL_ENV)}")
 
     device = services.get(context, Device)
     # pc = services.get(context, process_compose.ProcessCompose)
@@ -197,7 +198,7 @@ def up(
     """Launch PikeSquares Server"""
 
     # context = ctx.ensure_object(dict)
-    # client_conf = services.get(context, conf.ClientConfig)
+    # conf = services.get(context, conf.AppConfig)
     # nothing to do here
     pass
 
@@ -288,6 +289,20 @@ def main(
         callback=_version_callback,
         is_eager=True,
     ),
+    data_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--data-dir",
+            "-d",
+            exists=True,
+            # file_okay=True,
+            dir_okay=False,
+            writable=False,
+            readable=True,
+            resolve_path=True,
+            help="Data directory",
+        )
+    ] = None,
     # build_configs: Optional[bool] = typer.Option(
     #    False,
     #    help="Write configs to disk"
@@ -300,17 +315,28 @@ def main(
     """
     Welcome to Pike Squares. Building blocks for your apps.
     """
-    pikesquares_version = os.environ.get("PIKESQUARES_VERSION")
+
+    console.info(f"About to execute command: {ctx.invoked_subcommand}")
+    for key, value in os.environ.items():
+        if key.startswith(("PIKESQUARES", "SCIE", "PEX", "VIRTUAL_ENV")):
+            print(f"{key}: {value}")
+
+
+    if ctx.invoked_subcommand in ["bootstrap", "up"] and os.getuid() != 0:
+        console.info("please restart server as root user.")
+        raise typer.Exit()
+
+    pikesquares_version = version or os.environ.get("PIKESQUARES_VERSION")
     if not pikesquares_version:
         console.error("Unable to read the pikesquares version")
-        raise typer.Abort()
+        raise typer.Exit(1)
 
-    #for key, value in os.environ.items():
-    #    if key.startswith(("PIKESQUARES", "SCIE", "PEX", "VIRTUAL_ENV")):
-    #        print(f"{key}: {value}")
+    scie_base = os.environ.get("PIKESQUARES_SCIE_BASE")
+    if not scie_base:
+        console.error("Unable to read the pikesquares scie base directory")
+        raise typer.Exit(1)
 
-    # console.info(f"PikeSquares: v{pikesquares_version}")
-    # console.info(f"About to execute command: {ctx.invoked_subcommand}")
+    console.info(f"PikeSquares: v{pikesquares_version}")
     # context = services.init_context(ctx.ensure_object(dict))
     # print(vars(ctx))
 
@@ -320,32 +346,50 @@ def main(
     # and not all([
     #    Path(process_compose_dir),
     #    Path(process_compose_dir).is_dir()]):
-    process_compose_dir = os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")
-    if not process_compose_dir:
-        console.error(f"unable to locate process-compose directory @ {process_compose_dir}")
-        raise typer.Abort()
+    #process_compose_dir = os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")
+    #if not process_compose_dir:
+    #    console.error(f"unable to locate process-compose directory @ {process_compose_dir}")
+    #    raise typer.Abort()
 
-    services.register_db(
-        context,
-        Path(os.environ.get("PIKESQUARES_DATA_DIR", DEFAULT_DATA_DIR)) / "device-db.json"
-    )
-    db = services.get(context, TinyDB)
+    data_dir = data_dir or Path(os.environ.get("PIKESUARES_DATA_DIR", "/var/lib/pikesquares"))
+    if not data_dir.exists():
+        data_dir = make_system_dir(data_dir)
+
+    #pikesquares_version
+    #server_run_as_uid
+    #server_run_as_gid
+
+    override_settings = {
+        "pikesquares_version": pikesquares_version,
+        "data_dir": data_dir,
+    }
 
     try:
-        register_app_conf(context, pikesquares_version, db)
-    except ClientConfigError:
+        register_app_conf(
+            context,
+            override_settings,
+        )
+    except AppConfigError:
+        console.error(traceback.format_exc())
         console.error(f"unable to load v{pikesquares_version} conf from {str(db_path)}")
         raise typer.Abort() from None
 
-    client_conf = services.get(context, ClientConfig)
+    conf = services.get(context, AppConfig)
 
-    # console.debug(client_conf.model_dump())
+    db_path = data_dir / "device-db.json"
+    services.register_db(
+        context,
+        db_path,
+    )
+    db = services.get(context, TinyDB)
+
+    # console.info(conf.model_dump())
 
     build_configs = ctx.invoked_subcommand == "bootstrap"
     register_device(
         context,
         Device,
-        client_conf,
+        conf,
         db,
         build_config_on_init=build_configs,
     )
@@ -355,7 +399,7 @@ def main(
         context,
         SandboxProject,
         Project,
-        client_conf,
+        conf,
         db,
         build_config_on_init=build_configs,
     )
@@ -366,8 +410,7 @@ def main(
     router_https_subscription_server_address = \
         f"127.0.0.1:{get_first_available_port(port=5600)}"
 
-    router_http_address = \
-        f"0.0.0.0:{str(get_first_available_port(port=8034))}"
+    router_http_address = "0.0.0.0:8034"
     router_http_subscription_server_address = \
         f"127.0.0.1:{get_first_available_port(port=5700)}"
 
@@ -379,7 +422,7 @@ def main(
         router_plugins,
         DefaultHttpsRouter,
         HttpsRouter,
-        client_conf,
+        conf,
         db,
         build_config_on_init=build_configs,
     )
@@ -390,7 +433,7 @@ def main(
         router_plugins,
         DefaultHttpRouter,
         HttpRouter,
-        client_conf,
+        conf,
         db,
         build_config_on_init=build_configs,
     )
@@ -408,7 +451,7 @@ def main(
 
     process_compose.register_process_compose(
         context,
-        client_conf,
+        conf,
         # Path(uwsgi_bin),
         pc_api_port,
     )

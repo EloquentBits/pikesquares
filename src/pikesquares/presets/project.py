@@ -12,7 +12,7 @@ class ProjectSection(Section):
         )
         self.project = project
 
-        self.set_runtime_dir(str(self.project.conf.RUN_DIR))
+        self.set_runtime_dir(str(self.project.conf.run_dir))
 
         plugins = [
             # "python312",
@@ -21,7 +21,7 @@ class ProjectSection(Section):
         ]
         self.set_plugins_params(
             plugins=plugins,
-            search_dirs=[self.project.conf.PLUGINS_DIR],
+            search_dirs=[self.project.conf.plugins_dir],
         )
         self.print_plugins()
 
@@ -34,13 +34,13 @@ class ProjectSection(Section):
             vacuum=True,
             touch_reload=str(self.project.touch_reload_file),
             # place here correct emperor wrapper
-            #binary_path=str((Path(self.conf.DATA_DIR) / ".venv/bin/uwsgi").resolve())
+            #binary_path=str((Path(self.conf.data_dir) / ".venv/bin/uwsgi").resolve())
             #binary_path=str((Path(self.project.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
 
         )
         self.main_process.set_owner_params(
-                uid=self.project.conf.RUN_AS_UID,
-                gid=self.project.conf.RUN_AS_GID
+                uid=self.project.conf.server_run_as_uid,
+                gid=self.project.conf.server_run_as_gid
         )
         self.main_process.set_naming_params(
             prefix=f"{self.project.name} {self.project.service_id} ",

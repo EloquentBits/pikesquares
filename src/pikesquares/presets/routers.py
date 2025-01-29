@@ -82,11 +82,11 @@ class HttpsRouterSection(Section):
         self.router = router
         self.plugins = plugins
 
-        self.set_runtime_dir(str(self.router.conf.RUN_DIR))
+        self.set_runtime_dir(str(self.router.conf.run_dir))
 
         self.set_plugins_params(
              plugins=self.plugins,
-             search_dirs=[self.router.conf.PLUGINS_DIR,],
+             search_dirs=[self.router.conf.plugins_dir,],
         )
         self.print_plugins()
 
@@ -101,8 +101,8 @@ class HttpsRouterSection(Section):
             touch_reload=str(self.router.touch_reload_file),
         )
         self.main_process.set_owner_params(
-            uid=self.router.conf.RUN_AS_UID,
-            gid=self.router.conf.RUN_AS_GID
+            uid=self.router.conf.default_app_run_as_uid,
+            gid=self.router.conf.default_app_run_as_gid,
         )
         self.main_process.set_naming_params(
             prefix=f"{self.router_name} {self.router.service_id} ",
@@ -207,12 +207,12 @@ class HttpRouterSection(Section):
         self.router = router
         self.plugins = plugins
 
-        self.set_runtime_dir(str(self.router.conf.RUN_DIR))
+        self.set_runtime_dir(str(self.router.conf.run_dir))
         router_cls = self.routing.routers.http
 
         self.set_plugins_params(
              plugins=self.plugins,
-             search_dirs=[router.conf.PLUGINS_DIR,],
+             search_dirs=[router.conf.plugins_dir,],
         )
         self.master_process.set_basic_params(enable=True)
         self.master_process.set_exit_events(reload=True)
@@ -222,8 +222,8 @@ class HttpRouterSection(Section):
             touch_reload=str(self.router.touch_reload_file),
         )
         self.main_process.set_owner_params(
-            uid=self.router.conf.RUN_AS_UID,
-            gid=self.router.conf.RUN_AS_GID
+            uid=self.router.conf.server_run_as_uid,
+            gid=self.router.conf.server_run_as_gid
         )
         self.main_process.set_naming_params(
             prefix=f"{self.router_name} {self.router.service_id} ",

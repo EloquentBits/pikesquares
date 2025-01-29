@@ -12,7 +12,9 @@ dependencies = [
     "cuid>=0.4",
     "gitpython>=3.1.43",
     "giturlparse>=0.12.0",
+    "gripcontrol>=4.2.0",
     "platformdirs>=4.3.6",
+    "plumbum>=1.9.0",
     "pydantic-settings>=2.6.1",
     "questionary>=2.0.1",
     "randomname>=0.2.1",
@@ -22,9 +24,9 @@ dependencies = [
     "tinydb>=4.8.2",
     "typer[all,rich]>=0.13.1",
     "uwsgiconf>=1.0.0",
-  #"uwsgi-tasks",
-  #"pyuwsgi",
-  #"pyuwsgi==2.0.28.post1",
+    #"uwsgi-tasks",
+    #"pyuwsgi",
+    #"pyuwsgi==2.0.28.post1",
 ]
 
 version = "0.8.0"
