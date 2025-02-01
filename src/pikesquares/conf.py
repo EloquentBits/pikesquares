@@ -1,8 +1,16 @@
 import json
 import os
 import pwd
+import grp
 from pathlib import Path
-from typing import Any, Dict, Tuple, Type, Optional
+from typing import (
+    # Any,
+    # Dict,
+    # Tuple,
+    # Type,
+    Optional,
+    Annotated,
+)
 
 # from questionary import Style as QuestionaryStyle
 
@@ -117,10 +125,22 @@ class AppConfigError(Exception):
 #       conf_dir = /etc/pikesquares
 #       log_dir = /var/log/pikesquares
 
+
+class SysDir(pydantic.BaseModel):
+
+    # path_to_dir: Path
+    path_to_dir: pydantic.DirectoryPath = pydantic.Field()
+    env_var: str
+    dir_mode: int = 0o775
+    owner_username: str = "root"
+    owner_groupname: str = "pikesquares"
+
+
 def make_system_dir(
         newdir: Path | str,
-        owner_uid: str = "root",
-        owner_gid: str = "pikesquares",
+        owner_username: str = "root",
+        owner_groupname: str = "pikesquares",
+        dir_mode: int = 0o775,
     ) -> Path:
     if isinstance(newdir, str):
         newdir = Path(newdir)
@@ -128,13 +148,36 @@ def make_system_dir(
     if newdir.exists():
         return newdir
 
-    newdir.mkdir(mode=0o755, parents=True, exist_ok=True)
-    os.chown(
-        newdir,
-        pwd.getpwnam(owner_uid).pw_uid,
-        pwd.getpwnam(owner_gid).pw_gid
-    )
-    return newdir
+    print(f"make_system_dir: mkdir {str(newdir)}")
+    newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
+
+    print(f"make_system_dir: chown {owner_username}:{owner_groupname}")
+    try:
+        owner_uid = pwd.getpwnam(owner_username)[2]
+    except KeyError:
+        raise AppConfigError(f"unable locate user: {owner_username}") from None
+
+    try:
+        owner_gid = grp.getgrnam(owner_groupname)[2]
+    except KeyError:
+        raise AppConfigError(f"unable locate user: {owner_groupname}") from None
+
+    os.chown(newdir, owner_uid, owner_gid)
+
+    # pwd.getpwnam(owner_uid).pw_uid,
+    # pwd.getpwnam(owner_gid).pw_gid
+
+
+def ensure_sysdir(dir_path, varname):
+    dir_path = dir_path or os.environ.get(f"PIKESQUARES_{varname}")
+    if not dir_path:
+        dir_path = make_system_dir(Path("/var/lib/pikesquares"))
+        print(f"new dir with default path: {dir_path}")
+        return dir_path 
+    elif not Path(dir_path).exists():
+        dir_path = make_system_dir(Path(dir_path))
+        print(f"new dir with a user provided path: {dir_path}")
+        return dir_path
 
 
 def get_lift_file_section(lift_file: Path, lift_file_key: str):
@@ -175,7 +218,6 @@ class AppConfig(BaseSettings):
 
     # DEBUG: bool = False
     # PROCESS_COMPOSE_BIN: Path
-    uwsgi_bin: pydantic.FilePath = pydantic.Field()
 
     data_dir: pydantic.DirectoryPath = pydantic.Field(
             default=Path("/var/lib/pikesquares"),
@@ -196,22 +238,25 @@ class AppConfig(BaseSettings):
             default=Path("/var/run/pikesquares"),
             alias="PIKESQUARES_RUN_DIR"
     )
+    UWSGI_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
-    SCIE_BASE: pydantic.DirectoryPath = pydantic.Field()
-    SCIE_LIFT_FILE: pydantic.FilePath = pydantic.Field()
-    EASYRSA_DIR: pydantic.DirectoryPath = pydantic.Field()
-    DNSMASQ_BIN: pydantic.FilePath = pydantic.Field()
-    CADDY_BIN: pydantic.FilePath = pydantic.Field()
-    PROCESS_COMPOSE_DIR: pydantic.DirectoryPath = pydantic.Field()
-    PROCESS_COMPOSE_CONFIG: pydantic.FilePath = pydantic.Field()
+    SCIE_BASE: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
+    SCIE_BINDINGS: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
+    SCIE_LIFT_FILE: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+
+    EASYRSA_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    DNSMASQ_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+
+    PROCESS_COMPOSE_DIR: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
+    PROCESS_COMPOSE_CONFIG: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+
     PC_PORT_NUM: int = 9555
 
-    VIRTUAL_ENV: pydantic.DirectoryPath = pydantic.Field()
-
-    # EASYRSA_DIR: Path | None = None
-    # EASYRSA_BIN: Path | None = None
+    VIRTUAL_ENV: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
     # CADDY_DIR: Optional[str] = None
     # CLI_STYLE: QuestionaryStyle
+
     sentry_enabled: bool = False
     sentry_dsn: str | None = None
     daemonize: bool = False
@@ -225,26 +270,6 @@ class AppConfig(BaseSettings):
     @property
     def default_app_run_as_gid(self) -> int:
         return pwd.getpwnam("pikesquares").pw_gid
-
-    #@pydantic.computed_field
-    #@property
-    #def data_dir(self) -> Path:
-        #return make_system_dir("/var/lib/pikesquares")
-
-    #@pydantic.computed_field
-    #@property
-    #def log_dir(self) -> Path:
-    #    return make_system_dir("/var/log/pikesquares")
-
-    #@pydantic.computed_field
-    #@property
-    #def config_dir(self) -> Path:
-    #    return make_system_dir("/etc/pikesquares")
-
-    #@pydantic.computed_field
-    #@property
-    #def run_dir(self) -> Path:
-    #    return make_system_dir("/var/run/pikesquares")
 
     @pydantic.computed_field
     @property
@@ -263,7 +288,7 @@ class AppConfig(BaseSettings):
             return self.SCIE_LIFT_FILE
         elif self.SCIE_BASE:
             return self.SCIE_BASE / "lift.json"
-
+    """
     @pydantic.computed_field
     @property
     def easyrsa_bin(self) -> Path:
@@ -285,6 +310,8 @@ class AppConfig(BaseSettings):
             if not bin_path.exists():
                 raise AppConfigError(f"unable to locate the EasyRSA script at {bin_path}") from None
         return bin_path
+
+    """
 
     # @classmethod
     # def settings_customise_sources(

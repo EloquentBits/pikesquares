@@ -123,13 +123,13 @@ class ProcessCompose(pydantic.BaseModel):
         cmd_env = {
             "COMPOSE_SHELL": os.environ.get("SHELL"),
             "PIKESQUARES_VERSION": self.conf.VERSION,
-            "PIKESQUARES_UWSGI_BIN": str(self.conf.uwsgi_bin),
+            "PIKESQUARES_UWSGI_BIN": str(self.conf.UWSGI_BIN),
             "PIKESQUARES_VIRTUAL_ENV": str(self.conf.VIRTUAL_ENV),
             "PIKESQUARES_CADDY_BIN": str(self.conf.CADDY_BIN),
             "PIKESQUARES_DNSMASQ_BIN": str(self.conf.DNSMASQ_BIN),
             "PIKESQUARES_SCIE_BASE": str(self.conf.SCIE_BASE),
             "PIKESQUARES_SCIE_LIFT_FILE": str(self.conf.SCIE_LIFT_FILE),
-            "PIKESQUARES_EASYRSA_DIR": str(self.conf.EASYRSA_DIR),
+            "PIKESQUARES_EASYRSA_BIN": str(self.conf.EASYRSA_BIN),
             "PIKESQUARES_PROCESS_COMPOSE_DIR": str(self.conf.PROCESS_COMPOSE_DIR),
         }
         cmd_args = [

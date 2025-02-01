@@ -10,10 +10,7 @@ def ensure_pki(conf):
         return
 
     compl = subprocess.run(
-        args=[
-            str(Path(conf.EASYRSA_DIR) / "EasyRSA-3.1.7" / "easyrsa"),
-            "init-pki",
-        ],
+        args=[str(conf.EASYRSA_BIN), "init-pki"],
         cwd=conf.data_dir,
         capture_output=True,
         check=True,
@@ -36,7 +33,7 @@ def ensure_build_ca(conf):
 
     compl = subprocess.run(
         args=[
-            str(Path(conf.EASYRSA_DIR) / "EasyRSA-3.1.7" / "easyrsa"),
+            str(conf.EASYRSA_BIN),
             '--req-cn=PikeSquares Proxy',
             "--batch",
             "--no-pass",
@@ -70,7 +67,7 @@ def ensure_csr(conf):
     console.info("generating CSR")
     compl = subprocess.run(
         args=[
-            str(Path(conf.EASYRSA_DIR) / "EasyRSA-3.1.7" / "easyrsa"),
+            str(conf.EASYRSA_BIN),
             "--batch",
             "--no-pass",
             "--silent",
@@ -101,7 +98,7 @@ def ensure_sign_req(conf):
     console.info("Signing CSR")
     compl = subprocess.run(
         args=[
-            str(Path(conf.EASYRSA_DIR) / "EasyRSA-3.1.7" / "easyrsa"),
+            str(conf.EASYRSA_BIN),
             "--batch",
             "--no-pass",
             "sign-req",

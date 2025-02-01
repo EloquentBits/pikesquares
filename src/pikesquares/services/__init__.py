@@ -228,6 +228,7 @@ def init_app(cli_context):
 
 def register_db(context, db_path: Path):
     def tinydb_factory():
+        # FIXME make sure pikesquares user can read and write
         with TinyDB(db_path) as db:
             yield db
     register_factory(context, TinyDB, tinydb_factory)

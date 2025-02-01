@@ -28,7 +28,7 @@ class DevicePKIMixin:
 
         compl = subprocess.run(
             args=[
-                str(self.conf.easyrsa_bin),
+                str(self.conf.EASYRSA_BIN),
                 "init-pki",
             ],
             cwd=str(self.conf.data_dir),
@@ -49,7 +49,7 @@ class DevicePKIMixin:
 
         compl = subprocess.run(
             args=[
-                str(self.conf.easyrsa_bin),
+                str(self.conf.EASYRSA_BIN),
                 '--req-cn=PikeSquares Proxy',
                 "--batch",
                 "--no-pass",
@@ -79,7 +79,7 @@ class DevicePKIMixin:
         print("generating CSR")
         compl = subprocess.run(
             args=[
-                str(self.conf.easyrsa_bin),
+                str(self.conf.EASYRSA_BIN),
                 "--batch",
                 "--no-pass",
                 "--silent",
@@ -114,7 +114,7 @@ class DevicePKIMixin:
         print("Signing CSR")
         compl = subprocess.run(
             args=[
-                str(self.conf.easyrsa_bin),
+                str(self.conf.EASYRSA_BIN),
                 "--batch",
                 "--no-pass",
                 "sign-req",

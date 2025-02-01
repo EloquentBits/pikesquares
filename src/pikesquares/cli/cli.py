@@ -8,12 +8,15 @@ import typer
 import questionary
 from tinydb import TinyDB, Query
 from cuid import cuid
+from dotenv import load_dotenv
+
 #from circus import Arbiter, get_arbiter
 
 from pikesquares.conf import (
     AppConfig,
     AppConfigError,
     register_app_conf,
+    SysDir,
     make_system_dir,
 )
 from pikesquares import services
@@ -41,12 +44,14 @@ from pikesquares.services.data import (
 from .console import console
 from pikesquares import __app_name__, __version__, get_first_available_port
 
+load_dotenv()
+
 app = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
-    pretty_exceptions_enable=False,
+    pretty_exceptions_enable=True,
     pretty_exceptions_short=False,
-    pretty_exceptions_show_locals=False,
+    pretty_exceptions_show_locals=True,
 )
 
 
@@ -300,7 +305,49 @@ def main(
             writable=False,
             readable=True,
             resolve_path=True,
-            help="Data directory",
+            help="PikeSquares data directory",
+        )
+    ] = None,
+    config_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-dir",
+            "-c",
+            exists=True,
+            # file_okay=True,
+            dir_okay=False,
+            writable=False,
+            readable=True,
+            resolve_path=True,
+            help="PikeSquares configs directory",
+        )
+    ] = None,
+    log_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--log-dir",
+            "-l",
+            exists=True,
+            # file_okay=True,
+            dir_okay=False,
+            writable=False,
+            readable=True,
+            resolve_path=True,
+            help="PikeSquares logs directory",
+        )
+    ] = None,
+    run_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--run-dir",
+            "-r",
+            exists=True,
+            # file_okay=True,
+            dir_okay=False,
+            writable=False,
+            readable=True,
+            resolve_path=True,
+            help="PikeSquares run directory",
         )
     ] = None,
     # build_configs: Optional[bool] = typer.Option(
@@ -321,9 +368,11 @@ def main(
         if key.startswith(("PIKESQUARES", "SCIE", "PEX", "VIRTUAL_ENV")):
             print(f"{key}: {value}")
 
+    is_root: bool = os.getuid() == 0
+    print(f"{os.getuid()=} {is_root=}")
 
-    if ctx.invoked_subcommand in ["bootstrap", "up"] and os.getuid() != 0:
-        console.info("please restart server as root user.")
+    if ctx.invoked_subcommand in set({"bootstrap", "up"}) and not is_root:
+        console.info("Please start server as root user. `sudo pikesquares up`")
         raise typer.Exit()
 
     pikesquares_version = version or os.environ.get("PIKESQUARES_VERSION")
@@ -331,14 +380,14 @@ def main(
         console.error("Unable to read the pikesquares version")
         raise typer.Exit(1)
 
-    scie_base = os.environ.get("PIKESQUARES_SCIE_BASE")
-    if not scie_base:
-        console.error("Unable to read the pikesquares scie base directory")
-        raise typer.Exit(1)
+    #scie_base = os.environ.get("PIKESQUARES_SCIE_BASE")
+    #if not scie_base:
+    #    console.error("Unable to read the pikesquares scie base directory")
+    #    raise typer.Exit(1)
 
     console.info(f"PikeSquares: v{pikesquares_version}")
-    # context = services.init_context(ctx.ensure_object(dict))
-    # print(vars(ctx))
+    context = services.init_context(ctx.ensure_object(dict))
+    print(vars(ctx))
 
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
@@ -351,18 +400,43 @@ def main(
     #    console.error(f"unable to locate process-compose directory @ {process_compose_dir}")
     #    raise typer.Abort()
 
-    data_dir = data_dir or Path(os.environ.get("PIKESUARES_DATA_DIR", "/var/lib/pikesquares"))
-    if not data_dir.exists():
-        data_dir = make_system_dir(data_dir)
-
-    #pikesquares_version
-    #server_run_as_uid
-    #server_run_as_gid
-
     override_settings = {
-        "pikesquares_version": pikesquares_version,
-        "data_dir": data_dir,
+        "PIKESQUARES_DATA_DIR": os.environ.get("PIKESQUARES_DATA_DIR", "/var/lib/pikesquares"),
+        "PIKESQUARES_RUN_DIR": os.environ.get("PIKESQUARES_RUN_DIR", "/var/run/pikesquares"),
+        "PIKESQUARES_LOG_DIR": os.environ.get("PIKESQUARES_LOG_DIR", "/var/log/pikesquares"),
+        "PIKESQUARES_CONFIG_DIR": os.environ.get("PIKESQUARES_CONFIG_DIR", "/etc/pikesquares"),
+
     }
+    if is_root:
+        sysdirs = {
+            "data_dir": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), Path("/var/lib/pikesquares")),
+            "run_dir": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), Path("/var/run/pikesquares")),
+            "config_dir": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), Path("/etc/pikesquares")),
+            "log_dir": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), Path("/var/log/pikesquares")),
+        }
+        for varname, path_to_dir_sources in sysdirs.items():
+            cli_arg = path_to_dir_sources[0]
+            env_var_path_to_dir = path_to_dir_sources[1]
+            default_path_to_dir = path_to_dir_sources[2]
+            print(f"{varname=}")
+            if cli_arg:
+                print(f"cli args: {cli_arg}.")
+            if env_var_path_to_dir:
+                print(f"env var: {env_var_path_to_dir}")
+            # ensure_sysdir(sysdir, varname)
+
+            path_to_dir = cli_arg or env_var_path_to_dir or default_path_to_dir
+            if isinstance(path_to_dir, str):
+                path_to_dir = Path(path_to_dir)
+            if not path_to_dir.exists():
+                print(f"creating dir: {path_to_dir}")
+                make_system_dir(path_to_dir)
+            override_settings[varname] = path_to_dir
+
+    if version:
+        override_settings["VERSION"] = version
+
+    print(f"{override_settings=}")
 
     try:
         register_app_conf(
@@ -371,12 +445,14 @@ def main(
         )
     except AppConfigError:
         console.error(traceback.format_exc())
-        console.error(f"unable to load v{pikesquares_version} conf from {str(db_path)}")
+        # console.error(f"unable to load AppConf from {str(db_path)}")
         raise typer.Abort() from None
 
     conf = services.get(context, AppConfig)
 
-    db_path = data_dir / "device-db.json"
+    print(f"{conf.data_dir=}")
+    db_path = conf.data_dir / "device-db.json"
+    print(f"{db_path=}")
     services.register_db(
         context,
         db_path,
