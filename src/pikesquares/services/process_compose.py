@@ -52,6 +52,10 @@ class ProcessCompose(pydantic.BaseModel):
     def __str__(self) -> str:
         return self.__repr__()
 
+    @pydantic.computed_field
+    def socket_address(self) -> Path:
+        return Path(self.conf.run_dir) / f"{self.service_id}.sock"
+
     def ping(self) -> None:
         if not is_port_open(self.api_port):
             raise PCAPIUnavailableError()
@@ -132,6 +136,10 @@ class ProcessCompose(pydantic.BaseModel):
             "PIKESQUARES_EASYRSA_BIN": str(self.conf.EASYRSA_BIN),
             "PIKESQUARES_PROCESS_COMPOSE_DIR": str(self.conf.PROCESS_COMPOSE_DIR),
         }
+
+        # --unix-socke
+        # --use-uds
+
         cmd_args = [
             str(pc_bin),
             "up",
@@ -141,6 +149,8 @@ class ProcessCompose(pydantic.BaseModel):
             str(self.conf.log_dir / "process-compose.log"),
             "--detached",
             "--hide-disabled",
+            # "--tui",
+            # "false",
             "--port",
             str(self.conf.PC_PORT_NUM),
         ]

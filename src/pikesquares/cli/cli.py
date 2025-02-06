@@ -1,4 +1,6 @@
 import os
+import tempfile
+import shutil
 import traceback
 import time
 from typing import Optional, Annotated, NewType
@@ -35,9 +37,21 @@ from pikesquares.services.router import (
     register_router,
 )
 from pikesquares.services import process_compose
-from pikesquares.services.data import (
-    RouterStats,
+from pikesquares.services.apps import (
+    PythonRuntime,
+    RubyRuntime,
+    PHPRuntime,
+    PY_IGNORE_PATTERNS,
 )
+from pikesquares.services.apps.django import (
+    is_django,
+    uv_django_check,
+    uv_django_diffsettings,
+)
+
+# from pikesquares.services.data import (
+#    RouterStats,
+# )
 # from ..services.router import *
 # from ..services.app import *
 
@@ -242,6 +256,109 @@ def bootstrap(
     console.info("bootstrap done")
 
     raise typer.Exit(code=0)
+
+
+@app.command(rich_help_panel="Control", short_help="Initialize a project")
+def init(
+     ctx: typer.Context,
+):
+    """Initialize a project"""
+    context = ctx.ensure_object(dict)
+    conf = services.get(context, AppConfig)
+
+    # uv init djangotutorial
+    # cd djangotutorial
+    # uv add django
+    # uv run django-admin startproject mysite djangotutorial
+    # app_root_dir = Path("/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/djangotutorial")
+
+    # https://github.com/kolosochok/django-ecommerce
+    # app_root_dir = Path("/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/django-ecommerce")
+
+    # https://github.com/healthchecks/healthchecks
+    app_root_dir = Path("/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/healthchecks")
+
+    if not app_root_dir.exists():
+        console.info(f"Project root directory does not exist: {str(app_root_dir)}")
+        raise typer.Exit(code=1)
+
+    def get_files(extensions):
+        all_files = []
+        for ext in extensions:
+            all_files.extend(Path(app_root_dir).glob(ext))
+        return all_files
+
+    detected_runtimes = {}
+    for runtime_class in (PythonRuntime, RubyRuntime, PHPRuntime):
+        top_level_files: set[Path] = set(get_files(runtime_class.MATCH_FILES))
+        if not len(top_level_files):
+            continue
+
+        print("*" * 30)
+        for f in top_level_files:
+            print(f.name)
+
+        detected_runtimes[runtime_class] = {f.name for f in list(top_level_files)}
+
+    if PythonRuntime in detected_runtimes.keys():
+        try:
+            py_version = Path(".python-version").read_text().strip()
+        except FileNotFoundError:
+            py_version = "3.12"
+
+        service_type = "WSGI-App"
+        # service ID
+        service_type_prefix = service_type.replace("-", "_").lower()
+        service_id = f"{service_type_prefix}_{cuid()}"
+
+        app_temp_dir = Path(tempfile.mkdtemp(prefix="pre_", suffix="_suf"))
+
+        # 1) copy project to tmp dir at $TMPDIR
+        shutil.copytree(
+            app_root_dir,
+            app_temp_dir,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns(*PY_IGNORE_PATTERNS)
+        )
+        for p in Path(app_temp_dir).iterdir():
+            print(p)
+
+        # 2) create venv, install deps
+        py_runtime = PythonRuntime()
+        py_runtime.install_dependencies(
+            app_temp_dir,
+            detected_runtimes[PythonRuntime],
+            conf.UV_BIN,
+        )
+
+        # 3) inspect codebase
+
+        # 4) locate wsgi file and application callable
+
+        if is_django(app_temp_dir):
+            print("[pikesquares] detected Django project.")
+            uv_django_check(app_temp_dir, conf.UV_BIN)
+            django_settings = uv_django_diffsettings(app_temp_dir, conf.UV_BIN)
+            print(f"{django_settings=}")
+
+        # 5) fill in app_options
+
+        print(f"[pikesquares] {py_version=}")
+        print(f"[pikesquares] removing {str(app_temp_dir)}")
+        shutil.rmtree(app_temp_dir)
+
+    # print(f"{rubyproj=}")
+    # print(f"{phpproj=}")
+
+    # wsgi_app = WsgiApp(
+    #        conf=services.get(context, AppConfig),
+    #        db=db,
+    #        service_id=service_id,
+    #        name=app_name,
+    #        app_options=WsgiAppOptions(**app_options),
+    # )
+
+
 
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")
@@ -513,26 +630,20 @@ def main(
         db,
         build_config_on_init=build_configs,
     )
-
-    # http_router = services.get(context, DefaultHttpRouter)
-    # https_router = services.get(context, DefaultHttpsRouter)
-
-    if ctx.invoked_subcommand == "apps":
-        return
-
-    pc_api_port = 9555
-    # uwsgi_bin = os.environ.get("PIKESQUARES_UWSGI_BIN")
-    # if not all([uwsgi_bin, Path(uwsgi_bin).exists()]):
-    #    raise Exception("unable to locate uwsgi binary @ {uwsgi_bin}")
-
     process_compose.register_process_compose(
         context,
         conf,
-        # Path(uwsgi_bin),
-        pc_api_port,
+        (get_first_available_port(port=9555)),
+
     )
+    # http_router = services.get(context, DefaultHttpRouter)
+    # https_router = services.get(context, DefaultHttpsRouter)
 
     if ctx.invoked_subcommand == "up":
+        pc_api_port = 9555
+        # uwsgi_bin = os.environ.get("PIKESQUARES_UWSGI_BIN")
+        # if not all([uwsgi_bin, Path(uwsgi_bin).exists()]):
+        #    raise Exception("unable to locate uwsgi binary @ {uwsgi_bin}")
         pc = services.get(context, process_compose.ProcessCompose)
         try:
             pc.ping()
@@ -543,8 +654,8 @@ def main(
             pass  # device.up()
             # console.info("-- PCDeviceUnavailableError --")
             # sandbox_project.ping()
-    elif ctx.invoked_subcommand in set({"down", "bootstrap"}):
-        return
+    #elif ctx.invoked_subcommand in set({"down", "bootstrap"}):
+    #    return
 
     """
     for svc in services.get_pings(context):

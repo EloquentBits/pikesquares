@@ -160,7 +160,7 @@ def make_system_dir(
     try:
         owner_gid = grp.getgrnam(owner_groupname)[2]
     except KeyError:
-        raise AppConfigError(f"unable locate user: {owner_groupname}") from None
+        raise AppConfigError(f"unable locate group: {owner_groupname}") from None
 
     os.chown(newdir, owner_uid, owner_gid)
 
@@ -247,6 +247,7 @@ class AppConfig(BaseSettings):
     EASYRSA_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     DNSMASQ_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
     PROCESS_COMPOSE_DIR: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
     PROCESS_COMPOSE_CONFIG: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None

@@ -36,6 +36,8 @@ processes:
     depends_on:
       bootstrap:
         condition: process_completed_successfuly
+      caddy: 
+        condition: process_started
     shutdown:
       command: "${PIKESQUARES_SERVER_EXE} devices down --noinput"
       timeout_seconds: 10 # default 10
@@ -57,6 +59,13 @@ processes:
     disabled: false
     availability:
       restart: "exit_on_failure"
+
+  caddy:
+    command: "${PIKESQUARES_CADDY_BIN} reverse-proxy --from :2080 --to :8034"
+    disabled: false
+    #readiness_probe:
+    #  exec:
+    #    command: postgres-health-check
 
 ################################################################
   #sanitycheck:

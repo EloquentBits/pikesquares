@@ -23,6 +23,8 @@ dependencies = [
     "sentry-sdk>=2.19.0",
     "svcs>=24.1.0",
     "tinydb>=4.8.2",
+    "toml>=0.10.2",
+    "transitions>=0.9.2",
     "typer[all,rich]>=0.13.1",
     "uwsgiconf>=1.0.0",
     #"uwsgi-tasks",
