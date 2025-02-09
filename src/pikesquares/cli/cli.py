@@ -1,11 +1,11 @@
+import sys
 import os
-import tempfile
-import shutil
 import traceback
 import time
 from typing import Optional, Annotated, NewType
 from pathlib import Path
 
+import randomname
 import typer
 import questionary
 from tinydb import TinyDB, Query
@@ -37,21 +37,23 @@ from pikesquares.services.router import (
     register_router,
 )
 from pikesquares.services import process_compose
-from pikesquares.services.apps import (
-    PythonRuntime,
-    RubyRuntime,
-    PHPRuntime,
-    PY_IGNORE_PATTERNS,
-)
+from pikesquares.services.apps import RubyRuntime, PHPRuntime
+from pikesquares.services.apps.python import PythonRuntime
+from pikesquares.cli.commands.apps.validators import NameValidator
+
 from pikesquares.services.apps.django import (
-    is_django,
-    uv_django_check,
-    uv_django_diffsettings,
+    DjangoSettings,
+    DjangoWsgiApp,
+)
+from pikesquares.services.apps.exceptions import (
+    PythonRuntimeInitError,
 )
 
-# from pikesquares.services.data import (
+from pikesquares.services.data import (
 #    RouterStats,
-# )
+    WsgiAppOptions,
+    Router,
+ )
 # from ..services.router import *
 # from ..services.app import *
 
@@ -261,102 +263,219 @@ def bootstrap(
 @app.command(rich_help_panel="Control", short_help="Initialize a project")
 def init(
      ctx: typer.Context,
+    app_root_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--root-dir",
+            "-d",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            writable=False,
+            readable=True,
+            resolve_path=True,
+            help="Project/App root directory",
+        )
+    ] = None,
 ):
     """Initialize a project"""
     context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
     conf = services.get(context, AppConfig)
+    db = services.get(context, TinyDB)
 
     # uv init djangotutorial
     # cd djangotutorial
     # uv add django
     # uv run django-admin startproject mysite djangotutorial
-    # app_root_dir = Path("/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/djangotutorial")
 
     # https://github.com/kolosochok/django-ecommerce
-    # app_root_dir = Path("/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/django-ecommerce")
-
     # https://github.com/healthchecks/healthchecks
-    app_root_dir = Path("/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/healthchecks")
 
-    if not app_root_dir.exists():
+    app_root_dir = app_root_dir or Path(questionary.path(
+        "Enter the location of your project/app root directory:",
+        default=str(Path().cwd()),
+        only_directories=True,
+        style=custom_style,
+    ).ask())
+
+    if app_root_dir and not app_root_dir.exists():
         console.info(f"Project root directory does not exist: {str(app_root_dir)}")
         raise typer.Exit(code=1)
 
-    def get_files(extensions):
-        all_files = []
-        for ext in extensions:
-            all_files.extend(Path(app_root_dir).glob(ext))
-        return all_files
+    print(f"{app_root_dir=}")
 
-    detected_runtimes = {}
     for runtime_class in (PythonRuntime, RubyRuntime, PHPRuntime):
-        top_level_files: set[Path] = set(get_files(runtime_class.MATCH_FILES))
-        if not len(top_level_files):
-            continue
+        if runtime_class == PythonRuntime:
+            service_type = "WSGI-App"
+            service_type_prefix = service_type.replace("-", "_").lower()
+            service_id = f"{service_type_prefix}_{cuid()}"
 
-        print("*" * 30)
-        for f in top_level_files:
-            print(f.name)
+            runtime = PythonRuntime(app_root_dir=app_root_dir)
+            runtime.uv_bin = conf.UV_BIN
 
-        detected_runtimes[runtime_class] = {f.name for f in list(top_level_files)}
+            try:
+                pyvenv_dir = conf.data_dir / "venvs" / service_id
+                if runtime.init(pyvenv_dir):
+                    print("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
+                    print(runtime.model_dump())
+                    django_settings = runtime.collected_project_metadata.get(DjangoSettings.__name__)
+                    app_name = questionary.text(
+                        "Choose a name for your app: ",
+                        default=randomname.get_name().lower(),
+                        style=custom_style,
+                        validate=NameValidator,
+                    ).ask()
 
-    if PythonRuntime in detected_runtimes.keys():
-        try:
-            py_version = Path(".python-version").read_text().strip()
-        except FileNotFoundError:
-            py_version = "3.12"
+                    default_https_router = services.get(context, DefaultHttpsRouter)
+                    default_http_router = services.get(context, DefaultHttpRouter)
+
+                    https_router_kwargs = {
+                        "router_id": default_https_router.service_id,
+                        "subscription_server_address": default_https_router.subscription_server_address,
+                        "subscription_notify_socket": default_https_router.notify_socket,
+                        "app_name": app_name,
+                    }
+                    http_router_kwargs = {
+                        "router_id": default_http_router.service_id,
+                        "subscription_server_address": default_http_router.subscription_server_address,
+                        "subscription_notify_socket": default_http_router.notify_socket,
+                        "app_name": app_name,
+                    }
+                    routers = [
+                        Router(**https_router_kwargs),
+                        Router(**http_router_kwargs),
+                    ]
+                    app_project = services.get(context, SandboxProject)
+
+                    cmd_env = {
+                        # FIXME does not have any effect.
+                        "UV_CACHE_DIR": str(conf.uv_cache_dir),
+                        "UV_PROJECT_ENVIRONMENT": str(pyvenv_dir),
+                    }
+                    wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
+                    wsgi_file = app_root_dir / Path("/".join(wsgi_parts) + ".py")
+                    app_options = {
+                        "root_dir": app_root_dir,
+                        "project_id": app_project.service_id,
+                        "wsgi_file": wsgi_file,
+                        "wsgi_module": django_settings.wsgi_application.split(".")[-1],
+                        "pyvenv_dir": str(pyvenv_dir),
+                        "routers": routers,
+                        "workers": 3,
+                    }
+
+                    console.info(app_options)
+                    wsgi_app = DjangoWsgiApp(
+                            conf=services.get(context, AppConfig),
+                            db=db,
+                            service_id=service_id,
+                            name=app_name,
+                            app_options=WsgiAppOptions(**app_options),
+                    )
+
+            except PythonRuntimeInitError:
+                print("[pikesquares] -- PythonRuntimeInitError --")
+                print(traceback.format_exc())
+
+        elif runtime_class == RubyRuntime:
+            pass
+        elif runtime_class == PHPRuntime:
+            pass
+
+    if 0:
+
+        django_settings = DjangoSettings(
+            settings_module="mysite.settings",
+            root_urlconf="mysite.urls",
+            wsgi_application="mysite.wsgi.application",
+            base_dir=app_root_dir,
+        )
 
         service_type = "WSGI-App"
         # service ID
         service_type_prefix = service_type.replace("-", "_").lower()
         service_id = f"{service_type_prefix}_{cuid()}"
 
-        app_temp_dir = Path(tempfile.mkdtemp(prefix="pre_", suffix="_suf"))
+        app_name = questionary.text(
+            "Choose a name for your app: ",
+            default=randomname.get_name().lower(),
+            style=custom_style,
+            validate=NameValidator,
+        ).ask()
 
-        # 1) copy project to tmp dir at $TMPDIR
-        shutil.copytree(
-            app_root_dir,
-            app_temp_dir,
-            dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns(*PY_IGNORE_PATTERNS)
-        )
-        for p in Path(app_temp_dir).iterdir():
-            print(p)
+        default_https_router = services.get(context, DefaultHttpsRouter)
+        default_http_router = services.get(context, DefaultHttpRouter)
 
-        # 2) create venv, install deps
+        https_router_kwargs = {
+            "router_id": default_https_router.service_id,
+            "subscription_server_address": default_https_router.subscription_server_address,
+            "subscription_notify_socket": default_https_router.notify_socket,
+            "app_name": app_name,
+        }
+        http_router_kwargs = {
+            "router_id": default_http_router.service_id,
+            "subscription_server_address": default_http_router.subscription_server_address,
+            "subscription_notify_socket": default_http_router.notify_socket,
+            "app_name": app_name,
+        }
+        routers = [
+            Router(**https_router_kwargs),
+            Router(**http_router_kwargs),
+        ]
+        app_project = services.get(context, SandboxProject)
+
+        pyvenv_dir = conf.data_dir / "venvs" / service_id
+
         py_runtime = PythonRuntime()
+        cmd_env = {
+            # FIXME does not have any effect.
+            "UV_CACHE_DIR": str(conf.uv_cache_dir),
+            "UV_PROJECT_ENVIRONMENT": str(pyvenv_dir),
+        }
+        py_runtime.create_venv(
+            app_root_dir,
+            pyvenv_dir,
+            conf.UV_BIN,
+            cmd_env=cmd_env,
+        )
+        # cmd_env["VIRTUAL_ENV"] = str(pyvenv_dir)
+
         py_runtime.install_dependencies(
-            app_temp_dir,
+            app_root_dir,
             detected_runtimes[PythonRuntime],
             conf.UV_BIN,
+            cmd_env=cmd_env,
         )
 
-        # 3) inspect codebase
+        wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
+        wsgi_file = app_root_dir / Path("/".join(wsgi_parts) + ".py")
+        app_options = {
+            "root_dir": django_settings.base_dir,
+            "project_id": app_project.service_id,
+            "wsgi_file": wsgi_file,
+            "wsgi_module": django_settings.wsgi_application.split(".")[-1],
+            "pyvenv_dir": str(pyvenv_dir),
+            "routers": routers,
+            "workers": 3,
+        }
 
-        # 4) locate wsgi file and application callable
+        console.info(app_options)
+        wsgi_app = DjangoWsgiApp(
+                conf=services.get(context, AppConfig),
+                db=db,
+                service_id=service_id,
+                name=app_name,
+                app_options=WsgiAppOptions(**app_options),
+        )
 
-        if is_django(app_temp_dir):
-            print("[pikesquares] detected Django project.")
-            uv_django_check(app_temp_dir, conf.UV_BIN)
-            django_settings = uv_django_diffsettings(app_temp_dir, conf.UV_BIN)
-            print(f"{django_settings=}")
-
-        # 5) fill in app_options
-
-        print(f"[pikesquares] {py_version=}")
-        print(f"[pikesquares] removing {str(app_temp_dir)}")
-        shutil.rmtree(app_temp_dir)
-
-    # print(f"{rubyproj=}")
-    # print(f"{phpproj=}")
-
-    # wsgi_app = WsgiApp(
-    #        conf=services.get(context, AppConfig),
-    #        db=db,
-    #        service_id=service_id,
-    #        name=app_name,
-    #        app_options=WsgiAppOptions(**app_options),
-    # )
+        # wsgi_app = WsgiApp(
+        #        conf=services.get(context, AppConfig),
+        #        db=db,
+        #        service_id=service_id,
+        #        name=app_name,
+        #        app_options=WsgiAppOptions(**app_options),
+        # )
 
 
 

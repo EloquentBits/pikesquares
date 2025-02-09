@@ -279,6 +279,11 @@ class AppConfig(BaseSettings):
 
     @pydantic.computed_field
     @property
+    def uv_cache_dir(self) -> Path:
+        return make_system_dir(self.data_dir / "uv-cache")
+
+    @pydantic.computed_field
+    @property
     def plugins_dir(self) -> Path:
         return make_system_dir(self.data_dir / "plugins")
 

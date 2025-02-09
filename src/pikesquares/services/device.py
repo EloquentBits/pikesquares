@@ -43,8 +43,10 @@ class Device(BaseService, DevicePKIMixin):
         return appsdir
 
     @pydantic.computed_field
-    def stats(self) -> DeviceStats:
-        return DeviceStats(**self.read_stats())
+    def stats(self) -> DeviceStats | None:
+        stats_now = self.read_stats()
+        if stats_now:
+            return DeviceStats(**stats_now)
 
     def up(self):
         self.setup_pki()
