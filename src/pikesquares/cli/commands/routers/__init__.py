@@ -62,10 +62,10 @@ def list_(
     """
 
     context = ctx.ensure_object(dict)
-    db = services.get(context, TinyDB)
+    # db = services.get(context, TinyDB)
     conf = services.get(context, AppConfig)
 
-    print(db)
+    # print(db)
     print(conf.dump_model())
 
     """
