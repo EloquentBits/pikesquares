@@ -401,9 +401,11 @@ def tail_service_log(
 
 from .commands import devices
 from .commands import apps
+from .commands import routers
 from .commands import managed_services
 
 app.add_typer(apps.app, name="apps")
+app.add_typer(routers.app, name="routers")
 app.add_typer(devices.app, name="devices")
 app.add_typer(managed_services.app, name="services")
 
