@@ -14,13 +14,13 @@ class BaseLanguageRuntime(pydantic.BaseModel, ABC):
 
     MATCH_FILES: set[str]
     app_root_dir: Path
-    collected_project_metadata: dict | None = None
+    collected_project_metadata: dict = {}
 
     def __init_subclass__(cls):
         print(f"Subclass {cls} was created.")
 
     @abstractmethod
-    def check(self):
+    def check(self, app_tmp_dir: Path):
         raise NotImplementedError
 
     @abstractmethod

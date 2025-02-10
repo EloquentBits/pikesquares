@@ -10,6 +10,8 @@ class UvPipInstallError(Exception):
 class PythonRuntimeCheckError(Exception):
     pass
 
+class PythonRuntimeDjangoCheckError(Exception):
+    pass
 
 class PythonRuntimeInitError(Exception):
     pass

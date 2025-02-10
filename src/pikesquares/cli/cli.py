@@ -39,10 +39,10 @@ from pikesquares.services.router import (
 from pikesquares.services import process_compose
 from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
+from pikesquares.services.apps.django import PythonRuntimeDjango
 from pikesquares.cli.commands.apps.validators import NameValidator
 
 from pikesquares.services.apps.django import (
-    DjangoSettings,
     DjangoWsgiApp,
 )
 from pikesquares.services.apps.exceptions import (
@@ -51,7 +51,6 @@ from pikesquares.services.apps.exceptions import (
 
 from pikesquares.services.data import (
 #    RouterStats,
-    WsgiAppOptions,
     Router,
  )
 # from ..services.router import *
@@ -260,7 +259,10 @@ def bootstrap(
     raise typer.Exit(code=0)
 
 
-@app.command(rich_help_panel="Control", short_help="Initialize a project")
+@app.command(
+    rich_help_panel="Control",
+    short_help="Initialize a project"
+)
 def init(
      ctx: typer.Context,
     app_root_dir: Annotated[
@@ -311,15 +313,18 @@ def init(
             service_type_prefix = service_type.replace("-", "_").lower()
             service_id = f"{service_type_prefix}_{cuid()}"
 
-            runtime = PythonRuntime(app_root_dir=app_root_dir)
-            runtime.uv_bin = conf.UV_BIN
+            if PythonRuntime.is_django(app_root_dir):
+                runtime = PythonRuntimeDjango(app_root_dir=app_root_dir)
+            else:
+                runtime = PythonRuntime(app_root_dir=app_root_dir)
 
+            runtime.uv_bin = conf.UV_BIN
             try:
                 pyvenv_dir = conf.data_dir / "venvs" / service_id
                 if runtime.init(pyvenv_dir):
                     print("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
                     print(runtime.model_dump())
-                    django_settings = runtime.collected_project_metadata.get(DjangoSettings.__name__)
+
                     app_name = questionary.text(
                         "Choose a name for your app: ",
                         default=randomname.get_name().lower(),
@@ -348,136 +353,26 @@ def init(
                     ]
                     app_project = services.get(context, SandboxProject)
 
-                    cmd_env = {
-                        # FIXME does not have any effect.
-                        "UV_CACHE_DIR": str(conf.uv_cache_dir),
-                        "UV_PROJECT_ENVIRONMENT": str(pyvenv_dir),
-                    }
-                    wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
-                    wsgi_file = app_root_dir / Path("/".join(wsgi_parts) + ".py")
-                    app_options = {
-                        "root_dir": app_root_dir,
-                        "project_id": app_project.service_id,
-                        "wsgi_file": wsgi_file,
-                        "wsgi_module": django_settings.wsgi_application.split(".")[-1],
-                        "pyvenv_dir": str(pyvenv_dir),
-                        "routers": routers,
-                        "workers": 3,
-                    }
-
-                    console.info(app_options)
-                    wsgi_app = DjangoWsgiApp(
-                            conf=services.get(context, AppConfig),
-                            db=db,
-                            service_id=service_id,
-                            name=app_name,
-                            app_options=WsgiAppOptions(**app_options),
+                    wsgi_app = runtime.get_app(
+                        conf,
+                        db,
+                        app_name,
+                        service_id,
+                        app_project,
+                        pyvenv_dir,
+                        routers,
                     )
+                    print(wsgi_app)
+
 
             except PythonRuntimeInitError:
                 print("[pikesquares] -- PythonRuntimeInitError --")
-                print(traceback.format_exc())
+                #print(traceback.format_exc())
 
         elif runtime_class == RubyRuntime:
             pass
         elif runtime_class == PHPRuntime:
             pass
-
-    if 0:
-
-        django_settings = DjangoSettings(
-            settings_module="mysite.settings",
-            root_urlconf="mysite.urls",
-            wsgi_application="mysite.wsgi.application",
-            base_dir=app_root_dir,
-        )
-
-        service_type = "WSGI-App"
-        # service ID
-        service_type_prefix = service_type.replace("-", "_").lower()
-        service_id = f"{service_type_prefix}_{cuid()}"
-
-        app_name = questionary.text(
-            "Choose a name for your app: ",
-            default=randomname.get_name().lower(),
-            style=custom_style,
-            validate=NameValidator,
-        ).ask()
-
-        default_https_router = services.get(context, DefaultHttpsRouter)
-        default_http_router = services.get(context, DefaultHttpRouter)
-
-        https_router_kwargs = {
-            "router_id": default_https_router.service_id,
-            "subscription_server_address": default_https_router.subscription_server_address,
-            "subscription_notify_socket": default_https_router.notify_socket,
-            "app_name": app_name,
-        }
-        http_router_kwargs = {
-            "router_id": default_http_router.service_id,
-            "subscription_server_address": default_http_router.subscription_server_address,
-            "subscription_notify_socket": default_http_router.notify_socket,
-            "app_name": app_name,
-        }
-        routers = [
-            Router(**https_router_kwargs),
-            Router(**http_router_kwargs),
-        ]
-        app_project = services.get(context, SandboxProject)
-
-        pyvenv_dir = conf.data_dir / "venvs" / service_id
-
-        py_runtime = PythonRuntime()
-        cmd_env = {
-            # FIXME does not have any effect.
-            "UV_CACHE_DIR": str(conf.uv_cache_dir),
-            "UV_PROJECT_ENVIRONMENT": str(pyvenv_dir),
-        }
-        py_runtime.create_venv(
-            app_root_dir,
-            pyvenv_dir,
-            conf.UV_BIN,
-            cmd_env=cmd_env,
-        )
-        # cmd_env["VIRTUAL_ENV"] = str(pyvenv_dir)
-
-        py_runtime.install_dependencies(
-            app_root_dir,
-            detected_runtimes[PythonRuntime],
-            conf.UV_BIN,
-            cmd_env=cmd_env,
-        )
-
-        wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
-        wsgi_file = app_root_dir / Path("/".join(wsgi_parts) + ".py")
-        app_options = {
-            "root_dir": django_settings.base_dir,
-            "project_id": app_project.service_id,
-            "wsgi_file": wsgi_file,
-            "wsgi_module": django_settings.wsgi_application.split(".")[-1],
-            "pyvenv_dir": str(pyvenv_dir),
-            "routers": routers,
-            "workers": 3,
-        }
-
-        console.info(app_options)
-        wsgi_app = DjangoWsgiApp(
-                conf=services.get(context, AppConfig),
-                db=db,
-                service_id=service_id,
-                name=app_name,
-                app_options=WsgiAppOptions(**app_options),
-        )
-
-        # wsgi_app = WsgiApp(
-        #        conf=services.get(context, AppConfig),
-        #        db=db,
-        #        service_id=service_id,
-        #        name=app_name,
-        #        app_options=WsgiAppOptions(**app_options),
-        # )
-
-
 
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")

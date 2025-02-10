@@ -1,3 +1,4 @@
+import re
 import sys
 import shutil
 import traceback
@@ -7,13 +8,29 @@ from pathlib import Path
 
 import pydantic
 from plumbum import ProcessExecutionError
+from tinydb import TinyDB
 
+from pikesquares.conf import AppConfig
+from ..data import Router, WsgiAppOptions
 from .wsgi import WsgiApp
+from .python import PythonRuntime
 from .exceptions import (
     UvCommandExecutionError,
     DjangoCheckError,
     DjangoDiffSettingsError,
+    PythonRuntimeDjangoCheckError,
 )
+
+
+class DjangoCheckMessage(pydantic.BaseModel):
+    # 4_0.E001
+    id: str
+    # ?: (4_0.E001) As of Django 4.0, the values in the CSRF_TRUSTED_ORIGINS setting must start with a scheme (usually http:// or https://) but found . See the release notes for details.
+    message: str
+
+
+class DjangoCheckMessages(pydantic.BaseModel):
+    messages: list[DjangoCheckMessage] = []
 
 
 class DjangoSettings(pydantic.BaseModel):
@@ -48,40 +65,97 @@ class DjangoSettings(pydantic.BaseModel):
     base_dir: Path | None = None
 
 
-class PythonRuntimeDjangoMixin:
+class DjangoWsgiApp(WsgiApp):
+    pass
 
-    PY_DJANGO_FILES: set[str] = set({
-        "urls.py",
-        "wsgi.py",
-        "settings.py",
-        "manage.py",
-    })
 
-    def is_django(self, app_tmp_dir: Path | None = None) -> bool:
-        all_files = []
-        for filename in self.PY_DJANGO_FILES:
-            all_django_files = Path(app_tmp_dir or self.app_root_dir).glob(f"**/{filename}")
-            all_files.extend(list(filter(lambda f: ".venv" not in Path(f).parts, all_django_files)))
-        # for f in all_files:
-        #    print(f)
-        return bool(len(all_files))
+"""
+[pikesquares] PythonRuntimeDjango.init
+[pikesquares] PythonRuntime.init
+[pikesquares] PythonRuntimeDjango.check
+[pikesquares] PythonRuntime.check
 
-        # for f in glob(f"{app_temp_dir}/**/*wsgi*.py", recursive=True):
-        #    print(f)
-        # [f for f in glob("**/settings.py", recursive=True) if not f.startswith("venv/")]
-        # for f in glob(f"{app_temp_dir}/**/settings.py", recursive=True):
-        #    settings_module_path = Path(f)
-        #    print(f"settings module: {(settings_module_path)}")
-        #    print(f"settings module: {settings_module_path.relative_to(app_temp_dir)}")
-        # os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ecomproject.settings')
+"""
+
+
+class PythonRuntimeDjango(PythonRuntime):
+
+    def init(self, venv: Path | None = None) -> bool:
+        print(f"[pikesquares] PythonRuntimeDjango.init")
+        if super().init(venv):
+            return True
+        return False
+
+    def check(self, app_tmp_dir: Path) -> bool:
+        print(f"[pikesquares] PythonRuntimeDjango.check")
+        if super().check(app_tmp_dir):
+            print("[pikesquares] PythonRuntimeDjango.check | PythonRuntime check ok")
+            try:
+                self.collected_project_metadata["django_check_messages"] = \
+                        self.django_check(app_tmp_dir=app_tmp_dir)
+            except DjangoCheckError:
+                self.check_cleanup(app_tmp_dir)
+                raise PythonRuntimeDjangoCheckError("django check command failed")
+            try:
+                self.collected_project_metadata["django_settings"] = \
+                        self.django_diffsettings(app_tmp_dir=app_tmp_dir)
+            except DjangoDiffSettingsError:
+                self.check_cleanup(app_tmp_dir)
+                raise PythonRuntimeDjangoCheckError("django diffsettings command failed.")
+            return True
+        return False
+
+    def get_app(
+        self,
+        conf: AppConfig,
+        db: TinyDB,
+        name: str,
+        service_id: str,
+        app_project,
+        venv: Path,
+        routers: list[Router]
+        ) -> DjangoWsgiApp:
+
+        django_settings = self.collected_project_metadata.\
+                get("django_settings")
+
+        print(django_settings.model_dump())
+
+        django_check_messages = self.collected_project_metadata.\
+                get("django_check_messages", [])
+
+        for msg in django_check_messages.messages:
+            print(f"{msg.id=}")
+            print(f"{msg.message=}")
+
+        wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
+        wsgi_file = self.app_root_dir / Path("/".join(wsgi_parts) + ".py")
+        app_options = {
+            "root_dir": self.app_root_dir,
+            "project_id": app_project.service_id,
+            "wsgi_file": wsgi_file,
+            "wsgi_module": django_settings.wsgi_application.split(".")[-1],
+            "pyvenv_dir": str(venv),
+            "routers": routers,
+            "workers": 3,
+        }
+        return DjangoWsgiApp(
+            conf=conf,
+            db=db,
+            service_id=service_id,
+            name=name,
+            app_options=WsgiAppOptions(**app_options),
+        )
 
     def django_check(
             self,
             cmd_env: dict | None = None,
             app_tmp_dir: Path | None = None,
-        ):
+        ) -> DjangoCheckMessages:
         chdir = app_tmp_dir or self.app_root_dir
         print(f"[pikesquares] run django check in {str(chdir)}")
+
+        dj_msgs = DjangoCheckMessages()
 
         # DJANGO_SETTINGS_MODULE=mysite.settings
         # uv run python -c "from django.conf import settings ; print(settings.WSGI_APPLICATION)"
@@ -93,43 +167,59 @@ class PythonRuntimeDjangoMixin:
                 chdir=chdir,
             )
             if "System check identified no issues" in stdout:
-                # retcode=0
-                # stdout='System check identified no issues (0 silenced).\n'
-                # stderr='warning: `VIRTUAL_ENV=/home/pk/dev/eqb/pikesquares/.venv` does not match the project environment path `.venv` and will be ignored\n'
-                # stderr "System check identified some issues:\n\nWARNINGS:\n?: (staticfiles.W004) The directory '/tmp/pre_1d82tc06_suf/static' in the STATICFILES_DIRS setting does not exist.\n\nSystem check identified 1 issue (0 silenced).\n
-                return True
+                return dj_msgs
         except ProcessExecutionError as plumbum_pe_err:
+            print(" =============== ProcessExecutionError ==============")
+            # https://docs.djangoproject.com/en/5.1/ref/checks/#checkmessage
+            # id
+            # Optional string. A unique identifier for the issue.
+            # Identifiers should follow the pattern applabel.X001, where X is one of the letters CEWID,
+            # indicating the message severity (C for criticals, E for errors and so).
+            # The number can be allocated by the application, but should be unique within that application.
 
-            if "hc.api.W002" in plumbum_pe_err.stderr:
-                print("hc.api.W002")
-                pass
-            elif "caches.E001" in plumbum_pe_err.stderr:
-                print("caches.E001")
-                pass
-            elif "staticfiles.W004" in plumbum_pe_err.stderr:
-                # The directory '/tmp/pre_icugrao4_suf/static' in the STATICFILES_DIRS
-                # create static dir
-                match = re.search(r"/tmp/pikesquares_[a-zA-Z0-9]+_py_app/static", plumbum_pe_err.stderr)
-                if match:
-                    print(f"[pikesquares] creating staticfiles directory {match.group()}")
+            # if "staticfiles.W004" in plumbum_pe_err.stderr:
+            # The directory '/tmp/pre_icugrao4_suf/static' in the STATICFILES_DIRS
+            # create static dir
+            #    match = re.search(r"/tmp/pikesquares_[a-zA-Z0-9]+_py_app/static", plumbum_pe_err.stderr)
+            #    if match:
+            #        print(f"[pikesquares] creating staticfiles directory {match.group()}")
+            #        try:
+            #            Path(match.group()).mkdir()
+            #        except:
+            #            traceback.format_exc()
+            #            raise DjangoCheckError(f"Django check: unable to create staticfiles directory {match.group()}")
+            #        else:
+            #            print("[pikesquares] re-running Django check")
+            #            self.django_check(app_tmp_dir or self.app_root_dir)
+
+            print(plumbum_pe_err.stderr)
+            print(" =============== /ProcessExecutionError ==============")
+            if plumbum_pe_err.stderr.startswith("SystemCheckError"):
+                err_lines = plumbum_pe_err.stderr.split("\n")
+                for msg in [line for line in err_lines if line.startswith("?:")]:
+                    print(f"====    {msg=}     ====")
                     try:
-                        Path(match.group()).mkdir()
-                    except:
-                        traceback.format_exc()
-                        raise DjangoCheckError(f"Django check: unable to create staticfiles directory {match.group()}")
-                    else:
-                        print("[pikesquares] re-running Django check")
-                        self.django_check(app_tmp_dir or self.app_root_dir)
-            # else:
-            #    raise DjangoCheckError(f"Django check: {plumbum_pe_err.retcode=} {plumbum_pe_err.stdout=} plumbum_pe_errs.stderr=}")
+                        # ?: (4_0.E001)
+                        msg_id = re.findall(r"(?<=\()[^)]+(?=\))", msg)[0]
+                    except IndexError:
+                        print(f"unable to parse message id from '{msg}'")
+                        continue
+                    dj_msgs.messages.append(
+                            DjangoCheckMessage(
+                                id=msg_id,
+                                message="".join(msg.split(")")[1:],
+                            ).strip()
+                        )
+                    )
+                print(f"{dj_msgs.messages=}")
+                return dj_msgs
             else:
-                raise DjangoCheckError(
-                    f"[pikesquares] UvExecError: unable to run django check in {str(chdir)}"
-                )
-        else:
-            print(
-                f"django check completed: {plumbum_pe_err.retcode=} {plumbum_pe_err.stdout=} {plumbum_pe_errs.stderr=}"
-            )
+                raise DjangoCheckError(f"[pikesquares] UvExecError: unable to run django check in {str(chdir)}") from None
+
+        print(
+            f"django check completed. no errors.: {retcode=} {stdout=} {stderr=}"
+        )
+        return dj_msgs
 
     def django_diffsettings(
         self,
@@ -166,5 +256,3 @@ class PythonRuntimeDjangoMixin:
             )
 
 
-class DjangoWsgiApp(WsgiApp):
-    pass

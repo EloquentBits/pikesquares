@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pydantic
 
-from .django import PythonRuntimeDjangoMixin
 from .uv import UVMixin
 from . import BaseLanguageRuntime
 
@@ -15,11 +14,12 @@ from .exceptions import (
     DjangoDiffSettingsError,
     DjangoCheckError,
     PythonRuntimeCheckError,
+    PythonRuntimeDjangoCheckError,
     PythonRuntimeInitError,
 )
 
 
-class PythonRuntime(BaseLanguageRuntime, PythonRuntimeDjangoMixin, UVMixin):
+class PythonRuntime(BaseLanguageRuntime, UVMixin):
 
     uv_bin: Path | None = None
 
@@ -60,9 +60,9 @@ class PythonRuntime(BaseLanguageRuntime, PythonRuntimeDjangoMixin, UVMixin):
         except OSError:
             print(f"unable to delete tmp dir @ {str(app_tmp_dir)}")
 
-    def check(self) -> bool:
-        app_tmp_dir = Path(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
+    def check(self, app_tmp_dir: Path) -> bool:
         # copy project to tmp dir at $TMPDIR
+        print(f"[pikesquares] PythonRuntime.check")
         shutil.copytree(
             self.app_root_dir,
             app_tmp_dir,
@@ -75,45 +75,25 @@ class PythonRuntime(BaseLanguageRuntime, PythonRuntimeDjangoMixin, UVMixin):
         cmd_env = {}
         venv = app_tmp_dir / ".venv"
         self.create_venv(venv=venv, cmd_env=cmd_env)
-
         try:
             self.install_dependencies(venv=venv, app_tmp_dir=app_tmp_dir)
         except (UvSyncError, UvPipInstallError):
             print(traceback.format_exc())
             self.check_cleanup(app_tmp_dir)
             raise PythonRuntimeCheckError("django uv install dependencies failed.")
-
-        if self.is_django(app_tmp_dir=app_tmp_dir):
-            print("[pikesquares] detected Django project.")
-            try:
-                self.django_check(app_tmp_dir=app_tmp_dir)
-            except DjangoCheckError:
-                print(traceback.format_exc())
-                self.check_cleanup(app_tmp_dir)
-                raise PythonRuntimeCheckError("django check command failed")
-            try:
-                django_settings = self.django_diffsettings(app_tmp_dir=app_tmp_dir)
-                print(f"{django_settings=}")
-                self.collected_project_metadata = {
-                        django_settings.__class__.__name__: django_settings,
-                }
-            except DjangoDiffSettingsError:
-                print(traceback.format_exc())
-                self.check_cleanup(app_tmp_dir)
-                raise PythonRuntimeCheckError("django diffsettings command failed.")
-
-        print(f"[pikesquares] {self.version=}")
-        print(f"[pikesquares] removing {str(app_tmp_dir)}")
-        self.check_cleanup(app_tmp_dir)
         return True
 
     def init(self, venv: Path | None = None) -> bool:
+        print(f"[pikesquares] PythonRuntime.init")
+        app_tmp_dir = Path(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
         try:
-            self.check()
-        except PythonRuntimeCheckError:
+            self.check(app_tmp_dir)
+        except (PythonRuntimeCheckError, PythonRuntimeDjangoCheckError):
             print("[pikesquares] -- PythonRuntimeCheckError --")
             print(traceback.format_exc())
             raise PythonRuntimeInitError("Python Runtime check failed")
+
+        self.check_cleanup(app_tmp_dir)
 
         cmd_env = {
             # FIXME does not have any effect.
@@ -124,3 +104,28 @@ class PythonRuntime(BaseLanguageRuntime, PythonRuntimeDjangoMixin, UVMixin):
         self.install_dependencies()
 
         return True
+
+    @classmethod
+    def is_django(cls, app_root_dir: Path) -> bool:
+        py_django_files: set[str] = set({
+            "urls.py",
+            "wsgi.py",
+            "settings.py",
+            "manage.py",
+        })
+        all_files = []
+        for filename in py_django_files:
+            all_django_files = Path(app_root_dir).glob(f"**/{filename}")
+            all_files.extend(list(filter(lambda f: ".venv" not in Path(f).parts, all_django_files)))
+        # for f in all_files:
+        #    print(f)
+        return bool(len(all_files))
+
+        # for f in glob(f"{app_temp_dir}/**/*wsgi*.py", recursive=True):
+        #    print(f)
+        # [f for f in glob("**/settings.py", recursive=True) if not f.startswith("venv/")]
+        # for f in glob(f"{app_temp_dir}/**/settings.py", recursive=True):
+        #    settings_module_path = Path(f)
+        #    print(f"settings module: {(settings_module_path)}")
+        #    print(f"settings module: {settings_module_path.relative_to(app_temp_dir)}")
+        # os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ecomproject.settings')
