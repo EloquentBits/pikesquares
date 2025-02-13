@@ -16,6 +16,7 @@ import giturlparse
 import randomname
 from cuid import cuid
 from tinydb import TinyDB, where, Query
+import structlog
 
 
 from pikesquares.conf import AppConfig
@@ -29,6 +30,8 @@ from .validators import (
     RepoAddressValidator,
     PathValidator,
 )
+
+logger = structlog.get_logger()
 
 
 def detect_runtime(cwd: Path):

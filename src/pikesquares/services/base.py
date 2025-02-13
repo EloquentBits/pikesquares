@@ -10,13 +10,15 @@ import pydantic
 from pydantic.config import ConfigDict
 from tinydb import TinyDB, Query
 from uwsgiconf import uwsgi
-import sentry_sdk
+import structlog
+# import sentry_sdk
 
 from pikesquares import __version__, __app_name__
 from pikesquares import conf
 from pikesquares.presets import Section
 from pikesquares.cli.console import console
 
+logger = structlog.get_logger()
 
 __all__ = (
     "BaseService",

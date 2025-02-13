@@ -1,22 +1,43 @@
-import traceback
+# import traceback
+from time import sleep
 import tempfile
 import shutil
 from pathlib import Path
 
 import pydantic
+from rich.console import RenderableType
+import structlog
 
+from pikesquares.cli.console import console
 from .uv import UVMixin
 from . import BaseLanguageRuntime
 
 from .exceptions import (
     UvSyncError,
     UvPipInstallError,
-    DjangoDiffSettingsError,
-    DjangoCheckError,
     PythonRuntimeCheckError,
     PythonRuntimeDjangoCheckError,
     PythonRuntimeInitError,
 )
+
+import logging
+LOG_FILE = "app.log"
+logging.basicConfig(
+    filename=LOG_FILE,  # Log only to a file
+    level=logging.DEBUG,  # Set the desired log level
+    format="%(message)s",
+)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger()
 
 
 class PythonRuntime(BaseLanguageRuntime, UVMixin):
@@ -58,11 +79,17 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
         try:
             shutil.rmtree(app_tmp_dir)
         except OSError:
-            print(f"unable to delete tmp dir @ {str(app_tmp_dir)}")
+            logger.error(f"unable to delete tmp dir @ {str(app_tmp_dir)}")
 
-    def check(self, app_tmp_dir: Path) -> bool:
+    def check(
+            self,
+            app_tmp_dir: Path,
+            console_status: RenderableType | None = None,
+        ) -> bool:
         # copy project to tmp dir at $TMPDIR
-        print(f"[pikesquares] PythonRuntime.check")
+        logger.debug("[pikesquares] PythonRuntime.check")
+        console.log(f"Inspecting Python project @ {str(self.app_root_dir)}")
+        sleep(1)
         shutil.copytree(
             self.app_root_dir,
             app_tmp_dir,
@@ -70,34 +97,36 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
             ignore=shutil.ignore_patterns(*list(self.PY_IGNORE_PATTERNS))
         )
         for p in Path(app_tmp_dir).iterdir():
-            print(p)
+            logger.debug(p)
 
         cmd_env = {}
         venv = app_tmp_dir / ".venv"
-        self.create_venv(venv=venv, cmd_env=cmd_env)
+        self.create_venv(venv=venv, cmd_env=cmd_env, console_silent=True)
         try:
-            self.install_dependencies(venv=venv, app_tmp_dir=app_tmp_dir)
+            self.install_dependencies(venv=venv, app_tmp_dir=app_tmp_dir, console_silent=True)
         except (UvSyncError, UvPipInstallError):
-            print(traceback.format_exc())
+            logger.error("installing dependencies failed.")
             self.check_cleanup(app_tmp_dir)
-            raise PythonRuntimeCheckError("django uv install dependencies failed.")
+            raise PythonRuntimeCheckError("uv install dependencies failed.")
         return True
 
-    def init(self, venv: Path | None = None) -> bool:
-        print(f"[pikesquares] PythonRuntime.init")
+    def init(
+            self,
+            console_status: RenderableType | None = None,
+            venv: Path | None = None
+        ) -> bool:
+        logger.debug("[pikesquares] PythonRuntime.init")
         app_tmp_dir = Path(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
         try:
-            self.check(app_tmp_dir)
+            self.check(app_tmp_dir, console_status)
         except (PythonRuntimeCheckError, PythonRuntimeDjangoCheckError):
-            print("[pikesquares] -- PythonRuntimeCheckError --")
-            print(traceback.format_exc())
+            logger.error("[pikesquares] -- PythonRuntimeCheckError --")
+            # print(traceback.format_exc())
             raise PythonRuntimeInitError("Python Runtime check failed")
 
         self.check_cleanup(app_tmp_dir)
-
         cmd_env = {
-            # FIXME does not have any effect.
-            # "UV_CACHE_DIR": str(conf.uv_cache_dir),
+            # "UV_CACHE_DIR": str(conf.pv_cache_dir),
             "UV_PROJECT_ENVIRONMENT": str(venv),
         }
         self.create_venv(venv, cmd_env=cmd_env)

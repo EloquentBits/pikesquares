@@ -5,6 +5,7 @@ from typing import NewType
 # import zmq
 from tinydb import Query, TinyDB
 import pydantic
+import structlog
 
 from pikesquares import get_first_available_port
 from pikesquares.conf import AppConfig
@@ -17,6 +18,8 @@ __all__ = (
     "HttpRouter",
     "HttpsRouter",
 )
+
+logger = structlog.get_logger()
 
 
 class BaseRouter(BaseService):
@@ -132,7 +135,7 @@ class HttpsRouter(BaseRouter):
     # }
 
     def ping(self) -> None:
-        print("== HttpsRouter.ping ==")
+        logger.debug("== HttpsRouter.ping ==")
         # if not is_port_open(self.api_port):
         #    raise PCAPIUnavailableError()
 
@@ -180,7 +183,7 @@ class HttpRouter(BaseRouter):
     config_section_class: Section = HttpRouterSection
 
     def ping(self) -> None:
-        print("== HttpRouter.ping ==")
+        logger.debug("== HttpRouter.ping ==")
 
     """
     def connect(self):

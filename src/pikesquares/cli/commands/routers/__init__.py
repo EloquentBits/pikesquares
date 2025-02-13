@@ -1,13 +1,13 @@
 from pathlib import Path
-#from typing import Optional
-#import shutil
+# from typing import Optional
+# import shutil
 
 import typer
 from typing_extensions import Annotated
 from tinydb import TinyDB, where, Query
-
 from cuid import cuid
 import questionary
+import structlog
 
 from pikesquares.conf import AppConfig
 from pikesquares import services
@@ -21,6 +21,8 @@ from pikesquares import get_first_available_port
 from ...console import console
 # from ..validators import ServiceNameValidator
 # from ..cli import app
+
+logger = structlog.get_logger()
 
 
 app = typer.Typer()
@@ -66,7 +68,7 @@ def list_(
     conf = services.get(context, AppConfig)
 
     # print(db)
-    print(conf.dump_model())
+    logger.debug(conf)
 
     """
     routers = https_routers_all(conf)

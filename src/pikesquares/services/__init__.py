@@ -4,6 +4,7 @@ from typing import overload, NewType
 from collections.abc import Callable
 
 from tinydb import TinyDB
+import structlog
 
 #from pikesquares.services.device import Device
 #from pikesquares.services.app import WsgiApp
@@ -11,7 +12,7 @@ from tinydb import TinyDB
 
 #from pikesquares.services.base import StatsReadError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 __all__ = (

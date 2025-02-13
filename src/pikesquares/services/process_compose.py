@@ -4,12 +4,15 @@ from pathlib import Path
 
 import pydantic
 import requests
+import structlog
 
 from pikesquares import is_port_open
 from pikesquares.conf import AppConfig
 from pikesquares.services.base import ServiceUnavailableError
 from pikesquares.services import register_factory
 from pikesquares.cli.console import console
+
+logger = structlog.get_logger()
 
 
 class PCAPIUnavailableError(ServiceUnavailableError):
@@ -67,7 +70,7 @@ class ProcessCompose(pydantic.BaseModel):
         try:
             url = f"http://127.0.0.1:{self.api_port}/processes"
             response = requests.get(url, timeout=5)
-            # print(f"ping process-compose api: {response.status_code}")
+            logger.info(f"ping process-compose api: {response.status_code}")
             try:
                 js = response.json()
             except ValueError:
@@ -154,9 +157,9 @@ class ProcessCompose(pydantic.BaseModel):
             "--port",
             str(self.conf.PC_PORT_NUM),
         ]
-        print("calling process-compose up")
-        print(cmd_env)
-        print(cmd_args)
+        logger.info("calling process-compose up")
+        logger.debug(cmd_env)
+        logger.debug(cmd_args)
 
         try:
             popen = subprocess.Popen(
@@ -170,14 +173,14 @@ class ProcessCompose(pydantic.BaseModel):
                 group=self.conf.server_run_as_gid,
             )
             for line in iter(popen.stdout.readline, ""):
-                print(line, end="")
+                logger.debug(line, end="")
 
             popen.stdout.close()
             popen.wait()
 
         except subprocess.CalledProcessError as cperr:
             console.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
-            print(f"failed to launch process-compose: {cperr.stderr.decode()}")
+            logger.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
             return
         """
 
@@ -248,7 +251,7 @@ class ProcessCompose(pydantic.BaseModel):
                 group=0,
             )
             for line in iter(popen.stdout.readline, ""):
-                print(line, end="")
+                logger.debug(line, end="")
 
             popen.stdout.close()
             popen.wait()
@@ -294,8 +297,8 @@ class ProcessCompose(pydantic.BaseModel):
 
         # if compl.returncode != 0:
         #    print("unable to shut down process-compose")
-        print(compl.args)
-        print(compl)
+        logger.debug(compl.args)
+        logger.debug(compl)
 
         if compl.stderr:
             console.warning(compl.stderr.decode())
@@ -315,7 +318,7 @@ class ProcessCompose(pydantic.BaseModel):
 
         args_str = f"{str(self.conf.PROCESS_COMPOSE_BIN)} up --config {pc_config} --detached --port {str(self.api_port)}"
 
-        print(f"{args_str=}")
+        logger.debug(f"{args_str=}")
 
         try:
             compl = subprocess.run(
@@ -335,16 +338,16 @@ class ProcessCompose(pydantic.BaseModel):
                 user=self.conf.server_run_as_uid,
             )
         except subprocess.CalledProcessError as cperr:
-            print(f"failed to launch process-compose: {cperr.stderr.decode()}")
+            logger.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
             return
 
         if compl.returncode != 0:
-            print("unable to launch process-compose")
+            logger.error("unable to launch process-compose")
         else:
-            print("launched process-compose")
+            logger.info("launched process-compose")
 
-        print(compl.stderr.decode())
-        print(compl.stdout.decode())
+        logger.error(compl.stderr.decode())
+        logger.debug(compl.stdout.decode())
 
     def attach(self) -> None:
 
@@ -362,14 +365,14 @@ class ProcessCompose(pydantic.BaseModel):
                 check=True,
             )
         except subprocess.CalledProcessError as cperr:
-            print(f"failed to attach to server: {cperr.stderr.decode()}")
+            logger.error(f"failed to attach to server: {cperr.stderr.decode()}")
             return
 
         if compl.returncode != 0:
-            print("unable to attach server")
+            logger.error("unable to attach server")
 
-        print(compl.stderr.decode())
-        print(compl.stdout.decode())
+        logger.error(compl.stderr.decode())
+        logger.debug(compl.stdout.decode())
 
 
 def register_process_compose(

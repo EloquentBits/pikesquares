@@ -9,6 +9,7 @@ import sys
 import pydantic
 import typer
 from tinydb import TinyDB, Query
+import structlog
 
 #from circus.arbiter import Arbiter
 #from circus.pidfile import Pidfile
@@ -28,6 +29,8 @@ from pikesquares.cli.console import console
 from .mixins.pki import DevicePKIMixin
 
 __all__ = ("Device",)
+
+logger = structlog.get_logger()
 
 
 class Device(BaseService, DevicePKIMixin):
@@ -77,7 +80,7 @@ class Device(BaseService, DevicePKIMixin):
         else:  # ah well, can't control how dlopen works here
             import pyuwsgi
         console.info("Starting PikeSquares Server")
-        print("!!! Starting PikeSquares Server | pyuwsgi.run !!!")
+        logger.info("!!! Starting PikeSquares Server | pyuwsgi.run !!!")
 
         pyuwsgi.run(["--json", f"{str(self.service_config.resolve())}"])
 

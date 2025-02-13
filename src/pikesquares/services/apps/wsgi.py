@@ -6,6 +6,7 @@ from pathlib import Path
 # import zmq
 from tinydb import Query
 import pydantic
+import structlog
 
 # from .. import get_service_status
 # from .project import project_up
@@ -15,6 +16,9 @@ from pikesquares.services import register_factory
 from ...presets import wsgi_app as wsgi_app_preset
 from ..data import VirtualHost, WsgiAppOptions
 from pikesquares.services.base import BaseService
+
+
+logger = structlog.get_logger()
 
 
 class WsgiApp(BaseService):
@@ -55,7 +59,7 @@ class WsgiApp(BaseService):
         return Path(self.conf.run_dir) / f"{self.service_id}-subscription-notify.sock"
 
     def ping(self) -> None:
-        print("== WsgiApp.ping ==")
+        logger.debug("== WsgiApp.ping ==")
 
     def zmq_up(self):
         # if not self.is_started() and str(self.service_config.resolve()).endswith(".stopped"):
@@ -113,7 +117,7 @@ class WsgiApp(BaseService):
             virtual_hosts=self.virtual_hosts,
         ).as_configuration().format(
             formatter="json",
-            do_print=True,
+            do_print=False,
         )
         config_json = json.loads(section)
         config_json["uwsgi"]["show-config"] = True

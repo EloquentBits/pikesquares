@@ -1,9 +1,14 @@
 import subprocess
 from pathlib import Path
 
+import structlog
+
 from .console import console
 
+logger = structlog.get_logger()
+
 CERT_NAME = "_wildcard_pikesquares_dev"
+
 
 def ensure_pki(conf):
     if Path(conf.PKI_DIR).exists():

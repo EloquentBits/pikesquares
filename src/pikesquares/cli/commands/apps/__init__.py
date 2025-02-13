@@ -10,6 +10,7 @@ import questionary
 import randomname
 from cuid import cuid
 from tinydb import TinyDB, where, Query
+import structlog
 
 from .validators import NameValidator
 
@@ -29,6 +30,8 @@ from .utils import (
     create_venv,
     venv_pip_install,
 )
+
+logger = structlog.get_logger()
 
 
 class LanguageRuntime(str, Enum):
@@ -60,7 +63,7 @@ def detect(
 
     custom_style = context.get("cli-style")
 
-    print("Detecting project")
+    logger.info("Detecting project")
 
 
 @app.command(short_help="Create new app\nAliases: [i] create, new")
@@ -359,8 +362,8 @@ def ls(
     for app in db.table("apps").search(where("project_id") == project_id):
         service_id = app.get("service_id")
         # stats_socket = Path(conf.RUN_DIR) / f"{service_id}-stats.sock"
-        # print(read_stats(str(stats_socket)))
-        # print(f"{stats_socket=} {service_id=}")
+        # logger.debug(read_stats(str(stats_socket)))
+        # logger.debug(f"{stats_socket=} {service_id=}")
         # status = get_service_status(
         #    (Path(conf.RUN_DIR) / f"{service_id}-stats.sock")
         # )

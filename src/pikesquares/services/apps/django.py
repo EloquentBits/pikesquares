@@ -1,16 +1,16 @@
+from time import sleep
 import re
-import sys
-import shutil
-import traceback
 import re
-import os
 from pathlib import Path
 
 import pydantic
+from rich.console import RenderableType
 from plumbum import ProcessExecutionError
 from tinydb import TinyDB
+import structlog
 
 from pikesquares.conf import AppConfig
+from pikesquares.cli.console import console
 from ..data import Router, WsgiAppOptions
 from .wsgi import WsgiApp
 from .python import PythonRuntime
@@ -20,6 +20,24 @@ from .exceptions import (
     DjangoDiffSettingsError,
     PythonRuntimeDjangoCheckError,
 )
+
+import logging
+LOG_FILE = "app.log"
+logging.basicConfig(
+    filename=LOG_FILE,  # Log only to a file
+    level=logging.DEBUG,  # Set the desired log level
+    format="%(message)s",
+)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+logger = structlog.get_logger()
 
 
 class DjangoCheckMessage(pydantic.BaseModel):
@@ -80,16 +98,25 @@ class DjangoWsgiApp(WsgiApp):
 
 class PythonRuntimeDjango(PythonRuntime):
 
-    def init(self, venv: Path | None = None) -> bool:
-        print(f"[pikesquares] PythonRuntimeDjango.init")
-        if super().init(venv):
+    def init(
+            self,
+            console_status: RenderableType | None = None,
+            venv: Path | None = None
+        ) -> bool:
+        logger.debug("[pikesquares] PythonRuntimeDjango.init")
+        if super().init(console_status, venv):
             return True
         return False
 
-    def check(self, app_tmp_dir: Path) -> bool:
-        print(f"[pikesquares] PythonRuntimeDjango.check")
-        if super().check(app_tmp_dir):
-            print("[pikesquares] PythonRuntimeDjango.check | PythonRuntime check ok")
+    def check(
+            self,
+            app_tmp_dir: Path,
+            console_status: RenderableType | None = None,
+        ) -> bool:
+        logger.debug("[pikesquares] PythonRuntimeDjango.check")
+        if super().check(app_tmp_dir, console_status):
+            logger.debug("[pikesquares] PythonRuntimeDjango.check | PythonRuntime check ok")
+            console_status.update(status="[magenta]Provisioning Python WSGI App", spinner="earth")
             try:
                 self.collected_project_metadata["django_check_messages"] = \
                         self.django_check(app_tmp_dir=app_tmp_dir)
@@ -119,14 +146,14 @@ class PythonRuntimeDjango(PythonRuntime):
         django_settings = self.collected_project_metadata.\
                 get("django_settings")
 
-        print(django_settings.model_dump())
+        logger.debug(django_settings.model_dump())
 
         django_check_messages = self.collected_project_metadata.\
                 get("django_check_messages", [])
 
         for msg in django_check_messages.messages:
-            print(f"{msg.id=}")
-            print(f"{msg.message=}")
+            logger.debug(f"{msg.id=}")
+            logger.debug(f"{msg.message=}")
 
         wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
         wsgi_file = self.app_root_dir / Path("/".join(wsgi_parts) + ".py")
@@ -153,7 +180,9 @@ class PythonRuntimeDjango(PythonRuntime):
             app_tmp_dir: Path | None = None,
         ) -> DjangoCheckMessages:
         chdir = app_tmp_dir or self.app_root_dir
-        print(f"[pikesquares] run django check in {str(chdir)}")
+        logger.info(f"[pikesquares] run django check in {str(chdir)}")
+        console.log("Running Django checks")
+        sleep(1)
 
         dj_msgs = DjangoCheckMessages()
 
@@ -169,7 +198,7 @@ class PythonRuntimeDjango(PythonRuntime):
             if "System check identified no issues" in stdout:
                 return dj_msgs
         except ProcessExecutionError as plumbum_pe_err:
-            print(" =============== ProcessExecutionError ==============")
+            logger.error(" =============== ProcessExecutionError ==============")
             # https://docs.djangoproject.com/en/5.1/ref/checks/#checkmessage
             # id
             # Optional string. A unique identifier for the issue.
@@ -192,17 +221,17 @@ class PythonRuntimeDjango(PythonRuntime):
             #            print("[pikesquares] re-running Django check")
             #            self.django_check(app_tmp_dir or self.app_root_dir)
 
-            print(plumbum_pe_err.stderr)
-            print(" =============== /ProcessExecutionError ==============")
+            logger.error(plumbum_pe_err.stderr)
+            logger.error(" =============== /ProcessExecutionError ==============")
             if plumbum_pe_err.stderr.startswith("SystemCheckError"):
                 err_lines = plumbum_pe_err.stderr.split("\n")
                 for msg in [line for line in err_lines if line.startswith("?:")]:
-                    print(f"====    {msg=}     ====")
+                    logger.error(f"====    {msg=}     ====")
                     try:
                         # ?: (4_0.E001)
                         msg_id = re.findall(r"(?<=\()[^)]+(?=\))", msg)[0]
                     except IndexError:
-                        print(f"unable to parse message id from '{msg}'")
+                        logger.error(f"unable to parse message id from '{msg}'")
                         continue
                     dj_msgs.messages.append(
                             DjangoCheckMessage(
@@ -211,12 +240,12 @@ class PythonRuntimeDjango(PythonRuntime):
                             ).strip()
                         )
                     )
-                print(f"{dj_msgs.messages=}")
+                logger.error(f"{dj_msgs.messages=}")
                 return dj_msgs
             else:
                 raise DjangoCheckError(f"[pikesquares] UvExecError: unable to run django check in {str(chdir)}") from None
 
-        print(
+        logger.info(
             f"django check completed. no errors.: {retcode=} {stdout=} {stderr=}"
         )
         return dj_msgs
@@ -226,7 +255,9 @@ class PythonRuntimeDjango(PythonRuntime):
         cmd_env: dict | None = None,
         app_tmp_dir: Path | None = None,
         ):
-        print("[pikesquares] django diffsettings")
+        logger.info("[pikesquares] django diffsettings")
+        console.log("Running Django diffsettings")
+        sleep(3)
         cmd_args = ["run", "manage.py", "diffsettings"]
         chdir = app_tmp_dir or self.app_root_dir
         try:
@@ -243,16 +274,14 @@ class PythonRuntimeDjango(PythonRuntime):
                         if match:
                             dj_settings[fld] = match.group(1)
                         else:
-                            print(f"did not find a match for {fld}")
+                            logger.debug(f"did not find a match for {fld}")
 
             assert dj_settings
             django_settings = DjangoSettings(**dj_settings)
-            print(django_settings.model_dump())
+            logger.debug(django_settings.model_dump())
             return django_settings
 
         except UvCommandExecutionError:
             raise DjangoDiffSettingsError(
                 f"[pikesquares] UvExecError: unable to run django diffsettings in {chdir}"
             )
-
-

@@ -15,16 +15,19 @@ from typing import (
 # from questionary import Style as QuestionaryStyle
 
 import pydantic
-
 from pydantic_settings import (
     BaseSettings,
     # PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
 # from pydantic.fields import FieldInfo
+import structlog
 
 from pikesquares.services import register_factory
 from pikesquares.cli.console import console
+
+logger = structlog.get_logger()
+
 
 """
 class JsonConfigSettingsSource(PydanticBaseSettingsSource):
@@ -148,10 +151,10 @@ def make_system_dir(
     if newdir.exists():
         return newdir
 
-    print(f"make_system_dir: mkdir {str(newdir)}")
+    logger.info(f"make_system_dir: mkdir {str(newdir)}")
     newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
 
-    print(f"make_system_dir: chown {owner_username}:{owner_groupname}")
+    logger.info(f"make_system_dir: chown {owner_username}:{owner_groupname}")
     try:
         owner_uid = pwd.getpwnam(owner_username)[2]
     except KeyError:
@@ -172,11 +175,11 @@ def ensure_sysdir(dir_path, varname):
     dir_path = dir_path or os.environ.get(f"PIKESQUARES_{varname}")
     if not dir_path:
         dir_path = make_system_dir(Path("/var/lib/pikesquares"))
-        print(f"new dir with default path: {dir_path}")
+        logger.info(f"new dir with default path: {dir_path}")
         return dir_path 
     elif not Path(dir_path).exists():
         dir_path = make_system_dir(Path(dir_path))
-        print(f"new dir with a user provided path: {dir_path}")
+        logger.info(f"new dir with a user provided path: {dir_path}")
         return dir_path
 
 
@@ -356,7 +359,7 @@ def register_app_conf(
             #db.table("configs").insert(configs)
 
         # raise AppConfigError() from None
-        print(override_settings)
+        logger.debug(override_settings)
         return AppConfig(**override_settings)
 
     register_factory(context, AppConfig, conf_factory)

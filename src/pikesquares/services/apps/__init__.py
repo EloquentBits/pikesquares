@@ -2,12 +2,32 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 
 import pydantic
+from rich.console import RenderableType
+import structlog
 
 # from wsgi import WsgiApp
 
 # __all__ = (
 #    "WsgiApp",
 # )
+
+import logging
+LOG_FILE = "app.log"
+logging.basicConfig(
+    filename=LOG_FILE,  # Log only to a file
+    level=logging.DEBUG,  # Set the desired log level
+    format="%(message)s",
+)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+logger = structlog.get_logger()
 
 
 class BaseLanguageRuntime(pydantic.BaseModel, ABC):
@@ -17,14 +37,21 @@ class BaseLanguageRuntime(pydantic.BaseModel, ABC):
     collected_project_metadata: dict = {}
 
     def __init_subclass__(cls):
-        print(f"Subclass {cls} was created.")
+        logger.debug(f"Subclass {cls} was created.")
 
     @abstractmethod
-    def check(self, app_tmp_dir: Path):
+    def check(self,
+        app_tmp_dir: Path,
+        console_status: RenderableType | None = None,
+        ):
         raise NotImplementedError
 
     @abstractmethod
-    def init(self, venv: Path | None = None):
+    def init(
+        self,
+        console_status: RenderableType | None = None,
+        venv: Path | None = None
+        ) -> bool:
         raise NotImplementedError
 
     def get_files(self) -> set[Path]:
@@ -50,14 +77,18 @@ class RubyRuntime(BaseLanguageRuntime):
         "Gemfile",
     })
 
-    @abstractmethod
-    def check(self) -> bool:
-        print("Ruby Check")
+    def check(self,
+        app_tmp_dir: Path,
+        console_status: RenderableType | None = None,
+        ) -> bool:
+        logger.info("Ruby Check")
         return True
 
-    @abstractmethod
-    def init(self, venv: Path | None = None) -> bool:
-        print("Ruby Init")
+    def init(self,
+        console_status: RenderableType | None = None,
+        venv: Path | None = None
+        ) -> bool:
+        logger.info("Ruby Init")
         return True
 
 
@@ -66,10 +97,15 @@ class PHPRuntime(BaseLanguageRuntime):
         "index.php",
     })
 
-    @abstractmethod
-    def check(self):
+    def check(self,
+        app_tmp_dir: Path,
+        console_status: RenderableType | None = None,
+        ):
         pass
 
-    @abstractmethod
-    def init(self, venv: Path | None = None):
+    def init(
+        self,
+        console_status: RenderableType | None = None,
+        venv: Path | None = None,
+        ):
         pass

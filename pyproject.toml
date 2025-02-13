@@ -21,6 +21,7 @@ dependencies = [
     "randomname>=0.2.1",
     "requests>=2.32.3",
     "sentry-sdk>=2.19.0",
+    "structlog>=25.1.0",
     "svcs>=24.1.0",
     "tinydb>=4.8.2",
     "toml>=0.10.2",

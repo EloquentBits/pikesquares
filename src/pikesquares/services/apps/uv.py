@@ -1,16 +1,37 @@
-import shutil
-import sys
+from time import sleep
 from pathlib import Path
 
 # import toml
 from plumbum import local as pl_local
 from plumbum import ProcessExecutionError
+import structlog
 
+from pikesquares.cli.console import console
 from .exceptions import (
     UvCommandExecutionError,
     UvSyncError,
     UvPipInstallError,
 )
+
+import logging
+LOG_FILE = "app.log"
+logging.basicConfig(
+    filename=LOG_FILE,  # Log only to a file
+    level=logging.DEBUG,  # Set the desired log level
+    format="%(message)s",
+)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+
+logger = structlog.get_logger()
 
 
 class UVMixin:
@@ -19,8 +40,12 @@ class UVMixin:
         self,
         venv: Path | None = None,
         cmd_env: dict | None = None,
+        console_silent: bool = False,
         ) -> None:
-        print(f"[pikesquares] `uv venv`: {str(venv)}")
+        logger.info(f"[pikesquares] `uv venv`: {str(venv)}")
+        if not console_silent:
+            console.log("Creating Python virtual environment")
+            sleep(1)
 
         # os.chdir(app_root_dir)
         cmd_args = []
@@ -48,10 +73,14 @@ class UVMixin:
         cmd_env: dict | None = None,
         venv: Path | None = None,
         app_tmp_dir: Path | None = None,
+        console_silent: bool = False,
         ) -> None:
 
         venv = venv or self.app_root_dir / ".venv"
-        print(f"[pikesquares] uv installing dependencies in venv @ {str(venv)}")
+        logger.info(f"[pikesquares] uv installing dependencies in venv @ {str(venv)}")
+        if not console_silent:
+            console.log("Installing Dependencies")
+            sleep(1)
         cmd_args = []
         install_inspect_extensions = False
 
@@ -62,7 +91,7 @@ class UVMixin:
         #    print(deps)
 
         if "uv.lock" and "pyproject.toml" in self.top_level_file_names:
-            print("[pikesquares] installing dependencies from uv.lock")
+            logger.info("[pikesquares] installing dependencies from uv.lock")
             """
             --cache-dir cache-dir
                 Path to the cache directory.
@@ -100,7 +129,7 @@ class UVMixin:
             # uv pip install -r requirements.txt
             # uv add -r requirements.txt
             # uv export --format requirements-txt
-            print("[pikesquares] installing depedencies from requirements.txt")
+            logger.info("[pikesquares] installing depedencies from requirements.txt")
             cmd_args = [*cmd_args, "pip", "install", "-r", "requirements.txt"]
             try:
                 retcode, stdout, stderr = self.uv_cmd(
@@ -109,19 +138,17 @@ class UVMixin:
                     chdir=app_tmp_dir or self.app_root_dir,
                 )
             except UvCommandExecutionError:
-                # shutil.rmtree(self.app_root_dir)
                 raise UvPipInstallError(
                     "[pikesquares] UvExecError: unable to install dependencies from requirements.txt"
                 )
                 # for p in Path(app_root_dir / ".venv/lib/python3.12/site-packages").iterdir():
                 #    print(p)
             if install_inspect_extensions:
-                print("[pikesquares] installing inspect-extensions")
+                logger.info("[pikesquares] installing inspect-extensions")
                 cmd_args = [*cmd_args, "pip", "install", "inspect-extensions"]
                 try:
                     retcode, stdout, stderr = self.uv_cmd(cmd_args, cmd_env)
                 except UvCommandExecutionError:
-                    # shutil.rmtree(self.app_root_dir)
                     raise UvPipInstallError(
                         f"[pikesquares] UvExecError: unable to install inspect-extensions in {str(self.app_root_dir)}"
                     )
@@ -134,11 +161,11 @@ class UVMixin:
             chdir: Path | None = None,
 
         ):
-        print(f"[pikesquares] uv_cmd: {cmd_args=}")
+        logger.info(f"[pikesquares] uv_cmd: {cmd_args=}")
         try:
             if cmd_env:
                 pl_local.env.update(cmd_env)
-                print(f"{cmd_env=}")
+                logger.debug(f"{cmd_env=}")
 
             # with pl_local.as_user(run_as_user):
             with pl_local.cwd(chdir or self.app_root_dir):
@@ -147,9 +174,9 @@ class UVMixin:
                     cmd_args,
                     **{"env": cmd_env}
                 )
-                print(f"[pikesquares] uv_cmd: {retcode=}")
-                print(f"[pikesquares] uv_cmd: {stdout=}")
-                print(f"[pikesquares] uv_cmd: {stderr=}")
+                logger.debug(f"[pikesquares] uv_cmd: {retcode=}")
+                logger.debug(f"[pikesquares] uv_cmd: {stdout=}")
+                logger.debug(f"[pikesquares] uv_cmd: {stderr=}")
                 return retcode, stdout, stderr
         except ProcessExecutionError:
             raise

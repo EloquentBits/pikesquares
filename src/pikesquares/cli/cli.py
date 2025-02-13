@@ -1,24 +1,24 @@
-import sys
+#import json
+from time import sleep
 import os
 import traceback
 import time
-from typing import Optional, Annotated, NewType
+from typing import Optional, Annotated
 from pathlib import Path
 
 import randomname
 import typer
 import questionary
-from tinydb import TinyDB, Query
+from tinydb import TinyDB
 from cuid import cuid
 from dotenv import load_dotenv
-
-#from circus import Arbiter, get_arbiter
+import structlog
+# from circus import Arbiter, get_arbiter
 
 from pikesquares.conf import (
     AppConfig,
     AppConfigError,
     register_app_conf,
-    SysDir,
     make_system_dir,
 )
 from pikesquares import services
@@ -36,15 +36,11 @@ from pikesquares.services.router import (
     DefaultHttpRouter,
     register_router,
 )
+from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.services import process_compose
 from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
 from pikesquares.services.apps.django import PythonRuntimeDjango
-from pikesquares.cli.commands.apps.validators import NameValidator
-
-from pikesquares.services.apps.django import (
-    DjangoWsgiApp,
-)
 from pikesquares.services.apps.exceptions import (
     PythonRuntimeInitError,
 )
@@ -58,6 +54,50 @@ from pikesquares.services.data import (
 
 from .console import console
 from pikesquares import __app_name__, __version__, get_first_available_port
+
+
+LOG_FILE = "app.log"
+
+
+"""
+def write_to_file(logger, method_name, event_dict):
+    with open(LOG_FILE, "a") as log_file:
+        log_file.write(json.dumps(event_dict) + "\n")
+    return event_dict  # Required by structlog's processor chain
+
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),  # Add timestamp
+        structlog.processors.JSONRenderer(),  # Format as JSON
+        write_to_file,  # Write to file
+    ],
+    context_class=dict,  # Use a standard dictionary for context
+    logger_factory=structlog.PrintLoggerFactory(),  # PrintLoggerFactory is required but won't print due to write_to_file
+    wrapper_class=structlog.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+"""
+
+import logging
+logging.basicConfig(
+    filename=LOG_FILE,  # Log only to a file
+    level=logging.DEBUG,  # Set the desired log level
+    format="%(message)s",
+)
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger()
+
+logger.info("This message will only be written to the log file")
+
 
 load_dotenv()
 
@@ -181,7 +221,7 @@ def info(
 
     conf = services.get(context, AppConfig)
     # console.info(f"data_dir={str(conf.DATA_DIR)}")
-    console.info(f"virtualenv={str(conf.VIRTUAL_ENV)}")
+    logger.debug(f"virtualenv={str(conf.VIRTUAL_ENV)}")
 
     device = services.get(context, Device)
     # pc = services.get(context, process_compose.ProcessCompose)
@@ -254,7 +294,7 @@ def bootstrap(
          ]:
         svc = services.get(context, svc_class)
         svc.up()
-    console.info("bootstrap done")
+    logger.info("bootstrap done")
 
     raise typer.Exit(code=0)
 
@@ -302,10 +342,33 @@ def init(
     ).ask())
 
     if app_root_dir and not app_root_dir.exists():
-        console.info(f"Project root directory does not exist: {str(app_root_dir)}")
+        console.warning(f"Project root directory does not exist: {str(app_root_dir)}")
         raise typer.Exit(code=1)
 
-    print(f"{app_root_dir=}")
+    logger.info(f"{app_root_dir=}")
+
+    def build_routers(app_name: str) -> list[Router]:
+
+        default_https_router = services.get(context, DefaultHttpsRouter)
+        default_http_router = services.get(context, DefaultHttpRouter)
+
+        https_router_kwargs = {
+            "router_id": default_https_router.service_id,
+            "subscription_server_address": default_https_router.subscription_server_address,
+            "subscription_notify_socket": default_https_router.notify_socket,
+            "app_name": app_name,
+        }
+        http_router_kwargs = {
+            "router_id": default_http_router.service_id,
+            "subscription_server_address": default_http_router.subscription_server_address,
+            "subscription_notify_socket": default_http_router.notify_socket,
+            "app_name": app_name,
+        }
+        routers = [
+            Router(**https_router_kwargs),
+            Router(**http_router_kwargs),
+        ]
+        return routers
 
     for runtime_class in (PythonRuntime, RubyRuntime, PHPRuntime):
         if runtime_class == PythonRuntime:
@@ -321,53 +384,37 @@ def init(
             runtime.uv_bin = conf.UV_BIN
             try:
                 pyvenv_dir = conf.data_dir / "venvs" / service_id
-                if runtime.init(pyvenv_dir):
-                    print("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
-                    print(runtime.model_dump())
-
-                    app_name = questionary.text(
-                        "Choose a name for your app: ",
-                        default=randomname.get_name().lower(),
-                        style=custom_style,
-                        validate=NameValidator,
-                    ).ask()
-
-                    default_https_router = services.get(context, DefaultHttpsRouter)
-                    default_http_router = services.get(context, DefaultHttpRouter)
-
-                    https_router_kwargs = {
-                        "router_id": default_https_router.service_id,
-                        "subscription_server_address": default_https_router.subscription_server_address,
-                        "subscription_notify_socket": default_https_router.notify_socket,
-                        "app_name": app_name,
-                    }
-                    http_router_kwargs = {
-                        "router_id": default_http_router.service_id,
-                        "subscription_server_address": default_http_router.subscription_server_address,
-                        "subscription_notify_socket": default_http_router.notify_socket,
-                        "app_name": app_name,
-                    }
-                    routers = [
-                        Router(**https_router_kwargs),
-                        Router(**http_router_kwargs),
-                    ]
-                    app_project = services.get(context, SandboxProject)
-
-                    wsgi_app = runtime.get_app(
-                        conf,
-                        db,
-                        app_name,
-                        service_id,
-                        app_project,
-                        pyvenv_dir,
-                        routers,
-                    )
-                    print(wsgi_app)
-
+                proj_type = "Python"
+                with console.status(
+                        status=f"[magenta]Validating {proj_type} project", spinner="earth"
+                    ) as console_status:
+                    sleep(1)
+                    if runtime.init(console_status=console_status, venv=pyvenv_dir):
+                        logger.info("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
+                        logger.debug(runtime.model_dump())
+                        # app_name = questionary.text(
+                        #    "Choose a name for your app: ",
+                        #    default=randomname.get_name().lower(),
+                        #    style=custom_style,
+                        #    validate=NameValidator,
+                        # ).ask()
+                        console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
+                        app_name = randomname.get_name().lower()
+                        app_project = services.get(context, SandboxProject)
+                        wsgi_app = runtime.get_app(
+                            conf,
+                            db,
+                            app_name,
+                            service_id,
+                            app_project,
+                            pyvenv_dir,
+                            build_routers(app_name),
+                        )
+                        logger.info(wsgi_app)
+                console.print("[bold green]WSGI App has been provisioned.")
 
             except PythonRuntimeInitError:
-                print("[pikesquares] -- PythonRuntimeInitError --")
-                #print(traceback.format_exc())
+                logger.error("[pikesquares] -- PythonRuntimeInitError --")
 
         elif runtime_class == RubyRuntime:
             pass
@@ -496,13 +543,13 @@ def main(
     Welcome to Pike Squares. Building blocks for your apps.
     """
 
-    console.info(f"About to execute command: {ctx.invoked_subcommand}")
+    logger.info(f"About to execute command: {ctx.invoked_subcommand}")
     for key, value in os.environ.items():
         if key.startswith(("PIKESQUARES", "SCIE", "PEX", "VIRTUAL_ENV")):
-            print(f"{key}: {value}")
+            logger.debug(f"{key}: {value}")
 
     is_root: bool = os.getuid() == 0
-    print(f"{os.getuid()=} {is_root=}")
+    logger.info(f"{os.getuid()=} {is_root=}")
 
     if ctx.invoked_subcommand in set({"bootstrap", "up"}) and not is_root:
         console.info("Please start server as root user. `sudo pikesquares up`")
@@ -518,9 +565,9 @@ def main(
     #    console.error("Unable to read the pikesquares scie base directory")
     #    raise typer.Exit(1)
 
-    console.info(f"PikeSquares: v{pikesquares_version}")
+    logger.info(f"PikeSquares: v{pikesquares_version}")
     context = services.init_context(ctx.ensure_object(dict))
-    print(vars(ctx))
+    logger.info(vars(ctx))
 
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
@@ -551,25 +598,25 @@ def main(
             cli_arg = path_to_dir_sources[0]
             env_var_path_to_dir = path_to_dir_sources[1]
             default_path_to_dir = path_to_dir_sources[2]
-            print(f"{varname=}")
+            logger.info(f"{varname=}")
             if cli_arg:
-                print(f"cli args: {cli_arg}.")
+                logger.info(f"cli args: {cli_arg}.")
             if env_var_path_to_dir:
-                print(f"env var: {env_var_path_to_dir}")
+                logger.info(f"env var: {env_var_path_to_dir}")
             # ensure_sysdir(sysdir, varname)
 
             path_to_dir = cli_arg or env_var_path_to_dir or default_path_to_dir
             if isinstance(path_to_dir, str):
                 path_to_dir = Path(path_to_dir)
             if not path_to_dir.exists():
-                print(f"creating dir: {path_to_dir}")
+                logger.info(f"creating dir: {path_to_dir}")
                 make_system_dir(path_to_dir)
             override_settings[varname] = path_to_dir
 
     if version:
         override_settings["VERSION"] = version
 
-    print(f"{override_settings=}")
+    logger.info(f"{override_settings=}")
 
     try:
         register_app_conf(
@@ -583,9 +630,9 @@ def main(
 
     conf = services.get(context, AppConfig)
 
-    print(f"{conf.data_dir=}")
+    logger.info(f"{conf.data_dir=}")
     db_path = conf.data_dir / "device-db.json"
-    print(f"{db_path=}")
+    logger.info(f"{db_path=}")
     services.register_db(
         context,
         db_path,

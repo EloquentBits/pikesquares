@@ -2,11 +2,14 @@ from typing import Optional, Annotated
 
 import typer
 import questionary
+import structlog
 
 from pikesquares.cli.console import console
 from pikesquares import services
 from pikesquares.services.base import StatsReadError
 from pikesquares.services.device import Device
+
+logger = structlog.get_logger()
 
 app = typer.Typer()
 
@@ -110,7 +113,7 @@ def info(
         console.warning(f"""Device stats @ {device.stats_address} are unavailable.\nIs the PikeSquares Server running?""")
         raise typer.Exit() from None
 
-    print(device_stats)
+    logger.info(device_stats)
 
     #vassals = stats_js.get("vassals", [])
     #console.info(f"{len(vassals)} vassals running")
