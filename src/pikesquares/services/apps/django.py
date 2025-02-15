@@ -21,22 +21,6 @@ from .exceptions import (
     PythonRuntimeDjangoCheckError,
 )
 
-import logging
-LOG_FILE = "app.log"
-logging.basicConfig(
-    filename=LOG_FILE,  # Log only to a file
-    level=logging.DEBUG,  # Set the desired log level
-    format="%(message)s",
-)
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
-    ],
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
 logger = structlog.get_logger()
 
 
@@ -100,23 +84,27 @@ class PythonRuntimeDjango(PythonRuntime):
 
     def init(
             self,
-            console_status: RenderableType | None = None,
-            venv: Path | None = None
+            venv: Path,
+            check: bool = True,
         ) -> bool:
+
+        # live = self.__pydantic_extra__.get("rich_live")
+        # live.console("hello from PythonRuntimeDjango")
+        # live.update("hello from PythonRuntimeDjango")
         logger.debug("[pikesquares] PythonRuntimeDjango.init")
-        if super().init(console_status, venv):
+
+        if super().init(check, venv):
             return True
         return False
 
     def check(
             self,
-            app_tmp_dir: Path,
-            console_status: RenderableType | None = None,
+            app_tmp_dir: Path
         ) -> bool:
         logger.debug("[pikesquares] PythonRuntimeDjango.check")
-        if super().check(app_tmp_dir, console_status):
+        if super().check(app_tmp_dir):
             logger.debug("[pikesquares] PythonRuntimeDjango.check | PythonRuntime check ok")
-            console_status.update(status="[magenta]Provisioning Python WSGI App", spinner="earth")
+            #console_status.update(status="[magenta]Provisioning Python WSGI App", spinner="earth")
             try:
                 self.collected_project_metadata["django_check_messages"] = \
                         self.django_check(app_tmp_dir=app_tmp_dir)

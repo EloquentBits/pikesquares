@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -5,6 +6,8 @@ from pathlib import Path
 import pydantic
 import requests
 import structlog
+from plumbum import local as pl_local
+from plumbum import ProcessExecutionError
 
 from pikesquares import is_port_open
 from pikesquares.conf import AppConfig
@@ -42,323 +45,165 @@ class ProcessComposeProcessStats(pydantic.BaseModel):
 
 
 class ProcessCompose(pydantic.BaseModel):
-    api_port: int
     # uwsgi_bin: Path
     conf: AppConfig
     # db: TinyDB
 
     # model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
 
+    @pydantic.computed_field
+    def socket_address(self) -> Path:
+        return self.conf.run_dir / "process-compose.sock"
+
     def __repr__(self) -> str:
-        return f"process-compose ... -p 127.0.0.1:{self.api_port}"
+        return f"process-compose: API @ {str(self.socket_address)}"
 
     def __str__(self) -> str:
         return self.__repr__()
 
-    @pydantic.computed_field
-    def socket_address(self) -> Path:
-        return Path(self.conf.run_dir) / f"{self.service_id}.sock"
-
-    def ping(self) -> None:
-        if not is_port_open(self.api_port):
-            raise PCAPIUnavailableError()
-
-    def ping_api(self) -> bool:
-        if not is_port_open(self.api_port):
-            raise PCAPIUnavailableError()
-
-        try:
-            url = f"http://127.0.0.1:{self.api_port}/processes"
-            response = requests.get(url, timeout=5)
-            logger.info(f"ping process-compose api: {response.status_code}")
-            try:
-                js = response.json()
-            except ValueError:
-                console.warning(f"process-compose proceses API did not return valid json. {response=}")
-                return False
-            try:
-                device_process = \
-                        next(filter(lambda p: p.get("name") == "Device", js.get("data", {})))
-                process_stats = ProcessComposeProcessStats(**device_process)
-                if process_stats.IsRunning and process_stats.status == "Running":
-                    return True
-            except (IndexError, StopIteration):
-                pass
-        except requests.ConnectionError:
-            console.warning("Connection Error to process-compose API")
-        except requests.Timeout:
-            console.warning("Request to process-compose API timed out")
-
-        raise PCDeviceUnavailableError()
-
-
-    def list_processes(self):
-        # process-compose list --port 9555 --output json
-        # [
-        #        {
-        #                "name": "Device",
-        #                "namespace": "default",
-        #                "status": "Running",
-        #                "system_time": "20m",
-        #                "age": 1178211038484,
-        #                "is_ready": "-",
-        #                "restarts": 0,
-        #                "exit_code": 0,
-        #                "pid": 3968629,
-        #                "is_elevated": false,
-        #                "password_provided": false,
-        #                "mem": 1708032,
-        #                "cpu": 0,
-        #                "IsRunning": true
-        #        }
-        # ]
-        pass
-
-    def up(self) -> None:
-        #  str(self.conf.PROCESS_COMPOSE_BIN),
-        #  "up",
-        #  "--config",
-        #  str(datadir / "process-compose.yml"),
-        #  "--detached",
-        #  "--port",
-        #  str(self.api_port),
-        # ],
-
-        pc_config = self.conf.PROCESS_COMPOSE_CONFIG
-        pc_bin = self.conf.PROCESS_COMPOSE_DIR / "process-compose"
+    def pc_cmd(
+            self,
+            cmd_args: list[str],
+            # run_as_user: str = "pikesquares",
+            cmd_env: dict | None = None,
+            chdir: Path | None = None,
+        ) -> tuple[int, str, str]:
+        logger.info(f"[pikesquares] pc_cmd: {cmd_args=}")
 
         cmd_env = {
             "COMPOSE_SHELL": os.environ.get("SHELL"),
             "PIKESQUARES_VERSION": self.conf.VERSION,
             "PIKESQUARES_UWSGI_BIN": str(self.conf.UWSGI_BIN),
-            "PIKESQUARES_VIRTUAL_ENV": str(self.conf.VIRTUAL_ENV),
+            "PIKESQUARES_PYTHON_VIRTUAL_ENV": str(self.conf.PYTHON_VIRTUAL_ENV),
             "PIKESQUARES_CADDY_BIN": str(self.conf.CADDY_BIN),
             "PIKESQUARES_DNSMASQ_BIN": str(self.conf.DNSMASQ_BIN),
             "PIKESQUARES_SCIE_BASE": str(self.conf.SCIE_BASE),
             "PIKESQUARES_SCIE_LIFT_FILE": str(self.conf.SCIE_LIFT_FILE),
             "PIKESQUARES_EASYRSA_BIN": str(self.conf.EASYRSA_BIN),
-            "PIKESQUARES_PROCESS_COMPOSE_DIR": str(self.conf.PROCESS_COMPOSE_DIR),
+            "PIKESQUARES_PROCESS_COMPOSE_BIN": str(self.conf.PROCESS_COMPOSE_BIN),
         }
 
-        # --unix-socke
-        # --use-uds
+        logger.debug(cmd_env)
+        logger.debug(cmd_args)
 
+        try:
+            if cmd_env:
+                pl_local.env.update(cmd_env)
+                logger.debug(f"{cmd_env=}")
+
+            # with pl_local.as_user(run_as_user):
+            with pl_local.cwd(chdir or self.conf.data_dir):
+                pc = pl_local[str(self.conf.PROCESS_COMPOSE_BIN)]
+                retcode, stdout, stderr = pc.run(
+                    cmd_args,
+                    **{"env": cmd_env}
+                )
+                logger.debug(f"[pikesquares] pc_cmd: {retcode=}")
+                logger.debug(f"[pikesquares] pc_cmd: {stdout=}")
+                logger.debug(f"[pikesquares] pc_cmd: {stderr=}")
+                return retcode, stdout, stderr
+        except ProcessExecutionError:
+            raise
+            # print(vars(exc))
+            # {
+            #    'message': None,
+            #    'host': None,
+            #    'argv': ['/home/pk/.local/bin/uv', 'run', 'manage.py', 'check'],
+            #    'retcode': 1
+            #    'stdout': '',
+            #    'stderr': "warning: `VIRTUAL_ENV=/home/pk/dev/eqb/pikesquares/.venv` does not match the project environment path `.venv` and will be ignored\nSystemCheckError: System check identified some issues:\n\nERRORS:\n?: (caches.E001) You must define a 'default' cache in your CACHES setting.\n\nSystem check identified 1 issue (0 silenced).\n"
+            # }
+            # print(traceback.format_exc())
+            #raise UvCommandExecutionError(
+            #        f"uv cmd [{' '.join(cmd_args)}] failed.\n{exc.stderr}"
+            #)
+
+    def ping(self) -> None:
+        if not self.socket_address.exists():
+            raise PCAPIUnavailableError()
+
+    def ping_api(self) -> bool:
+        if not self.socket_address.exists():
+            raise PCAPIUnavailableError()
+
+        try:
+            logger.info(f"ping process-compose api: {str(self.socket_address)}")
+            cmd_args = [
+                "process",
+                "list",
+                "--use-uds",
+                "--unix-socket",
+                "/run/pikesquares/process-compose.sock",
+                "--output",
+                "json",
+            ]
+            retcode, stdout, stderr = self.pc_cmd(cmd_args)
+            js = json.loads(stdout)
+            try:
+                device_process = \
+                        next(
+                            filter(lambda p: p.get("name") == "Device", js)
+                        )
+                console.info(device_process)
+                process_stats = ProcessComposeProcessStats(**device_process)
+                if process_stats.IsRunning and process_stats.status == "Running":
+                    return True
+            except (IndexError, StopIteration):
+                pass
+        except ProcessExecutionError as exc:
+            logger.error(exc)
+            return False
+
+        raise PCDeviceUnavailableError()
+
+    def up(self) -> tuple[int, str, str]:
         cmd_args = [
-            str(pc_bin),
             "up",
             "--config",
-            str(pc_config),
+            str(self.conf.PROCESS_COMPOSE_CONFIG),
             "--log-file",
             str(self.conf.log_dir / "process-compose.log"),
             "--detached",
             "--hide-disabled",
             # "--tui",
             # "false",
-            "--port",
-            str(self.conf.PC_PORT_NUM),
+            "--unix-socket",
+            str(self.socket_address),
+
         ]
         logger.info("calling process-compose up")
-        logger.debug(cmd_env)
-        logger.debug(cmd_args)
-
         try:
-            popen = subprocess.Popen(
-                cmd_args,
-                env=cmd_env,
-                cwd=self.conf.data_dir,
-                stdout=subprocess.PIPE,
-                bufsize=1,
-                universal_newlines=True,
-                user=self.conf.server_run_as_uid,
-                group=self.conf.server_run_as_gid,
-            )
-            for line in iter(popen.stdout.readline, ""):
-                logger.debug(line, end="")
+            return self.pc_cmd(cmd_args)
+        except ProcessExecutionError as exc:
+            logger.error(exc)
+            return exc.retcode, exc.stdout, exc.stderr
 
-            popen.stdout.close()
-            popen.wait()
+    def down(self) -> tuple[int, str, str]:
 
-        except subprocess.CalledProcessError as cperr:
-            console.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
-            logger.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
-            return
-        """
+        if not self.socket_address.exists():
+            raise PCAPIUnavailableError()
 
-        args_str = f"{str(self.conf.PROCESS_COMPOSE_BIN)} up --config {pc_config} --detached --port {str(self.api_port)}"
-
-        print(f"{args_str=}")
-
+        cmd_args = [
+            "down",
+            "--unix-socket",
+            str(self.conf.run_dir / "process-compose.sock"),
+        ]
+        logger.info("calling process-compose down")
         try:
-            compl = subprocess.run(
-                args_str,
-                env={
-                    "DATA_DIR": str(self.conf.data_dir),
-                    "LOG_DIR": str(self.conf.log_dir),
-                    "SERVER_EXE": os.environ.get("SCIE_ARGV0"),
-                    "COMPOSE_SHELL": "/usr/bin/sh",
-                    "PIKESQUARES_VERSION": self.conf.version,
-
-                },
-                shell=True,
-                cwd=self.conf.data_dir,
-                capture_output=True,
-                check=True,
-                user=self.conf.server_run_as_uid,
-            )
-        except subprocess.CalledProcessError as cperr:
-            print(f"failed to launch process-compose: {cperr.stderr.decode()}")
-            return
-
-        if compl.returncode != 0:
-            print("unable to launch process-compose")
-        else:
-            print("launched process-compose")
-
-        print(compl.stderr.decode())
-        print(compl.stdout.decode())
-        """
-
-    def up_scie(self) -> None:
-        server_bin = os.environ.get("SCIE_ARGV0")
-        # if server_bin and Path(server_bin).exists():
-        console.info(f"{os.environ.get("SHELL")=}")
-        console.info(f"{self.conf.uwsgi_bin=}")
-        cmd_env = {
-            "SCIE_BOOT": "process-compose-up",
-            "COMPOSE_SHELL": os.environ.get("SHELL"),
-            "PIKESQUARES_VERSION": self.conf.VERSION,
-            "PIKESQUARES_UWSGI_BIN": str(self.conf.uwsgi_bin),
-        }
-        try:
-            # compl = subprocess.run(
-            #    server_bin,
-            #    env=cmd_env,
-            #    shell=True,
-            #    cwd=datadir,
-            #    capture_output=True,
-            #    check=True,
-            #    user=self.conf.server_run_as_uid,
-            # )
-
-            popen = subprocess.Popen(
-                server_bin,
-                env=cmd_env,
-                cwd=self.conf.data_dir,
-                stdout=subprocess.PIPE,
-                bufsize=1,
-                universal_newlines=True,
-                user=0,
-                group=0,
-            )
-            for line in iter(popen.stdout.readline, ""):
-                logger.debug(line, end="")
-
-            popen.stdout.close()
-            popen.wait()
-
-        except subprocess.CalledProcessError as cperr:
-            console.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
-            return
-
-        # if compl.returncode != 0:
-        #    print("unable to launch process-compose")
-        # if compl.stderr:
-        #    console.info(compl.stderr.decode())
-        # if compl.stdout:
-        #    console.info(compl.stdout.decode())
-
-
-    def down(self) -> None:
-        datadir = self.conf.data_dir
-        server_bin = os.environ.get("SCIE_ARGV0")
-        # if server_bin and Path(server_bin).exists():
-        compose_shell = os.environ.get("SHELL")
-        console.info(f"{compose_shell=}")
-        cmd_env = {
-            "SCIE_BOOT": "process-compose-down",
-            "COMPOSE_SHELL": compose_shell,
-            "PIKESQUARES_VERSION": self.conf.VERSION,
-        }
-        console.info(cmd_env)
-        console.info(f"{server_bin=}")
-        try:
-            compl = subprocess.run(
-                server_bin,
-                env=cmd_env,
-                shell=True,
-                cwd=datadir,
-                capture_output=True,
-                check=True,
-                user=self.conf.server_run_as_uid,
-            )
-        except subprocess.CalledProcessError as cperr:
-            console.warning(f"failed to shut down process-compose: {cperr.stderr.decode()}")
-            return
-
-        # if compl.returncode != 0:
-        #    print("unable to shut down process-compose")
-        logger.debug(compl.args)
-        logger.debug(compl)
-
-        if compl.stderr:
-            console.warning(compl.stderr.decode())
-        if compl.stdout:
-            console.info(compl.stdout.decode())
-
-    def up_direct(self) -> None:
-        #  str(self.conf.PROCESS_COMPOSE_BIN),
-        #  "up",
-        #  "--config",
-        #  str(datadir / "process-compose.yml"),
-        #  "--detached",
-        #  "--port",
-        #  str(self.api_port),
-        # ],
-        pc_config = str(self.conf.data_dir / "process-compose.yml")
-
-        args_str = f"{str(self.conf.PROCESS_COMPOSE_BIN)} up --config {pc_config} --detached --port {str(self.api_port)}"
-
-        logger.debug(f"{args_str=}")
-
-        try:
-            compl = subprocess.run(
-                args_str,
-                env={
-                    "DATA_DIR": str(self.conf.data_dir),
-                    "LOG_DIR": str(self.conf.log_dir),
-                    "SERVER_EXE": os.environ.get("SCIE_ARGV0"),
-                    "COMPOSE_SHELL": "/usr/bin/sh",
-                    "PIKESQUARES_VERSION": self.conf.VERSION,
-
-                },
-                shell=True,
-                cwd=self.conf.data_dir,
-                capture_output=True,
-                check=True,
-                user=self.conf.server_run_as_uid,
-            )
-        except subprocess.CalledProcessError as cperr:
-            logger.error(f"failed to launch process-compose: {cperr.stderr.decode()}")
-            return
-
-        if compl.returncode != 0:
-            logger.error("unable to launch process-compose")
-        else:
-            logger.info("launched process-compose")
-
-        logger.error(compl.stderr.decode())
-        logger.debug(compl.stdout.decode())
+            return self.pc_cmd(cmd_args)
+        except ProcessExecutionError as exc:
+            logger.error(exc)
+            return exc.retcode, exc.stdout, exc.stderr
 
     def attach(self) -> None:
-
         try:
             compl = subprocess.run(
                 args=[
                   # str(self.conf.PROCESS_COMPOSE_BIN),
                   str(Path(os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")) / "process-compose"),
                   "attach",
-                  "--port",
-                  str(self.api_port),
+                  "--unix-socket",
+                  str(self.socket_address),
                 ],
                 cwd=str(self.conf.data_dir),
                 capture_output=True,
@@ -379,12 +224,10 @@ def register_process_compose(
         context,
         conf: AppConfig,
         # uwsgi_bin: Path,
-        api_port: int = 9555,
     ):
 
     def process_compose_factory():
         return ProcessCompose(
-            api_port=api_port,
             conf=conf,
             # uwsgi_bin=uwsgi_bin,
             # db=get(context, TinyDB),

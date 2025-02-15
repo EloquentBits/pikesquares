@@ -1,3 +1,4 @@
+import logging
 #import json
 from time import sleep
 import os
@@ -6,12 +7,15 @@ import time
 from typing import Optional, Annotated
 from pathlib import Path
 
+from rich.progress import Progress
+from rich.panel import Panel
 import randomname
 import typer
 import questionary
 from tinydb import TinyDB
 from cuid import cuid
 from dotenv import load_dotenv
+from plumbum import ProcessExecutionError
 import structlog
 # from circus import Arbiter, get_arbiter
 
@@ -78,26 +82,55 @@ structlog.configure(
 )
 """
 
-import logging
 logging.basicConfig(
-    filename=LOG_FILE,  # Log only to a file
-    level=logging.DEBUG,  # Set the desired log level
+    filename=LOG_FILE,
+    level=logging.DEBUG,
+    # stream=sys.stdout,
     format="%(message)s",
 )
+
+# imported_module_logger = logging.getLogger("svsc")
+# imported_module_logger.setLevel(logging.WARNING)
+svcs_logger = logging.getLogger("svcs")
+svcs_logger.setLevel(logging.WARNING)
+
 structlog.configure(
     processors=[
+        # If log level is too low, abort pipeline and throw away log entry.
+        structlog.stdlib.filter_by_level,
+        # Add the name of the logger to event dict.
+        structlog.stdlib.add_logger_name,
+        # Add log level to event dict.
+        structlog.stdlib.add_log_level,
+        # Perform %-style formatting.
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        # Add a timestamp in ISO 8601 format.
         structlog.processors.TimeStamper(fmt="iso"),
+        # If the "stack_info" key in the event dict is true, remove it and
+        # render the current stack trace in the "stack" key.
+        structlog.processors.StackInfoRenderer(),
+        # If the "exc_info" key in the event dict is either true or a
+        # sys.exc_info() tuple, remove "exc_info" and render the exception
+        # with traceback into the "exception" key.
+        structlog.processors.format_exc_info,
+        # If some value is in bytes, decode it to a Unicode str.
+        structlog.processors.UnicodeDecoder(),
+        # Add callsite parameters.
+        structlog.processors.CallsiteParameterAdder(
+            {
+                structlog.processors.CallsiteParameter.FILENAME,
+                structlog.processors.CallsiteParameter.FUNC_NAME,
+                structlog.processors.CallsiteParameter.LINENO,
+            }
+        ),
         structlog.processors.JSONRenderer(),
     ],
     logger_factory=structlog.stdlib.LoggerFactory(),
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
-
 logger = structlog.get_logger()
-
-logger.info("This message will only be written to the log file")
-
+logger.info("This message will only be written to the log file ---- CLI ---")
 
 load_dotenv()
 
@@ -221,16 +254,24 @@ def info(
 
     conf = services.get(context, AppConfig)
     # console.info(f"data_dir={str(conf.DATA_DIR)}")
-    logger.debug(f"virtualenv={str(conf.VIRTUAL_ENV)}")
+    logger.debug(f"virtualenv={str(conf.PYTHON_VIRTUAL_ENV)}")
 
     device = services.get(context, Device)
-    # pc = services.get(context, process_compose.ProcessCompose)
+    pc = services.get(context, process_compose.ProcessCompose)
     try:
-        # pc.ping_api()
-        if device.stats:
-            console.success("🚀 PikeSquares Server is running.")
-    except StatsReadError:
-        console.warning("PikeSquares Server is not running.")
+        pc.ping_api()
+        try:
+            if device.stats:
+                console.success("🚀 PikeSquares Server is running.")
+        except StatsReadError:
+            console.warning("PikeSquares Server is not running.")
+
+    except process_compose.PCAPIUnavailableError:
+        console.info("PCAPIUnavailableError: process-compose api not available.")
+    except process_compose.PCDeviceUnavailableError:
+        console.error("PCDeviceUnavailableError: PikeSquares Server was unable to start.")
+        raise typer.Exit() from None
+
     # except (process_compose.PCAPIUnavailableError,
     #        process_compose.PCDeviceUnavailableError):
     #    console.warning("PikeSquares Server is not running.")
@@ -244,8 +285,6 @@ def info(
     # https_router = services.get(context, DefaultHttpsRouter)
     # https_router_stats = RouterStats(https_router.read_stats())
     # console.info(https_router_stats.model_dump())
-
-
 
 
 @app.command(
@@ -271,13 +310,28 @@ def down(
     context = ctx.ensure_object(dict)
     pc = services.get(context, process_compose.ProcessCompose)
     try:
-        pc.ping()
-        console.info("Shutting down PikeSquares Server.")
-        pc.down()
+        retcode, stdout, stderr = pc.down()
+        if retcode != 0:
+            console.log(retcode, stdout, stderr)
+            raise typer.Exit(code=1) from None
+        elif retcode == 0:
+            console.success("🚀 PikeSquares Server has been shut down.")
+    except ProcessExecutionError as process_exec_error:
+        console.error(process_exec_error)
+        console.error("PikeSquares Server was unable to shut down.")
+        raise typer.Exit(code=1) from None
     except process_compose.PCAPIUnavailableError:
-        pass
-    except process_compose.PCDeviceUnavailableError:
-        pass  # device.up()
+        console.info("🚀 PikeSquares Server is not running at the moment.")
+        raise typer.Exit(code=0) from None
+
+    # try:
+    #    pc.ping()
+    #    console.info("Shutting down PikeSquares Server.")
+    #    pc.down()
+    # except process_compose.PCAPIUnavailableError:
+    #    pass
+    # except process_compose.PCDeviceUnavailableError:
+    #    pass  # device.up()
 
 
 @app.command(rich_help_panel="Control", short_help="Bootstrap the PikeSquares Server)")
@@ -370,56 +424,298 @@ def init(
         ]
         return routers
 
-    for runtime_class in (PythonRuntime, RubyRuntime, PHPRuntime):
-        if runtime_class == PythonRuntime:
-            service_type = "WSGI-App"
-            service_type_prefix = service_type.replace("-", "_").lower()
-            service_id = f"{service_type_prefix}_{cuid()}"
+    # from contextlib import contextmanager
+    # BEAT_TIME = 0.04
+    # @contextmanager
+    # def beat(length: int = 1) -> None:
+    #     yield
+    #     time.sleep(length * BEAT_TIME)
 
-            if PythonRuntime.is_django(app_root_dir):
-                runtime = PythonRuntimeDjango(app_root_dir=app_root_dir)
-            else:
-                runtime = PythonRuntime(app_root_dir=app_root_dir)
+    # for runtime_class in (PythonRuntime, RubyRuntime, PHPRuntime):
+    #    if runtime_class == PythonRuntime:
 
-            runtime.uv_bin = conf.UV_BIN
+    runtime_base = PythonRuntime
+    service_type = "WSGI-App"
+    service_type_prefix = service_type.replace("-", "_").lower()
+    service_id = f"{service_type_prefix}_{cuid()}"
+    proj_type = "Python"
+    pyvenv_dir = conf.data_dir / "venvs" / service_id
+    """
+        jobs
+            1) detect runtime
+            2) detect runtime version
+            3) detect framework
+            4) detect dependencies
+            5) validate dependencies
+    """
+    # [link=https://www.willmcgugan.com]blog[/link]
+    progress = Progress(auto_refresh=False, console=console)
+    with progress:
+        ####################################
+        # Detect Runtime
+        detect_runtime_task = progress.add_task(
+            "Detecting language runtime",
+            total=100,
+        )
+        progress.start_task(detect_runtime_task)
+        # console.print("Detecting language runtime")
+        for wait in progress.track(range(20), task_id=detect_runtime_task):
+            sleep(0.01)
+        detect_runtime_description = ":snake: Python language runtime [bold green] detected [/bold green] :heavy_check_mark:"
+        progress.reset(
+            detect_runtime_task,
+            total=100,
+            description=detect_runtime_description,
+        )
+
+        py_kwargs = {
+            "app_root_dir": app_root_dir,
+            "uv_bin": conf.PYTHON_VIRTUAL_ENV / "bin/uv",
+            # "rich_live": live,
+        }
+
+        console.info(py_kwargs)
+
+        if PythonRuntime.is_django(app_root_dir):
+            runtime = PythonRuntimeDjango(**py_kwargs)
+        else:
+            runtime = runtime_base(**py_kwargs)
+
+        ####################################
+        # Detect Runtime Version
+        detect_runtime_version_task = progress.add_task(
+            "Detecting language runtime version",
+            total=100,
+        )
+        progress.start_task(detect_runtime_version_task)
+        for wait in progress.track(range(100), task_id=detect_runtime_version_task):
+            sleep(0.01)
+
+        progress.reset(
+            detect_runtime_version_task,
+            total=20,
+            description=f":snake: Python version {runtime.version} [bold green] detected [/bold green] :heavy_check_mark:"
+        )
+        ####################################
+        # Detect Framework
+        detect_framework_task = progress.add_task(
+            "Detecting web framework",
+            total=100,
+        )
+        progress.start_task(detect_framework_task)
+        for wait in progress.track(range(100), task_id=detect_framework_task):
+            sleep(0.01)
+        if isinstance(runtime, PythonRuntimeDjango):
+            py_framework_name = ":unicorn_face: Django"
+        else:
+            py_framework_name = "No"
+        progress.reset(
+            detect_framework_task,
+            total=100,
+            description=f"{py_framework_name} framework [bold green] detected [/bold green] :heavy_check_mark:"
+        )
+        ####################################
+        # Detect Project Dependencies
+        detect_dependencies_task = progress.add_task(
+            ":package: Detecting project dependencies",
+            total=100,
+        )
+        progress.start_task(detect_dependencies_task)
+        for wait in progress.track(range(100), task_id=detect_dependencies_task):
+            sleep(0.01)
+
+        deps_cnt = 10
+        progress.reset(
+            detect_dependencies_task,
+            total=100,
+            description=f":package: {deps_cnt} dependencies [bold green]detected[/bold green] :heavy_check_mark:"
+        )
+        ####################################
+        # Validate Project Dependencies
+        validate_dependencies_task = progress.add_task(
+            ":package: Validating project dependencies",
+            total=100,
+        )
+        progress.start_task(validate_dependencies_task)
+        for wait in progress.track(range(100), task_id=validate_dependencies_task):
+            sleep(0.01)
+        progress.reset(
+            validate_dependencies_task,
+            total=100,
+            description=f":package: {deps_cnt} dependencies [bold green]validated[/bold green] :heavy_check_mark:"
+        )
+        ###################################
+        # if Django - run mange.py check
+        django_check_task = progress.add_task(
+            ":unicorn_face: Running Django check",
+            total=100,
+        )
+        progress.start_task(django_check_task)
+        for wait in progress.track(range(100), task_id=django_check_task):
+            sleep(0.01)
+        progress.reset(
+            django_check_task,
+            total=100,
+            description="""\
+:unicorn_face: Django check [bold green]completed[/bold green] :heavy_check_mark:\n
+something else here \n
+and here"""
+        )
+
+        ###################################
+        # if Django - run diffsettings
+        django_diffsettings_task = progress.add_task(
+            ":unicorn_face: Django discovering urlconf, settings and wsgi modules",
+            total=100,
+        )
+        progress.start_task(django_diffsettings_task)
+        for wait in progress.track(range(100), task_id=django_diffsettings_task):
+            sleep(0.01)
+        progress.reset(
+            django_diffsettings_task,
+            total=100,
+            description="""\
+:unicorn_face: Django settings [bold green]discovered[/bold green] :heavy_check_mark:\n
+\rROOT_URLCONF=mysite.urls\n
+\rSETINGS_MODULE=mysite.settings\n
+\rWSGI_APPLICATION=mysite.wsgi.application"""
+        )
+
+        ####################################
+        # Installing Project Dependencies
+        install_dependencies_task = progress.add_task(
+            ":package: Installing project dependencies",
+            total=100,
+        )
+        progress.start_task(install_dependencies_task)
+        for wait in progress.track(range(100), task_id=install_dependencies_task):
+            sleep(0.01)
+        deps_cnt = 10
+        progress.reset(
+            install_dependencies_task,
+            total=100,
+            description=f":package: {deps_cnt} dependencies [bold green]installed[/bold green] :heavy_check_mark:"
+        )
+
+        # console.clear()
+
+        # progress.log(
+        #    Panel(":checkered_flag: All done! :checkered_flag:", border_style="green", padding=1)
+        # )
+        if 0:
             try:
-                pyvenv_dir = conf.data_dir / "venvs" / service_id
-                proj_type = "Python"
-                with console.status(
-                        status=f"[magenta]Validating {proj_type} project", spinner="earth"
-                    ) as console_status:
-                    sleep(1)
-                    if runtime.init(console_status=console_status, venv=pyvenv_dir):
-                        logger.info("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
-                        logger.debug(runtime.model_dump())
-                        # app_name = questionary.text(
-                        #    "Choose a name for your app: ",
-                        #    default=randomname.get_name().lower(),
-                        #    style=custom_style,
-                        #    validate=NameValidator,
-                        # ).ask()
-                        console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
-                        app_name = randomname.get_name().lower()
-                        app_project = services.get(context, SandboxProject)
-                        wsgi_app = runtime.get_app(
-                            conf,
-                            db,
-                            app_name,
-                            service_id,
-                            app_project,
-                            pyvenv_dir,
-                            build_routers(app_name),
-                        )
-                        logger.info(wsgi_app)
+                pass
+                """
+                if runtime.init(venv=pyvenv_dir):
+                    logger.info("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
+                    logger.debug(runtime.model_dump())
+                    # app_name = questionary.text(
+                    #    "Choose a name for your app: ",
+                    #    default=randomname.get_name().lower(),
+                    #    style=custom_style,
+                    #    validate=NameValidator,
+                    # ).ask()
+                    #console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
+                    app_name = randomname.get_name().lower()
+                    app_project = services.get(context, SandboxProject)
+                    wsgi_app = runtime.get_app(
+                        conf,
+                        db,
+                        app_name,
+                        service_id,
+                        app_project,
+                        pyvenv_dir,
+                        build_routers(app_name),
+                    )
+                    logger.info(wsgi_app)
                 console.print("[bold green]WSGI App has been provisioned.")
-
+                """
             except PythonRuntimeInitError:
                 logger.error("[pikesquares] -- PythonRuntimeInitError --")
 
-        elif runtime_class == RubyRuntime:
-            pass
-        elif runtime_class == PHPRuntime:
-            pass
+        """
+
+        try:
+            if runtime.init(venv=pyvenv_dir):
+                logger.info("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
+                logger.debug(runtime.model_dump())
+                # app_name = questionary.text(
+                #    "Choose a name for your app: ",
+                #    default=randomname.get_name().lower(),
+                #    style=custom_style,
+                #    validate=NameValidator,
+                # ).ask()
+
+                #console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
+
+                app_name = randomname.get_name().lower()
+                app_project = services.get(context, SandboxProject)
+                wsgi_app = runtime.get_app(
+                    conf,
+                    db,
+                    app_name,
+                    service_id,
+                    app_project,
+                    pyvenv_dir,
+                    build_routers(app_name),
+                )
+                logger.info(wsgi_app)
+            console.print("[bold green]WSGI App has been provisioned.")
+
+        except PythonRuntimeInitError:
+            logger.error("[pikesquares] -- PythonRuntimeInitError --")
+
+        """
+
+    # elif runtime_class == RubyRuntime:
+    #    pass
+    # elif runtime_class == PHPRuntime:
+    #    pass
+
+
+"""
+
+with Live(console=console) as live:
+    console.print("[bold blue]Starting work!")
+
+from rich.table import Table
+
+table = Table()
+table.add_column("Row ID")
+table.add_column("Description")
+table.add_column("Level")
+
+with Live(table, refresh_per_second=4) as live:  # update 4 times a second to feel fluid
+    for row in range(12):
+        live.console.print(f"Working on row #{row}")
+        time.sleep(0.4)
+        table.add_row(f"{row}", f"description {row}", "[red]ERROR")
+
+
+with Live("Starting...", refresh_per_second=4) as live:  # Keep updating the text
+    for i in range(10):
+        live.update(f"[bold green]Processing {i}/10...[/bold green]")
+        time.sleep(0.5)
+    live.update("[bold blue]Done![/bold blue]")
+
+# transient=True
+# Normally when you exit live context manager (or call stop()) the last
+# refreshed item remains in the terminal with the cursor on the following line.
+# You can also make the live display disappear on exit by setting transient=True
+# on the Live constructor.
+
+for i in range(10):
+    console.print(
+            f"\r[bold yellow]Processing {i}/10...[/bold yellow]",
+            end="",
+            soft_wrap=False
+    )
+    time.sleep(0.5)
+
+console.print("\n[bold green]Done![/bold green]")
+
+"""
+
 
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")
@@ -545,8 +841,8 @@ def main(
 
     logger.info(f"About to execute command: {ctx.invoked_subcommand}")
     for key, value in os.environ.items():
-        if key.startswith(("PIKESQUARES", "SCIE", "PEX", "VIRTUAL_ENV")):
-            logger.debug(f"{key}: {value}")
+        if key.startswith(("PIKESQUARES", "SCIE", "PEX", "PYTHON_VIRTUAL_ENV")):
+            console.log(f"{key}: {value}")
 
     is_root: bool = os.getuid() == 0
     logger.info(f"{os.getuid()=} {is_root=}")
@@ -565,20 +861,10 @@ def main(
     #    console.error("Unable to read the pikesquares scie base directory")
     #    raise typer.Exit(1)
 
-    logger.info(f"PikeSquares: v{pikesquares_version}")
+    console.info(f"PikeSquares: v{pikesquares_version}")
     context = services.init_context(ctx.ensure_object(dict))
-    logger.info(vars(ctx))
-
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
-
-    # and not all([
-    #    Path(process_compose_dir),
-    #    Path(process_compose_dir).is_dir()]):
-    #process_compose_dir = os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")
-    #if not process_compose_dir:
-    #    console.error(f"unable to locate process-compose directory @ {process_compose_dir}")
-    #    raise typer.Abort()
 
     override_settings = {
         "PIKESQUARES_DATA_DIR": os.environ.get("PIKESQUARES_DATA_DIR", "/var/lib/pikesquares"),
@@ -693,28 +979,25 @@ def main(
         db,
         build_config_on_init=build_configs,
     )
-    process_compose.register_process_compose(
-        context,
-        conf,
-        (get_first_available_port(port=9555)),
-
-    )
+    process_compose.register_process_compose(context, conf)
     # http_router = services.get(context, DefaultHttpRouter)
     # https_router = services.get(context, DefaultHttpsRouter)
 
     if ctx.invoked_subcommand == "up":
-        pc_api_port = 9555
         # uwsgi_bin = os.environ.get("PIKESQUARES_UWSGI_BIN")
         # if not all([uwsgi_bin, Path(uwsgi_bin).exists()]):
         #    raise Exception("unable to locate uwsgi binary @ {uwsgi_bin}")
         pc = services.get(context, process_compose.ProcessCompose)
-        try:
-            pc.ping()
-        except process_compose.PCAPIUnavailableError:
-            if ctx.invoked_subcommand == "up":
-                launch_pc(pc, device)
-        except process_compose.PCDeviceUnavailableError:
-            pass  # device.up()
+
+        launch_pc(pc, device)
+
+        # try:
+        #    pc.ping()
+        #except process_compose.PCAPIUnavailableError:
+        #    if ctx.invoked_subcommand == "up":
+        #        launch_pc(pc, device)
+        #except process_compose.PCDeviceUnavailableError:
+        #    pass  # device.up()
             # console.info("-- PCDeviceUnavailableError --")
             # sandbox_project.ping()
     #elif ctx.invoked_subcommand in set({"down", "bootstrap"}):
@@ -769,16 +1052,29 @@ def main(
 
 def launch_pc(pc: process_compose.ProcessCompose, device: Device):
     with console.status("Launching the PikeSquares Server", spinner="earth"):
-        pc.up()
-        time.sleep(10)
+
         try:
-            pc.ping_api()
-            console.success("🚀 PikeSquares Server is running.")
-        except process_compose.PCAPIUnavailableError:
-            console.info("process-compose api not available.")
-        except process_compose.PCDeviceUnavailableError:
+            retcode, stdout, stderr = pc.up()
+            if retcode != 0:
+                console.log(retcode, stdout, stderr)
+                raise typer.Exit(code=1) from None
+            elif retcode == 0:
+                console.success("🚀 PikeSquares Server is running.")
+
+        except ProcessExecutionError as process_exec_error:
+            console.error(process_exec_error)
             console.error("PikeSquares Server was unable to start.")
-            raise typer.Exit() from None
+            raise typer.Exit(code=1) from None
+
+        # time.sleep(10)
+        # try:
+        #    pc.ping_api()
+        #    console.success("🚀 PikeSquares Server is running.")
+        #except process_compose.PCAPIUnavailableError:
+        #    console.info("process-compose api not available.")
+        #except process_compose.PCDeviceUnavailableError:
+        #    console.error("PikeSquares Server was unable to start.")
+        #    raise typer.Exit() from None
 
         # if not device.get_service_status() == "running":
         #    console.warning(f"Device stats @ {device.stats_address} are unavailable.")

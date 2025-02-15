@@ -3,22 +3,6 @@ from pathlib import Path
 import pydantic
 import structlog
 
-import logging
-LOG_FILE = "app.log"
-logging.basicConfig(
-    filename=LOG_FILE,  # Log only to a file
-    level=logging.DEBUG,  # Set the desired log level
-    format="%(message)s",
-)
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
-    ],
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
 logger = structlog.get_logger()
 
 

@@ -242,6 +242,7 @@ class AppConfig(BaseSettings):
             alias="PIKESQUARES_RUN_DIR"
     )
     UWSGI_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    PYTHON_VIRTUAL_ENV: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]]
 
     SCIE_BASE: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
     SCIE_BINDINGS: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
@@ -250,14 +251,12 @@ class AppConfig(BaseSettings):
     EASYRSA_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     DNSMASQ_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-    UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    PROCESS_COMPOSE_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
-    PROCESS_COMPOSE_DIR: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
     PROCESS_COMPOSE_CONFIG: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
     PC_PORT_NUM: int = 9555
 
-    VIRTUAL_ENV: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
     # CADDY_DIR: Optional[str] = None
     # CLI_STYLE: QuestionaryStyle
 

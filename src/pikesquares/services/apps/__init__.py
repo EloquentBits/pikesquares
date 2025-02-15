@@ -2,7 +2,6 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 
 import pydantic
-from rich.console import RenderableType
 import structlog
 
 # from wsgi import WsgiApp
@@ -11,22 +10,6 @@ import structlog
 #    "WsgiApp",
 # )
 
-import logging
-LOG_FILE = "app.log"
-logging.basicConfig(
-    filename=LOG_FILE,  # Log only to a file
-    level=logging.DEBUG,  # Set the desired log level
-    format="%(message)s",
-)
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
-    ],
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
 logger = structlog.get_logger()
 
 
@@ -36,21 +19,22 @@ class BaseLanguageRuntime(pydantic.BaseModel, ABC):
     app_root_dir: Path
     collected_project_metadata: dict = {}
 
+    model_config = pydantic.ConfigDict(extra="allow")
+
     def __init_subclass__(cls):
         logger.debug(f"Subclass {cls} was created.")
 
     @abstractmethod
     def check(self,
         app_tmp_dir: Path,
-        console_status: RenderableType | None = None,
         ):
         raise NotImplementedError
 
     @abstractmethod
     def init(
         self,
-        console_status: RenderableType | None = None,
-        venv: Path | None = None
+        venv: Path,
+        check: bool = True,
         ) -> bool:
         raise NotImplementedError
 
@@ -79,14 +63,13 @@ class RubyRuntime(BaseLanguageRuntime):
 
     def check(self,
         app_tmp_dir: Path,
-        console_status: RenderableType | None = None,
         ) -> bool:
         logger.info("Ruby Check")
         return True
 
     def init(self,
-        console_status: RenderableType | None = None,
-        venv: Path | None = None
+        venv: Path,
+        check: bool = True,
         ) -> bool:
         logger.info("Ruby Init")
         return True
@@ -99,13 +82,13 @@ class PHPRuntime(BaseLanguageRuntime):
 
     def check(self,
         app_tmp_dir: Path,
-        console_status: RenderableType | None = None,
         ):
         pass
 
     def init(
         self,
-        console_status: RenderableType | None = None,
-        venv: Path | None = None,
-        ):
-        pass
+        venv: Path,
+        check: bool = True,
+        ) -> bool:
+        logger.info("PHP Init")
+        return True

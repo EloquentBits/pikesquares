@@ -1,4 +1,3 @@
-from time import sleep
 from pathlib import Path
 
 # import toml
@@ -13,23 +12,6 @@ from .exceptions import (
     UvPipInstallError,
 )
 
-import logging
-LOG_FILE = "app.log"
-logging.basicConfig(
-    filename=LOG_FILE,  # Log only to a file
-    level=logging.DEBUG,  # Set the desired log level
-    format="%(message)s",
-)
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
-    ],
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
-
 
 logger = structlog.get_logger()
 
@@ -38,14 +20,13 @@ class UVMixin:
 
     def create_venv(
         self,
-        venv: Path | None = None,
+        venv: Path,
         cmd_env: dict | None = None,
         console_silent: bool = False,
         ) -> None:
         logger.info(f"[pikesquares] `uv venv`: {str(venv)}")
         if not console_silent:
             console.log("Creating Python virtual environment")
-            sleep(1)
 
         # os.chdir(app_root_dir)
         cmd_args = []
@@ -80,7 +61,6 @@ class UVMixin:
         logger.info(f"[pikesquares] uv installing dependencies in venv @ {str(venv)}")
         if not console_silent:
             console.log("Installing Dependencies")
-            sleep(1)
         cmd_args = []
         install_inspect_extensions = False
 

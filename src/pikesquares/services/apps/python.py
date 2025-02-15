@@ -1,8 +1,6 @@
-# import traceback
-from time import sleep
-import tempfile
-import shutil
 from pathlib import Path
+import shutil
+import tempfile
 
 import pydantic
 from rich.console import RenderableType
@@ -18,23 +16,6 @@ from .exceptions import (
     PythonRuntimeCheckError,
     PythonRuntimeDjangoCheckError,
     PythonRuntimeInitError,
-)
-
-import logging
-LOG_FILE = "app.log"
-logging.basicConfig(
-    filename=LOG_FILE,  # Log only to a file
-    level=logging.DEBUG,  # Set the desired log level
-    format="%(message)s",
-)
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer(),
-    ],
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
 )
 
 logger = structlog.get_logger()
@@ -81,15 +62,40 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
         except OSError:
             logger.error(f"unable to delete tmp dir @ {str(app_tmp_dir)}")
 
+    def init(
+            self,
+            venv: Path,
+            check: bool = True,
+        ) -> bool:
+        logger.debug("[pikesquares] PythonRuntime.init")
+        if check:
+            app_tmp_dir = Path(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
+            try:
+                self.check(app_tmp_dir)
+            except (PythonRuntimeCheckError, PythonRuntimeDjangoCheckError):
+                logger.error("[pikesquares] -- PythonRuntimeCheckError --")
+                raise PythonRuntimeInitError("Python Runtime check failed")
+
+            self.check_cleanup(app_tmp_dir)
+
+        cmd_env = {
+            # "UV_CACHE_DIR": str(conf.pv_cache_dir),
+            "UV_PROJECT_ENVIRONMENT": str(venv),
+        }
+        self.create_venv(venv, cmd_env=cmd_env)
+        self.install_dependencies()
+        return True
+
     def check(
             self,
             app_tmp_dir: Path,
-            console_status: RenderableType | None = None,
         ) -> bool:
         # copy project to tmp dir at $TMPDIR
         logger.debug("[pikesquares] PythonRuntime.check")
-        console.log(f"Inspecting Python project @ {str(self.app_root_dir)}")
-        sleep(1)
+        console.print(
+            f"Inspecting Python project @ {str(self.app_root_dir)}",
+            #log_locals=True,
+        )
         shutil.copytree(
             self.app_root_dir,
             app_tmp_dir,
@@ -110,29 +116,6 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
             raise PythonRuntimeCheckError("uv install dependencies failed.")
         return True
 
-    def init(
-            self,
-            console_status: RenderableType | None = None,
-            venv: Path | None = None
-        ) -> bool:
-        logger.debug("[pikesquares] PythonRuntime.init")
-        app_tmp_dir = Path(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
-        try:
-            self.check(app_tmp_dir, console_status)
-        except (PythonRuntimeCheckError, PythonRuntimeDjangoCheckError):
-            logger.error("[pikesquares] -- PythonRuntimeCheckError --")
-            # print(traceback.format_exc())
-            raise PythonRuntimeInitError("Python Runtime check failed")
-
-        self.check_cleanup(app_tmp_dir)
-        cmd_env = {
-            # "UV_CACHE_DIR": str(conf.pv_cache_dir),
-            "UV_PROJECT_ENVIRONMENT": str(venv),
-        }
-        self.create_venv(venv, cmd_env=cmd_env)
-        self.install_dependencies()
-
-        return True
 
     @classmethod
     def is_django(cls, app_root_dir: Path) -> bool:
