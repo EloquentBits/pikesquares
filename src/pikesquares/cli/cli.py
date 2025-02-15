@@ -348,8 +348,6 @@ def bootstrap(
          ]:
         svc = services.get(context, svc_class)
         svc.up()
-    logger.info("bootstrap done")
-
     raise typer.Exit(code=0)
 
 
@@ -1049,37 +1047,32 @@ def main(
     #    getattr(console, f"custom_style_{conf.CLI_STYLE}"),
     # )
 
-
-def launch_pc(pc: process_compose.ProcessCompose, device: Device):
+def launch_pc(pc: process_compose.ProcessCompose, device: Device) -> bool:
     with console.status("Launching the PikeSquares Server", spinner="earth"):
-
         try:
             retcode, stdout, stderr = pc.up()
             if retcode != 0:
                 console.log(retcode, stdout, stderr)
                 raise typer.Exit(code=1) from None
             elif retcode == 0:
-                console.success("🚀 PikeSquares Server is running.")
+                for _ in range(1, 5):
+                    try:
+                        pc.ping_api()
+                        console.success("🚀 PikeSquares Server is running.")
+                        return True
+                    except (
+                            process_compose.PCAPIUnavailableError,
+                            process_compose.PCDeviceUnavailableError
+                    ):
+                        sleep(1)
+                        continue
+                console.error("PikeSquares Server was unable to start.")
+                raise typer.Exit(code=0) from None
 
         except ProcessExecutionError as process_exec_error:
             console.error(process_exec_error)
             console.error("PikeSquares Server was unable to start.")
             raise typer.Exit(code=1) from None
-
-        # time.sleep(10)
-        # try:
-        #    pc.ping_api()
-        #    console.success("🚀 PikeSquares Server is running.")
-        #except process_compose.PCAPIUnavailableError:
-        #    console.info("process-compose api not available.")
-        #except process_compose.PCDeviceUnavailableError:
-        #    console.error("PikeSquares Server was unable to start.")
-        #    raise typer.Exit() from None
-
-        # if not device.get_service_status() == "running":
-        #    console.warning(f"Device stats @ {device.stats_address} are unavailable.")
-        #    console.error("PikeSquares Server was unable to start.")
-        #    raise typer.Exit() from None
 
 
 """

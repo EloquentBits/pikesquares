@@ -142,7 +142,7 @@ class ProcessCompose(pydantic.BaseModel):
                         next(
                             filter(lambda p: p.get("name") == "Device", js)
                         )
-                console.info(device_process)
+                logger.debug(device_process)
                 process_stats = ProcessComposeProcessStats(**device_process)
                 if process_stats.IsRunning and process_stats.status == "Running":
                     return True
