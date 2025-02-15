@@ -14,12 +14,12 @@ from pikesquares.services.base import BaseService
 from pikesquares.services import register_factory
 from ..presets.routers import HttpsRouterSection, HttpRouterSection
 
+logger = structlog.get_logger()
+
 __all__ = (
     "HttpRouter",
     "HttpsRouter",
 )
-
-logger = structlog.get_logger()
 
 
 class BaseRouter(BaseService):

@@ -21,8 +21,8 @@ class BaseLanguageRuntime(pydantic.BaseModel, ABC):
 
     model_config = pydantic.ConfigDict(extra="allow")
 
-    def __init_subclass__(cls):
-        logger.debug(f"Subclass {cls} was created.")
+    # def __init_subclass__(cls):
+    #    logger.debug(f"Subclass {cls} was created.")
 
     @abstractmethod
     def check(self,

@@ -5,6 +5,7 @@ from typing import Optional
 import typer
 import randomname
 from cuid import cuid
+import structlog
 
 from pikesquares import (
     get_service_status,
@@ -17,6 +18,8 @@ from pikesquares.services.project import (
 from ..console import console
 from ..validators import ServiceNameValidator
 from ..cli import app
+
+logger = structlog.get_logger()
 
 
 ALIASES = ("proj", "prj")

@@ -11,7 +11,7 @@ from pydantic.config import ConfigDict
 from tinydb import TinyDB, Query
 from uwsgiconf import uwsgi
 import structlog
-# import sentry_sdk
+import sentry_sdk
 
 from pikesquares import __version__, __app_name__
 from pikesquares import conf
@@ -50,24 +50,25 @@ class BaseService(pydantic.BaseModel, ABC):
     # cli_style: QuestionaryStyle = console.custom_style_dope
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
 
-    # def __init__(self):
-    #    if self.conf.SENTRY_ENABLED and self.conf.SENTRY_DSN:
-    #        sentry_sdk.init(
-    #            dsn=self.conf.SENTRY_DSN,
-    #            traces_sample_rate=1.0,
-    #            release=f"{__app_name__} v{__version__}",
-    #        )
-    #       console.success("initialized sentry-sdk")
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        service_config = self.load_config_from_tinydb()
-        if not service_config or self.build_config_on_init:
+
+        if self.conf.sentry_enabled and self.conf.sentry_dsn:
+            sentry_sdk.init(
+                dsn=self.conf.sentry_dsn,
+                traces_sample_rate=1.0,
+                release=f"{__app_name__} v{__version__}",
+            )
+            logger.info("initialized sentry-sdk")
+
+        if self.build_config_on_init:
             self.config_json = self.default_config_json
-            self.save_config_to_filesystem()
-            self.save_config_to_tinydb()
         else:
-            self.config_json = service_config.get("service_config")
+            service_config = self.load_config_from_tinydb()
+            self.config_json = service_config.get("service_config", self.default_config_json)
+
+        self.save_config_to_filesystem()
+        self.save_config_to_tinydb()
 
     @property
     def handler_name(self):

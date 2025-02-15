@@ -1,7 +1,11 @@
+import structlog
 from uwsgiconf.options.routing_routers import RouterHttp as _RouterHttp
 from uwsgiconf.utils import filter_locals, KeyValue
 
 from . import Section
+
+
+logger = structlog.get_logger()
 
 
 class RouterHttps(_RouterHttp):

@@ -1,7 +1,10 @@
 # from pathlib import Path
 
+import structlog
+
 from . import Section
 
+logger = structlog.get_logger()
 
 class ProjectSection(Section):
 

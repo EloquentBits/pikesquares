@@ -6,6 +6,7 @@ from typing import NewType
 # import zmq
 from tinydb import Query, TinyDB
 import pydantic
+import structlog
 # from uwsgiconf import uwsgi
 
 from pikesquares.conf import AppConfig
@@ -13,6 +14,8 @@ from pikesquares.services.base import BaseService
 from pikesquares.services import register_factory
 from pikesquares.presets import Section
 from ..presets.project import ProjectSection
+
+logger = structlog.get_logger()
 
 __all__ = (
     "Project",

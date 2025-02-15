@@ -1,10 +1,14 @@
 from pathlib import Path
 from typing import Union
 
+import structlog
 from uwsgiconf.typehints import Strlist
 
 from . import Section
 from ..services.data import VirtualHost, WsgiAppOptions
+
+
+logger = structlog.get_logger()
 
 
 class BaseWsgiAppSection(Section):

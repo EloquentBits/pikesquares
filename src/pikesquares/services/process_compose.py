@@ -4,7 +4,6 @@ import subprocess
 from pathlib import Path
 
 import pydantic
-import requests
 import structlog
 from plumbum import local as pl_local
 from plumbum import ProcessExecutionError
@@ -45,7 +44,6 @@ class ProcessComposeProcessStats(pydantic.BaseModel):
 
 
 class ProcessCompose(pydantic.BaseModel):
-    # uwsgi_bin: Path
     conf: AppConfig
     # db: TinyDB
 
@@ -223,13 +221,11 @@ class ProcessCompose(pydantic.BaseModel):
 def register_process_compose(
         context,
         conf: AppConfig,
-        # uwsgi_bin: Path,
     ):
 
     def process_compose_factory():
         return ProcessCompose(
             conf=conf,
-            # uwsgi_bin=uwsgi_bin,
             # db=get(context, TinyDB),
         )
     register_factory(

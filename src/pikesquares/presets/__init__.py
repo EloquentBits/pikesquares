@@ -3,6 +3,8 @@ from pathlib import Path
 import json
 from typing import Union
 
+import structlog
+
 from uwsgiconf.config import (
     Section as _Section, 
     TypeSection, 
@@ -16,6 +18,8 @@ from uwsgiconf.formatters import (
     ArgsFormatter,
     IniFormatter,
 )
+
+logger = structlog.get_logger()
 
 
 class JSONFormatter(FormatterBase):
@@ -71,7 +75,7 @@ class Configuration(_Configuration):
         formatted = formatter(self.sections).format()
 
         if do_print:
-            print(formatted)
+            logger.debug(formatted)
 
         return formatted
 
