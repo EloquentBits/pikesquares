@@ -296,11 +296,35 @@ def up(
 ):
     """Launch PikeSquares Server"""
 
-    # context = ctx.ensure_object(dict)
-    # conf = services.get(context, conf.AppConfig)
-    # nothing to do here
-    pass
+    context = ctx.ensure_object(dict)
+    # conf = services.get(context, AppConfig)
+    pc = services.get(context, process_compose.ProcessCompose)
 
+    with console.status("Launching the PikeSquares Server", spinner="earth"):
+        try:
+            retcode, stdout, stderr = pc.up()
+            if retcode != 0:
+                console.log(retcode, stdout, stderr)
+                raise typer.Exit(code=1) from None
+            elif retcode == 0:
+                for _ in range(1, 5):
+                    try:
+                        pc.ping_api()
+                        console.success("🚀 PikeSquares Server is running.")
+                        return True
+                    except (
+                            process_compose.PCAPIUnavailableError,
+                            process_compose.PCDeviceUnavailableError
+                    ):
+                        sleep(1)
+                        continue
+                console.error("PikeSquares Server was unable to start.")
+                raise typer.Exit(code=0) from None
+
+        except ProcessExecutionError as process_exec_error:
+            console.error(process_exec_error)
+            console.error("PikeSquares Server was unable to start.")
+            raise typer.Exit(code=1) from None
 
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
 def down(
@@ -836,11 +860,10 @@ def main(
     """
     Welcome to Pike Squares. Building blocks for your apps.
     """
-
     logger.info(f"About to execute command: {ctx.invoked_subcommand}")
     for key, value in os.environ.items():
         if key.startswith(("PIKESQUARES", "SCIE", "PEX", "PYTHON_VIRTUAL_ENV")):
-            console.log(f"{key}: {value}")
+            logger.info(f"{key}: {value}")
 
     is_root: bool = os.getuid() == 0
     logger.info(f"{os.getuid()=} {is_root=}")
@@ -854,12 +877,7 @@ def main(
         console.error("Unable to read the pikesquares version")
         raise typer.Exit(1)
 
-    #scie_base = os.environ.get("PIKESQUARES_SCIE_BASE")
-    #if not scie_base:
-    #    console.error("Unable to read the pikesquares scie base directory")
-    #    raise typer.Exit(1)
-
-    console.info(f"PikeSquares: v{pikesquares_version}")
+    # console.info(f"PikeSquares: v{pikesquares_version}")
     context = services.init_context(ctx.ensure_object(dict))
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
@@ -907,23 +925,18 @@ def main(
             context,
             override_settings,
         )
-    except AppConfigError:
-        console.error(traceback.format_exc())
-        # console.error(f"unable to load AppConf from {str(db_path)}")
+    except AppConfigError as app_conf_error:
+        logger.error(app_conf_error)
         raise typer.Abort() from None
 
     conf = services.get(context, AppConfig)
-
-    logger.info(f"{conf.data_dir=}")
     db_path = conf.data_dir / "device-db.json"
-    logger.info(f"{db_path=}")
     services.register_db(
         context,
         db_path,
     )
     db = services.get(context, TinyDB)
-
-    # console.info(conf.model_dump())
+    logger.info(conf.model_dump())
 
     build_configs = ctx.invoked_subcommand == "bootstrap"
     register_device(
@@ -981,26 +994,6 @@ def main(
     # http_router = services.get(context, DefaultHttpRouter)
     # https_router = services.get(context, DefaultHttpsRouter)
 
-    if ctx.invoked_subcommand == "up":
-        # uwsgi_bin = os.environ.get("PIKESQUARES_UWSGI_BIN")
-        # if not all([uwsgi_bin, Path(uwsgi_bin).exists()]):
-        #    raise Exception("unable to locate uwsgi binary @ {uwsgi_bin}")
-        pc = services.get(context, process_compose.ProcessCompose)
-
-        launch_pc(pc, device)
-
-        # try:
-        #    pc.ping()
-        #except process_compose.PCAPIUnavailableError:
-        #    if ctx.invoked_subcommand == "up":
-        #        launch_pc(pc, device)
-        #except process_compose.PCDeviceUnavailableError:
-        #    pass  # device.up()
-            # console.info("-- PCDeviceUnavailableError --")
-            # sandbox_project.ping()
-    #elif ctx.invoked_subcommand in set({"down", "bootstrap"}):
-    #    return
-
     """
     for svc in services.get_pings(context):
         # print(f"pinging {svc.name=}")
@@ -1023,87 +1016,26 @@ def main(
             launch_pc(pc, device)
     """
 
-    # def circus_arbiter_factory():
-    #    watchers = []
-    #    check_delay = 5
-    #    endpoint = "tcp://127.0.0.1:5555"
-    #    pubsub_endpoint = "tcp://127.0.0.1:5556"
-    #    stats_endpoint = "tcp://127.0.0.1:5557"
+# def circus_arbiter_factory():
+#    watchers = []
+#    check_delay = 5
+#    endpoint = "tcp://127.0.0.1:5555"
+#    pubsub_endpoint = "tcp://127.0.0.1:5556"
+#    stats_endpoint = "tcp://127.0.0.1:5557"
 
-    #    return Arbiter(
-    #        watchers,
-    #        endpoint=endpoint,
-    #        pubsub_endpoint=pubsub_endpoint,
-    #        stats_endpoint=stats_endpoint,
-    #        check_delay = check_delay,
-    #    )
-    # services.register_factory(context, Arbiter, get_arbiter)
-    # obj["device-handler"] = device_handler
-
-    # console.info(device_handler.svc_model.model_dump())
-    # getattr(
-    #    console,
-    #    f"custom_style_{cli_style}",
-    #    getattr(console, f"custom_style_{conf.CLI_STYLE}"),
-    # )
-
-def launch_pc(pc: process_compose.ProcessCompose, device: Device) -> bool:
-    with console.status("Launching the PikeSquares Server", spinner="earth"):
-        try:
-            retcode, stdout, stderr = pc.up()
-            if retcode != 0:
-                console.log(retcode, stdout, stderr)
-                raise typer.Exit(code=1) from None
-            elif retcode == 0:
-                for _ in range(1, 5):
-                    try:
-                        pc.ping_api()
-                        console.success("🚀 PikeSquares Server is running.")
-                        return True
-                    except (
-                            process_compose.PCAPIUnavailableError,
-                            process_compose.PCDeviceUnavailableError
-                    ):
-                        sleep(1)
-                        continue
-                console.error("PikeSquares Server was unable to start.")
-                raise typer.Exit(code=0) from None
-
-        except ProcessExecutionError as process_exec_error:
-            console.error(process_exec_error)
-            console.error("PikeSquares Server was unable to start.")
-            raise typer.Exit(code=1) from None
-
-
-"""
-@app.callback(invoke_without_command=True)
-def main_bak(
-    ctx: typer.Context,
-    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable verbose mode.")] = False,
-    version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit.")] = False,
-    #cli_style: Annotated[str, typer.Option("--cli-style", "-c", help="Custom CLI Style")] = "dope",
-):            
-"""
-
-# from .commands.routers import *
-# from .commands.projects import *
-
-# ALIASES = ("applications", "app")
-# HELP = f"""
-#    Application commands.\n
-#    Aliases: [i]{', '.join(ALIASES)}[/i]
-# """
-
-# apps_cmd = typer.Typer(
-#    no_args_is_help=True,
-#    rich_markup_mode="rich",
-#    name="apps",
-#    help=HELP
-# )
-# for alias in ALIASES:
-#    app.add_typer(
-#        apps_cmd,
-#        name=alias,
-#        help=HELP,
-#        hidden=True
+#    return Arbiter(
+#        watchers,
+#        endpoint=endpoint,
+#        pubsub_endpoint=pubsub_endpoint,
+#        stats_endpoint=stats_endpoint,
+#        check_delay = check_delay,
 #    )
+# services.register_factory(context, Arbiter, get_arbiter)
+# obj["device-handler"] = device_handler
+
+# console.info(device_handler.svc_model.model_dump())
+# getattr(
+#    console,
+#    f"custom_style_{cli_style}",
+#    getattr(console, f"custom_style_{conf.CLI_STYLE}"),
+# )
