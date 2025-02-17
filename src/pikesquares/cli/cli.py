@@ -7,8 +7,15 @@ import time
 from typing import Optional, Annotated
 from pathlib import Path
 
-from rich.progress import Progress
+from rich.progress import (
+    Progress,
+    TextColumn,
+    SpinnerColumn,
+)
 from rich.panel import Panel
+from rich.table import Column
+from rich.style import Style
+
 import randomname
 import typer
 import questionary
@@ -470,164 +477,378 @@ def init(
             4) detect dependencies
             5) validate dependencies
     """
+    py_kwargs = {
+        "app_root_dir": app_root_dir,
+        "uv_bin": conf.PYTHON_VIRTUAL_ENV / "bin/uv",
+        # "rich_live": live,
+    }
+    # console.info(py_kwargs)
+
+    if PythonRuntime.is_django(app_root_dir):
+        runtime = PythonRuntimeDjango(**py_kwargs)
+        py_framework_name = "Django"
+    else:
+        runtime = runtime_base(**py_kwargs)
+        py_framework_name = "No"
+
     # [link=https://www.willmcgugan.com]blog[/link]
-    progress = Progress(auto_refresh=False, console=console)
+
+    # text_column = TextColumn("{task.description}", table_column=Column(ratio=1))
+    # bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
+
+    style1 = Style(frame=True)
+
+    emoji_column = TextColumn("{task.fields[emoji_fld]}",
+                        table_column=Column(
+                            # ratio=1,
+                            width=3,
+                            style=style1,
+                        )
+    )
+    description_column = TextColumn("[progress.description]{task.description}",
+                        table_column=Column(
+                            # ratio=3
+                            width=30,
+                            style=style1,
+                        )
+    )
+    detected_fld_column = TextColumn("{task.fields[detected_fld]}",
+                        table_column=Column(
+                            # ratio=1
+                            width=10,
+                            style="green",
+                        )
+    )
+    result_mark_column = TextColumn("{task.fields[result_mark_fld]}",
+                        table_column=Column(
+                            # ratio=1
+                            width=3,
+                            style=style1,
+                        )
+    )
+
+    class MyProgress(Progress):
+        def get_renderables(self):
+            yield Panel(
+               self.make_tasks_table(self.tasks)
+            )
+            """
+
+            for task in self.tasks:
+                if task.fields.get("progress_type") == "mygreenbar":
+                    self.columns = ("[green]Rich is awesome!", BarColumn())
+                if task.fields.get("progress_type") == "mybluebar":
+                    self.columns = (
+                        "[blue]Another bar with a different layout",
+                        BarColumn(bar_width=None),
+                        "•",
+                        DownloadColumn(),
+                    )
+                yield self.make_tasks_table([task])
+
+            """
+
+    progress = MyProgress(
+        SpinnerColumn(),
+        emoji_column,
+        description_column,
+        detected_fld_column,
+        result_mark_column,
+        auto_refresh=False,
+        console=console,
+    )
+
     with progress:
-        ####################################
-        # Detect Runtime
+
         detect_runtime_task = progress.add_task(
             "Detecting language runtime",
-            total=100,
+            visible=True,
+            total=1,
+            start=False,
+            emoji_fld="",
+            detected_fld="",
+            result_mark_fld="",
         )
-        progress.start_task(detect_runtime_task)
-        # console.print("Detecting language runtime")
-        for wait in progress.track(range(20), task_id=detect_runtime_task):
-            sleep(0.01)
-        detect_runtime_description = ":snake: Python language runtime [bold green] detected [/bold green] :heavy_check_mark:"
-        progress.reset(
-            detect_runtime_task,
-            total=100,
-            description=detect_runtime_description,
-        )
-
-        py_kwargs = {
-            "app_root_dir": app_root_dir,
-            "uv_bin": conf.PYTHON_VIRTUAL_ENV / "bin/uv",
-            # "rich_live": live,
-        }
-
-        console.info(py_kwargs)
-
-        if PythonRuntime.is_django(app_root_dir):
-            runtime = PythonRuntimeDjango(**py_kwargs)
-        else:
-            runtime = runtime_base(**py_kwargs)
-
-        ####################################
-        # Detect Runtime Version
         detect_runtime_version_task = progress.add_task(
             "Detecting language runtime version",
-            total=100,
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld="",
+            detected_fld="",
+            result_mark_fld="",
         )
-        progress.start_task(detect_runtime_version_task)
-        for wait in progress.track(range(100), task_id=detect_runtime_version_task):
-            sleep(0.01)
-
-        progress.reset(
-            detect_runtime_version_task,
-            total=20,
-            description=f":snake: Python version {runtime.version} [bold green] detected [/bold green] :heavy_check_mark:"
-        )
-        ####################################
-        # Detect Framework
         detect_framework_task = progress.add_task(
             "Detecting web framework",
-            total=100,
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld="",
+            detected_fld="",
+            result_mark_fld="",
         )
-        progress.start_task(detect_framework_task)
-        for wait in progress.track(range(100), task_id=detect_framework_task):
-            sleep(0.01)
-        if isinstance(runtime, PythonRuntimeDjango):
-            py_framework_name = ":unicorn_face: Django"
-        else:
-            py_framework_name = "No"
-        progress.reset(
-            detect_framework_task,
-            total=100,
-            description=f"{py_framework_name} framework [bold green] detected [/bold green] :heavy_check_mark:"
-        )
-        ####################################
-        # Detect Project Dependencies
         detect_dependencies_task = progress.add_task(
-            ":package: Detecting project dependencies",
-            total=100,
+            "Detecting project dependencies",
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld="",
+            detected_fld="",
+            result_mark_fld="",
         )
-        progress.start_task(detect_dependencies_task)
-        for wait in progress.track(range(100), task_id=detect_dependencies_task):
-            sleep(0.01)
-
-        deps_cnt = 10
-        progress.reset(
-            detect_dependencies_task,
-            total=100,
-            description=f":package: {deps_cnt} dependencies [bold green]detected[/bold green] :heavy_check_mark:"
-        )
-        ####################################
-        # Validate Project Dependencies
-        validate_dependencies_task = progress.add_task(
-            ":package: Validating project dependencies",
-            total=100,
-        )
-        progress.start_task(validate_dependencies_task)
-        for wait in progress.track(range(100), task_id=validate_dependencies_task):
-            sleep(0.01)
-        progress.reset(
-            validate_dependencies_task,
-            total=100,
-            description=f":package: {deps_cnt} dependencies [bold green]validated[/bold green] :heavy_check_mark:"
-        )
-        ###################################
-        # if Django - run mange.py check
         django_check_task = progress.add_task(
             ":unicorn_face: Running Django check",
-            total=100,
-        )
-        progress.start_task(django_check_task)
-        for wait in progress.track(range(100), task_id=django_check_task):
-            sleep(0.01)
-        progress.reset(
-            django_check_task,
-            total=100,
-            description="""\
-:unicorn_face: Django check [bold green]completed[/bold green] :heavy_check_mark:\n
-something else here \n
-and here"""
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld="",
+            detected_fld="",
+            result_mark_fld="",
         )
 
-        ###################################
-        # if Django - run diffsettings
         django_diffsettings_task = progress.add_task(
-            ":unicorn_face: Django discovering urlconf, settings and wsgi modules",
-            total=100,
-        )
-        progress.start_task(django_diffsettings_task)
-        for wait in progress.track(range(100), task_id=django_diffsettings_task):
-            sleep(0.01)
-        progress.reset(
-            django_diffsettings_task,
-            total=100,
-            description="""\
-:unicorn_face: Django settings [bold green]discovered[/bold green] :heavy_check_mark:\n
-\rROOT_URLCONF=mysite.urls\n
-\rSETINGS_MODULE=mysite.settings\n
-\rWSGI_APPLICATION=mysite.wsgi.application"""
+            "Django discovering modules",
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld=":unicorn_face:",
+            detected_fld="",
+            result_mark_fld="",
         )
 
-        ####################################
-        # Installing Project Dependencies
         install_dependencies_task = progress.add_task(
-            ":package: Installing project dependencies",
-            total=100,
+            "Installing project dependencies",
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld=":package:",
+            detected_fld="",
+            result_mark_fld="",
         )
-        progress.start_task(install_dependencies_task)
-        for wait in progress.track(range(100), task_id=install_dependencies_task):
-            sleep(0.01)
+
+        detect_runtime_description = "Python language runtime"
+        detect_runtime_version_description = f"Python version {runtime.version}"
+        detect_framework_description = f"{py_framework_name} framework"
         deps_cnt = 10
-        progress.reset(
-            install_dependencies_task,
-            total=100,
-            description=f":package: {deps_cnt} dependencies [bold green]installed[/bold green] :heavy_check_mark:"
-        )
+        django_check_description = "Django check"
+        django_diffsettings_description = "Django modules"
 
-        # console.clear()
+        # django_diffsettings_description = """\
+    # Django settings\n
+    # \rROOT_URLCONF=mysite.urls\n
+    # \rSETINGS_MODULE=mysite.settings\n
+    # \rWSGI_APPLICATION=mysite.wsgi.application"""
 
-        # progress.log(
-        #    Panel(":checkered_flag: All done! :checkered_flag:", border_style="green", padding=1)
-        # )
+        while not progress.finished:
+
+            progress.start_task(detect_runtime_task)
+            sleep(1)
+            progress.update(
+                detect_runtime_task,
+                completed=1,
+                visible=True,
+                refresh=True,
+                description=detect_runtime_description,
+                emoji_fld=":snake:",
+                detected_fld="detected",
+                result_mark_fld=":heavy_check_mark:"
+            )
+            progress.update(
+                detect_runtime_version_task,
+                visible=True,
+                refresh=True,
+            )
+            progress.start_task(detect_runtime_version_task)
+            sleep(1)
+            progress.update(
+                detect_runtime_version_task,
+                completed=1,
+                visible=True,
+                refresh=True,
+                description=detect_runtime_version_description,
+                emoji_fld=":snake:",
+                detected_fld="detected",
+                result_mark_fld=":heavy_check_mark:"
+            )
+
+            progress.update(
+                detect_framework_task,
+                visible=True,
+                refresh=True,
+            )
+            progress.start_task(detect_framework_task)
+            sleep(1)
+            progress.update(
+                detect_framework_task,
+                completed=1,
+                visible=True,
+                refresh=True,
+                description=detect_framework_description,
+                emoji_fld=":unicorn_face:" if py_framework_name == "Django" else ":snake:",
+                detected_fld="detected",
+                result_mark_fld=":heavy_check_mark:"
+            )
+
+            ####################################
+            #   create tmp dir
+            #   copy project into tmp dir
+            #   create venv in the tmp dir
+            #   install dependencies into tmp dir
+            #   django run check in the tmp dir
+            #   django run diffsettings in the tmp dir
+            #
+            #   create venv in the pyvenv_dir
+            #        pyvenv_dir = conf.data_dir / "venvs" / service_id
+            #   install dependencies into pyvenv_dir
+
+            ####################################
+            import tempfile
+            import shutil
+            import json
+
+            from pikesquares.services.apps.exceptions import (
+                UvSyncError,
+                UvPipInstallError,
+                UvPipListError,
+                # PythonRuntimeCheckError,
+                # PythonRuntimeDjangoCheckError,
+                UvCommandExecutionError,
+                PythonRuntimeInitError,
+                DjangoCheckError,
+                DjangoDiffSettingsError,
+            )
+
+            app_tmp_dir = Path(
+                tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app")
+            )
+            shutil.copytree(
+                runtime.app_root_dir,
+                app_tmp_dir,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(*list(runtime.PY_IGNORE_PATTERNS))
+            )
+            for p in Path(app_tmp_dir).iterdir():
+                logger.debug(p)
+
+            ####################################
+            # Detect Project Dependencies
+            progress.update(
+                detect_dependencies_task,
+                visible=True,
+                refresh=True,
+            )
+            progress.start_task(detect_dependencies_task)
+
+            cmd_env = {}
+            venv = app_tmp_dir / ".venv"
+            runtime.create_venv(venv=venv, cmd_env=cmd_env)
+            try:
+                runtime.install_dependencies(venv=venv, app_tmp_dir=app_tmp_dir)
+            except (UvSyncError, UvPipInstallError):
+                logger.error("installing dependencies failed.")
+                runtime.check_cleanup(app_tmp_dir)
+
+            deps_count = 0
+            try:
+                deps = runtime.dependencies_list()
+                deps_count = len(deps)
+                progress.update(
+                    detect_dependencies_task,
+                    completed=1,
+                    visible=True,
+                    refresh=True,
+                    description=f"{deps_count} dependencies",
+                    emoji_fld=":package:",
+                    detected_fld="detected",
+                    result_mark_fld=":heavy_check_mark:"
+                )
+            except UvPipListError as exc:
+                progress.console.log(exc)
+
+            ###################################
+            # if Django - run mange.py check
+            progress.update(
+                django_check_task,
+                visible=True,
+                refresh=True,
+            )
+            progress.start_task(django_check_task)
+            try:
+                runtime.collected_project_metadata["django_check_messages"] = \
+                        runtime.django_check(app_tmp_dir=app_tmp_dir)
+            except DjangoCheckError:
+                runtime.check_cleanup(app_tmp_dir)
+                # raise PythonRuntimeDjangoCheckError("django check command failed")
+            progress.console.log(runtime.collected_project_metadata)
+
+            progress.update(
+                django_check_task,
+                completed=1,
+                visible=True,
+                refresh=True,
+                description=django_check_description,
+                emoji_fld=":unicorn_face:",
+                detected_fld="passed",
+                result_mark_fld=":heavy_check_mark:"
+            )
+
+            ###################################
+            # if Django - run diffsettings
+            progress.update(
+                django_diffsettings_task,
+                visible=True,
+                refresh=True,
+            )
+            progress.start_task(django_diffsettings_task)
+            try:
+                runtime.collected_project_metadata["django_settings"] = \
+                        runtime.django_diffsettings(app_tmp_dir=app_tmp_dir)
+            except DjangoDiffSettingsError:
+                runtime.check_cleanup(app_tmp_dir)
+                # raise PythonRuntimeDjangoCheckError("django diffsettings command failed.")
+
+            progress.update(
+                django_diffsettings_task,
+                completed=1,
+                visible=True,
+                refresh=True,
+                description=django_diffsettings_description,
+                emoji_fld=":unicorn_face:",
+                detected_fld="done",
+                result_mark_fld=":heavy_check_mark:"
+            )
+
+            ####################################
+            # Installing Project Dependencies
+            progress.update(
+                install_dependencies_task,
+                visible=True,
+                refresh=True,
+            )
+            progress.start_task(install_dependencies_task)
+            cmd_env = {
+                # "UV_CACHE_DIR": str(conf.pv_cache_dir),
+                "UV_PROJECT_ENVIRONMENT": str(venv),
+            }
+            runtime.create_venv(pyvenv_dir, cmd_env=cmd_env)
+            runtime.install_dependencies()
+
+            progress.update(
+                install_dependencies_task,
+                completed=1,
+                visible=True,
+                description=f"{deps_count} dependencies",
+                refresh=True,
+                emoji_fld=":package:",
+                detected_fld="installed",
+                result_mark_fld=":heavy_check_mark:"
+            )
+            # progress.log(
+            #   Panel(":checkered_flag: All done! :checkered_flag:", border_style="green", padding=1)
+            # )
+
         if 0:
             try:
-                pass
-                """
                 if runtime.init(venv=pyvenv_dir):
                     logger.info("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
                     logger.debug(runtime.model_dump())
@@ -651,7 +872,6 @@ and here"""
                     )
                     logger.info(wsgi_app)
                 console.print("[bold green]WSGI App has been provisioned.")
-                """
             except PythonRuntimeInitError:
                 logger.error("[pikesquares] -- PythonRuntimeInitError --")
 

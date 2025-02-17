@@ -7,6 +7,9 @@ class UvPipInstallError(Exception):
     pass
 
 
+class UvPipListError(Exception):
+    pass
+
 class PythonRuntimeCheckError(Exception):
     pass
 

@@ -120,48 +120,6 @@ class PythonRuntimeDjango(PythonRuntime):
             return True
         return False
 
-    def get_app(
-        self,
-        conf: AppConfig,
-        db: TinyDB,
-        name: str,
-        service_id: str,
-        app_project,
-        venv: Path,
-        routers: list[Router]
-        ) -> DjangoWsgiApp:
-
-        django_settings = self.collected_project_metadata.\
-                get("django_settings")
-
-        logger.debug(django_settings.model_dump())
-
-        django_check_messages = self.collected_project_metadata.\
-                get("django_check_messages", [])
-
-        for msg in django_check_messages.messages:
-            logger.debug(f"{msg.id=}")
-            logger.debug(f"{msg.message=}")
-
-        wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
-        wsgi_file = self.app_root_dir / Path("/".join(wsgi_parts) + ".py")
-        app_options = {
-            "root_dir": self.app_root_dir,
-            "project_id": app_project.service_id,
-            "wsgi_file": wsgi_file,
-            "wsgi_module": django_settings.wsgi_application.split(".")[-1],
-            "pyvenv_dir": str(venv),
-            "routers": routers,
-            "workers": 3,
-        }
-        return DjangoWsgiApp(
-            conf=conf,
-            db=db,
-            service_id=service_id,
-            name=name,
-            app_options=WsgiAppOptions(**app_options),
-        )
-
     def django_check(
             self,
             cmd_env: dict | None = None,
@@ -273,3 +231,46 @@ class PythonRuntimeDjango(PythonRuntime):
             raise DjangoDiffSettingsError(
                 f"[pikesquares] UvExecError: unable to run django diffsettings in {chdir}"
             )
+
+    def get_app(
+        self,
+        conf: AppConfig,
+        db: TinyDB,
+        name: str,
+        service_id: str,
+        app_project,
+        venv: Path,
+        routers: list[Router]
+        ) -> DjangoWsgiApp:
+
+        django_settings = self.collected_project_metadata.\
+                get("django_settings")
+
+        logger.debug(django_settings.model_dump())
+
+        django_check_messages = self.collected_project_metadata.\
+                get("django_check_messages", [])
+
+        for msg in django_check_messages.messages:
+            logger.debug(f"{msg.id=}")
+            logger.debug(f"{msg.message=}")
+
+        wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
+        wsgi_file = self.app_root_dir / Path("/".join(wsgi_parts) + ".py")
+        app_options = {
+            "root_dir": self.app_root_dir,
+            "project_id": app_project.service_id,
+            "wsgi_file": wsgi_file,
+            "wsgi_module": django_settings.wsgi_application.split(".")[-1],
+            "pyvenv_dir": str(venv),
+            "routers": routers,
+            "workers": 3,
+        }
+        return DjangoWsgiApp(
+            conf=conf,
+            db=db,
+            service_id=service_id,
+            name=name,
+            app_options=WsgiAppOptions(**app_options),
+        )
+

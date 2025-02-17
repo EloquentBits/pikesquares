@@ -34,8 +34,8 @@ processes:
       backoff_seconds: 2 # default: 1
       max_restarts: 5 # default: 0 (unlimited)
     depends_on:
-      bootstrap:
-        condition: process_completed_successfuly
+      # bootstrap:
+      #  condition: process_completed_successfuly
       caddy: 
         condition: process_started
     shutdown:
@@ -56,7 +56,7 @@ processes:
     #  failure_threshold: 3
   bootstrap:
     command: "${PIKESQUARES_SERVER_EXE} bootstrap"
-    disabled: false
+    disabled: true
     availability:
       restart: "exit_on_failure"
 

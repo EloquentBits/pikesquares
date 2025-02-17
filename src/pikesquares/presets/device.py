@@ -1,11 +1,7 @@
-from pathlib import Path
-
 import structlog
 
-from . import (
-    Section, 
-)
-#from .routers import BaseRouterHttps
+from . import Section
+# from .routers import BaseRouterHttps
 
 
 logger = structlog.get_logger()

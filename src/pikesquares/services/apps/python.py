@@ -107,9 +107,9 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
 
         cmd_env = {}
         venv = app_tmp_dir / ".venv"
-        self.create_venv(venv=venv, cmd_env=cmd_env, console_silent=True)
+        self.create_venv(venv=venv, cmd_env=cmd_env)
         try:
-            self.install_dependencies(venv=venv, app_tmp_dir=app_tmp_dir, console_silent=True)
+            self.install_dependencies(venv=venv, app_tmp_dir=app_tmp_dir)
         except (UvSyncError, UvPipInstallError):
             logger.error("installing dependencies failed.")
             self.check_cleanup(app_tmp_dir)

@@ -79,7 +79,7 @@ class Device(BaseService, DevicePKIMixin):
                 sys.setdlopenflags(orig)
         else:  # ah well, can't control how dlopen works here
             import pyuwsgi
-        console.info("Starting PikeSquares Server")
+        logger.info("Starting PikeSquares Server")
         logger.info("!!! Starting PikeSquares Server | pyuwsgi.run !!!")
 
         pyuwsgi.run(["--json", f"{str(self.service_config.resolve())}"])
@@ -95,16 +95,16 @@ class Device(BaseService, DevicePKIMixin):
         if not self.db.table("projects").all():
             for proj_config in (config_dir / "projects").glob("project_*.json"):
                 for app_config in (config_dir / proj_config.stem / "apps").glob("*.json"):
-                    console.info(f"found loose app config. deleting {app_config.name}")
+                    logger.info(f"found loose app config. deleting {app_config.name}")
                     app_config.unlink()
-                console.info(f"found loose project config. deleting {proj_config.name}")
+                logger.info(f"found loose project config. deleting {proj_config.name}")
                 proj_config.unlink()
-            # console.info("creating sandbox project.")
+            # logger.info("creating sandbox project.")
             # project_up(conf, "sandbox", f"project_{cuid()}")
 
         if not self.db.table("routers").all():
             for router_config in (config_dir / "projects").glob("router_*.json"):
-                console.info(f"found loose router config. deleting {router_config.name}")
+                logger.info(f"found loose router config. deleting {router_config.name}")
                 router_config.unlink()
 
     def drop_db_tables(self):
@@ -118,19 +118,19 @@ class Device(BaseService, DevicePKIMixin):
         config_dir = self.conf.config_dir
         for proj_config in (config_dir / "projects").glob("project_*.json"):
             for app_config in (config_dir / proj_config.stem / "apps").glob("*.json"):
-                console.info(f"deleting {app_config.name}")
+                logger.info(f"deleting {app_config.name}")
                 app_config.unlink()
 
                 # FIXME
                 # app_log = self.log_dir / app_config.stem / ".log"
                 # app_log.unlink(missing_ok=True)
-                # console.info(f"deleting {app_log.name}")
+                # logger.info(f"deleting {app_log.name}")
 
-            console.info(f"deleting {proj_config.name}")
+            logger.info(f"deleting {proj_config.name}")
             proj_config.unlink()
 
         for router_config in (config_dir / "projects").glob("router_*.json"):
-            console.info(f"found router config. deleting {router_config.name}")
+            logger.info(f"found router config. deleting {router_config.name}")
             router_config.unlink()
 
         for logfile in self.conf.log_dir.glob("*.log"):
@@ -148,7 +148,7 @@ class Device(BaseService, DevicePKIMixin):
             if not dry_run:
                 try:
                     shutil.rmtree(str(user_dir))
-                    console.info(f"deleted {str(user_dir)}")
+                    logger.info(f"deleted {str(user_dir)}")
                 except FileNotFoundError:
                     pass
 

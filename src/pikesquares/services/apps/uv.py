@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 # import toml
@@ -10,6 +11,7 @@ from .exceptions import (
     UvCommandExecutionError,
     UvSyncError,
     UvPipInstallError,
+    UvPipListError,
 )
 
 
@@ -22,11 +24,9 @@ class UVMixin:
         self,
         venv: Path,
         cmd_env: dict | None = None,
-        console_silent: bool = False,
         ) -> None:
-        logger.info(f"[pikesquares] `uv venv`: {str(venv)}")
-        if not console_silent:
-            console.log("Creating Python virtual environment")
+        logger.debug(f"[pikesquares] `uv venv`: {str(venv)}")
+        logger.info("Creating Python virtual environment")
 
         # os.chdir(app_root_dir)
         cmd_args = []
@@ -54,13 +54,10 @@ class UVMixin:
         cmd_env: dict | None = None,
         venv: Path | None = None,
         app_tmp_dir: Path | None = None,
-        console_silent: bool = False,
         ) -> None:
 
         venv = venv or self.app_root_dir / ".venv"
         logger.info(f"[pikesquares] uv installing dependencies in venv @ {str(venv)}")
-        if not console_silent:
-            console.log("Installing Dependencies")
         cmd_args = []
         install_inspect_extensions = False
 
@@ -133,10 +130,22 @@ class UVMixin:
                         f"[pikesquares] UvExecError: unable to install inspect-extensions in {str(self.app_root_dir)}"
                     )
 
+    def dependencies_list(self):
+        cmd_env = {}
+        cmd_args = ["pip", "list", "--format", "json"]
+        try:
+            retcode, stdout, stderr = self.uv_cmd(
+                    cmd_args, cmd_env
+            )
+            return json.loads(stdout)
+        except UvCommandExecutionError:
+            raise UvPipListError("unable to get a list of dependencies")
+
+
     def uv_cmd(
             self,
             cmd_args: list[str],
-            run_as_user: str = "pikesquares",
+            # run_as_user: str = "pikesquares",
             cmd_env: dict | None = None,
             chdir: Path | None = None,
 
