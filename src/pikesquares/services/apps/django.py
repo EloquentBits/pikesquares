@@ -271,6 +271,7 @@ class PythonRuntimeDjango(PythonRuntime):
             db=db,
             service_id=service_id,
             name=name,
+            build_config_on_init=True,
             app_options=WsgiAppOptions(**app_options),
         )
 

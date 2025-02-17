@@ -1,8 +1,8 @@
-import logging
-#import json
-from time import sleep
 import os
-import traceback
+import tempfile
+import shutil
+import logging
+from time import sleep
 import time
 from typing import Optional, Annotated
 from pathlib import Path
@@ -47,14 +47,25 @@ from pikesquares.services.router import (
     DefaultHttpRouter,
     register_router,
 )
-from pikesquares.cli.commands.apps.validators import NameValidator
+# from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.services import process_compose
 from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
 from pikesquares.services.apps.django import PythonRuntimeDjango
+
 from pikesquares.services.apps.exceptions import (
+    UvSyncError,
+    UvPipInstallError,
+    UvPipListError,
+    # PythonRuntimeCheckError,
+    # PythonRuntimeDjangoCheckError,
+    # UvCommandExecutionError,
     PythonRuntimeInitError,
+    DjangoCheckError,
+    DjangoDiffSettingsError,
 )
+
+
 
 from pikesquares.services.data import (
 #    RouterStats,
@@ -146,7 +157,7 @@ app = typer.Typer(
     rich_markup_mode="rich",
     pretty_exceptions_enable=True,
     pretty_exceptions_short=False,
-    pretty_exceptions_show_locals=True,
+    pretty_exceptions_show_locals=False,
 )
 
 
@@ -642,7 +653,7 @@ def init(
         while not progress.finished:
 
             progress.start_task(detect_runtime_task)
-            sleep(1)
+            sleep(0.5)
             progress.update(
                 detect_runtime_task,
                 completed=1,
@@ -659,7 +670,7 @@ def init(
                 refresh=True,
             )
             progress.start_task(detect_runtime_version_task)
-            sleep(1)
+            sleep(0.5)
             progress.update(
                 detect_runtime_version_task,
                 completed=1,
@@ -677,7 +688,7 @@ def init(
                 refresh=True,
             )
             progress.start_task(detect_framework_task)
-            sleep(1)
+            sleep(0.5)
             progress.update(
                 detect_framework_task,
                 completed=1,
@@ -702,22 +713,6 @@ def init(
             #   install dependencies into pyvenv_dir
 
             ####################################
-            import tempfile
-            import shutil
-            import json
-
-            from pikesquares.services.apps.exceptions import (
-                UvSyncError,
-                UvPipInstallError,
-                UvPipListError,
-                # PythonRuntimeCheckError,
-                # PythonRuntimeDjangoCheckError,
-                UvCommandExecutionError,
-                PythonRuntimeInitError,
-                DjangoCheckError,
-                DjangoDiffSettingsError,
-            )
-
             app_tmp_dir = Path(
                 tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app")
             )
@@ -846,50 +841,14 @@ def init(
             # progress.log(
             #   Panel(":checkered_flag: All done! :checkered_flag:", border_style="green", padding=1)
             # )
-
-        if 0:
             try:
-                if runtime.init(venv=pyvenv_dir):
-                    logger.info("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
-                    logger.debug(runtime.model_dump())
-                    # app_name = questionary.text(
-                    #    "Choose a name for your app: ",
-                    #    default=randomname.get_name().lower(),
-                    #    style=custom_style,
-                    #    validate=NameValidator,
-                    # ).ask()
-                    #console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
-                    app_name = randomname.get_name().lower()
-                    app_project = services.get(context, SandboxProject)
-                    wsgi_app = runtime.get_app(
-                        conf,
-                        db,
-                        app_name,
-                        service_id,
-                        app_project,
-                        pyvenv_dir,
-                        build_routers(app_name),
-                    )
-                    logger.info(wsgi_app)
-                console.print("[bold green]WSGI App has been provisioned.")
-            except PythonRuntimeInitError:
-                logger.error("[pikesquares] -- PythonRuntimeInitError --")
-
-        """
-
-        try:
-            if runtime.init(venv=pyvenv_dir):
-                logger.info("[pikesquares] PYTHON RUNTIME COMPLETED INIT")
-                logger.debug(runtime.model_dump())
                 # app_name = questionary.text(
                 #    "Choose a name for your app: ",
                 #    default=randomname.get_name().lower(),
                 #    style=custom_style,
                 #    validate=NameValidator,
                 # ).ask()
-
                 #console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
-
                 app_name = randomname.get_name().lower()
                 app_project = services.get(context, SandboxProject)
                 wsgi_app = runtime.get_app(
@@ -901,62 +860,15 @@ def init(
                     pyvenv_dir,
                     build_routers(app_name),
                 )
-                logger.info(wsgi_app)
-            console.print("[bold green]WSGI App has been provisioned.")
-
-        except PythonRuntimeInitError:
-            logger.error("[pikesquares] -- PythonRuntimeInitError --")
-
-        """
+                console.log(wsgi_app.config_json)
+                console.print("[bold green]WSGI App has been provisioned.")
+            except PythonRuntimeInitError:
+                logger.error("[pikesquares] -- PythonRuntimeInitError --")
 
     # elif runtime_class == RubyRuntime:
     #    pass
     # elif runtime_class == PHPRuntime:
     #    pass
-
-
-"""
-
-with Live(console=console) as live:
-    console.print("[bold blue]Starting work!")
-
-from rich.table import Table
-
-table = Table()
-table.add_column("Row ID")
-table.add_column("Description")
-table.add_column("Level")
-
-with Live(table, refresh_per_second=4) as live:  # update 4 times a second to feel fluid
-    for row in range(12):
-        live.console.print(f"Working on row #{row}")
-        time.sleep(0.4)
-        table.add_row(f"{row}", f"description {row}", "[red]ERROR")
-
-
-with Live("Starting...", refresh_per_second=4) as live:  # Keep updating the text
-    for i in range(10):
-        live.update(f"[bold green]Processing {i}/10...[/bold green]")
-        time.sleep(0.5)
-    live.update("[bold blue]Done![/bold blue]")
-
-# transient=True
-# Normally when you exit live context manager (or call stop()) the last
-# refreshed item remains in the terminal with the cursor on the following line.
-# You can also make the live display disappear on exit by setting transient=True
-# on the Live constructor.
-
-for i in range(10):
-    console.print(
-            f"\r[bold yellow]Processing {i}/10...[/bold yellow]",
-            end="",
-            soft_wrap=False
-    )
-    time.sleep(0.5)
-
-console.print("\n[bold green]Done![/bold green]")
-
-"""
 
 
 
@@ -1158,7 +1070,7 @@ def main(
     db = services.get(context, TinyDB)
     logger.info(conf.model_dump())
 
-    build_configs = ctx.invoked_subcommand == "bootstrap"
+    build_configs = True # ctx.invoked_subcommand == "bootstrap"
     register_device(
         context,
         Device,
