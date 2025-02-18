@@ -265,9 +265,10 @@ class BaseService(pydantic.BaseModel, ABC):
             spdir.mkdir(parents=True, exist_ok=True)
         return spdir
 
-    def read_stats(self):
-        if not all([self.stats_address.exists(), self.stats_address.is_socket()]):
-            raise StatsReadError(f"unable to read stats from {(self.stats_address)}")
+    @classmethod
+    def read_stats(cls, stats_address: Path):
+        if not all([stats_address.exists(), stats_address.is_socket()]):
+            raise StatsReadError(f"unable to read stats from {(stats_address)}")
 
         def unix_addr(arg):
             sfamily = socket.AF_UNIX
@@ -275,9 +276,7 @@ class BaseService(pydantic.BaseModel, ABC):
             return sfamily, addr, socket.gethostname()
 
         js = ""
-        sfamily, addr, host = unix_addr(self.stats_address)
-        # console.info(f"{sfamily=} {str(addr)=} {host=}")
-
+        sfamily, addr, _ = unix_addr(stats_address)
         try:
             s = None
             s = socket.socket(sfamily, socket.SOCK_STREAM)
@@ -290,18 +289,18 @@ class BaseService(pydantic.BaseModel, ABC):
             if s:
                 s.close()
         except ConnectionRefusedError as e:
-            raise StatsReadError(f"Connection refused @ {(self.stats_address)}")
+            raise StatsReadError(f"Connection refused @ {(stats_address)}")
         except FileNotFoundError as e:
-            raise StatsReadError(f"Socket not available @ {(self.stats_address)}")
+            raise StatsReadError(f"Socket not available @ {(stats_address)}")
         except IOError as e:
             if e.errno != errno.EINTR:
                 # uwsgi.log(f"socket @ {addr} not available")
                 pass
         except Exception:
-            console.error(traceback.format_exc())
+            logger.error(traceback.format_exc())
         else:
             try:
                 return json.loads(js)
             except json.JSONDecodeError:
-                console.error(traceback.format_exc())
-                console.info(js)
+                logger.error(traceback.format_exc())
+                logger.info(js)
