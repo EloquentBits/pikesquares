@@ -183,7 +183,7 @@ class BaseService(pydantic.BaseModel, ABC):
         read stats socket
         """
         if self.stats_address.exists() and self.stats_address.is_socket():
-            return "running" if self.read_stats(str(self.stats_address)) else "stopped"
+            return "running" if BaseService.read_stats(self.stats_address) else "stopped"
 
     def startup_log(self, show_config_start_marker: str, show_config_end_marker: str) -> Tuple[List, List]:
         """

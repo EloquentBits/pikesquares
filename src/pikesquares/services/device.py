@@ -47,7 +47,7 @@ class Device(BaseService, DevicePKIMixin):
 
     @pydantic.computed_field
     def stats(self) -> DeviceStats | None:
-        stats_now = self.read_stats()
+        stats_now = Device.read_stats(self.stats_address)
         if stats_now:
             return DeviceStats(**stats_now)
 
