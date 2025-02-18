@@ -12,7 +12,6 @@ from rich.progress import (
     TextColumn,
     SpinnerColumn,
 )
-from rich.panel import Panel
 from rich.table import Column
 from rich.style import Style
 
@@ -509,40 +508,42 @@ def init(
 
     style1 = Style(frame=True)
 
-    emoji_column = TextColumn("{task.fields[emoji_fld]}",
-                        table_column=Column(
-                            # ratio=1,
-                            width=3,
-                            style=style1,
-                        )
+    emoji_column = TextColumn(
+        "{task.fields[emoji_fld]}",
+        table_column=Column(
+            ratio=1,
+            # width=3,
+            style=style1,
+        )
     )
     description_column = TextColumn("[progress.description]{task.description}",
                         table_column=Column(
-                            # ratio=3
-                            width=30,
+                            ratio=5,
+                            # width=30,
                             style=style1,
                         )
     )
     detected_fld_column = TextColumn("{task.fields[detected_fld]}",
                         table_column=Column(
-                            # ratio=1
-                            width=10,
+                            ratio=1,
+                            # width=10,
                             style="green",
                         )
     )
     result_mark_column = TextColumn("{task.fields[result_mark_fld]}",
                         table_column=Column(
-                            # ratio=1
-                            width=3,
+                            ratio=1,
+                            # width=3,
                             style=style1,
                         )
     )
 
     class MyProgress(Progress):
         def get_renderables(self):
-            yield Panel(
-               self.make_tasks_table(self.tasks)
-            )
+            yield self.make_tasks_table(self.tasks)
+            # yield Panel(
+            #   self.make_tasks_table(self.tasks)
+            # )
             """
 
             for task in self.tasks:
@@ -640,7 +641,6 @@ def init(
         detect_runtime_description = "Python language runtime"
         detect_runtime_version_description = f"Python version {runtime.version}"
         detect_framework_description = f"{py_framework_name} framework"
-        deps_cnt = 10
         django_check_description = "Django check"
         django_diffsettings_description = "Django modules"
 
