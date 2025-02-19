@@ -10,17 +10,24 @@ class UvPipInstallError(Exception):
 class UvPipListError(Exception):
     pass
 
+
 class PythonRuntimeCheckError(Exception):
     pass
 
+
 class PythonRuntimeDjangoCheckError(Exception):
     pass
+
 
 class PythonRuntimeInitError(Exception):
     pass
 
 
 class DjangoCheckError(Exception):
+    pass
+
+
+class DjangoSettingsError(Exception):
     pass
 
 

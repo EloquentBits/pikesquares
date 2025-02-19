@@ -86,7 +86,7 @@ class BaseRouter(BaseService):
         config_json = json.loads(
                 section.as_configuration().format(
                     formatter="json",
-                    do_print=True,
+                    do_print=False,
                 )
         )
         # self.config_json["uwsgi"]["show-config"] = True

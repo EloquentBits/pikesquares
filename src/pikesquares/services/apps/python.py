@@ -3,10 +3,8 @@ import shutil
 import tempfile
 
 import pydantic
-from rich.console import RenderableType
 import structlog
 
-from pikesquares.cli.console import console
 from .uv import UVMixin
 from . import BaseLanguageRuntime
 
@@ -47,6 +45,7 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
         "tests",
         "__pycache__",
     })
+    runtime_emoji: str = ":snake:"
 
     @pydantic.computed_field
     def version(self) -> str:
@@ -92,7 +91,7 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
         ) -> bool:
         # copy project to tmp dir at $TMPDIR
         logger.debug("[pikesquares] PythonRuntime.check")
-        console.print(
+        logger.info(
             f"Inspecting Python project @ {str(self.app_root_dir)}",
             #log_locals=True,
         )

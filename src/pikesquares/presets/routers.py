@@ -75,7 +75,7 @@ class RouterHttps(_RouterHttp):
 
 
 class HttpsRouterSection(Section):
-    router_name: str = "[[ Pike Squares App / HTTPS Router ]]"
+    router_name: str = "[[ PikeSquares App / HTTPS Router ]]"
 
     def __init__(self, router, plugins: list, **kwargs):
         super().__init__(
@@ -156,6 +156,7 @@ class HttpsRouterSection(Section):
 
         self.router.set_basic_params(
             stats_server=str(router.stats_address),
+            cheap_mode=True,
             quiet=False,
             keepalive=5,
             # resubscribe_addresses=(router.resubscribe_to),
@@ -253,6 +254,7 @@ class HttpRouterSection(Section):
 
         self.router.set_basic_params(
             stats_server=str(router.stats_address),
+            cheap_mode=True,
             quiet=False,
             keepalive=5,
             # resubscribe_addresses=resubscribe_to

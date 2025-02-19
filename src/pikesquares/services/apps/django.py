@@ -4,13 +4,11 @@ import re
 from pathlib import Path
 
 import pydantic
-from rich.console import RenderableType
 from plumbum import ProcessExecutionError
 from tinydb import TinyDB
 import structlog
 
 from pikesquares.conf import AppConfig
-from pikesquares.cli.console import console
 from ..data import Router, WsgiAppOptions
 from .wsgi import WsgiApp
 from .python import PythonRuntime
@@ -82,18 +80,15 @@ class DjangoWsgiApp(WsgiApp):
 
 class PythonRuntimeDjango(PythonRuntime):
 
+    framework_emoji: str = ":unicorn_face:"
+
     def init(
             self,
             venv: Path,
             check: bool = True,
         ) -> bool:
-
-        # live = self.__pydantic_extra__.get("rich_live")
-        # live.console("hello from PythonRuntimeDjango")
-        # live.update("hello from PythonRuntimeDjango")
         logger.debug("[pikesquares] PythonRuntimeDjango.init")
-
-        if super().init(check, venv):
+        if super().init(venv, check=check):
             return True
         return False
 
@@ -127,9 +122,6 @@ class PythonRuntimeDjango(PythonRuntime):
         ) -> DjangoCheckMessages:
         chdir = app_tmp_dir or self.app_root_dir
         logger.info(f"[pikesquares] run django check in {str(chdir)}")
-        console.log("Running Django checks")
-        sleep(1)
-
         dj_msgs = DjangoCheckMessages()
 
         # DJANGO_SETTINGS_MODULE=mysite.settings
@@ -200,9 +192,8 @@ class PythonRuntimeDjango(PythonRuntime):
         self,
         cmd_env: dict | None = None,
         app_tmp_dir: Path | None = None,
-        ):
+        ) -> DjangoSettings:
         logger.info("[pikesquares] django diffsettings")
-        console.log("Running Django diffsettings")
         sleep(3)
         cmd_args = ["run", "manage.py", "diffsettings"]
         chdir = app_tmp_dir or self.app_root_dir
@@ -242,6 +233,9 @@ class PythonRuntimeDjango(PythonRuntime):
         venv: Path,
         routers: list[Router]
         ) -> DjangoWsgiApp:
+
+        if "django_settings" not in self.collected_project_metadata:
+            raise DjangoSettingsError("unable to detect django settings")
 
         django_settings = self.collected_project_metadata.\
                 get("django_settings")
