@@ -1,5 +1,3 @@
-from time import sleep
-import re
 import re
 from pathlib import Path
 
@@ -63,6 +61,13 @@ class DjangoSettings(pydantic.BaseModel):
     root_urlconf: str
     wsgi_application: str
     base_dir: Path | None = None
+
+    def settings_with_titles(self) -> list[tuple[str, str]]:
+        return [
+             ("Django Settings Module", self.settings_module),
+             ("Django URLConf Module", self.root_urlconf),
+             ("Django WSGI Module", self.wsgi_application)
+        ]
 
 
 class DjangoWsgiApp(WsgiApp):
@@ -164,7 +169,6 @@ class PythonRuntimeDjango(PythonRuntime):
             if plumbum_pe_err.stderr.startswith("SystemCheckError"):
                 err_lines = plumbum_pe_err.stderr.split("\n")
                 for msg in [line for line in err_lines if line.startswith("?:")]:
-                    logger.error(f"====    {msg=}     ====")
                     try:
                         # ?: (4_0.E001)
                         msg_id = re.findall(r"(?<=\()[^)]+(?=\))", msg)[0]
@@ -178,7 +182,6 @@ class PythonRuntimeDjango(PythonRuntime):
                             ).strip()
                         )
                     )
-                logger.error(f"{dj_msgs.messages=}")
                 return dj_msgs
             else:
                 raise DjangoCheckError(f"[pikesquares] UvExecError: unable to run django check in {str(chdir)}") from None
@@ -194,7 +197,6 @@ class PythonRuntimeDjango(PythonRuntime):
         app_tmp_dir: Path | None = None,
         ) -> DjangoSettings:
         logger.info("[pikesquares] django diffsettings")
-        sleep(3)
         cmd_args = ["run", "manage.py", "diffsettings"]
         chdir = app_tmp_dir or self.app_root_dir
         try:

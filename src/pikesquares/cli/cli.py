@@ -15,6 +15,7 @@ from rich.table import Column
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
+from rich.table import Table
 
 import randomname
 import typer
@@ -507,7 +508,6 @@ def init(
     # text_column = TextColumn("{task.description}", table_column=Column(ratio=1))
     # bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
 
-
     class MyProgress(Progress):
         def get_renderables(self):
             yield self.make_tasks_table(self.tasks)
@@ -600,70 +600,73 @@ def init(
     def make_layout():
         layout = Layout(name="root")
         layout.split(
-            # Layout(
-            #    name="overall_progress",
-            #    ratio=1,
-            #    ),
-            Layout(
-                name="tasks_and_messages",
-                ratio=1,
-                size=None,
-            ),
+            Layout(name="overall_progress", size=5),
+            Layout(name="tasks_and_messages", size=20),
         )
         layout["tasks_and_messages"].split_row(
-            Layout(
-                name="tasks",
-                ratio=1,
+            Layout(name="tasks",
+                ratio=2,
                 size=None,
                 # minimum_size=30,
             ),
             Layout(
                 name="task_messages",
-                ratio=1,
+                ratio=3,
                 size=None,
             ),
         )
         return layout
 
+    class HeaderDjangoChecks:
+        def __rich__(self) -> Panel:
+            grid = Table.grid(expand=True)
+            grid.add_column(justify="center", ratio=1)
+            grid.add_column(justify="right")
+            grid.add_row(
+                "Static checks for validating Django projects",
+                "Django 5.2.4",
+            )
+            return Panel(grid, style="white on blue")
+
+    class HeaderDjangoSettings:
+        def __rich__(self) -> Panel:
+            grid = Table.grid(expand=True)
+            grid.add_column(justify="center", ratio=1)
+            grid.add_column(justify="right")
+            grid.add_row(
+                "Discovered Django settings",
+                "Django 5.2.4",
+            )
+            return Panel(grid, style="white on blue")
+
     layout = make_layout()
-    layout["tasks"].update(
-        Panel(
+    layout["tasks"].update(Panel(
             progress,
             title="Initializing Project",
             border_style="green",
             padding=(2, 2),
         ),
     )
-    # layout["overall_progress"].update(
-    #     Panel(
-    #         overall_progress,
-    #         title="Overall Progress",
-    #         border_style="green",
-    #         padding=(1, 1),
-    #     ),
-    # )
-    layout["task_messages"].update(
-        "some messages will be here"
+    layout["overall_progress"].update(
+        Panel(
+            overall_progress,
+            title="Overall Progress",
+            border_style="green",
+            padding=(1, 1),
+        ),
     )
-
-    with Live(layout, refresh_per_second=10):
+    layout["task_messages"].update(Panel("", title="Messages", border_style="green", padding=(2, 2),))
+    task_messages_layout = layout["task_messages"]
+    msg_id_styles = {
+        "C": "red",
+        "E": "red",
+        "W": "yellow",
+        "I": "green",
+        "D": "green",
+    }
+    with Live(layout, console=console, auto_refresh=True) as live:
         while not overall_progress.finished:
             sleep(0.1)
-            # progress_table.add_row(
-            #     Panel.fit(
-            #         "this will be more comments",
-            #         border_style="green",
-            #         padding=(2, 2),
-            #     ),
-            # )
-            layout["task_messages"].update(
-                Panel(
-                    "some new messages here",
-                    title="messages",
-                    border_style="green",
-                    padding=(2, 2),
-                )
-            )
             for job in progress.tasks:
                 if not job.finished:
                     if job.id == detect_dependencies_task:
@@ -735,23 +738,54 @@ def init(
                         try:
                             runtime.collected_project_metadata["django_check_messages"] = \
                                     runtime.django_check(app_tmp_dir=app_tmp_dir)
+                            dj_msgs = runtime.collected_project_metadata.get("django_check_messages")
+                            task_messages_layout.add_split(
+                                Layout(name="dj-check-msgs-header", ratio=1, size=None)
+                            )
+                            task_messages_layout["dj-check-msgs-header"].update(HeaderDjangoChecks())
+                            for idx, msg in enumerate(dj_msgs.messages):
+                                task_messages_layout.add_split(
+                                        Layout(name=f"dj-msg-{idx}", ratio=1, size=None)
+                                )
+                                msg_id_style = msg_id_styles.get(msg.id.split(".")[-1][0])
+                                task_messages_layout[f"dj-msg-{idx}"].update(
+                                    Panel(
+                                        f"[{msg_id_style}]{msg.id}[/{msg_id_style}] - {msg.message}",
+                                        border_style="green",
+                                        )
+                                    )
                         except DjangoCheckError:
                             if app_tmp_dir:
                                 runtime.check_cleanup(app_tmp_dir)
                             # raise PythonRuntimeDjangoCheckError("django check command failed")
-                        logger.debug(runtime.collected_project_metadata)
-
                     elif job.id == django_diffsettings_task:
                         ###################################
                         # if Django - run diffsettings
                         try:
                             runtime.collected_project_metadata["django_settings"] = \
                                     runtime.django_diffsettings(app_tmp_dir=app_tmp_dir)
+                            dj_settings = runtime.collected_project_metadata.get("django_settings")
+                            task_messages_layout.add_split(
+                                Layout(name="dj-settings-header", ratio=1, size=None)
+                            )
+                            task_messages_layout["dj-settings-header"].update(
+                                HeaderDjangoSettings()
+                            )
+                            for msg_index, settings_fld in enumerate(dj_settings.settings_with_titles()):
+                                task_messages_layout.add_split(
+                                    Layout(name=f"dj-settings-msg-{msg_index}", ratio=1, size=None)
+                                )
+                                task_messages_layout[f"dj-settings-msg-{msg_index}"].\
+                                    update(
+                                        Panel(
+                                            f"{settings_fld[0]} - {settings_fld[1]}\n",
+                                            border_style="green",
+                                        )
+                                    )
                         except DjangoDiffSettingsError:
                             if app_tmp_dir:
                                 runtime.check_cleanup(app_tmp_dir)
                             # raise PythonRuntimeDjangoCheckError("django diffsettings command failed.")
-
                     elif job.id == install_dependencies_task:
                         ####################################
                         # Installing Project Dependencies
@@ -763,10 +797,6 @@ def init(
                         runtime.install_dependencies()
                         description_done = f"{dependencies_count} dependencies installed"
 
-                    # progress.log(
-                    #   Panel(":checkered_flag: All done! :checkered_flag:", border_style="green", padding=1)
-                    # )
-
                     progress.update(
                         job.id,
                         completed=1,
@@ -776,37 +806,32 @@ def init(
                         emoji_fld=job.fields.get("emoji_fld", "N/A"),
                         result_mark_fld=":heavy_check_mark:"
                     )
+                    completed = sum(task.completed for task in progress.tasks)
+                    overall_progress.update(overall_task, completed=completed)
 
-            completed = sum(task.completed for task in progress.tasks)
-            overall_progress.update(overall_task, completed=completed)
-
+        # app_name = questionary.text(
+        #    "Choose a name for your app: ",
+        #    default=randomname.get_name().lower(),
+        #    style=custom_style,
+        #    validate=NameValidator,
+        # ).ask()
+        # console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
+        app_name = randomname.get_name().lower()
+        app_project = services.get(context, SandboxProject)
         try:
-            # app_name = questionary.text(
-            #    "Choose a name for your app: ",
-            #    default=randomname.get_name().lower(),
-            #    style=custom_style,
-            #    validate=NameValidator,
-            # ).ask()
-            # console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
-            app_name = randomname.get_name().lower()
-            app_project = services.get(context, SandboxProject)
-            try:
-                wsgi_app = runtime.get_app(
-                    conf,
-                    db,
-                    app_name,
-                    service_id,
-                    app_project,
-                    pyvenv_dir,
-                    build_routers(app_name),
-                )
-                logger.info(wsgi_app.config_json)
-                # console.print("[bold green]WSGI App has been provisioned.")
-            except DjangoSettingsError:
-                logger.error("[pikesquares] -- DjangoSettingsError --")
-                raise typer.Exit() from None
-        except PythonRuntimeInitError:
-            logger.error("[pikesquares] -- PythonRuntimeInitError --")
+            wsgi_app = runtime.get_app(
+                conf,
+                db,
+                app_name,
+                service_id,
+                app_project,
+                pyvenv_dir,
+                build_routers(app_name),
+            )
+            logger.info(wsgi_app.config_json)
+            # console.print("[bold green]WSGI App has been provisioned.")
+        except DjangoSettingsError:
+            logger.error("[pikesquares] -- DjangoSettingsError --")
             raise typer.Exit() from None
 
     # console.log(runtime.collected_project_metadata["django_settings"])
