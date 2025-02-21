@@ -8,6 +8,9 @@
 **Table of Contents**
 
 - [Installation](#installation)
+- [Overview](#overview)
+- [Features](#features)
+- [Usage](#usage)
 - [License](#license)
 
 ## Installation
@@ -16,6 +19,40 @@
 curl -fsSl https://install.pikesquares.com | bash
 ```
 
+## Overview
+
+`pikeSquares` is a CLI-tool for application developers to deploy managed services such as web applications, APIs, periodic jobs, background workers and more.
+
+
+## Features
+
+* Experiment with stacks with ease
+* Reliably automate your local dev environment
+* Take control of your local development environment
+* Organize and launch your projects with various language runtimes
+* Provision a fully configured dev environment on demand
+* Keep in-sync between various devices
+* All kinds of runtimes and managed services are supported
+
+
+## Usage
+
+```console
+pikesquares up
+```
+```console
+pikesquares init
+```
+
 ## License
 
 `pikesquares` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+
+
+
+
+
+
+
+
+
