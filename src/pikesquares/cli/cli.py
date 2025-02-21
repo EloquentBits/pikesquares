@@ -561,6 +561,18 @@ def init(
         result_mark_fld="",
         description_done=None,
     )
+    for task in runtime.get_tasks():
+        task_id = progress.add_task(
+            task.description,
+            visible=task.visible,
+            total=task.total,
+            start=task.start,
+            emoji_fld=task.emoji_fld,
+            result_mark_fld=task.result_mark_fld,
+            description_done=task.description_done,
+        )
+        
+    """
     django_check_task = progress.add_task(
         "Running Django check",
         visible=False,
@@ -580,6 +592,7 @@ def init(
         result_mark_fld="",
         description_done="Django modules discovered",
     )
+    """
 
     install_dependencies_task = progress.add_task(
         "Installing project dependencies",
@@ -667,9 +680,9 @@ def init(
     with Live(layout, console=console, auto_refresh=True) as live:
         while not overall_progress.finished:
             sleep(0.1)
-            for job in progress.tasks:
-                if not job.finished:
-                    if job.id == detect_dependencies_task:
+            for task in progress.tasks:
+                if not task.finished:
+                    if task.id == detect_dependencies_task:
                         ####################################
                         app_tmp_dir = Path(
                             tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app")
@@ -683,22 +696,22 @@ def init(
                         for p in Path(app_tmp_dir).iterdir():
                             logger.debug(p)
 
-                    if job.id < 2:
-                        progress.start_task(job.id)
+                    if task.id < 2:
+                        progress.start_task(task.id)
                         sleep(0.5)
                         progress.update(
-                            job.id,
+                            task.id,
                             completed=1,
                             visible=True,
                             refresh=True,
-                            description=job.fields.get("description_done", "N/A"),
-                            emoji_fld=job.fields.get("emoji_fld", "N/A"),
+                            description=task.fields.get("description_done", "N/A"),
+                            emoji_fld=task.fields.get("emoji_fld", "N/A"),
                             result_mark_fld=":heavy_check_mark:"
                         )
-                        if job.id == detect_runtime_task:
+                        if task.id == detect_runtime_task:
                             update_job_id = detect_framework_task
                         else:
-                            update_job_id = job.id + 1
+                            update_job_id = task.id + 1
                         try:
                             progress.update(
                                 update_job_id,
@@ -708,13 +721,13 @@ def init(
                         except KeyError:
                             pass
                     else:
-                        progress.update(job.id, visible=True, refresh=True)
-                        progress.start_task(job.id)
+                        progress.update(task.id, visible=True, refresh=True)
+                        progress.start_task(task.id)
                         sleep(0.5)
 
                     description_done = None
 
-                    if job.id == detect_dependencies_task:
+                    if task.id == detect_dependencies_task:
                         ####################################
                         # Detect Project Dependencies
                         cmd_env = {}
@@ -732,7 +745,7 @@ def init(
                             logger.error(exc)
                             raise typer.Exit(1) from None
 
-                    elif job.id == django_check_task:
+                    elif task.id == django_check_task:
                         ###################################
                         # if Django - run mange.py check
                         try:
@@ -758,7 +771,7 @@ def init(
                             if app_tmp_dir:
                                 runtime.check_cleanup(app_tmp_dir)
                             # raise PythonRuntimeDjangoCheckError("django check command failed")
-                    elif job.id == django_diffsettings_task:
+                    elif task.id == django_diffsettings_task:
                         ###################################
                         # if Django - run diffsettings
                         try:
@@ -786,7 +799,7 @@ def init(
                             if app_tmp_dir:
                                 runtime.check_cleanup(app_tmp_dir)
                             # raise PythonRuntimeDjangoCheckError("django diffsettings command failed.")
-                    elif job.id == install_dependencies_task:
+                    elif task.id == install_dependencies_task:
                         ####################################
                         # Installing Project Dependencies
                         cmd_env = {
@@ -798,12 +811,12 @@ def init(
                         description_done = f"{dependencies_count} dependencies installed"
 
                     progress.update(
-                        job.id,
+                        task.id,
                         completed=1,
                         visible=True,
                         refresh=True,
-                        description=description_done or job.fields.get("description_done"),
-                        emoji_fld=job.fields.get("emoji_fld", "N/A"),
+                        description=description_done or task.fields.get("description_done"),
+                        emoji_fld=task.fields.get("emoji_fld", "N/A"),
                         result_mark_fld=":heavy_check_mark:"
                     )
                     completed = sum(task.completed for task in progress.tasks)
@@ -901,7 +914,7 @@ def main(
             writable=False,
             readable=True,
             resolve_path=True,
-            help="PikeSquares data directory",
+            help="Data directory",
         )
     ] = None,
     config_dir: Annotated[
@@ -915,7 +928,7 @@ def main(
             writable=False,
             readable=True,
             resolve_path=True,
-            help="PikeSquares configs directory",
+            help="Configs directory",
         )
     ] = None,
     log_dir: Annotated[
@@ -929,7 +942,7 @@ def main(
             writable=False,
             readable=True,
             resolve_path=True,
-            help="PikeSquares logs directory",
+            help="Logs directory",
         )
     ] = None,
     run_dir: Annotated[
@@ -943,7 +956,7 @@ def main(
             writable=False,
             readable=True,
             resolve_path=True,
-            help="PikeSquares run directory",
+            help="Run directory",
         )
     ] = None,
     # build_configs: Optional[bool] = typer.Option(
@@ -1090,6 +1103,8 @@ def main(
         build_config_on_init=build_configs,
     )
     process_compose.register_process_compose(context, conf)
+
+    # console.log(context)
     # http_router = services.get(context, DefaultHttpRouter)
     # https_router = services.get(context, DefaultHttpsRouter)
 

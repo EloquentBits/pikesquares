@@ -7,6 +7,7 @@ from tinydb import TinyDB
 import structlog
 
 from pikesquares.conf import AppConfig
+from . import Task
 from ..data import Router, WsgiAppOptions
 from .wsgi import WsgiApp
 from .python import PythonRuntime
@@ -83,6 +84,7 @@ class DjangoWsgiApp(WsgiApp):
 """
 
 
+
 class PythonRuntimeDjango(PythonRuntime):
 
     framework_emoji: str = ":unicorn_face:"
@@ -96,6 +98,28 @@ class PythonRuntimeDjango(PythonRuntime):
         if super().init(venv, check=check):
             return True
         return False
+
+    def get_tasks(self) -> list:
+        tasks = super().get_tasks()
+        dj_check_task = Task(
+            description="Running Django check",
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld=getattr(self, "framework_emoji", self.runtime_emoji),
+            result_mark_fld="",
+            description_done="Django check passed",
+        )
+        dj_settings_task = Task(
+            description="Django discovering modules",
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld=getattr(self, "framework_emoji", self.runtime_emoji),
+            result_mark_fld="",
+            description_done="Django modules discovered",
+        )
+        return [*tasks, dj_check_task, dj_settings_task]
 
     def check(
             self,

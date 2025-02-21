@@ -13,6 +13,19 @@ import structlog
 logger = structlog.get_logger()
 
 
+class Task(pydantic.BaseModel):
+    """rich.progress.Progress task"""
+
+    description: str
+    emoji_fld: str
+    visible: bool = False
+    total: int
+    start: bool
+    result_mark_fld: str
+    description_done: str
+
+
+
 class BaseLanguageRuntime(pydantic.BaseModel, ABC):
 
     MATCH_FILES: set[str]
@@ -28,6 +41,10 @@ class BaseLanguageRuntime(pydantic.BaseModel, ABC):
     def check(self,
         app_tmp_dir: Path,
         ):
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_tasks(self) -> list:
         raise NotImplementedError
 
     @abstractmethod
