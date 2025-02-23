@@ -1,14 +1,10 @@
-import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
 import sys
 
-# from cuid import cuid
 import pydantic
-import typer
-from tinydb import TinyDB, Query
+from tinydb import TinyDB
 import structlog
 
 #from circus.arbiter import Arbiter
@@ -24,8 +20,6 @@ from pikesquares.presets.device import DeviceSection
 from pikesquares.services.base import BaseService
 from pikesquares.services import register_factory
 from pikesquares.services.data import DeviceStats
-from pikesquares.cli.console import console
-
 from .mixins.pki import DevicePKIMixin
 
 __all__ = ("Device",)
