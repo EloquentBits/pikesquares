@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     #         path=self.POSTGRES_DB,
     #     )
 
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def SQLALCHEMY_DATABASE_URI(self) -> str:
+        path_to_db = "pikesquares.db"
+        return f"sqlite+aiosqlite:///{path_to_db}"
+
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
     SMTP_PORT: int = 587

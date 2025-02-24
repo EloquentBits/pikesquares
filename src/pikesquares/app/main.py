@@ -36,9 +36,6 @@ if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
 # def sqlmodel_session_maker(engine) -> Callable[[], Session]:
 #    return lambda: Session(bind=engine, autocommit=False, autoflush=False)
 
-sqlite_file_name = "pikesquares.db"
-sqlite_url = f"sqlite+aiosqlite:///{sqlite_file_name}"
-
 # connect_args = {"check_same_thread": False}
 # engine = create_engine(sqlite_url, connect_args=connect_args)
 
@@ -57,7 +54,7 @@ sqlite_url = f"sqlite+aiosqlite:///{sqlite_file_name}"
 #    get_db,
 # )
 
-async_engine = create_async_engine(sqlite_url, echo=True, future=True)
+async_engine = create_async_engine(settings.SQLALCHEMY_DATABASE_URI, echo=True, future=True)
 async_session = async_sessionmaker(async_engine, expire_on_commit=False)
 
 
