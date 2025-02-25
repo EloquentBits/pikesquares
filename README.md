@@ -37,9 +37,10 @@ curl -fsSl https://install.pikesquares.com | bash
 <h1><code>pikesquares --help</code><h1>
 <img src = "https://git.eloquentbits.com/EloquentBits/pikesquares/raw/branch/julia-patch-1/uv.gif" width="1000" alt="Terminal Demo">
 
-<h1><code>pikesquares up</code><h1>
-
 <h1><code>pikesquares init</code><h1><h1>
+<img src = "https://git.eloquentbits.com/EloquentBits/pikesquares/raw/commit/d0ae027dfe4041f61984469f93ff6311b4a4bc2a/init_test.gif">
+
+<h1><code>pikesquares up</code><h1>
 
 ## License
 
