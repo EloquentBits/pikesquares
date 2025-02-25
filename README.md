@@ -34,14 +34,12 @@ curl -fsSl https://install.pikesquares.com | bash
 * Keep in-sync between various devices
 * All kinds of runtimes and managed services are supported
 
-![Demo gif](https://git.eloquentbits.com/EloquentBits/pikesquares/raw/branch/julia-patch-1/uv.gif)
+<h1><code>pikesquares --help</code><h1>
+<img src = "https://git.eloquentbits.com/EloquentBits/pikesquares/raw/branch/julia-patch-1/uv.gif" width="1000" alt="Terminal Demo">
 
-```console
-pikesquares up
-```
-```console
-pikesquares init
-```
+<h1><code>pikesquares up</code><h1>
+
+<h1><code>pikesquares init</code><h1><h1>
 
 ## License
 
