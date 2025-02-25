@@ -36,6 +36,13 @@ curl -fsSl https://install.pikesquares.com | bash
 
 
 ## Usage
+ 
+[![asciinema](https://asciinema.org/a/HDru0gjP0tkpaM51l9RsvP8qy.svg)]
+
+
+
+
+
 
 ```console
 pikesquares up
