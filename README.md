@@ -34,15 +34,7 @@ curl -fsSl https://install.pikesquares.com | bash
 * Keep in-sync between various devices
 * All kinds of runtimes and managed services are supported
 
-
-## Usage
- 
-[![asciinema](https://asciinema.org/a/HDru0gjP0tkpaM51l9RsvP8qy.svg)]
-
-
-
-
-
+![Demo gif](https://git.eloquentbits.com/EloquentBits/pikesquares/raw/branch/julia-patch-1/uv.gif)
 
 ```console
 pikesquares up
