@@ -69,6 +69,7 @@ class ProcessCompose(pydantic.BaseModel):
         logger.info(f"[pikesquares] pc_cmd: {cmd_args=}")
 
         cmd_env = {
+            # TODO use shellingham library
             "COMPOSE_SHELL": os.environ.get("SHELL"),
             "PIKESQUARES_VERSION": self.conf.VERSION,
             "PIKESQUARES_UWSGI_BIN": str(self.conf.UWSGI_BIN),

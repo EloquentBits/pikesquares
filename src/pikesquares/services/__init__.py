@@ -82,7 +82,6 @@ def register_value(
     )
 
 
-
 def get_pings(context: dict) -> list[ServicePing]:
     return svcs_from(context).get_pings()
 

@@ -1,0 +1,97 @@
+import logging
+from typing import Any, Annotated
+from collections.abc import AsyncGenerator
+
+import contextlib
+from typing import AsyncIterator
+
+from fastapi import FastAPI
+
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import sessionmaker
+
+from pikesquares.app.core.config import settings
+
+
+class DatabaseSessionManager:
+    def __init__(self, host: str, engine_kwargs: dict[str, Any] = {}):
+        self._engine = create_async_engine(host, **engine_kwargs)
+        self._sessionmaker = async_sessionmaker(
+            autocommit=False,
+            bind=self._engine,
+            expire_on_commit=False
+        )
+
+    async def close(self):
+        if self._engine is None:
+            raise Exception("DatabaseSessionManager is not initialized")
+        await self._engine.dispose()
+
+        self._engine = None
+        self._sessionmaker = None
+
+    @contextlib.asynccontextmanager
+    async def connect(self) -> AsyncIterator[AsyncConnection]:
+        if self._engine is None:
+            raise Exception("DatabaseSessionManager is not initialized")
+
+        async with self._engine.begin() as connection:
+            try:
+                yield connection
+            except Exception:
+                await connection.rollback()
+                raise
+
+    @contextlib.asynccontextmanager
+    async def session(self) -> AsyncIterator[AsyncSession]:
+        if self._sessionmaker is None:
+            raise Exception("DatabaseSessionManager is not initialized")
+
+        session = self._sessionmaker()
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+    # Used for testing
+    # async def create_all(self, connection: AsyncConnection):
+    #    await connection.run_sync(Base.metadata.create_all)
+
+    # async def drop_all(self, connection: AsyncConnection):
+    #    await connection.run_sync(Base.metadata.drop_all)
+
+
+sessionmanager = DatabaseSessionManager(
+    settings.SQLALCHEMY_DATABASE_URI, {"echo": True}
+)
+
+
+async def get_session():
+    async with sessionmanager.session() as session:
+        yield session
+
+
+# engine = create_async_engine(
+#    settings.SQLALCHEMY_DATABASE_URI,
+#    echo=True,
+#    future=True,
+#    pool_size=20,
+#    max_overflow=20,
+#    pool_recycle=3600,
+# )
+#
+
+# @contextlib.asynccontextmanager
+# async def get_session() -> AsyncSession:
+#     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+#     async with async_session() as session:
+#         yield session
