@@ -74,7 +74,7 @@ async def read_device(
     session = await services.aget(AsyncSession)
 
     async with UnitOfWork(session=session) as uow:
-        return await uow.devices.get_by_id(id)
-
-    # if not device:
-    #    raise HTTPException(status_code=404, detail="Device not found")
+        device = await uow.devices.get_by_id(id)
+        if not device:
+            raise HTTPException(status_code=404, detail="Device not found")
+        return device

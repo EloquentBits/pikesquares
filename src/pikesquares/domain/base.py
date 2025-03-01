@@ -37,3 +37,13 @@ class ServiceBase(SQLModel):
         alias_generator = to_camel
         populate_by_name = True
         arbitrary_types_allowed = True
+
+    @property
+    def handler_name(self):
+        return self.__class__.__name__
+
+    def __repr__(self):
+        return f"<{self.handler_name} id={self.id} service_id={self.service_id}>"
+
+    def __str__(self):
+        return self.__repr__()

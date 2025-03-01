@@ -109,7 +109,12 @@ class GenericSqlRepository(GenericRepository[T], ABC):
 
     async def get_by_id(self, id: int) -> T | None:
         stmt = self._construct_get_stmt(id)
-        return await self._session.exec(stmt).first()
+        results = await self._session.exec(stmt)
+        if results:
+            logger.debug(results)
+            obj = results.first()
+            logger.debug(obj)
+            return obj
 
     def _construct_list_stmt(self, **filters) -> SelectOfScalar:
         """Creates a SELECT query for retrieving a multiple records.
@@ -160,7 +165,7 @@ class DeviceReposityBase(GenericRepository[Device], ABC):
     """DeviceHero repository.
     """
     @abstractmethod
-    async def get_by_id(self, id: int) -> Device | None:
+    async def get_by_machine_id(self, machine_id: str) -> Device | None:
         raise NotImplementedError()
 
 
@@ -168,11 +173,11 @@ class DeviceRepository(GenericSqlRepository[Device], DeviceReposityBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, Device)
 
-    async def get_by_id(self, id: int) -> Device | None:
-        #stmt = select(Device).where(Device.service_id == service_id)
-
-        return await self._session.get(Device, id)
-
-        # await self._session.exec(select(Hero)).all()
-
-        # return await self._session.exec(stmt)
+    async def get_by_machine_id(self, machine_id: str) -> Device | None:
+        stmt = select(Device).where(Device.machine_id == machine_id)
+        results = await self._session.exec(stmt)
+        if results:
+            logger.debug(results)
+            obj = results.first()
+            logger.debug(obj)
+            return obj

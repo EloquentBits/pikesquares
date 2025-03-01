@@ -16,6 +16,10 @@ from sqlalchemy.ext.asyncio import (
 from pikesquares.app.core.config import settings
 
 
+logger = logging.getLogger("uvicorn.error")
+logger.setLevel(logging.DEBUG)
+
+
 class DatabaseSessionManager:
     def __init__(self, host: str, engine_kwargs: dict[str, Any] = {}):
         self._engine = create_async_engine(host, **engine_kwargs)
