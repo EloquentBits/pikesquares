@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Callable
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -35,16 +34,15 @@ class UnitOfWorkBase(ABC):
 
 
 class UnitOfWork(UnitOfWorkBase):
-    def __init__(self, session_factory: Callable[[], AsyncSession]) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         """Creates a new uow instance.
 
         Args:
-            session_factory (Callable[[], Session]): Session maker function.
+            session_factory (Callable[[], AsyncSession]): Session maker function.
         """
-        self._session_factory = session_factory
+        self._session = session
 
     async def __aenter__(self):
-        self._session = self._session_factory()
         self.devices = DeviceRepository(self._session)
         return await super().__aenter__()
 

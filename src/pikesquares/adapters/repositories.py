@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar, Type
 
@@ -7,6 +8,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import Device
+
+logger = logging.getLogger("uvicorn.error")
+logger.setLevel(logging.DEBUG)
+
 
 T = TypeVar("T", bound=ServiceBase)
 
@@ -155,7 +160,7 @@ class DeviceReposityBase(GenericRepository[Device], ABC):
     """DeviceHero repository.
     """
     @abstractmethod
-    def get_by_service_id(self, service_id: str) -> Device | None:
+    async def get_by_id(self, id: int) -> Device | None:
         raise NotImplementedError()
 
 
@@ -163,6 +168,11 @@ class DeviceRepository(GenericSqlRepository[Device], DeviceReposityBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, Device)
 
-    async def get_by_service_id(self, service_id: str) -> Device | None:
-        stmt = select(Device).where(Device.service_id == service_id)
-        return await self._session.exec(stmt).first()
+    async def get_by_id(self, id: int) -> Device | None:
+        #stmt = select(Device).where(Device.service_id == service_id)
+
+        return await self._session.get(Device, id)
+
+        # await self._session.exec(select(Hero)).all()
+
+        # return await self._session.exec(stmt)

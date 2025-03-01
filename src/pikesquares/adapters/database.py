@@ -1,20 +1,17 @@
 import logging
-from typing import Any, Annotated
-from collections.abc import AsyncGenerator
+from typing import Any
 
 import contextlib
 from typing import AsyncIterator
 
-from fastapi import FastAPI
-
-from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
 
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import sessionmaker
+# from sqlalchemy.orm import sessionmaker
 
 from pikesquares.app.core.config import settings
 
@@ -25,7 +22,8 @@ class DatabaseSessionManager:
         self._sessionmaker = async_sessionmaker(
             autocommit=False,
             bind=self._engine,
-            expire_on_commit=False
+            expire_on_commit=False,
+            class_=SQLModelAsyncSession,
         )
 
     async def close(self):
@@ -49,7 +47,7 @@ class DatabaseSessionManager:
                 raise
 
     @contextlib.asynccontextmanager
-    async def session(self) -> AsyncIterator[AsyncSession]:
+    async def session(self) -> AsyncIterator[SQLModelAsyncSession]:
         if self._sessionmaker is None:
             raise Exception("DatabaseSessionManager is not initialized")
 
@@ -91,7 +89,7 @@ async def get_session():
 #
 
 # @contextlib.asynccontextmanager
-# async def get_session() -> AsyncSession:
-#     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+# async def get_session() -> SQLModelAsyncSession:
+#     async_session = sessionmaker(engine, class_=SQLModelAsyncSession, expire_on_commit=False)
 #     async with async_session() as session:
 #         yield session
