@@ -70,10 +70,13 @@ This approach embodies simplicity and precision—offering a unified, modular fr
 
 ## 🔨 Usage
 
+##### `pikesquares up`
+<img src = "https://git.eloquentbits.com/EloquentBits/pikesquares/raw/branch/julia-patch-1/pks_up.gif">
+
 ##### `pikesquares --help`
 <br>
 
-<img src="https://git.eloquentbits.com/EloquentBits/pikesquares/raw/branch/julia-patch-1/uv.gif" width="1000" alt="Terminal Demo" width="800">
+<img src="https://git.eloquentbits.com/EloquentBits/pikesquares/raw/branch/julia-patch-1/uv.gif" style="max-width: 800px; width: 100%;">
 
 ##### `pikesquares init`
 <br>
