@@ -202,6 +202,13 @@ def get(
 ) -> object:
     return svcs_from(context).get(*svc_types)
 
+
+async def aget(
+    context: dict,
+    *svc_types: type,
+) -> object:
+    return await svcs_from(context).aget(*svc_types)
+
 #####################################
 ####### init app
 

@@ -2,18 +2,10 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from svcs.fastapi import DepContainer
 
-from sqlalchemy.ext.asyncio import (
-    async_sessionmaker,
-    create_async_engine,
-)
-
-from pikesquares.app.core.config import settings
 from pikesquares.domain.device import Device
-from pikesquares.adapters.database import get_session
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = logging.getLogger("uvicorn.error")
@@ -65,7 +57,7 @@ async def add_device(
 
 @router.get("/{id}", response_model=Device)
 async def read_device(
-        id: int,
+        id: str,
         services: DepContainer,
     ) -> Any:
     """

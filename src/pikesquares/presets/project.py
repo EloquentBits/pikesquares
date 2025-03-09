@@ -6,6 +6,7 @@ from . import Section
 
 logger = structlog.get_logger()
 
+
 class ProjectSection(Section):
 
     def __init__(self, project):
@@ -15,7 +16,7 @@ class ProjectSection(Section):
         )
         self.project = project
 
-        self.set_runtime_dir(str(self.project.conf.run_dir))
+        self.set_runtime_dir(str(self.project.run_dir))
 
         plugins = [
             # "python312",
@@ -24,7 +25,7 @@ class ProjectSection(Section):
         ]
         self.set_plugins_params(
             plugins=plugins,
-            search_dirs=[self.project.conf.plugins_dir],
+            search_dirs=[self.project.plugins_dir],
         )
         self.print_plugins()
 
@@ -37,13 +38,13 @@ class ProjectSection(Section):
             vacuum=True,
             touch_reload=str(self.project.touch_reload_file),
             # place here correct emperor wrapper
-            #binary_path=str((Path(self.conf.data_dir) / ".venv/bin/uwsgi").resolve())
-            #binary_path=str((Path(self.project.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
+            # binary_path=str((Path(self.data_dir) / ".venv/bin/uwsgi").resolve())
+            # binary_path=str((Path(self.project.VIRTUAL_ENV) / "bin/uwsgi").resolve())
 
         )
         self.main_process.set_owner_params(
-                uid=self.project.conf.server_run_as_uid,
-                gid=self.project.conf.server_run_as_gid
+                uid=self.project.run_as_uid,
+                gid=self.project.run_as_gid
         )
         self.main_process.set_naming_params(
             prefix=f"{self.project.name} {self.project.service_id} ",
@@ -98,14 +99,14 @@ class ProjectSection(Section):
             #bind_to=resubscribe_bind_to
         )
         fastrouter.set_owner_params(
-            uid=self.conf.UID, 
-            gid=self.conf.GID,
+            uid=self.UID,
+            gid=self.GID,
         )
         self.routing.use_router(fastrouter)
     """
 
 
-#def get_project_config(project_id, formatter="json"):
+# def get_project_config(project_id, formatter="json"):
 
 #    section = ProjectSection(
 #        project_id=project_id,
@@ -116,5 +117,3 @@ class ProjectSection(Section):
 #    )
 #    configuration = section.as_configuration()
 #    return configuration.format(formatter=formatter)
-
-

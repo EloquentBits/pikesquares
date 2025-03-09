@@ -6,6 +6,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from pikesquares.adapters.repositories import (
     DeviceReposityBase,
     DeviceRepository,
+    ProjectReposityBase,
+    ProjectRepository,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -17,6 +19,7 @@ class UnitOfWorkBase(ABC):
     """
 
     devices: DeviceReposityBase
+    projects: ProjectReposityBase
 
     async def __aenter__(self):
         return self
@@ -49,10 +52,10 @@ class UnitOfWork(UnitOfWorkBase):
 
     async def __aenter__(self):
         self.devices = DeviceRepository(self._session)
+        self.projects = ProjectRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args):
-        # await super().__aexit__(*args)
         await self._session.close()
 
     async def commit(self):

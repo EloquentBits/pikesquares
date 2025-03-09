@@ -136,7 +136,6 @@ class Device(BaseService, DevicePKIMixin):
             self.conf.config_dir,
             self.conf.run_dir,
             self.conf.log_dir,
-            #self.conf.PLUGINS_DIR,
             self.conf.pki_dir,
         ]:
             if not dry_run:

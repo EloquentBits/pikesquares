@@ -1,4 +1,6 @@
 import os
+import json
+from functools import wraps
 import tempfile
 import shutil
 import logging
@@ -17,14 +19,15 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.table import Table
 
-import randomname
 import typer
+import structlog
+import randomname
 import questionary
 from tinydb import TinyDB
 from cuid import cuid
 from dotenv import load_dotenv
 from plumbum import ProcessExecutionError
-import structlog
+from sqlmodel.ext.asyncio.session import AsyncSession
 # from circus import Arbiter, get_arbiter
 
 from pikesquares.conf import (
@@ -34,13 +37,19 @@ from pikesquares.conf import (
     make_system_dir,
 )
 from pikesquares import services
-from pikesquares.services.base import StatsReadError
-from pikesquares.services.device import Device, register_device
-from pikesquares.services.project import (
-    SandboxProject,
-    Project,
-    register_sandbox_project,
-)
+from pikesquares.adapters.database import get_session
+# from pikesquares.services.device import Device
+from pikesquares.presets.device import DeviceSection
+from pikesquares.presets.project import ProjectSection
+from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.exceptions import StatsReadError
+
+#from pikesquares.services.project import (
+#    SandboxProject,
+#    Project,
+#    register_sandbox_project,
+#)
+
 from pikesquares.services.router import (
     HttpsRouter,
     HttpRouter,
@@ -49,7 +58,7 @@ from pikesquares.services.router import (
     register_router,
 )
 # from pikesquares.cli.commands.apps.validators import NameValidator
-from pikesquares.services import process_compose
+from pikesquares.domain import process_compose, device, project
 from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
 from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -162,6 +171,18 @@ app = typer.Typer(
 )
 
 
+def run_async(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        async def coro_wrapper():
+            logger.debug("=== run_async ===")
+            return await func(*args, **kwargs)
+
+        return anyio.run(coro_wrapper)
+
+    return wrapper
+
+
 @app.command(rich_help_panel="Control", short_help="Reset device")
 def reset(
     ctx: typer.Context,
@@ -265,7 +286,8 @@ def attach(
 @app.command(
         rich_help_panel="Control",
         short_help="Info on the PikeSquares Server")
-def info(
+@run_async
+async def info(
     ctx: typer.Context,
 ):
     """Info on the PikeSquares Server"""
@@ -275,8 +297,13 @@ def info(
     # console.info(f"data_dir={str(conf.DATA_DIR)}")
     logger.debug(f"virtualenv={str(conf.PYTHON_VIRTUAL_ENV)}")
 
-    device = services.get(context, Device)
+    # uow = await services.aget(context, UnitOfWork)
+    # device = await uow.devices.get_by_id(1)
+    # logger.debug(device)
+
+    device = context.get("device")
     pc = services.get(context, process_compose.ProcessCompose)
+
     try:
         pc.ping_api()
         try:
@@ -309,7 +336,8 @@ def info(
 @app.command(
         rich_help_panel="Control",
         short_help="Launch the PikeSquares Server (if stopped)")
-def up(
+@run_async
+async def up(
     ctx: typer.Context,
     # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
@@ -319,7 +347,12 @@ def up(
     # conf = services.get(context, AppConfig)
     pc = services.get(context, process_compose.ProcessCompose)
 
-    with console.status("Launching the PikeSquares Server", spinner="earth"):
+    session = await services.aget(context, AsyncSession)
+    async with UnitOfWork(session=session) as uow:
+        # id = 1
+        # device = await uow.devices.get_by_id(id)
+        # logger.debug(device)
+
         try:
             retcode, stdout, stderr = pc.up()
             if retcode != 0:
@@ -491,7 +524,7 @@ def init(
     """
     py_kwargs = {
         "app_root_dir": app_root_dir,
-        "uv_bin": conf.PYTHON_VIRTUAL_ENV / "bin/uv",
+        "uv_bin": conf.UV_BIN,
         # "rich_live": live,
     }
     # console.info(py_kwargs)
@@ -885,6 +918,9 @@ app.add_typer(routers.app, name="routers")
 app.add_typer(devices.app, name="devices")
 app.add_typer(managed_services.app, name="services")
 
+from functools import wraps
+import anyio
+
 
 def _version_callback(value: bool) -> None:
     if value:
@@ -893,7 +929,8 @@ def _version_callback(value: bool) -> None:
 
 
 @app.callback()
-def main(
+@run_async
+async def main(
     ctx: typer.Context,
     version: Optional[bool] = typer.Option(
         None,
@@ -1040,26 +1077,87 @@ def main(
         logger.error(app_conf_error)
         raise typer.Abort() from None
 
-    conf = services.get(context, AppConfig)
-    db_path = conf.data_dir / "device-db.json"
-    services.register_db(
-        context,
-        db_path,
-    )
-    db = services.get(context, TinyDB)
-    logger.info(conf.model_dump())
+    conf = await services.aget(context, AppConfig)
 
-    build_configs = True # ctx.invoked_subcommand == "bootstrap"
-    register_device(
-        context,
-        Device,
-        conf,
-        db,
-        build_config_on_init=build_configs,
-    )
-    device = services.get(context, Device)
-    # device.ping()
+    services.register_factory(context, AsyncSession, get_session)
 
+    process_compose.register_process_compose(context, conf)
+
+    session = await services.aget(context, AsyncSession)
+
+    async def uow_factory():
+        async with UnitOfWork(session=session) as uow:
+            yield uow
+    services.register_factory(context, UnitOfWork, uow_factory)
+
+    machine_id = Path("/var/lib/dbus/machine-id").read_text(encoding="utf-8")
+    uow = await services.aget(context, UnitOfWork)
+
+    dvc = await uow.devices.get_by_machine_id(machine_id)
+    if not dvc:
+        dvc = device.Device(
+            service_id=f"device_{cuid()}",
+            machine_id=machine_id,
+            data_dir=str(conf.data_dir),
+            config_dir=str(conf.config_dir),
+            log_dir=str(conf.log_dir),
+            run_dir=str(conf.run_dir),
+            pki_dir=str(conf.pki_dir),
+            sentry_dsn=conf.sentry_dsn,
+        )
+        dvc.uwsgi_config = json.loads(
+            DeviceSection(dvc).as_configuration().format(
+                formatter="json",
+                do_print=True,
+            )
+        )
+        dvc.uwsgi_config["uwsgi"]["show-config"] = True
+        await uow.devices.add(dvc)
+        await uow.commit()
+        logger.debug(f"Created {dvc=} for {machine_id=}")
+    else:
+        logger.debug(f"Using existing device for {machine_id=} {dvc=}")
+
+    context["device"] = dvc
+
+    # async with UnitOfWork(session=session) as uow:
+    #    id = 1
+    #    device = await uow.devices.get_by_id(id)
+    #    logger.debug(device)
+
+    sandbox_project = await uow.projects.get_by_name("sandbox")
+    if not sandbox_project:
+
+        # run_as_uid
+        # run_as_gid
+
+        sandbox_project = project.Project(
+            service_id=f"project_{cuid()}",
+            name="sandbox",
+            data_dir=str(conf.data_dir),
+            config_dir=str(conf.config_dir),
+            log_dir=str(conf.log_dir),
+            run_dir=str(conf.run_dir),
+            pki_dir=str(conf.pki_dir),
+            sentry_dsn=conf.sentry_dsn,
+        )
+        sandbox_project.uwsgi_config = json.loads(
+            ProjectSection(sandbox_project).as_configuration().format(
+                formatter="json",
+                do_print=True,
+            )
+        )
+        sandbox_project.uwsgi_config["uwsgi"]["show-config"] = True
+        await uow.projects.add(sandbox_project)
+        await uow.commit()
+        logger.debug(f"Created {sandbox_project=} for {machine_id=}")
+    else:
+        logger.debug(f"Using existing sandbox project for {machine_id=} {sandbox_project=}")
+
+    context["device"] = dvc
+
+
+    """
     register_sandbox_project(
         context,
         SandboxProject,
@@ -1102,7 +1200,7 @@ def main(
         db,
         build_config_on_init=build_configs,
     )
-    process_compose.register_process_compose(context, conf)
+    """
 
     # console.log(context)
     # http_router = services.get(context, DefaultHttpRouter)

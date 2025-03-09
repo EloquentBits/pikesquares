@@ -8,17 +8,12 @@ import sentry_sdk
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
-# from sqlmodel import SQLModel, select
+from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-
-from sqlalchemy.ext.asyncio import (
-    async_sessionmaker,
-    create_async_engine,
-)
 
 from pikesquares.app.api.main import api_router
 from pikesquares.app.core.config import settings
-from pikesquares.adapters.database import sessionmanager
+from pikesquares.adapters.database import sessionmanager, get_session
 
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
@@ -32,22 +27,20 @@ if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
     sentry_sdk.init(dsn=str(settings.SENTRY_DSN), enable_tracing=True)
 
 
-# SQLModel.metadata.create_all(engine)
-
-
 @svcs.fastapi.lifespan
 async def lifespan(
         app: FastAPI,
         registry: svcs.Registry,
     ) -> AsyncGenerator[dict[str, object], None]:
 
-    async def get_session() -> AsyncSession:
-        async with sessionmanager.session() as session:
-            return session
-
     registry.register_factory(AsyncSession, get_session)
 
     yield {"your": "other", "initial": "state"}
+
+
+def create_db_and_tables():
+    logger.debug("=== create_db_and_tables ===")
+    SQLModel.metadata.create_all(sessionmanager._engine)
 
 
 app = FastAPI(
@@ -56,6 +49,17 @@ app = FastAPI(
     # generate_unique_id_function=custom_generate_unique_id,
     lifespan=lifespan,
 )
+
+
+@app.on_event("startup")
+async def on_startup():
+    # create_db_and_tables()
+    async with sessionmanager._engine.begin() as conn:
+        await conn.run_sync(
+            lambda conn: SQLModel.metadata.create_all(conn)
+        )
+
+
 
 # Set all CORS enabled origins
 if settings.all_cors_origins:

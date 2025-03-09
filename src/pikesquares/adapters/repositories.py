@@ -2,15 +2,20 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar, Type
 
+import structlog
 from sqlmodel import select, and_
 from sqlmodel.sql.expression import SelectOfScalar
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import Device
+from pikesquares.domain.project import Project
 
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
+
+
+logger = structlog.get_logger()
 
 
 T = TypeVar("T", bound=ServiceBase)
@@ -21,7 +26,7 @@ class GenericRepository(Generic[T], ABC):
     """
 
     @abstractmethod
-    async def get_by_id(self, id: int) -> T | None:
+    async def get_by_id(self, id: str) -> T | None:
         """Get a single record by id.
 
         Args:
@@ -72,11 +77,11 @@ class GenericRepository(Generic[T], ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def delete(self, id: int) -> None:
+    async def delete(self, id: str) -> None:
         """Deletes a record by id.
 
         Args:
-            id (int): Record id.
+            id (str): Record id.
         """
         raise NotImplementedError()
 
@@ -95,11 +100,11 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         self._session = session
         self._model_cls = model_cls
 
-    def _construct_get_stmt(self, id: int) -> SelectOfScalar:
+    def _construct_get_stmt(self, id: str) -> SelectOfScalar:
         """Creates a SELECT query for retrieving a single record.
 
         Args:
-            id (int):  Record id.
+            id (str):  Record id.
 
         Returns:
             SelectOfScalar: SELECT statement.
@@ -107,13 +112,13 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         stmt = select(self._model_cls).where(self._model_cls.id == id)
         return stmt
 
-    async def get_by_id(self, id: int) -> T | None:
+    async def get_by_id(self, id: str) -> T | None:
         stmt = self._construct_get_stmt(id)
         results = await self._session.exec(stmt)
         if results:
-            logger.debug(results)
+            logger.debug(f"REPO {results=}")
             obj = results.first()
-            logger.debug(obj)
+            logger.debug(f"REPO {obj=}")
             return obj
 
     def _construct_list_stmt(self, **filters) -> SelectOfScalar:
@@ -154,7 +159,7 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         await self._session.refresh(record)
         return record
 
-    async def delete(self, id: int) -> None:
+    async def delete(self, id: str) -> None:
         record = self.get_by_id(id)
         if record is not None:
             await self._session.delete(record)
@@ -162,7 +167,7 @@ class GenericSqlRepository(GenericRepository[T], ABC):
 
 
 class DeviceReposityBase(GenericRepository[Device], ABC):
-    """DeviceHero repository.
+    """Device repository.
     """
     @abstractmethod
     async def get_by_machine_id(self, machine_id: str) -> Device | None:
@@ -175,6 +180,28 @@ class DeviceRepository(GenericSqlRepository[Device], DeviceReposityBase):
 
     async def get_by_machine_id(self, machine_id: str) -> Device | None:
         stmt = select(Device).where(Device.machine_id == machine_id)
+        results = await self._session.exec(stmt)
+        if results:
+            logger.debug(results)
+            obj = results.first()
+            logger.debug(obj)
+            return obj
+
+
+class ProjectReposityBase(GenericRepository[Project], ABC):
+    """Project repository.
+    """
+    @abstractmethod
+    async def get_by_name(self, name: str) -> Project | None:
+        raise NotImplementedError()
+
+
+class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, Project)
+
+    async def get_by_name(self, name: str) -> Project | None:
+        stmt = select(Project).where(Project.name == name)
         results = await self._session.exec(stmt)
         if results:
             logger.debug(results)

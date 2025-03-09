@@ -251,6 +251,7 @@ class AppConfig(BaseSettings):
     EASYRSA_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     DNSMASQ_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     PROCESS_COMPOSE_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
     PROCESS_COMPOSE_CONFIG: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None

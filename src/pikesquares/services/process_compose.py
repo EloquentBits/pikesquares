@@ -59,6 +59,69 @@ class ProcessCompose(pydantic.BaseModel):
     def __str__(self) -> str:
         return self.__repr__()
 
+    def up(self) -> tuple[int, str, str]:
+        cmd_args = [
+            "up",
+            "--config",
+            str(self.conf.PROCESS_COMPOSE_CONFIG),
+            "--log-file",
+            str(self.conf.log_dir / "process-compose.log"),
+            "--detached",
+            "--hide-disabled",
+            # "--tui",
+            # "false",
+            "--unix-socket",
+            str(self.socket_address),
+
+        ]
+        logger.info("calling process-compose up")
+        try:
+            return self.pc_cmd(cmd_args)
+        except ProcessExecutionError as exc:
+            logger.error(exc)
+            return exc.retcode, exc.stdout, exc.stderr
+
+    def down(self) -> tuple[int, str, str]:
+
+        if not self.socket_address.exists():
+            raise PCAPIUnavailableError()
+
+        cmd_args = [
+            "down",
+            "--unix-socket",
+            str(self.conf.run_dir / "process-compose.sock"),
+        ]
+        logger.info("calling process-compose down")
+        try:
+            return self.pc_cmd(cmd_args)
+        except ProcessExecutionError as exc:
+            logger.error(exc)
+            return exc.retcode, exc.stdout, exc.stderr
+
+    def attach(self) -> None:
+        try:
+            compl = subprocess.run(
+                args=[
+                  # str(self.conf.PROCESS_COMPOSE_BIN),
+                  str(Path(os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")) / "process-compose"),
+                  "attach",
+                  "--unix-socket",
+                  str(self.socket_address),
+                ],
+                cwd=str(self.conf.data_dir),
+                capture_output=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as cperr:
+            logger.error(f"failed to attach to server: {cperr.stderr.decode()}")
+            return
+
+        if compl.returncode != 0:
+            logger.error("unable to attach server")
+
+        logger.error(compl.stderr.decode())
+        logger.debug(compl.stdout.decode())
+
     def pc_cmd(
             self,
             cmd_args: list[str],
@@ -72,14 +135,15 @@ class ProcessCompose(pydantic.BaseModel):
             # TODO use shellingham library
             "COMPOSE_SHELL": os.environ.get("SHELL"),
             "PIKESQUARES_VERSION": self.conf.VERSION,
-            "PIKESQUARES_UWSGI_BIN": str(self.conf.UWSGI_BIN),
-            "PIKESQUARES_PYTHON_VIRTUAL_ENV": str(self.conf.PYTHON_VIRTUAL_ENV),
-            "PIKESQUARES_CADDY_BIN": str(self.conf.CADDY_BIN),
-            "PIKESQUARES_DNSMASQ_BIN": str(self.conf.DNSMASQ_BIN),
             "PIKESQUARES_SCIE_BASE": str(self.conf.SCIE_BASE),
             "PIKESQUARES_SCIE_LIFT_FILE": str(self.conf.SCIE_LIFT_FILE),
-            "PIKESQUARES_EASYRSA_BIN": str(self.conf.EASYRSA_BIN),
-            "PIKESQUARES_PROCESS_COMPOSE_BIN": str(self.conf.PROCESS_COMPOSE_BIN),
+            "UWSGI_BIN": str(self.conf.UWSGI_BIN),
+            "LOG_DIR": str(self.conf.log_dir),
+            "UV_BIN": str(self.conf.UV_BIN),
+            "CADDY_BIN": str(self.conf.CADDY_BIN),
+            "DNSMASQ_BIN": str(self.conf.DNSMASQ_BIN),
+            # "EASYRSA_BIN": str(self.conf.EASYRSA_BIN),
+            # "PIKESQUARES_PROCESS_COMPOSE_BIN": str(self.conf.PROCESS_COMPOSE_BIN),
         }
 
         logger.debug(cmd_env)
@@ -154,69 +218,6 @@ class ProcessCompose(pydantic.BaseModel):
             return False
 
         raise PCDeviceUnavailableError()
-
-    def up(self) -> tuple[int, str, str]:
-        cmd_args = [
-            "up",
-            "--config",
-            str(self.conf.PROCESS_COMPOSE_CONFIG),
-            "--log-file",
-            str(self.conf.log_dir / "process-compose.log"),
-            "--detached",
-            "--hide-disabled",
-            # "--tui",
-            # "false",
-            "--unix-socket",
-            str(self.socket_address),
-
-        ]
-        logger.info("calling process-compose up")
-        try:
-            return self.pc_cmd(cmd_args)
-        except ProcessExecutionError as exc:
-            logger.error(exc)
-            return exc.retcode, exc.stdout, exc.stderr
-
-    def down(self) -> tuple[int, str, str]:
-
-        if not self.socket_address.exists():
-            raise PCAPIUnavailableError()
-
-        cmd_args = [
-            "down",
-            "--unix-socket",
-            str(self.conf.run_dir / "process-compose.sock"),
-        ]
-        logger.info("calling process-compose down")
-        try:
-            return self.pc_cmd(cmd_args)
-        except ProcessExecutionError as exc:
-            logger.error(exc)
-            return exc.retcode, exc.stdout, exc.stderr
-
-    def attach(self) -> None:
-        try:
-            compl = subprocess.run(
-                args=[
-                  # str(self.conf.PROCESS_COMPOSE_BIN),
-                  str(Path(os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")) / "process-compose"),
-                  "attach",
-                  "--unix-socket",
-                  str(self.socket_address),
-                ],
-                cwd=str(self.conf.data_dir),
-                capture_output=True,
-                check=True,
-            )
-        except subprocess.CalledProcessError as cperr:
-            logger.error(f"failed to attach to server: {cperr.stderr.decode()}")
-            return
-
-        if compl.returncode != 0:
-            logger.error("unable to attach server")
-
-        logger.error(compl.stderr.decode())
-        logger.debug(compl.stdout.decode())
 
 
 def register_process_compose(

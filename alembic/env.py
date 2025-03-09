@@ -28,8 +28,10 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 from sqlmodel import SQLModel
 
-from pikesquares.domain.device import Device
 from pikesquares.domain.base import ServiceBase
+from pikesquares.domain.device import Device
+from pikesquares.domain.project import Project
+
 
 target_metadata = SQLModel.metadata
 

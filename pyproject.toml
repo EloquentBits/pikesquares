@@ -9,6 +9,7 @@ build-backend = "setuptools.build_meta"
 
 name = "pikesquares"
 dependencies = [
+    "aiohttp>=3.11.13",
     "aiosqlite>=0.21.0",
     "alembic>=1.14.1",
     "cuid>=0.4",

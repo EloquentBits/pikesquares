@@ -22,7 +22,10 @@ logger.setLevel(logging.DEBUG)
 
 class DatabaseSessionManager:
     def __init__(self, host: str, engine_kwargs: dict[str, Any] = {}):
-        self._engine = create_async_engine(host, **engine_kwargs)
+        connect_args = {"check_same_thread": False}
+        self._engine = create_async_engine(
+            host, connect_args=connect_args, **engine_kwargs
+        )
         self._sessionmaker = async_sessionmaker(
             autocommit=False,
             bind=self._engine,
@@ -77,10 +80,16 @@ sessionmanager = DatabaseSessionManager(
 )
 
 
-async def get_session():
+async def get_session() -> SQLModelAsyncSession:
     async with sessionmanager.session() as session:
-        yield session
+        return session
 
+
+# async def initialize_database(engine):
+#    async with engine.begin() as conn:
+#        await conn.run_sync(
+#            lambda conn: SQLModel.metadata.create_all(conn)
+#        )
 
 # engine = create_async_engine(
 #    settings.SQLALCHEMY_DATABASE_URI,

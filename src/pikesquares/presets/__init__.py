@@ -1,5 +1,3 @@
-from typing import Dict, List, Type
-from pathlib import Path
 import json
 from typing import Union
 
@@ -13,8 +11,7 @@ from uwsgiconf.config import (
 from uwsgiconf.typehints import Strlist
 from uwsgiconf.utils import listify
 from uwsgiconf.formatters import (
-    FORMATTERS, 
-    FormatterBase, 
+    FormatterBase,
     ArgsFormatter,
     IniFormatter,
 )
@@ -53,7 +50,8 @@ class JSONFormatter(FormatterBase):
 
         return json.dumps(config)
 
-FORMATTERS: Dict[str, Type[FormatterBase]] = {formatter.alias: formatter for formatter in (
+
+FORMATTERS: dict[str, type[FormatterBase]] = {formatter.alias: formatter for formatter in (
     ArgsFormatter,
     IniFormatter,
     JSONFormatter,
@@ -63,7 +61,7 @@ FORMATTERS: Dict[str, Type[FormatterBase]] = {formatter.alias: formatter for for
 class Configuration(_Configuration):
     """Available formatters by alias."""
 
-    def format(self, *, do_print: bool = False, formatter: str = 'ini') -> Strlist:
+    def format(self, *, do_print: bool = False, formatter: str = "ini") -> Strlist:
         """Applies formatting to configuration.
 
         :param do_print: Whether to print out formatted config.
@@ -82,7 +80,7 @@ class Configuration(_Configuration):
 
 class Section(_Section):
 
-    def include(self, target: Union["Section", List["Section"], str, List[str]]) -> TypeSection:
+    def include(self, target: Union["Section", list["Section"], str, list[str]]) -> TypeSection:
         """Includes target contents into config.
 
         :param target: File path or Section to include.
@@ -103,6 +101,7 @@ class Section(_Section):
         return Configuration([self], **kwargs)
 
 
+"""
 class ManagedServiceSection(Section):
 
     def __init__(self, svc_model, command: str):
@@ -140,6 +139,8 @@ class ManagedServiceSection(Section):
     #def _setup_environment_variables(self, env_vars):
     #    for key, value in env_vars.items():
     #        self.env(key, value)
+
+"""
 
 
 
