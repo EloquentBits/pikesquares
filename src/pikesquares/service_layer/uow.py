@@ -8,6 +8,8 @@ from pikesquares.adapters.repositories import (
     DeviceRepository,
     ProjectReposityBase,
     ProjectRepository,
+    RouterReposityBase,
+    RouterRepository,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -20,6 +22,7 @@ class UnitOfWorkBase(ABC):
 
     devices: DeviceReposityBase
     projects: ProjectReposityBase
+    routers: RouterReposityBase
 
     async def __aenter__(self):
         return self
@@ -53,6 +56,7 @@ class UnitOfWork(UnitOfWorkBase):
     async def __aenter__(self):
         self.devices = DeviceRepository(self._session)
         self.projects = ProjectRepository(self._session)
+        self.routers = RouterRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args):

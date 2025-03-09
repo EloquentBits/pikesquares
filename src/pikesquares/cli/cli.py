@@ -41,6 +41,7 @@ from pikesquares.adapters.database import get_session
 # from pikesquares.services.device import Device
 from pikesquares.presets.device import DeviceSection
 from pikesquares.presets.project import ProjectSection
+from pikesquares.presets.routers import HttpsRouterSection, HttpRouterSection
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.exceptions import StatsReadError
 
@@ -50,15 +51,13 @@ from pikesquares.exceptions import StatsReadError
 #    register_sandbox_project,
 #)
 
-from pikesquares.services.router import (
-    HttpsRouter,
-    HttpRouter,
-    DefaultHttpsRouter,
-    DefaultHttpRouter,
-    register_router,
-)
 # from pikesquares.cli.commands.apps.validators import NameValidator
-from pikesquares.domain import process_compose, device, project
+from pikesquares.domain import (
+    process_compose,
+    device,
+    project,
+    router,
+)
 from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
 from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -1127,10 +1126,6 @@ async def main(
 
     sandbox_project = await uow.projects.get_by_name("sandbox")
     if not sandbox_project:
-
-        # run_as_uid
-        # run_as_gid
-
         sandbox_project = project.Project(
             service_id=f"project_{cuid()}",
             name="sandbox",
@@ -1154,30 +1149,76 @@ async def main(
     else:
         logger.debug(f"Using existing sandbox project for {machine_id=} {sandbox_project=}")
 
-    context["device"] = dvc
-
-
-    """
-    register_sandbox_project(
-        context,
-        SandboxProject,
-        Project,
-        conf,
-        db,
-        build_config_on_init=build_configs,
-    )
-    sandbox_project = services.get(context, SandboxProject)
-
-    router_https_address = \
-        f"0.0.0.0:{str(get_first_available_port(port=8443))}"
-    router_https_subscription_server_address = \
-        f"127.0.0.1:{get_first_available_port(port=5600)}"
-
-    router_http_address = "0.0.0.0:8034"
-    router_http_subscription_server_address = \
-        f"127.0.0.1:{get_first_available_port(port=5700)}"
+    context["sandbox_project"] = sandbox_project
 
     router_plugins = []
+    # HttpsRouterSection, HttpRouterSection
+
+    http_router = await uow.routers.get_by_name("default-http-router")
+    if not http_router:
+        http_router = router.BaseRouter(
+            service_id=f"http_router_{cuid()}",
+            name="default-http-router",
+            address="0.0.0.0:8034",
+            subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5700)}",
+            data_dir=str(conf.data_dir),
+            config_dir=str(conf.config_dir),
+            log_dir=str(conf.log_dir),
+            run_dir=str(conf.run_dir),
+            pki_dir=str(conf.pki_dir),
+            sentry_dsn=conf.sentry_dsn,
+        )
+        http_router.uwsgi_config = json.loads(
+            HttpRouterSection(
+                http_router,
+                plugins=router_plugins
+                ).as_configuration().format(
+                formatter="json",
+                do_print=True,
+            )
+        )
+        http_router.uwsgi_config["uwsgi"]["show-config"] = True
+        await uow.routers.add(http_router)
+        await uow.commit()
+        logger.debug(f"Created {http_router=} for {machine_id=}")
+    else:
+        logger.debug(f"Using existing http router for {machine_id=} {http_router=}")
+
+    context["http_router"] = http_router
+
+    https_router = await uow.routers.get_by_name("default-https-router")
+    if not https_router:
+        https_router = router.BaseRouter(
+            service_id=f"https_router_{cuid()}",
+            name="default-https-router",
+            address=f"0.0.0.0:{str(get_first_available_port(port=8443))}",
+            subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5600)}",
+            data_dir=str(conf.data_dir),
+            config_dir=str(conf.config_dir),
+            log_dir=str(conf.log_dir),
+            run_dir=str(conf.run_dir),
+            pki_dir=str(conf.pki_dir),
+            sentry_dsn=conf.sentry_dsn,
+        )
+        https_router.uwsgi_config = json.loads(
+            HttpsRouterSection(
+                https_router,
+                plugins=router_plugins
+                ).as_configuration().format(
+                formatter="json",
+                do_print=True,
+            )
+        )
+        https_router.uwsgi_config["uwsgi"]["show-config"] = True
+        await uow.routers.add(https_router)
+        await uow.commit()
+        logger.debug(f"Created {https_router=} for {machine_id=}")
+    else:
+        logger.debug(f"Using existing http router for {machine_id=} {https_router=}")
+
+    context["https_router"] = https_router
+
+    """
     register_router(
         context,
         router_https_address,

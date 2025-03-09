@@ -31,6 +31,11 @@ from sqlmodel import SQLModel
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
+from pikesquares.domain.router import (
+    BaseRouter,
+    # HttpRouter,
+    # HttpsRouter,
+)
 
 
 target_metadata = SQLModel.metadata

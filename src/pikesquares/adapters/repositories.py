@@ -10,6 +10,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
+from pikesquares.domain.router import (
+    BaseRouter,
+    # HttpRouter,
+    # HttpsRouter,
+)
 
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
@@ -202,6 +207,28 @@ class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
 
     async def get_by_name(self, name: str) -> Project | None:
         stmt = select(Project).where(Project.name == name)
+        results = await self._session.exec(stmt)
+        if results:
+            logger.debug(results)
+            obj = results.first()
+            logger.debug(obj)
+            return obj
+
+
+class RouterReposityBase(GenericRepository[BaseRouter], ABC):
+    """Router repository.
+    """
+    @abstractmethod
+    async def get_by_name(self, name: str) -> BaseRouter | None:
+        raise NotImplementedError()
+
+
+class RouterRepository(GenericSqlRepository[BaseRouter], RouterReposityBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, BaseRouter)
+
+    async def get_by_name(self, name: str) -> BaseRouter | None:
+        stmt = select(BaseRouter).where(BaseRouter.name == name)
         results = await self._session.exec(stmt)
         if results:
             logger.debug(results)
