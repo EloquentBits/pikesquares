@@ -128,14 +128,13 @@ class ServiceBase(TimeStampedBase, SQLModel):
         return Path(self.config_dir) / f"{self.service_id}.json"
 
     async def save_config_to_filesystem(self) -> None:
-        service_config = AsyncPath(self.config_dir) / f"{self.service_id}.json"
-        await service_config.parent.mkdir(parents=True, exist_ok=True)
-
-        await service_config.write_text(json.dumps(self.uwsgi_config))
+        await AsyncPath(self.service_config).\
+            parent.mkdir(parents=True, exist_ok=True)
+        await AsyncPath(self.service_config).\
+            write_text(json.dumps(self.uwsgi_config))
 
     async def delete_config_from_filesystem(self) -> None:
-        service_config = AsyncPath(self.config_dir) / f"{self.service_id}.json"
-        await service_config.unlink()
+        await AsyncPath(self.service_config).unlink()
 
     @pydantic.computed_field
     @cached_property

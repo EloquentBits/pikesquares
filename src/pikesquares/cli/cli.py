@@ -1129,7 +1129,7 @@ async def main(
     sandbox_project = await uow.projects.get_by_name("sandbox")
     if not sandbox_project:
         sandbox_project = project.Project(
-            service_id=f"project_{cuid()}",
+            service_id="project_sandbox",
             name="sandbox",
             data_dir=str(conf.data_dir),
             config_dir=str(conf.config_dir),

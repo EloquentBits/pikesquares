@@ -27,7 +27,7 @@ class Project(ServiceBase, table=True):
     @pydantic.computed_field
     @cached_property
     def touch_reload_file(self) -> Path:
-        return Path(self.config_dir) / "projects" / f"{self.service_id}.json"
+        return self.service_config
 
     @pydantic.computed_field
     @cached_property
