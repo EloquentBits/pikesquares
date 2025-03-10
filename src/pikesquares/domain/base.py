@@ -3,15 +3,18 @@ from datetime import (
     UTC,
 )
 import uuid
-from pathlib import Path
 import json
 import traceback
 import socket
 import errno
+from pathlib import Path
+from functools import cached_property
+
 
 import structlog
 import pydantic
 import sentry_sdk
+from aiopath import AsyncPath
 from sqlmodel import (
     SQLModel,
     Field,
@@ -33,7 +36,7 @@ from pikesquares.exceptions import (
     ServiceUnavailableError,
     StatsReadError,
 )
-from pikesquares.presets import Section
+# from pikesquares.presets import Section
 
 
 logger = structlog.getLogger()
@@ -81,6 +84,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
 
     service_id: str = Field(default=None, unique=True)
     uwsgi_config: dict | None = Field(None, sa_type=JSON)
+    uwsgi_plugins: str | None = Field(default=None, max_length=255)
 
     data_dir: str = Field(default="/var/lib/pikesquares", max_length=255)
     log_dir: str = Field(default="/var/log/pikesquares", max_length=255)
@@ -107,11 +111,9 @@ class ServiceBase(TimeStampedBase, SQLModel):
             )
             logger.info("initialized sentry-sdk")
 
-        # self.save_config_to_filesystem()
-        # self.save_config_to_tinydb()
-
-    @property
-    def handler_name(self):
+    @pydantic.computed_field(repr=False)
+    @cached_property
+    def handler_name(self) -> str:
         return self.__class__.__name__
 
     def __repr__(self):
@@ -120,73 +122,54 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def __str__(self):
         return self.__repr__()
 
-    """
     @pydantic.computed_field
-    def default_config_json(self) -> dict:
-        section = self.config_section_class(self)
-        config_json = json.loads(
-            section.as_configuration().format(
-                formatter="json",
-                do_print=True,
-            )
-        )
-        config_json["uwsgi"]["show-config"] = True
-        return config_json
-
-    def save_config_to_filesystem(self) -> None:
-        self.service_config.parent.mkdir(
-            parents=True, exist_ok=True
-        )
-        self.service_config.write_text(
-                json.dumps(self.config_json)
-        )
-
-    def save_config_to_tinydb(self, extra_data: dict = {}) -> None:
-        common_data = {
-                "service_type": self.handler_name,
-                "name": self.name,
-                "service_id": self.service_id,
-                "service_config": self.config_json,
-        }
-        common_data.update(extra_data)
-        self.db.table(
-                self.tiny_db_table
-        ).upsert(
-            common_data,
-            Query().service_id == self.service_id
-        )
-    """
-
-    @pydantic.computed_field
+    @cached_property
     def service_config(self) -> Path:
         return Path(self.config_dir) / f"{self.service_id}.json"
 
+    async def save_config_to_filesystem(self) -> None:
+        service_config = AsyncPath(self.config_dir) / f"{self.service_id}.json"
+        await service_config.parent.mkdir(parents=True, exist_ok=True)
+
+        await service_config.write_text(json.dumps(self.uwsgi_config))
+
+    async def delete_config_from_filesystem(self) -> None:
+        service_config = AsyncPath(self.config_dir) / f"{self.service_id}.json"
+        await service_config.unlink()
+
     @pydantic.computed_field
+    @cached_property
     def stats_address(self) -> Path:
         """uWSGI Stats Server socket address"""
         return Path(self.run_dir) / f"{self.service_id}-stats.sock"
 
     @pydantic.computed_field
+    @cached_property
     def socket_address(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}.sock"
 
     @pydantic.computed_field
+    @cached_property
     def notify_socket(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-notify.sock"
 
     @pydantic.computed_field
+    @cached_property
     def touch_reload_file(self) -> Path:
-        return self.service_config
+        return Path(self.config_dir) / f"{self.service_id}.json"
 
     @pydantic.computed_field
+    @cached_property
     def pid_file(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}.pid"
 
     @pydantic.computed_field
+    @cached_property
     def log_file(self) -> Path:
         return Path(self.log_dir) / f"{self.service_id}.log"
 
     @pydantic.computed_field
+    @cached_property
     def fifo_file(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-master-fifo"
 
@@ -194,32 +177,31 @@ class ServiceBase(TimeStampedBase, SQLModel):
     # def device_db_path(self) -> Path:
     #    return Path(self.data_dir) / "device-db.json"
 
-    @pydantic.computed_field
+    @pydantic.computed_field(repr=False)
+    @cached_property
     def certificate(self) -> Path:
         return Path(self.pki_dir) / "issued" / f"{self.cert_name}.crt"
 
-    @pydantic.computed_field
+    @pydantic.computed_field(repr=False)
+    @cached_property
     def certificate_key(self) -> Path:
         return Path(self.pki_dir) / "private" / f"{self.cert_name}.key"
 
-    @pydantic.computed_field
+    @pydantic.computed_field(repr=False)
+    @cached_property
     def certificate_ca(self) -> Path:
         return Path(self.pki_dir) / "ca.crt"
 
     @pydantic.computed_field
+    @cached_property
     def spooler_dir(self) -> Path:
-        spdir = Path(self.data_dir) / "spooler"
-        if not spdir.exists():
-            spdir.mkdir(parents=True, exist_ok=True)
-        return spdir
+        return Path(self.data_dir) / "spooler"
 
     @pydantic.computed_field
+    @cached_property
     def plugins_dir(self) -> Path:
-        pdir = Path(self.data_dir) / "plugins"
-        if not pdir.exists():
-            pdir.mkdir(parents=True, exist_ok=True)
-        return pdir
-
+        return Path(self.data_dir) / "plugins"
+        # await pdir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def read_stats(cls, stats_address: Path):
@@ -317,11 +299,11 @@ class ServiceBase(TimeStampedBase, SQLModel):
         if not self.get_service_status() == "running":
             raise ServiceUnavailableError()
 
-    def get_service_status(self) -> str | None:
+    async def get_service_status(self) -> str | None:
         """
         read stats socket
         """
-        if self.stats_address.exists() and self.stats_address.is_socket():
+        if await self.stats_address.exists() and await self.stats_address.is_socket():
             return "running" if ServiceBase.read_stats(self.stats_address) else "stopped"
 
     def startup_log(self, show_config_start_marker: str, show_config_end_marker: str) -> tuple[list, list]:

@@ -10,8 +10,11 @@ build-backend = "setuptools.build_meta"
 name = "pikesquares"
 dependencies = [
     "aiohttp>=3.11.13",
+    "aiopath>=0.7.7",
     "aiosqlite>=0.21.0",
     "alembic>=1.14.1",
+    "app-paths>=0.0.8",
+    "asynctempfile>=0.5.0",
     "cuid>=0.4",
     "fastapi[standard]",
     "gitpython>=3.1.43",

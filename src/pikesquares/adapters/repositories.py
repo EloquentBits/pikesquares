@@ -1,4 +1,5 @@
 import logging
+import json
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar, Type
 
@@ -14,6 +15,14 @@ from pikesquares.domain.router import (
     BaseRouter,
     # HttpRouter,
     # HttpsRouter,
+)
+
+from pikesquares.presets import Section
+from pikesquares.presets.device import DeviceSection
+from pikesquares.presets.project import ProjectSection
+from pikesquares.presets.routers import (
+   HttpsRouterSection,
+   HttpRouterSection,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -121,9 +130,7 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         stmt = self._construct_get_stmt(id)
         results = await self._session.exec(stmt)
         if results:
-            logger.debug(f"REPO {results=}")
             obj = results.first()
-            logger.debug(f"REPO {obj=}")
             return obj
 
     def _construct_list_stmt(self, **filters) -> SelectOfScalar:
@@ -152,23 +159,71 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         stmt = self._construct_list_stmt(**filters)
         return await self._session.exec(stmt).all()
 
+    async def _build_config(
+            self,
+            config_section_class: Section,
+            record: T,
+            extra_kwargs: dict = {},
+        ) -> dict:
+        uwsgi_config = json.loads(
+            config_section_class(
+                record,
+                **extra_kwargs,
+                ).as_configuration().format(
+                formatter="json",
+                do_print=True,
+            )
+        )
+        uwsgi_config["uwsgi"]["show-config"] = True
+        return uwsgi_config
+
+    async def _get_config_section_class(self, record: T) -> Section:
+        if isinstance(record, Device):
+            return DeviceSection
+        elif isinstance(record, Project):
+            return ProjectSection
+        elif isinstance(record, BaseRouter):
+            if int(record.port) >= 8443:
+                return HttpsRouterSection
+            return HttpRouterSection
+
     async def add(self, record: T) -> T:
+        config_section_class = await self._get_config_section_class(record)
+        record.uwsgi_config = await self._build_config(
+            config_section_class,
+            record,
+        )
+        record.uwsgi_plugins = ""
+        if not record.uwsgi_config:
+            raise Exception(f"unable to build uWSGI config for {type(record)}")
+
+        logger.debug(record.uwsgi_config)
+
         self._session.add(record)
         await self._session.flush()
         await self._session.refresh(record)
+        await record.save_config_to_filesystem()
         return record
 
     async def update(self, record: T) -> T:
+        record.uwsgi_config = await self._build_config(
+            await self._get_config_section_class(record), record
+        )
         self._session.add(record)
         await self._session.flush()
         await self._session.refresh(record)
+        await record.save_config_to_filesystem()
         return record
 
     async def delete(self, id: str) -> None:
-        record = self.get_by_id(id)
+        record: T = self.get_by_id(id)
         if record is not None:
+            record.uwsgi_config = await self._build_config(
+                await self._get_config_section_class(record), record
+            )
             await self._session.delete(record)
             await self._session.flush()
+            await record.delete_config_from_filesystem()
 
 
 class DeviceReposityBase(GenericRepository[Device], ABC):

@@ -20,6 +20,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 import typer
+from aiopath import AsyncPath
 import structlog
 import randomname
 import questionary
@@ -273,13 +274,14 @@ def uninstall(
 @app.command(
          rich_help_panel="Control",
          short_help="Attach to the PikeSquares Server")
-def attach(
+@run_async
+async def attach(
      ctx: typer.Context,
 ):
     """Attach to PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    pc = services.get(context, process_compose.ProcessCompose)
-    pc.attach()
+    pc = await services.aget(context, process_compose.ProcessCompose)
+    await pc.attach()
 
 
 @app.command(
@@ -292,7 +294,7 @@ async def info(
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
 
-    conf = services.get(context, AppConfig)
+    conf = await services.aget(context, AppConfig)
     # console.info(f"data_dir={str(conf.DATA_DIR)}")
     logger.debug(f"virtualenv={str(conf.PYTHON_VIRTUAL_ENV)}")
 
@@ -301,10 +303,10 @@ async def info(
     # logger.debug(device)
 
     device = context.get("device")
-    pc = services.get(context, process_compose.ProcessCompose)
-
+    pc = await services.aget(context, process_compose.ProcessCompose)
+    # pc = process_compose.ProcessCompose(conf=conf)
     try:
-        pc.ping_api()
+        await pc.ping_api()
         try:
             if device.stats:
                 console.success("🚀 PikeSquares Server is running.")
@@ -343,49 +345,45 @@ async def up(
     """Launch PikeSquares Server"""
 
     context = ctx.ensure_object(dict)
-    # conf = services.get(context, AppConfig)
-    pc = services.get(context, process_compose.ProcessCompose)
+    # pc = await services.aget(context, process_compose.ProcessCompose)
+    conf = await services.aget(context, AppConfig)
+    pc = process_compose.ProcessCompose(conf=conf)
 
-    session = await services.aget(context, AsyncSession)
-    async with UnitOfWork(session=session) as uow:
-        # id = 1
-        # device = await uow.devices.get_by_id(id)
-        # logger.debug(device)
-
-        try:
-            retcode, stdout, stderr = pc.up()
-            if retcode != 0:
-                console.log(retcode, stdout, stderr)
-                raise typer.Exit(code=1) from None
-            elif retcode == 0:
-                for _ in range(1, 5):
-                    try:
-                        pc.ping_api()
-                        console.success("🚀 PikeSquares Server is running.")
-                        return True
-                    except (
-                            process_compose.PCAPIUnavailableError,
-                            process_compose.PCDeviceUnavailableError
-                    ):
-                        sleep(1)
-                        continue
-                console.error("PikeSquares Server was unable to start.")
-                raise typer.Exit(code=0) from None
-
-        except ProcessExecutionError as process_exec_error:
-            console.error(process_exec_error)
-            console.error("PikeSquares Server was unable to start.")
+    try:
+        retcode, stdout, stderr = await pc.up()
+        if retcode != 0:
+            console.log(retcode, stdout, stderr)
             raise typer.Exit(code=1) from None
+        elif retcode == 0:
+            for _ in range(1, 5):
+                try:
+                    await pc.ping_api()
+                    console.success("🚀 PikeSquares Server is running.")
+                    return True
+                except (
+                        process_compose.PCAPIUnavailableError,
+                        process_compose.PCDeviceUnavailableError
+                ):
+                    sleep(1)
+                    continue
+            console.error("PikeSquares Server was unable to start.")
+            raise typer.Exit(code=0) from None
+
+    except ProcessExecutionError as process_exec_error:
+        console.error(process_exec_error)
+        console.error("PikeSquares Server was unable to start.")
+        raise typer.Exit(code=1) from None
 
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
-def down(
+@run_async
+async def down(
     ctx: typer.Context,
 ):
     """Stop the PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    pc = services.get(context, process_compose.ProcessCompose)
+    pc = await services.aget(context, process_compose.ProcessCompose)
     try:
-        retcode, stdout, stderr = pc.down()
+        retcode, stdout, stderr = await pc.down()
         if retcode != 0:
             console.log(retcode, stdout, stderr)
             raise typer.Exit(code=1) from None
@@ -430,10 +428,11 @@ def bootstrap(
     rich_help_panel="Control",
     short_help="Initialize a project"
 )
-def init(
+@run_async
+async def init(
      ctx: typer.Context,
     app_root_dir: Annotated[
-        Path | None,
+        AsyncPath | None,
         typer.Option(
             "--root-dir",
             "-d",
@@ -450,8 +449,8 @@ def init(
     """Initialize a project"""
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
-    conf = services.get(context, AppConfig)
-    db = services.get(context, TinyDB)
+    conf = await services.aget(context, AppConfig)
+    db = await services.aget(context, TinyDB)
 
     # uv init djangotutorial
     # cd djangotutorial
@@ -716,6 +715,9 @@ def init(
                 if not task.finished:
                     if task.id == detect_dependencies_task:
                         ####################################
+
+                        # asynctempfile
+
                         app_tmp_dir = Path(
                             tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app")
                         )
@@ -1029,6 +1031,8 @@ async def main(
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
 
+    # https://github.com/alexdelorenzo/app_paths
+
     override_settings = {
         "PIKESQUARES_DATA_DIR": os.environ.get("PIKESQUARES_DATA_DIR", "/var/lib/pikesquares"),
         "PIKESQUARES_RUN_DIR": os.environ.get("PIKESQUARES_RUN_DIR", "/var/run/pikesquares"),
@@ -1038,10 +1042,10 @@ async def main(
     }
     if is_root:
         sysdirs = {
-            "data_dir": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), Path("/var/lib/pikesquares")),
-            "run_dir": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), Path("/var/run/pikesquares")),
-            "config_dir": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), Path("/etc/pikesquares")),
-            "log_dir": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), Path("/var/log/pikesquares")),
+            "data_dir": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), AsyncPath("/var/lib/pikesquares")),
+            "run_dir": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), AsyncPath("/var/run/pikesquares")),
+            "config_dir": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), AsyncPath("/etc/pikesquares")),
+            "log_dir": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), AsyncPath("/var/log/pikesquares")),
         }
         for varname, path_to_dir_sources in sysdirs.items():
             cli_arg = path_to_dir_sources[0]
@@ -1056,22 +1060,17 @@ async def main(
 
             path_to_dir = cli_arg or env_var_path_to_dir or default_path_to_dir
             if isinstance(path_to_dir, str):
-                path_to_dir = Path(path_to_dir)
-            if not path_to_dir.exists():
+                path_to_dir = AsyncPath(path_to_dir)
+            if not await path_to_dir.exists():
                 logger.info(f"creating dir: {path_to_dir}")
-                make_system_dir(path_to_dir)
+                await make_system_dir(path_to_dir)
             override_settings[varname] = path_to_dir
 
     if version:
         override_settings["VERSION"] = version
 
-    logger.info(f"{override_settings=}")
-
     try:
-        register_app_conf(
-            context,
-            override_settings,
-        )
+        await register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:
         logger.error(app_conf_error)
         raise typer.Abort() from None
@@ -1079,17 +1078,16 @@ async def main(
     conf = await services.aget(context, AppConfig)
 
     services.register_factory(context, AsyncSession, get_session)
-
-    process_compose.register_process_compose(context, conf)
-
     session = await services.aget(context, AsyncSession)
+
+    await process_compose.register_process_compose(context, conf)
 
     async def uow_factory():
         async with UnitOfWork(session=session) as uow:
             yield uow
     services.register_factory(context, UnitOfWork, uow_factory)
 
-    machine_id = Path("/var/lib/dbus/machine-id").read_text(encoding="utf-8")
+    machine_id = await AsyncPath("/var/lib/dbus/machine-id").read_text(encoding="utf-8")
     uow = await services.aget(context, UnitOfWork)
 
     dvc = await uow.devices.get_by_machine_id(machine_id)
@@ -1104,18 +1102,22 @@ async def main(
             pki_dir=str(conf.pki_dir),
             sentry_dsn=conf.sentry_dsn,
         )
-        dvc.uwsgi_config = json.loads(
-            DeviceSection(dvc).as_configuration().format(
-                formatter="json",
-                do_print=True,
-            )
-        )
-        dvc.uwsgi_config["uwsgi"]["show-config"] = True
+        # dvc.uwsgi_config = json.loads(
+        #    DeviceSection(dvc).as_configuration().format(
+        #        formatter="json",
+        #        do_print=True,
+        #    )
+        # )
+        # dvc.uwsgi_config["uwsgi"]["show-config"] = True
         await uow.devices.add(dvc)
         await uow.commit()
         logger.debug(f"Created {dvc=} for {machine_id=}")
     else:
         logger.debug(f"Using existing device for {machine_id=} {dvc=}")
+
+    # service_config = AsyncPath(conf.config_dir) / f"{dvc.service_id}.json"
+    if not await AsyncPath(dvc.service_config).exists():
+        await dvc.save_config_to_filesystem()
 
     context["device"] = dvc
 
@@ -1136,23 +1138,18 @@ async def main(
             pki_dir=str(conf.pki_dir),
             sentry_dsn=conf.sentry_dsn,
         )
-        sandbox_project.uwsgi_config = json.loads(
-            ProjectSection(sandbox_project).as_configuration().format(
-                formatter="json",
-                do_print=True,
-            )
-        )
-        sandbox_project.uwsgi_config["uwsgi"]["show-config"] = True
         await uow.projects.add(sandbox_project)
         await uow.commit()
         logger.debug(f"Created {sandbox_project=} for {machine_id=}")
     else:
         logger.debug(f"Using existing sandbox project for {machine_id=} {sandbox_project=}")
 
-    context["sandbox_project"] = sandbox_project
+    if not await AsyncPath(sandbox_project.apps_dir).exists():
+        await AsyncPath(sandbox_project.apps_dir).mkdir(parents=True, exist_ok=True)
 
-    router_plugins = []
-    # HttpsRouterSection, HttpRouterSection
+    context["sandbox_project"] = sandbox_project
+    if not await AsyncPath(sandbox_project.service_config).exists():
+        await sandbox_project.save_config_to_filesystem()
 
     http_router = await uow.routers.get_by_name("default-http-router")
     if not http_router:
@@ -1168,16 +1165,6 @@ async def main(
             pki_dir=str(conf.pki_dir),
             sentry_dsn=conf.sentry_dsn,
         )
-        http_router.uwsgi_config = json.loads(
-            HttpRouterSection(
-                http_router,
-                plugins=router_plugins
-                ).as_configuration().format(
-                formatter="json",
-                do_print=True,
-            )
-        )
-        http_router.uwsgi_config["uwsgi"]["show-config"] = True
         await uow.routers.add(http_router)
         await uow.commit()
         logger.debug(f"Created {http_router=} for {machine_id=}")
@@ -1185,6 +1172,8 @@ async def main(
         logger.debug(f"Using existing http router for {machine_id=} {http_router=}")
 
     context["http_router"] = http_router
+    if not await AsyncPath(http_router.service_config).exists():
+        await http_router.save_config_to_filesystem()
 
     https_router = await uow.routers.get_by_name("default-https-router")
     if not https_router:
@@ -1200,16 +1189,6 @@ async def main(
             pki_dir=str(conf.pki_dir),
             sentry_dsn=conf.sentry_dsn,
         )
-        https_router.uwsgi_config = json.loads(
-            HttpsRouterSection(
-                https_router,
-                plugins=router_plugins
-                ).as_configuration().format(
-                formatter="json",
-                do_print=True,
-            )
-        )
-        https_router.uwsgi_config["uwsgi"]["show-config"] = True
         await uow.routers.add(https_router)
         await uow.commit()
         logger.debug(f"Created {https_router=} for {machine_id=}")
@@ -1217,31 +1196,8 @@ async def main(
         logger.debug(f"Using existing http router for {machine_id=} {https_router=}")
 
     context["https_router"] = https_router
-
-    """
-    register_router(
-        context,
-        router_https_address,
-        router_https_subscription_server_address,
-        router_plugins,
-        DefaultHttpsRouter,
-        HttpsRouter,
-        conf,
-        db,
-        build_config_on_init=build_configs,
-    )
-    register_router(
-        context,
-        router_http_address,
-        router_http_subscription_server_address,
-        router_plugins,
-        DefaultHttpRouter,
-        HttpRouter,
-        conf,
-        db,
-        build_config_on_init=build_configs,
-    )
-    """
+    if not await AsyncPath(https_router.service_config).exists():
+        await https_router.save_config_to_filesystem()
 
     # console.log(context)
     # http_router = services.get(context, DefaultHttpRouter)

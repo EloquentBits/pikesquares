@@ -1,10 +1,12 @@
 import os
-from pathlib import Path
 import shutil
+from pathlib import Path
 import sys
+from functools import cached_property
 
 from sqlmodel import Field
 import pydantic
+
 import structlog
 
 from .base import ServiceBase
@@ -27,11 +29,9 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     server_run_as_gid: str = Field(default="root")
 
     @pydantic.computed_field
+    @cached_property
     def apps_dir(self) -> Path:
-        appsdir = Path(self.config_dir) / "projects"
-        if appsdir and not appsdir.exists():
-            appsdir.mkdir(parents=True, exist_ok=True)
-        return appsdir
+        return Path(self.config_dir) / "projects"
 
     @pydantic.computed_field
     def stats(self) -> DeviceStats | None:

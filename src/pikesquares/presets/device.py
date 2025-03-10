@@ -1,5 +1,6 @@
 import structlog
 
+
 from . import Section
 # from .routers import BaseRouterHttps
 
@@ -39,16 +40,13 @@ class DeviceSection(Section):
         # transformation_toupper,coroae,v8,cgi,xslt,webdav,ssi,ldap,gccgo,rados,pypy,zabbix,curl_cron,tornado,
         # tuntap,pty,mongrel2,alarm_curl,router_radius,airbrake,gridfs
 
-        # plugins = ["python312", "logfile"]
-        # self.set_plugins_params(
-        #     plugins=plugins,
-        #     search_dirs=[str(device.plugins_dir),],
-        #     autoload=True,
-        # required=True,
-        # )
+        self.set_plugins_params(
+             plugins=device.uwsgi_plugins,
+             search_dirs=[str(device.plugins_dir)],
+             # autoload=True,
+             # required=True,
+        )
         self.print_plugins()
-
-        self.set_plugins_params(search_dirs=str(device.plugins_dir))
 
         self.master_process.set_basic_params(
             enable=True,

@@ -1,6 +1,6 @@
 # from pathlib import Path
-
 import structlog
+from aiopath import AsyncPath
 
 from . import Section
 
@@ -18,25 +18,20 @@ class ProjectSection(Section):
 
         self.set_runtime_dir(str(self.project.run_dir))
 
-        plugins = [
-            # "python312",
-            # "logfile",
-            # "emperor_zmq",
-        ]
         self.set_plugins_params(
-            plugins=plugins,
-            search_dirs=[self.project.plugins_dir],
+            plugins=self.project.uwsgi_plugins,
+            search_dirs=[str(self.project.plugins_dir)],
         )
         self.print_plugins()
 
         self.master_process.set_basic_params(
             enable=True,
             no_orphans=True,
-            fifo_file=str(self.project.fifo_file),
+            fifo_file=str(AsyncPath(self.project.fifo_file)),
         )   # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
-            touch_reload=str(self.project.touch_reload_file),
+            touch_reload=str((self.project.touch_reload_file)),
             # place here correct emperor wrapper
             # binary_path=str((Path(self.data_dir) / ".venv/bin/uwsgi").resolve())
             # binary_path=str((Path(self.project.VIRTUAL_ENV) / "bin/uwsgi").resolve())

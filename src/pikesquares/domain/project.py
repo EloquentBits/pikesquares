@@ -1,7 +1,6 @@
-import os
+# import shutil
+from functools import cached_property
 from pathlib import Path
-import shutil
-import sys
 
 from sqlmodel import Field
 import pydantic
@@ -21,19 +20,19 @@ class Project(ServiceBase, table=True):
     run_as_gid: str = Field(default="pikesquares")
 
     @pydantic.computed_field
+    @cached_property
     def service_config(self) -> Path:
         return Path(self.config_dir) / "projects" / f"{self.service_id}.json"
 
     @pydantic.computed_field
+    @cached_property
     def touch_reload_file(self) -> Path:
         return Path(self.config_dir) / "projects" / f"{self.service_id}.json"
 
     @pydantic.computed_field
-    def apps_dir(self) -> str:
-        apps_dir = Path(self.config_dir) / f"{self.service_id}" / "apps"
-        if apps_dir and not apps_dir.exists():
-            apps_dir.mkdir(parents=True, exist_ok=True)
-        return str(apps_dir.resolve())
+    @cached_property
+    def apps_dir(self) -> Path:
+        return Path(self.config_dir) / f"{self.service_id}" / "apps"
 
     def ping(self) -> None:
         print("== Project.ping ==")

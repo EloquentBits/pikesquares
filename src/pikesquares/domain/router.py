@@ -1,17 +1,10 @@
+from functools import cached_property
 from pathlib import Path
-# import shutil
-
-from sqlmodel import Field
 import pydantic
+from sqlmodel import Field
 import structlog
 
 from .base import ServiceBase
-
-# from pikesquares.presets import Section
-# from pikesquares.presets.routers import (
-#    HttpsRouterSection,
-#    HttpRouterSection,
-#)
 
 
 logger = structlog.getLogger()
@@ -29,12 +22,14 @@ class BaseRouter(ServiceBase, table=True):
     run_as_gid: str = Field(default="root")
 
     @pydantic.computed_field
+    @cached_property
     def service_config(self) -> Path:
         return Path(self.config_dir) / "projects" / f"{self.service_id}.json"
 
     @pydantic.computed_field
+    @cached_property
     def touch_reload_file(self) -> Path:
-        return Path(self.config_dir) / "projects" / f"{self.service_id}.json"
+        return self.service_config
 
     def zmq_connect(self):
         pass
@@ -102,6 +97,7 @@ class BaseRouter(ServiceBase, table=True):
     #    return Path()
 
     @pydantic.computed_field
+    @cached_property
     def port(self) -> str | None:
         try:
             return self.address.split(":")[-1]

@@ -37,7 +37,6 @@ def svcs_from(context: dict) -> Container:
     if (cont := context.get(_KEY_CONTAINER, None)) is None:
         cont = Container(context[_KEY_REGISTRY])
         context[_KEY_CONTAINER] = cont
-
     return cont
 
 
@@ -203,6 +202,112 @@ def get(
     return svcs_from(context).get(*svc_types)
 
 
+@overload
+async def aget(context: dict, svc_type: type[T1], /) -> T1: ...
+
+@overload
+async def aget(
+    context: dict,
+    svc_type1: type[T1], svc_type2: type[T2], /
+) -> tuple[T1, T2]: ...
+
+@overload
+async def aget(
+    context: dict,
+    svc_type1: type[T1], svc_type2: type[T2], svc_type3: type[T3], /
+) -> tuple[T1, T2, T3]: ...
+
+@overload
+async def aget(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    /,
+) -> tuple[T1, T2, T3, T4]: ...
+
+@overload
+async def aget(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    /,
+) -> tuple[T1, T2, T3, T4, T5]: ...
+
+@overload
+async def aget(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6]: ...
+
+@overload
+async def aget(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    svc_type7: type[T7],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6, T7]: ...
+
+@overload
+async def aget(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    svc_type7: type[T7],
+    svc_type8: type[T8],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6, T7, T8]: ...
+
+@overload
+async def aget(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    svc_type7: type[T7],
+    svc_type8: type[T8],
+    svc_type9: type[T9],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6, T7, T8, T9]: ...
+
+@overload
+async def aget(
+    context: dict,
+    svc_type1: type[T1],
+    svc_type2: type[T2],
+    svc_type3: type[T3],
+    svc_type4: type[T4],
+    svc_type5: type[T5],
+    svc_type6: type[T6],
+    svc_type7: type[T7],
+    svc_type8: type[T8],
+    svc_type9: type[T9],
+    svc_type10: type[T10],
+    /,
+) -> tuple[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10]: ...
+
 async def aget(
     context: dict,
     *svc_types: type,
@@ -218,13 +323,14 @@ def init_app(cli_context):
     return context
 
 
+"""
 def register_db(context, db_path: Path):
     def tinydb_factory():
         # FIXME make sure pikesquares user can read and write
         with TinyDB(db_path) as db:
             yield db
     register_factory(context, TinyDB, tinydb_factory)
-
+"""
 
 # def register_pc_api(context):
 #    def pc_api_factory():
