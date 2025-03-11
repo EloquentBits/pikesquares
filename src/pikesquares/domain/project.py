@@ -7,6 +7,7 @@ import pydantic
 import structlog
 
 from .base import ServiceBase
+from pikesquares.presets.project import ProjectSection
 
 
 logger = structlog.getLogger()
@@ -16,8 +17,12 @@ class Project(ServiceBase, table=True):
 
     name: str = Field(default="sandbox", max_length=32)
 
-    run_as_uid: str = Field(default="pikesquares")
-    run_as_gid: str = Field(default="pikesquares")
+    run_as_uid: str = Field(default="root")
+    run_as_gid: str = Field(default="root")
+
+    @property
+    def uwsgi_config_section_class(self) -> ProjectSection:
+        return ProjectSection
 
     @pydantic.computed_field
     @cached_property

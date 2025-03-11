@@ -56,3 +56,9 @@ install:
 # Run the application with environment variables. Formats code first, then runs main.py with environment variables loaded from .env file
 run: format
     dotenv run -- uv run python main.py
+
+uwsgi-up:
+  sudo /home/pk/dev/eqb/scie-pikesquares/uwsgi/uwsgi  \
+    --plugin /var/lib/pikesquares/plugins/sqlite3 \
+    --sqlite3 /home/pk/dev/eqb/pikesquares/pikesquares.db:"SELECT option_key,option_value FROM uwsgi_options WHERE device_id='4babcd7c-711c-4dd5-9d97-5db8be9329c5' ORDER BY sort_order_index"
+

@@ -36,7 +36,7 @@ from pikesquares.exceptions import (
     ServiceUnavailableError,
     StatsReadError,
 )
-# from pikesquares.presets import Section
+from pikesquares.presets import Section
 
 
 logger = structlog.getLogger()
@@ -85,12 +85,10 @@ class ServiceBase(TimeStampedBase, SQLModel):
     service_id: str = Field(default=None, unique=True)
     uwsgi_config: dict | None = Field(None, sa_type=JSON)
     uwsgi_plugins: str | None = Field(default=None, max_length=255)
-
     data_dir: str = Field(default="/var/lib/pikesquares", max_length=255)
     log_dir: str = Field(default="/var/log/pikesquares", max_length=255)
     config_dir: str = Field(default="/etc/pikesquares", max_length=255)
     run_dir: str = Field(default="/var/run/pikesquares", max_length=255)
-    pki_dir: str = Field(default="/var/lib/pikesquares/pki", max_length=255)
 
     sentry_dsn: str | None = Field(default=None)
 
@@ -176,6 +174,16 @@ class ServiceBase(TimeStampedBase, SQLModel):
     # def device_db_path(self) -> Path:
     #    return Path(self.data_dir) / "device-db.json"
 
+    @pydantic.computed_field
+    @cached_property
+    def pki_dir(self) -> Path:
+        return Path(self.data_dir) / "pki"
+
+    @pydantic.computed_field
+    @cached_property
+    def plugins_dir(self) -> Path:
+        return Path(self.data_dir) / "plugins"
+
     @pydantic.computed_field(repr=False)
     @cached_property
     def certificate(self) -> Path:
@@ -196,11 +204,27 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def spooler_dir(self) -> Path:
         return Path(self.data_dir) / "spooler"
 
-    @pydantic.computed_field
-    @cached_property
-    def plugins_dir(self) -> Path:
-        return Path(self.data_dir) / "plugins"
-        # await pdir.mkdir(parents=True, exist_ok=True)
+    def build_uwsgi_config(self) -> dict:
+        uwsgi_config = json.loads(
+            self.uwsgi_config_section_class(
+                self,
+                ).as_configuration().format(
+                formatter="json",
+                do_print=True,
+            )
+        )
+        if not uwsgi_config:
+            raise RuntimeError(f"unable to build uWSGI config for {str(self)}")
+
+        uwsgi_config["uwsgi"]["show-config"] = True
+        return uwsgi_config
+
+    @classmethod
+    async def read_machine_id(cls) -> str:
+        machine_id = await AsyncPath(
+            "/var/lib/dbus/machine-id"
+        ).read_text(encoding="utf-8")
+        return machine_id.strip()
 
     @classmethod
     def read_stats(cls, stats_address: Path):

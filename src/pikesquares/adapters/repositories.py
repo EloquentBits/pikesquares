@@ -9,7 +9,7 @@ from sqlmodel.sql.expression import SelectOfScalar
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from pikesquares.domain.base import ServiceBase
-from pikesquares.domain.device import Device
+from pikesquares.domain.device import Device, DeviceUWSGIOptions
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import (
     BaseRouter,
@@ -17,17 +17,8 @@ from pikesquares.domain.router import (
     # HttpsRouter,
 )
 
-from pikesquares.presets import Section
-from pikesquares.presets.device import DeviceSection
-from pikesquares.presets.project import ProjectSection
-from pikesquares.presets.routers import (
-   HttpsRouterSection,
-   HttpRouterSection,
-)
-
 logger = logging.getLogger("uvicorn.error")
 logger.setLevel(logging.DEBUG)
-
 
 logger = structlog.get_logger()
 
@@ -159,46 +150,7 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         stmt = self._construct_list_stmt(**filters)
         return await self._session.exec(stmt).all()
 
-    async def _build_config(
-            self,
-            config_section_class: Section,
-            record: T,
-            extra_kwargs: dict = {},
-        ) -> dict:
-        uwsgi_config = json.loads(
-            config_section_class(
-                record,
-                **extra_kwargs,
-                ).as_configuration().format(
-                formatter="json",
-                do_print=True,
-            )
-        )
-        uwsgi_config["uwsgi"]["show-config"] = True
-        return uwsgi_config
-
-    async def _get_config_section_class(self, record: T) -> Section:
-        if isinstance(record, Device):
-            return DeviceSection
-        elif isinstance(record, Project):
-            return ProjectSection
-        elif isinstance(record, BaseRouter):
-            if int(record.port) >= 8443:
-                return HttpsRouterSection
-            return HttpRouterSection
-
     async def add(self, record: T) -> T:
-        config_section_class = await self._get_config_section_class(record)
-        record.uwsgi_config = await self._build_config(
-            config_section_class,
-            record,
-        )
-        record.uwsgi_plugins = ""
-        if not record.uwsgi_config:
-            raise Exception(f"unable to build uWSGI config for {type(record)}")
-
-        logger.debug(record.uwsgi_config)
-
         self._session.add(record)
         await self._session.flush()
         await self._session.refresh(record)
@@ -206,9 +158,6 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         return record
 
     async def update(self, record: T) -> T:
-        record.uwsgi_config = await self._build_config(
-            await self._get_config_section_class(record), record
-        )
         self._session.add(record)
         await self._session.flush()
         await self._session.refresh(record)
@@ -218,9 +167,6 @@ class GenericSqlRepository(GenericRepository[T], ABC):
     async def delete(self, id: str) -> None:
         record: T = self.get_by_id(id)
         if record is not None:
-            record.uwsgi_config = await self._build_config(
-                await self._get_config_section_class(record), record
-            )
             await self._session.delete(record)
             await self._session.flush()
             await record.delete_config_from_filesystem()
@@ -246,6 +192,25 @@ class DeviceRepository(GenericSqlRepository[Device], DeviceReposityBase):
             obj = results.first()
             logger.debug(obj)
             return obj
+
+
+class DeviceUWSGIOptionsReposityBase(GenericRepository[DeviceUWSGIOptions], ABC):
+    """uwsgi options repository.
+    """
+    pass
+
+
+class DeviceUWSGIOptionsReposity(GenericSqlRepository[DeviceUWSGIOptions], DeviceUWSGIOptionsReposityBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, Device)
+
+    async def get_by_device_id(self, device_id: str) -> list[DeviceUWSGIOptions] | None:
+        stmt = select(DeviceUWSGIOptions).\
+                where(DeviceUWSGIOptions.device_id == device_id).\
+                order_by(DeviceUWSGIOptions.sort_order_index)
+        results = await self._session.exec(stmt)
+        if results:
+            return results.all()
 
 
 class ProjectReposityBase(GenericRepository[Project], ABC):

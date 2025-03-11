@@ -1,4 +1,5 @@
 import sqlmodel
+
 """${message}
 
 Revision ID: ${up_revision}

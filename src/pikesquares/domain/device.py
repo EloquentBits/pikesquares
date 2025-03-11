@@ -1,22 +1,29 @@
+from typing import Optional
 import os
+import uuid
 import shutil
 from pathlib import Path
 import sys
 from functools import cached_property
 
-from sqlmodel import Field
 import pydantic
 
 import structlog
 
-from .base import ServiceBase
+from sqlmodel import (
+    SQLModel,
+    Field,
+    Relationship,
+)
 
+from sqlalchemy.orm import RelationshipProperty
+from sqlalchemy.schema import Column, ForeignKey
 
+from .base import ServiceBase, TimeStampedBase
 from pikesquares.exceptions import StatsReadError
-from pikesquares.presets.device import DeviceSection
-from pikesquares.presets import Section
 from pikesquares.services.data import DeviceStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
+from pikesquares.presets.device import DeviceSection
 
 
 logger = structlog.getLogger()
@@ -27,6 +34,11 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     machine_id: str = Field(default=None, unique=True, max_length=32)
     server_run_as_uid: str = Field(default="root")
     server_run_as_gid: str = Field(default="root")
+    uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
+
+    @property
+    def uwsgi_config_section_class(self) -> DeviceSection:
+        return DeviceSection
 
     @pydantic.computed_field
     @cached_property
@@ -54,6 +66,19 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     # empjs["uwsgi"]["emperor"] = f"zmq://tcp://{self.EMPEROR_ZMQ_ADDRESS}"
     # config["uwsgi"]["plugin"] = "emperor_zeromq"
     # self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
+
+    def build_uwsgi_options(self) -> list["DeviceUWSGIOptions"]:
+        # DeviceUWSGIOptions
+        uwsgi_options = []
+        for idx, opt in enumerate(self.uwsgi_config.get("uwsgi", {}).items()):
+            uwsgi_option = DeviceUWSGIOptions(
+                option_key=opt[0],
+                option_value=opt[1],
+                sort_order_index=idx,
+                device=self,
+            )
+            uwsgi_options.append(uwsgi_option)
+        return uwsgi_options
 
     def start(self):
         pass
@@ -136,5 +161,30 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
                     pass
 
 
-# class DeviceCreate(Device):
-#    pass
+class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
+
+    __tablename__ = "uwsgi_options"
+
+    id: str = Field(
+        primary_key=True,
+        default_factory=lambda: str(uuid.uuid4()),
+        max_length=36,
+    )
+    option_key: str = Field()
+    option_value: str = Field()
+
+    device_id: int | None = Field(default=None, foreign_key="device.id")
+    device: Device | None = Relationship(back_populates="uwsgi_options")
+    sort_order_index: int | None = Field(default=None)
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+
+    def __repr__(self):
+        return f"<DeviceUWSGIOptions option_key={self.option_key} option_value={self.option_value}>"
+
+    def __str__(self):
+        return self.__repr__()
+
+

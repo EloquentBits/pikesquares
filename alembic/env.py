@@ -13,7 +13,7 @@ from pikesquares.app.core.config import settings
 # access to the values within the .ini file in use.
 config = context.config
 
-
+print(f"{settings.SQLALCHEMY_DATABASE_URI=}")
 config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
 
 
@@ -29,7 +29,10 @@ if config.config_file_name is not None:
 from sqlmodel import SQLModel
 
 from pikesquares.domain.base import ServiceBase
-from pikesquares.domain.device import Device
+from pikesquares.domain.device import (
+    Device,
+    DeviceUWSGIOptions,
+)
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import (
     BaseRouter,

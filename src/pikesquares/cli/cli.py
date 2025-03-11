@@ -54,6 +54,7 @@ from pikesquares.exceptions import StatsReadError
 
 # from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain import (
+    base as domain_base,
     process_compose,
     device,
     project,
@@ -1087,10 +1088,18 @@ async def main(
             yield uow
     services.register_factory(context, UnitOfWork, uow_factory)
 
-    machine_id = await AsyncPath("/var/lib/dbus/machine-id").read_text(encoding="utf-8")
+    machine_id = await domain_base.ServiceBase.read_machine_id()
     uow = await services.aget(context, UnitOfWork)
-
     dvc = await uow.devices.get_by_machine_id(machine_id)
+
+    common_kwargs = {
+        "data_dir": str(conf.data_dir),
+        "config_dir": str(conf.config_dir),
+        "log_dir": str(conf.log_dir),
+        "run_dir": str(conf.run_dir),
+        "sentry_dsn": conf.sentry_dsn,
+    }
+
     if not dvc:
         dvc = device.Device(
             service_id=f"device_{cuid()}",
@@ -1099,16 +1108,14 @@ async def main(
             config_dir=str(conf.config_dir),
             log_dir=str(conf.log_dir),
             run_dir=str(conf.run_dir),
-            pki_dir=str(conf.pki_dir),
             sentry_dsn=conf.sentry_dsn,
         )
-        # dvc.uwsgi_config = json.loads(
-        #    DeviceSection(dvc).as_configuration().format(
-        #        formatter="json",
-        #        do_print=True,
-        #    )
-        # )
-        # dvc.uwsgi_config["uwsgi"]["show-config"] = True
+        dvc.uwsgi_config = dvc.build_uwsgi_config()
+        dvc.uwsgi_plugins = ""
+
+        for uwsgi_option in dvc.build_uwsgi_options():
+            uow.uwsgi_options.add(uwsgi_option)
+
         await uow.devices.add(dvc)
         await uow.commit()
         logger.debug(f"Created {dvc=} for {machine_id=}")
@@ -1131,13 +1138,9 @@ async def main(
         sandbox_project = project.Project(
             service_id="project_sandbox",
             name="sandbox",
-            data_dir=str(conf.data_dir),
-            config_dir=str(conf.config_dir),
-            log_dir=str(conf.log_dir),
-            run_dir=str(conf.run_dir),
-            pki_dir=str(conf.pki_dir),
-            sentry_dsn=conf.sentry_dsn,
+            **common_kwargs,
         )
+        sandbox_project.uwsgi_config = sandbox_project.build_uwsgi_config()
         await uow.projects.add(sandbox_project)
         await uow.commit()
         logger.debug(f"Created {sandbox_project=} for {machine_id=}")
@@ -1158,13 +1161,9 @@ async def main(
             name="default-http-router",
             address="0.0.0.0:8034",
             subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5700)}",
-            data_dir=str(conf.data_dir),
-            config_dir=str(conf.config_dir),
-            log_dir=str(conf.log_dir),
-            run_dir=str(conf.run_dir),
-            pki_dir=str(conf.pki_dir),
-            sentry_dsn=conf.sentry_dsn,
+            **common_kwargs,
         )
+        http_router.uwsgi_config = http_router.build_uwsgi_config()
         await uow.routers.add(http_router)
         await uow.commit()
         logger.debug(f"Created {http_router=} for {machine_id=}")
@@ -1175,31 +1174,27 @@ async def main(
     if not await AsyncPath(http_router.service_config).exists():
         await http_router.save_config_to_filesystem()
 
-    https_router = await uow.routers.get_by_name("default-https-router")
-    if not https_router:
-        https_router = router.BaseRouter(
-            service_id=f"https_router_{cuid()}",
-            name="default-https-router",
-            address=f"0.0.0.0:{str(get_first_available_port(port=8443))}",
-            subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5600)}",
-            data_dir=str(conf.data_dir),
-            config_dir=str(conf.config_dir),
-            log_dir=str(conf.log_dir),
-            run_dir=str(conf.run_dir),
-            pki_dir=str(conf.pki_dir),
-            sentry_dsn=conf.sentry_dsn,
-        )
-        await uow.routers.add(https_router)
-        await uow.commit()
-        logger.debug(f"Created {https_router=} for {machine_id=}")
-    else:
-        logger.debug(f"Using existing http router for {machine_id=} {https_router=}")
+    if 0:
+        https_router = await uow.routers.get_by_name("default-https-router")
+        if not https_router:
+            https_router = router.BaseRouter(
+                service_id=f"https_router_{cuid()}",
+                name="default-https-router",
+                address=f"0.0.0.0:{str(get_first_available_port(port=8443))}",
+                subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5600)}",
+                **common_kwargs,
+            )
+            https_router.uwsgi_config = http_router.build_uwsgi_config()
+            await uow.routers.add(https_router)
+            await uow.commit()
+            logger.debug(f"Created {https_router=} for {machine_id=}")
+        else:
+            logger.debug(f"Using existing http router for {machine_id=} {https_router=}")
 
-    context["https_router"] = https_router
-    if not await AsyncPath(https_router.service_config).exists():
-        await https_router.save_config_to_filesystem()
+        context["https_router"] = https_router
+        if not await AsyncPath(https_router.service_config).exists():
+            await https_router.save_config_to_filesystem()
 
-    # console.log(context)
     # http_router = services.get(context, DefaultHttpRouter)
     # https_router = services.get(context, DefaultHttpsRouter)
 

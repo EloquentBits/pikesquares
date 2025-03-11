@@ -154,7 +154,7 @@ async def make_system_dir(
         return newdir
 
     logger.info(f"make_system_dir: mkdir {str(newdir)}")
-    newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
+    await newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
 
     logger.info(f"make_system_dir: chown {owner_username}:{owner_groupname}")
     try:
@@ -167,7 +167,11 @@ async def make_system_dir(
     except KeyError:
         raise AppConfigError(f"unable locate group: {owner_groupname}") from None
 
-    os.chown(newdir, owner_uid, owner_gid)
+    os.chown(
+        newdir,
+        owner_uid,
+        owner_gid,
+    )
 
     # pwd.getpwnam(owner_uid).pw_uid,
     # pwd.getpwnam(owner_gid).pw_gid

@@ -54,10 +54,11 @@ app = FastAPI(
 @app.on_event("startup")
 async def on_startup():
     # create_db_and_tables()
-    async with sessionmanager._engine.begin() as conn:
-        await conn.run_sync(
-            lambda conn: SQLModel.metadata.create_all(conn)
-        )
+    if sessionmanager._engine:
+        async with sessionmanager._engine.begin() as conn:
+            await conn.run_sync(
+                lambda conn: SQLModel.metadata.create_all(conn)
+            )
 
 
 

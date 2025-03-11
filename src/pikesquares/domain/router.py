@@ -1,11 +1,12 @@
 from functools import cached_property
 from pathlib import Path
+
 import pydantic
 from sqlmodel import Field
 import structlog
 
 from .base import ServiceBase
-
+from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
 
 logger = structlog.getLogger()
 
@@ -20,6 +21,12 @@ class BaseRouter(ServiceBase, table=True):
 
     run_as_uid: str = Field(default="root")
     run_as_gid: str = Field(default="root")
+
+    @property
+    def uwsgi_config_section_class(self) -> HttpRouterSection | HttpsRouterSection:
+        if int(self.port) >= 8443:
+            return HttpsRouterSection
+        return HttpRouterSection
 
     @pydantic.computed_field
     @cached_property
