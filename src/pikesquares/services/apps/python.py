@@ -47,6 +47,9 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
     })
     runtime_emoji: str = ":snake:"
 
+    def get_tasks(self) -> list:
+        return []
+
     @pydantic.computed_field
     def version(self) -> str:
         try:

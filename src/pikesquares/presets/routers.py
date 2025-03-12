@@ -1,4 +1,5 @@
 import structlog
+
 from uwsgiconf.options.routing_routers import RouterHttp as _RouterHttp
 from uwsgiconf.utils import filter_locals, KeyValue
 
@@ -77,20 +78,19 @@ class RouterHttps(_RouterHttp):
 class HttpsRouterSection(Section):
     router_name: str = "[[ PikeSquares App / HTTPS Router ]]"
 
-    def __init__(self, router, plugins: list, **kwargs):
+    def __init__(self, router, **kwargs):
         super().__init__(
             strict_config=True,
             name="uwsgi",
             **kwargs,
         )
         self.router = router
-        self.plugins = plugins
 
-        self.set_runtime_dir(str(self.router.conf.run_dir))
+        self.set_runtime_dir(str(self.router.run_dir))
 
         self.set_plugins_params(
-             plugins=self.plugins,
-             search_dirs=[self.router.conf.plugins_dir,],
+             plugins=self.router.uwsgi_plugins,
+             search_dirs=[str(self.router.plugins_dir)],
         )
         self.print_plugins()
 
@@ -105,8 +105,8 @@ class HttpsRouterSection(Section):
             touch_reload=str(self.router.touch_reload_file),
         )
         self.main_process.set_owner_params(
-            uid=self.router.conf.default_app_run_as_uid,
-            gid=self.router.conf.default_app_run_as_gid,
+            uid=self.router.run_as_uid,
+            gid=self.router.run_as_gid,
         )
         self.main_process.set_naming_params(
             prefix=f"{self.router_name} {self.router.service_id} ",
@@ -197,7 +197,7 @@ class HttpRouterSection(Section):
     #    **kwargs,
     # ):
 
-    def __init__(self, router, plugins: list, **kwargs):
+    def __init__(self, router, **kwargs):
         # self.name = name
         # self.runtime_dir = runtime_dir
         # super().__init__(
@@ -210,15 +210,15 @@ class HttpRouterSection(Section):
 
         super().__init__(strict_config=True, name="uwsgi", **kwargs)
         self.router = router
-        self.plugins = plugins
 
-        self.set_runtime_dir(str(self.router.conf.run_dir))
-        router_cls = self.routing.routers.http
+        self.set_runtime_dir(str(self.router.run_dir))
 
         self.set_plugins_params(
-             plugins=self.plugins,
-             search_dirs=[router.conf.plugins_dir,],
+             plugins=self.router.uwsgi_plugins,
+             search_dirs=[str(self.router.plugins_dir)],
         )
+        self.print_plugins()
+
         self.master_process.set_basic_params(enable=True)
         self.master_process.set_exit_events(reload=True)
 
@@ -227,8 +227,8 @@ class HttpRouterSection(Section):
             touch_reload=str(self.router.touch_reload_file),
         )
         self.main_process.set_owner_params(
-            uid=self.router.conf.server_run_as_uid,
-            gid=self.router.conf.server_run_as_gid
+            uid=self.router.run_as_uid,
+            gid=self.router.run_as_gid
         )
         self.main_process.set_naming_params(
             prefix=f"{self.router_name} {self.router.service_id} ",
@@ -245,6 +245,7 @@ class HttpRouterSection(Section):
         #            address="0.0.0.0:3435"
         #        )
         #    )
+        router_cls = self.routing.routers.http
         self.router = router_cls(
             on=router.address,
             forward_to=router_cls.forwarders.subscription_server(

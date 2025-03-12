@@ -1,5 +1,6 @@
 import structlog
 
+
 from . import Section
 # from .routers import BaseRouterHttps
 
@@ -17,7 +18,7 @@ class DeviceSection(Section):
         )
         self.device = device
         # env = project.env
-        self.set_runtime_dir(str(device.conf.run_dir))
+        self.set_runtime_dir(str(device.run_dir))
 
         # base
         # = %(main_plugin)s,
@@ -39,16 +40,13 @@ class DeviceSection(Section):
         # transformation_toupper,coroae,v8,cgi,xslt,webdav,ssi,ldap,gccgo,rados,pypy,zabbix,curl_cron,tornado,
         # tuntap,pty,mongrel2,alarm_curl,router_radius,airbrake,gridfs
 
-        # plugins = ["python312", "logfile"]
-        # self.set_plugins_params(
-        #     plugins=plugins,
-        #     search_dirs=[str(device.conf.plugins_dir),],
-        #     autoload=True,
-        # required=True,
-        # )
+        self.set_plugins_params(
+             plugins=device.uwsgi_plugins,
+             search_dirs=[str(device.plugins_dir)],
+             # autoload=True,
+             # required=True,
+        )
         self.print_plugins()
-
-        self.set_plugins_params(search_dirs=device.conf.plugins_dir)
 
         self.master_process.set_basic_params(
             enable=True,
@@ -58,7 +56,7 @@ class DeviceSection(Section):
         self.main_process.set_basic_params(
             vacuum=True,
         )
-        # binary_path = device.conf.VIRTUAL_ENV / "bin/pyuwsgi"
+        # binary_path = device.VIRTUAL_ENV / "bin/pyuwsgi"
         # print(f"{binary_path=}")
         # self.main_process.set_basic_params(
         #    binary_path=str(binary_path),
@@ -71,8 +69,8 @@ class DeviceSection(Section):
         #   )
 
         self.main_process.set_owner_params(
-            uid=device.conf.server_run_as_uid,
-            gid=device.conf.server_run_as_gid,
+            uid=device.server_run_as_uid,
+            gid=device.server_run_as_gid,
         )
         self.main_process.set_naming_params(
             prefix="[[ PikeSquares App ]] ",
@@ -85,14 +83,14 @@ class DeviceSection(Section):
             # str((Path(conf.run_dir) / f"{self.service_id}.pid").resolve())
             device.pid_file,
         )
-        if device.conf.daemonize:
-            self.main_process.daemonize(log_into=str(device.log_file))
+        # if device.daemonize:
+        #    self.main_process.daemonize(log_into=str(device.log_file))
 
         self.main_process.set_basic_params(
             touch_reload=str(device.touch_reload_file),
         )
 
-        self.main_process.change_dir(to=device.conf.data_dir)
+        self.main_process.change_dir(to=device.data_dir)
 
         self.networking.register_socket(
             self.networking.sockets.default(str(device.socket_address))
@@ -103,7 +101,7 @@ class DeviceSection(Section):
 
         self.empire.set_emperor_params(
             vassals_home=str(device.apps_dir),
-            # vassals_home = f"zmq://tcp://{device.conf.EMPEROR_ZMQ_ADDRESS}",
+            # vassals_home = f"zmq://tcp://{device.EMPEROR_ZMQ_ADDRESS}",
             name="PikeSquares Server",
             spawn_asap=True,
             stats_address=str(device.stats_address),
@@ -123,7 +121,7 @@ class DeviceSection(Section):
             process_count=1,
             max_tasks=10,
             harakiri=60,
-            # change_dir=str(device.conf.DATA_DIR),
+            # change_dir=str(device.DATA_DIR),
             poll_interval=10,
             # cheap=True,
             # base_dir=str(""),

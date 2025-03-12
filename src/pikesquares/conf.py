@@ -3,6 +3,7 @@ import os
 import pwd
 import grp
 from pathlib import Path
+from functools import cached_property
 from typing import (
     # Any,
     # Dict,
@@ -22,6 +23,7 @@ from pydantic_settings import (
 )
 # from pydantic.fields import FieldInfo
 import structlog
+from aiopath import AsyncPath
 
 from pikesquares.services import register_factory
 from pikesquares.cli.console import console
@@ -139,20 +141,20 @@ class SysDir(pydantic.BaseModel):
     owner_groupname: str = "pikesquares"
 
 
-def make_system_dir(
-        newdir: Path | str,
+async def make_system_dir(
+        newdir: AsyncPath | str,
         owner_username: str = "root",
         owner_groupname: str = "pikesquares",
         dir_mode: int = 0o775,
-    ) -> Path:
+    ) -> AsyncPath:
     if isinstance(newdir, str):
-        newdir = Path(newdir)
+        newdir = AsyncPath(newdir)
 
-    if newdir.exists():
+    if await newdir.exists():
         return newdir
 
     logger.info(f"make_system_dir: mkdir {str(newdir)}")
-    newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
+    await newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
 
     logger.info(f"make_system_dir: chown {owner_username}:{owner_groupname}")
     try:
@@ -165,21 +167,25 @@ def make_system_dir(
     except KeyError:
         raise AppConfigError(f"unable locate group: {owner_groupname}") from None
 
-    os.chown(newdir, owner_uid, owner_gid)
+    os.chown(
+        newdir,
+        owner_uid,
+        owner_gid,
+    )
 
     # pwd.getpwnam(owner_uid).pw_uid,
     # pwd.getpwnam(owner_gid).pw_gid
 
 
-def ensure_sysdir(dir_path, varname):
+async def ensure_sysdir(dir_path, varname):
     dir_path = dir_path or os.environ.get(f"PIKESQUARES_{varname}")
     if not dir_path:
-        dir_path = make_system_dir(Path("/var/lib/pikesquares"))
-        logger.info(f"new dir with default path: {dir_path}")
-        return dir_path 
+        dir_path = await make_system_dir(AsyncPath("/var/lib/pikesquares"))
+        logger.info(f"new dir with default path: {str(dir_path)}")
+        return dir_path
     elif not Path(dir_path).exists():
-        dir_path = make_system_dir(Path(dir_path))
-        logger.info(f"new dir with a user provided path: {dir_path}")
+        dir_path = await make_system_dir(AsyncPath(dir_path))
+        logger.info(f"new dir with a user provided path: {str(dir_path)}")
         return dir_path
 
 
@@ -220,8 +226,6 @@ class AppConfig(BaseSettings):
     server_run_as_gid: str = pydantic.Field(default="root")
 
     # DEBUG: bool = False
-    # PROCESS_COMPOSE_BIN: Path
-
     data_dir: pydantic.DirectoryPath = pydantic.Field(
             default=Path("/var/lib/pikesquares"),
             alias="PIKESQUARES_DATA_DIR"
@@ -251,11 +255,10 @@ class AppConfig(BaseSettings):
     EASYRSA_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     DNSMASQ_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     PROCESS_COMPOSE_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
     PROCESS_COMPOSE_CONFIG: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-
-    PC_PORT_NUM: int = 9555
 
     # CADDY_DIR: Optional[str] = None
     # CLI_STYLE: QuestionaryStyle
@@ -265,32 +268,32 @@ class AppConfig(BaseSettings):
     daemonize: bool = False
 
     @pydantic.computed_field
-    @property
+    @cached_property
     def default_app_run_as_uid(self) -> int:
         return pwd.getpwnam("pikesquares").pw_uid
 
     @pydantic.computed_field
-    @property
+    @cached_property
     def default_app_run_as_gid(self) -> int:
         return pwd.getpwnam("pikesquares").pw_gid
 
     @pydantic.computed_field
-    @property
-    def pki_dir(self) -> Path:
-        return make_system_dir(self.data_dir / "pki")
+    @cached_property
+    async def pki_dir(self) -> Path:
+        return await make_system_dir(self.data_dir / "pki")
 
     @pydantic.computed_field
-    @property
-    def uv_cache_dir(self) -> Path:
-        return make_system_dir(self.data_dir / "uv-cache")
+    @cached_property
+    async def uv_cache_dir(self) -> Path:
+        return await make_system_dir(self.data_dir / "uv-cache")
 
     @pydantic.computed_field
-    @property
-    def plugins_dir(self) -> Path:
-        return make_system_dir(self.data_dir / "plugins")
+    @cached_property
+    async def plugins_dir(self) -> Path:
+        return await make_system_dir(self.data_dir / "plugins")
 
     @pydantic.computed_field
-    @property
+    @cached_property
     def lift_file(self) -> Path | None:
         if self.SCIE_LIFT_FILE:
             return self.SCIE_LIFT_FILE
@@ -338,27 +341,11 @@ class AppConfig(BaseSettings):
     #    )
 
 
-def register_app_conf(
+async def register_app_conf(
         context: dict,
         override_settings: dict,
     ):
-    def conf_factory() -> AppConfig:
-        #configs = db.table("configs").get(
-        #    Query().version == pikesquares_version
-        #) or {}
-        #if not configs:
-        #    configs["server_run_as_uid"] = server_run_as_uid
-        #    configs["server_run_as_gid"] = server_run_as_gid
-        #    configs["version"] = str(pikesquares_version)
-        #    configs["uwsgi_bin"] = os.environ.get("PIKESQUARES_UWSGI_BIN")
-            # if "PIKESQUARES_VIRTUAL_ENV" in os.environ:
-            #    venv_dir = os.environ.get("PIKESQUARES_VIRTUAL_ENV")
-            #    if venv_dir and Path(venv_dir).exists() and Path(venv_dir).is_dir():
-            #        configs["VIRTUAL_ENV"] = venv_dir
-            #db.table("configs").insert(configs)
-
-        # raise AppConfigError() from None
-        logger.debug(override_settings)
+    async def conf_factory() -> AppConfig:
         return AppConfig(**override_settings)
 
     register_factory(context, AppConfig, conf_factory)

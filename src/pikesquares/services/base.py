@@ -34,6 +34,9 @@ class StatsReadError(Exception):
 
 
 class BaseService(pydantic.BaseModel, ABC):
+    """
+    sdfsdfsdf
+    """
 
     conf: conf.AppConfig
     db: TinyDB
@@ -216,6 +219,7 @@ class BaseService(pydantic.BaseModel, ABC):
 
     @pydantic.computed_field
     def stats_address(self) -> Path:
+        """uWSGI Stats Server socket address"""
         return Path(self.conf.run_dir) / f"{self.service_id}-stats.sock"
 
     @pydantic.computed_field

@@ -1,5 +1,3 @@
-from time import sleep
-import re
 import re
 from pathlib import Path
 
@@ -9,6 +7,7 @@ from tinydb import TinyDB
 import structlog
 
 from pikesquares.conf import AppConfig
+from . import Task
 from ..data import Router, WsgiAppOptions
 from .wsgi import WsgiApp
 from .python import PythonRuntime
@@ -64,6 +63,13 @@ class DjangoSettings(pydantic.BaseModel):
     wsgi_application: str
     base_dir: Path | None = None
 
+    def settings_with_titles(self) -> list[tuple[str, str]]:
+        return [
+             ("Django Settings Module", self.settings_module),
+             ("Django URLConf Module", self.root_urlconf),
+             ("Django WSGI Module", self.wsgi_application)
+        ]
+
 
 class DjangoWsgiApp(WsgiApp):
     pass
@@ -76,6 +82,7 @@ class DjangoWsgiApp(WsgiApp):
 [pikesquares] PythonRuntime.check
 
 """
+
 
 
 class PythonRuntimeDjango(PythonRuntime):
@@ -91,6 +98,28 @@ class PythonRuntimeDjango(PythonRuntime):
         if super().init(venv, check=check):
             return True
         return False
+
+    def get_tasks(self) -> list:
+        tasks = super().get_tasks()
+        dj_check_task = Task(
+            description="Running Django check",
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld=getattr(self, "framework_emoji", self.runtime_emoji),
+            result_mark_fld="",
+            description_done="Django check passed",
+        )
+        dj_settings_task = Task(
+            description="Django discovering modules",
+            visible=False,
+            total=1,
+            start=False,
+            emoji_fld=getattr(self, "framework_emoji", self.runtime_emoji),
+            result_mark_fld="",
+            description_done="Django modules discovered",
+        )
+        return [*tasks, dj_check_task, dj_settings_task]
 
     def check(
             self,
@@ -164,7 +193,6 @@ class PythonRuntimeDjango(PythonRuntime):
             if plumbum_pe_err.stderr.startswith("SystemCheckError"):
                 err_lines = plumbum_pe_err.stderr.split("\n")
                 for msg in [line for line in err_lines if line.startswith("?:")]:
-                    logger.error(f"====    {msg=}     ====")
                     try:
                         # ?: (4_0.E001)
                         msg_id = re.findall(r"(?<=\()[^)]+(?=\))", msg)[0]
@@ -178,7 +206,6 @@ class PythonRuntimeDjango(PythonRuntime):
                             ).strip()
                         )
                     )
-                logger.error(f"{dj_msgs.messages=}")
                 return dj_msgs
             else:
                 raise DjangoCheckError(f"[pikesquares] UvExecError: unable to run django check in {str(chdir)}") from None
@@ -194,7 +221,6 @@ class PythonRuntimeDjango(PythonRuntime):
         app_tmp_dir: Path | None = None,
         ) -> DjangoSettings:
         logger.info("[pikesquares] django diffsettings")
-        sleep(3)
         cmd_args = ["run", "manage.py", "diffsettings"]
         chdir = app_tmp_dir or self.app_root_dir
         try:

@@ -256,6 +256,7 @@ def create(
             service_id=service_id,
             name=app_name,
             app_options=WsgiAppOptions(**app_options),
+            build_config_on_init=True,
     )
     with console.status(f"`{app_name}` is starting...", spinner="earth"):
         wsgi_app.up()
