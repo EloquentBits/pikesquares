@@ -228,6 +228,9 @@ class ServiceBase(TimeStampedBase, SQLModel):
 
     @classmethod
     def read_stats(cls, stats_address: Path):
+        """
+        read from uWSGI Stats Server socket
+        """
         if not all([stats_address.exists(), stats_address.is_socket()]):
             raise StatsReadError(f"unable to read stats from {(stats_address)}")
 

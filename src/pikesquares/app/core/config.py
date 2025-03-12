@@ -27,7 +27,7 @@ def parse_cors(v: Any) -> list[str] | str:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         # Use top level .env file (one level above ./backend/)
-        env_file="/home/pk/dev/eqb/pikesquares/src/pikesquares/.env-app",
+        env_file="src/pikesquares/.env-app",
         # env_file="../.env-app",
         env_ignore_empty=True,
         extra="ignore",
