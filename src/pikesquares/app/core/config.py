@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        path_to_db = "/home/pk/dev/eqb/pikesquares/pikesquares.db"
+        path_to_db = "pikesquares.db"
         return f"sqlite+aiosqlite:///{path_to_db}"
 
     SMTP_TLS: bool = True
