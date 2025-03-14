@@ -47,10 +47,19 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
     @pydantic.computed_field
     def stats(self) -> DeviceStats | None:
+
+        if not self.stats_address.exists():
+            return
+
         try:
-            return DeviceStats(
-                **Device.read_stats(self.stats_address)
+
+            device_stats = Device.read_stats(
+                    self.stats_address
             )
+            if device_stats:
+                return DeviceStats(
+                        **device_stats
+                )
         except StatsReadError:
             pass
 

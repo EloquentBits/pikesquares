@@ -23,7 +23,6 @@ from pydantic_settings import (
 )
 # from pydantic.fields import FieldInfo
 import structlog
-from aiopath import AsyncPath
 
 from pikesquares.services import register_factory
 from pikesquares.cli.console import console
@@ -141,20 +140,20 @@ class SysDir(pydantic.BaseModel):
     owner_groupname: str = "pikesquares"
 
 
-async def make_system_dir(
-        newdir: AsyncPath | str,
+def make_system_dir(
+        newdir: Path | str,
         owner_username: str = "root",
         owner_groupname: str = "pikesquares",
         dir_mode: int = 0o775,
-    ) -> AsyncPath:
+    ) -> Path:
     if isinstance(newdir, str):
-        newdir = AsyncPath(newdir)
+        newdir = Path(newdir)
 
-    if await newdir.exists():
+    if newdir.exists():
         return newdir
 
     logger.info(f"make_system_dir: mkdir {str(newdir)}")
-    await newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
+    newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
 
     logger.info(f"make_system_dir: chown {owner_username}:{owner_groupname}")
     try:
@@ -177,14 +176,14 @@ async def make_system_dir(
     # pwd.getpwnam(owner_gid).pw_gid
 
 
-async def ensure_sysdir(dir_path, varname):
+def ensure_sysdir(dir_path, varname):
     dir_path = dir_path or os.environ.get(f"PIKESQUARES_{varname}")
     if not dir_path:
-        dir_path = await make_system_dir(AsyncPath("/var/lib/pikesquares"))
+        dir_path = make_system_dir(Path("/var/lib/pikesquares"))
         logger.info(f"new dir with default path: {str(dir_path)}")
         return dir_path
     elif not Path(dir_path).exists():
-        dir_path = await make_system_dir(AsyncPath(dir_path))
+        dir_path = make_system_dir(Path(dir_path))
         logger.info(f"new dir with a user provided path: {str(dir_path)}")
         return dir_path
 
@@ -217,6 +216,7 @@ class AppConfig(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="PIKESQUARES_",
         env_file=".env",
+        env_ignore_empty=True,
         extra="ignore",
     )
 
@@ -257,7 +257,6 @@ class AppConfig(BaseSettings):
     CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     PROCESS_COMPOSE_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-
     PROCESS_COMPOSE_CONFIG: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
     # CADDY_DIR: Optional[str] = None
@@ -266,6 +265,12 @@ class AppConfig(BaseSettings):
     sentry_enabled: bool = False
     sentry_dsn: str | None = None
     daemonize: bool = False
+
+    @pydantic.computed_field  # type: ignore[prop-decorator]
+    @property
+    def SQLALCHEMY_DATABASE_URI(self) -> str:
+        path_to_db = self.data_dir / "pikesquares.db"
+        return f"sqlite+aiosqlite:///{str(path_to_db)}"
 
     @pydantic.computed_field
     @cached_property
@@ -279,18 +284,18 @@ class AppConfig(BaseSettings):
 
     @pydantic.computed_field
     @cached_property
-    async def pki_dir(self) -> Path:
-        return await make_system_dir(self.data_dir / "pki")
+    def pki_dir(self) -> Path:
+        return make_system_dir(self.data_dir / "pki")
 
     @pydantic.computed_field
     @cached_property
-    async def uv_cache_dir(self) -> Path:
-        return await make_system_dir(self.data_dir / "uv-cache")
+    def uv_cache_dir(self) -> Path:
+        return make_system_dir(self.data_dir / "uv-cache")
 
     @pydantic.computed_field
     @cached_property
-    async def plugins_dir(self) -> Path:
-        return await make_system_dir(self.data_dir / "plugins")
+    def plugins_dir(self) -> Path:
+        return make_system_dir(self.data_dir / "plugins")
 
     @pydantic.computed_field
     @cached_property
@@ -341,11 +346,11 @@ class AppConfig(BaseSettings):
     #    )
 
 
-async def register_app_conf(
+def register_app_conf(
         context: dict,
         override_settings: dict,
     ):
-    async def conf_factory() -> AppConfig:
+    def conf_factory() -> AppConfig:
         return AppConfig(**override_settings)
 
     register_factory(context, AppConfig, conf_factory)

@@ -17,8 +17,8 @@ from pikesquares.domain.router import (
     # HttpsRouter,
 )
 
-logger = logging.getLogger("uvicorn.error")
-logger.setLevel(logging.DEBUG)
+# logger = logging.getLogger("uvicorn.error")
+# logger.setLevel(logging.DEBUG)
 
 logger = structlog.get_logger()
 

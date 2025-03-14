@@ -12,3 +12,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+    # uvicorn.run(app, loop="uvloop")

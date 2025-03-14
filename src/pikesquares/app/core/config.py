@@ -1,6 +1,7 @@
 import secrets
 import warnings
 from typing import Annotated, Any, Literal
+from pathlib import Path
 
 from pydantic import (
     AnyUrl,
@@ -73,8 +74,8 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        path_to_db = "pikesquares.db"
-        return f"sqlite+aiosqlite:///{path_to_db}"
+        path_to_db = Path("/var/lib/pikesquares") / "pikesquares.db"
+        return f"sqlite+aiosqlite:///{str(path_to_db)}"
 
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False

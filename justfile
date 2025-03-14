@@ -63,8 +63,19 @@ uwsgi-up:
     --sqlite3 /home/pk/dev/eqb/pikesquares/pikesquares.db:"SELECT option_key,option_value FROM uwsgi_options WHERE device_id='4babcd7c-711c-4dd5-9d97-5db8be9329c5' ORDER BY sort_order_index"
 
 fastapi-up:
-   uv run fastapi dev src/pikesquares/app/main.py
+    PYTHONASYNCIODEBUG=1 uv run fastapi dev src/pikesquares/app/main.py
+
+uvicorn-up:
+  uv run uvicorn app.main:app --reload --debug
+
+pc-up-sock:
+  process-compose --use-uds --unix-socket pc.sock --log-file pc.log 
+
+pc-up-tcp:
+  process-compose --log-file pc.log --port 9995
 
 db-migrate:
   uv run alembic upgrade head
 
+export-dotenv-file:
+  export $(cat .env | xargs)

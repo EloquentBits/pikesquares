@@ -1,11 +1,9 @@
 import logging
-from typing import Any
-
+from typing import Any, AsyncIterator
 import contextlib
-from typing import AsyncIterator
 
+import structlog
 from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
-
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     async_sessionmaker,
@@ -13,11 +11,11 @@ from sqlalchemy.ext.asyncio import (
 )
 # from sqlalchemy.orm import sessionmaker
 
-from pikesquares.app.core.config import settings
+# logger = logging.getLogger("uvicorn.error")
+# logger.setLevel(logging.DEBUG)
 
 
-logger = logging.getLogger("uvicorn.error")
-logger.setLevel(logging.DEBUG)
+logger = structlog.get_logger()
 
 
 class DatabaseSessionManager:
@@ -73,16 +71,6 @@ class DatabaseSessionManager:
 
     # async def drop_all(self, connection: AsyncConnection):
     #    await connection.run_sync(Base.metadata.drop_all)
-
-
-sessionmanager = DatabaseSessionManager(
-    settings.SQLALCHEMY_DATABASE_URI, {"echo": True}
-)
-
-
-async def get_session() -> SQLModelAsyncSession:
-    async with sessionmanager.session() as session:
-        return session
 
 
 # async def initialize_database(engine):

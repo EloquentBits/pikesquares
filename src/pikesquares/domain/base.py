@@ -8,8 +8,6 @@ import traceback
 import socket
 import errno
 from pathlib import Path
-from functools import cached_property
-
 
 import structlog
 import pydantic
@@ -36,7 +34,6 @@ from pikesquares.exceptions import (
     ServiceUnavailableError,
     StatsReadError,
 )
-from pikesquares.presets import Section
 
 
 logger = structlog.getLogger()
@@ -109,8 +106,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
             )
             logger.info("initialized sentry-sdk")
 
-    @pydantic.computed_field(repr=False)
-    @cached_property
+    @property
     def handler_name(self) -> str:
         return self.__class__.__name__
 
@@ -121,7 +117,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
         return self.__repr__()
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def service_config(self) -> Path:
         return Path(self.config_dir) / f"{self.service_id}.json"
 
@@ -135,38 +131,38 @@ class ServiceBase(TimeStampedBase, SQLModel):
         await AsyncPath(self.service_config).unlink()
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def stats_address(self) -> Path:
         """uWSGI Stats Server socket address"""
         return Path(self.run_dir) / f"{self.service_id}-stats.sock"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def socket_address(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}.sock"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def notify_socket(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-notify.sock"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def touch_reload_file(self) -> Path:
         return Path(self.config_dir) / f"{self.service_id}.json"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def pid_file(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}.pid"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def log_file(self) -> Path:
         return Path(self.log_dir) / f"{self.service_id}.log"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def fifo_file(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-master-fifo"
 
@@ -175,32 +171,32 @@ class ServiceBase(TimeStampedBase, SQLModel):
     #    return Path(self.data_dir) / "device-db.json"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def pki_dir(self) -> Path:
         return Path(self.data_dir) / "pki"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def plugins_dir(self) -> Path:
         return Path(self.data_dir) / "plugins"
 
     @pydantic.computed_field(repr=False)
-    @cached_property
+    @property
     def certificate(self) -> Path:
         return Path(self.pki_dir) / "issued" / f"{self.cert_name}.crt"
 
     @pydantic.computed_field(repr=False)
-    @cached_property
+    @property
     def certificate_key(self) -> Path:
         return Path(self.pki_dir) / "private" / f"{self.cert_name}.key"
 
     @pydantic.computed_field(repr=False)
-    @cached_property
+    @property
     def certificate_ca(self) -> Path:
         return Path(self.pki_dir) / "ca.crt"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def spooler_dir(self) -> Path:
         return Path(self.data_dir) / "spooler"
 
