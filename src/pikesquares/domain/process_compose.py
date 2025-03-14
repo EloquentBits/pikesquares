@@ -1,21 +1,20 @@
-from typing import Any
-from functools import cached_property
-from pathlib import Path
 import json
 import os
-import subprocess
+# import subprocess
+from typing import Annotated
+from pathlib import Path
 
 import pydantic
 import structlog
-from aiopath import AsyncPath
-from plumbum import local as pl_local
+# from aiopath import AsyncPath
+# from plumbum import local as pl_local
 from plumbum import ProcessExecutionError
-from sqlmodel import Field
+from pydantic_yaml import to_yaml_str
 
 from pikesquares.conf import AppConfig
+from pikesquares.domain.managed_services import ManagedServiceBase
 from pikesquares.services.base import ServiceUnavailableError
 from pikesquares.services import register_factory
-from pikesquares.cli.console import console
 
 logger = structlog.get_logger()
 
@@ -46,12 +45,52 @@ class ProcessComposeProcessStats(pydantic.BaseModel):
     system_time: str
 
 
-class ProcessCompose(pydantic.BaseModel):
+class ProcessAvailability(pydantic.BaseModel):
+    """
+    restart other options: "on_failure", "exit_on_failure", "always", "no" (default)
+    """
+    restart: str = "yes"
+    exit_on_end: str = "no"
+    backoff_seconds: int = 2
+    max_restarts: int = 5
 
-    conf: AppConfig | None = None
 
-    class Config:
-        arbitrary_types_allowed = True
+class ProcessComposeProcess(pydantic.BaseModel):
+    name: str
+    description: str
+    command: str
+    is_elevated: bool = False
+    working_dir: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
+    # availability: ProcessAvailability
+    disabled: bool = False
+    is_daemon: bool = False
+    depends_on: list["ProcessComposeProcess"] = []
+
+
+class ProcessComposeConfig(pydantic.BaseModel):
+
+    version: str = "0.1"
+    is_strict: bool = True
+    log_level: str = "debug"
+
+    # log_configuration:
+    #  fields_order: ["time", "level", "message"] # order of logging fields. The default is time, level, message
+    #  disable_json: true                         # output as plain text. The default is false
+    #  timestamp_format: "06-01-02 15:04:05.000"  # timestamp format. The default is RFC3339
+    #  no_metadata: true                          # don't log process name and replica number
+    #  add_timestamp: true                        # add timestamp to the logger. Default is false
+    #  no_color: true                             # disable ANSII colors in the logger. Default is false
+    #  flush_each_line: true                      # disable buffering and flush each line to the log file. Default is false
+
+    processes: list[ProcessComposeProcess]
+
+
+class ProcessCompose(ManagedServiceBase):
+
+    daemon_name: str = "process-compose"
+    config: ProcessComposeConfig
+
+    uv_bin: Annotated[pydantic.FilePath, pydantic.Field()]
 
     def __repr__(self) -> str:
         return "process-compose"
@@ -60,98 +99,63 @@ class ProcessCompose(pydantic.BaseModel):
         return self.__repr__()
 
     # @pydantic.computed_field
-    async def get_socket_address(self) -> AsyncPath:
-        return await AsyncPath(
-            self.conf.run_dir) / "process-compose.sock"
+    # async def get_socket_address(self) -> AsyncPath:
+    #    return await AsyncPath(
+    #        self.conf.run_dir) / "process-compose.sock"
 
-    async def ping(self) -> None:
-        sockaddr = AsyncPath(
-            self.conf.run_dir) / "process-compose.sock"
+    def write_config_to_disk(self):
+        self.daemon_config.write_text(
+                to_yaml_str(self.config)
+        )
 
-        if not await sockaddr.exists():
-            raise PCAPIUnavailableError()
-
-    async def ping_api(self) -> bool:
-        sockaddr = AsyncPath(
-            self.conf.run_dir) / "process-compose.sock"
-
-        if not await sockaddr.exists():
-            raise PCAPIUnavailableError()
-
-        try:
-            cmd_args = [
-                "process",
-                "list",
-                "--use-uds",
-                "--unix-socket",
-                str(await self.get_socket_address()),
-                "--output",
-                "json",
-            ]
-            retcode, stdout, stderr = await self.pc_cmd(cmd_args)
-            js = json.loads(stdout)
-            try:
-                device_process = \
-                        next(
-                            filter(lambda p: p.get("name") == "Device", js)
-                        )
-                logger.debug(device_process)
-                process_stats = ProcessComposeProcessStats(**device_process)
-                if process_stats.IsRunning and process_stats.status == "Running":
-                    return True
-            except (IndexError, StopIteration):
-                pass
-        except ProcessExecutionError as exc:
-            logger.error(exc)
-            return False
-
-        raise PCDeviceUnavailableError()
-
-    async def up(self) -> tuple[int, str, str]:
-        sockaddr = AsyncPath(
-            self.conf.run_dir) / "process-compose.sock"
-
+    def up(self) -> tuple[int, str, str]:
         cmd_args = [
             "up",
             "--config",
-            str(self.conf.PROCESS_COMPOSE_CONFIG),
+            str(self.daemon_config),
             "--log-file",
-            str(AsyncPath(self.conf.log_dir) / "process-compose.log"),
+            str(self.daemon_log),
             "--detached",
             "--hide-disabled",
             # "--tui",
             # "false",
             "--unix-socket",
-            str(sockaddr),
+            str(self.daemon_socket),
 
         ]
-        logger.info("calling process-compose up")
+        cmd_env = {
+            # TODO use shellingham library
+            "COMPOSE_SHELL": os.environ.get("SHELL"),
+            # "PIKESQUARES_VERSION": self.conf.VERSION,
+            # "PIKESQUARES_SCIE_BASE": str(self.conf.SCIE_BASE),
+            # "PIKESQUARES_SCIE_LIFT_FILE": str(self.conf.SCIE_LIFT_FILE),
+            # "UWSGI_BIN": str(self.conf.UWSGI_BIN),
+            "PIKESQUARES_UV_BIN": str(self.uv_bin),
+        }
+
+        # "CADDY_BIN": str(self.conf.CADDY_BIN),
+        # "DNSMASQ_BIN": str(self.conf.DNSMASQ_BIN),
+        # "EASYRSA_BIN": str(self.conf.EASYRSA_BIN),
+
         try:
-            return await self.pc_cmd(cmd_args)
+            return self.cmd(cmd_args, cmd_env=cmd_env)
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    async def down(self) -> tuple[int, str, str]:
-        sockaddr = AsyncPath(
-            self.conf.run_dir) / "process-compose.sock"
-
-        if not await sockaddr.exists():
+    def down(self) -> tuple[int, str, str]:
+        if not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
-        cmd_args = [
-            "down",
-            "--unix-socket",
-            str(AsyncPath(self.conf.run_dir) / "process-compose.sock"),
-        ]
-        logger.info("calling process-compose down")
+        cmd_args = ["down", "--unix-socket", str(self.daemon_socket)]
         try:
-            return await self.pc_cmd(cmd_args)
+            return self.cmd(cmd_args)
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    async def attach(self) -> None:
+    """
+    def attach(self) -> None:
         try:
             compl = subprocess.run(
                 args=[
@@ -159,9 +163,9 @@ class ProcessCompose(pydantic.BaseModel):
                   str(AsyncPath(os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")) / "process-compose"),
                   "attach",
                   "--unix-socket",
-                  str(await self.get_socket_address()),
+                  self.daemon_socket,
                 ],
-                cwd=str(await AsyncPath(self.conf.data_dir)),
+                cwd=str(self.conf.data_dir),
                 capture_output=True,
                 check=True,
             )
@@ -174,78 +178,41 @@ class ProcessCompose(pydantic.BaseModel):
 
         logger.error(compl.stderr.decode())
         logger.debug(compl.stdout.decode())
+    """
 
-    async def pc_cmd(
-            self,
-            cmd_args: list[str],
-            # run_as_user: str = "pikesquares",
-            cmd_env: dict | None = None,
-            chdir: AsyncPath | None = None,
-        ) -> tuple[int, str, str]:
-        logger.info(f"[pikesquares] pc_cmd: {cmd_args=}")
+    def ping(self) -> None:
+        if not self.daemon_socket.exists():
+            raise PCAPIUnavailableError()
 
-        cmd_env = {
-            # TODO use shellingham library
-            "COMPOSE_SHELL": os.environ.get("SHELL"),
-            "PIKESQUARES_VERSION": self.conf.VERSION,
-            "PIKESQUARES_SCIE_BASE": str(self.conf.SCIE_BASE),
-            "PIKESQUARES_SCIE_LIFT_FILE": str(self.conf.SCIE_LIFT_FILE),
-            "UWSGI_BIN": str(self.conf.UWSGI_BIN),
-            "LOG_DIR": self.conf.log_dir,
-            "UV_BIN": str(self.conf.UV_BIN),
-            "CADDY_BIN": str(self.conf.CADDY_BIN),
-            "DNSMASQ_BIN": str(self.conf.DNSMASQ_BIN),
-            # "EASYRSA_BIN": str(self.conf.EASYRSA_BIN),
-            # "PIKESQUARES_PROCESS_COMPOSE_BIN": str(self.conf.PROCESS_COMPOSE_BIN),
-        }
-
-        logger.debug(cmd_env)
-        logger.debug(cmd_args)
+    def ping_api(self) -> bool:
+        if not self.daemon_socket.exists():
+            raise PCAPIUnavailableError()
 
         try:
-            if cmd_env:
-                pl_local.env.update(cmd_env)
-                logger.debug(f"{cmd_env=}")
+            cmd_args = [
+                "process",
+                "list",
+                "--use-uds",
+                "--unix-socket",
+                self.daemon_socket,
+                "--output",
+                "json",
+            ]
+            retcode, stdout, stderr = self.cmd(cmd_args)
+            js = json.loads(stdout)
+            try:
+                device_process = \
+                        next(
+                            filter(lambda p: p.get("name") == "api", js)
+                        )
+                logger.debug(device_process)
+                process_stats = ProcessComposeProcessStats(**device_process)
+                if process_stats.IsRunning and process_stats.status == "Running":
+                    return True
+            except (IndexError, StopIteration):
+                pass
+        except ProcessExecutionError as exc:
+            logger.error(exc)
+            return False
 
-            # with pl_local.as_user(run_as_user):
-            with pl_local.cwd(chdir or self.conf.data_dir):
-                pc = pl_local[str(self.conf.PROCESS_COMPOSE_BIN)]
-                retcode, stdout, stderr = pc.run(
-                    cmd_args,
-                    **{"env": cmd_env}
-                )
-                logger.debug(f"[pikesquares] pc_cmd: {retcode=}")
-                logger.debug(f"[pikesquares] pc_cmd: {stdout=}")
-                logger.debug(f"[pikesquares] pc_cmd: {stderr=}")
-                return retcode, stdout, stderr
-        except ProcessExecutionError:
-            raise
-            # print(vars(exc))
-            # {
-            #    'message': None,
-            #    'host': None,
-            #    'argv': ['/home/pk/.local/bin/uv', 'run', 'manage.py', 'check'],
-            #    'retcode': 1
-            #    'stdout': '',
-            #    'stderr': "warning: `VIRTUAL_ENV=/home/pk/dev/eqb/pikesquares/.venv` does not match the project environment path `.venv` and will be ignored\nSystemCheckError: System check identified some issues:\n\nERRORS:\n?: (caches.E001) You must define a 'default' cache in your CACHES setting.\n\nSystem check identified 1 issue (0 silenced).\n"
-            # }
-            # print(traceback.format_exc())
-            #raise UvCommandExecutionError(
-            #        f"uv cmd [{' '.join(cmd_args)}] failed.\n{exc.stderr}"
-            #)
-
-
-async def register_process_compose(
-        context,
-        conf: AppConfig,
-    ):
-    async def process_compose_factory() -> ProcessCompose:
-        kwargs = {"conf": conf}
-        return ProcessCompose(**kwargs)
-
-    register_factory(
-        context,
-        ProcessCompose,
-        process_compose_factory,
-        # ping=lambda svc: await svc.ping(),
-    )
+        raise PCDeviceUnavailableError()

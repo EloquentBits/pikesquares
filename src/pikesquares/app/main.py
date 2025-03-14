@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncGenerator
 
 import svcs
-from svcs.fastapi import DepContainer
+import structlog
 
 import sentry_sdk
 from fastapi.responses import JSONResponse
@@ -13,10 +13,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from pikesquares.app.api.main import api_router
 from pikesquares.app.core.config import settings
-from pikesquares.adapters.database import sessionmanager, get_session
+from pikesquares.adapters.database import DatabaseSessionManager
 
-logger = logging.getLogger("uvicorn.error")
-logger.setLevel(logging.DEBUG)
+# logger = logging.getLogger("uvicorn.error")
+# logger.setLevel(logging.DEBUG)
+
+logger = structlog.get_logger()
 
 
 # def custom_generate_unique_id(route: APIRoute) -> str:
@@ -25,6 +27,15 @@ logger.setLevel(logging.DEBUG)
 
 if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
     sentry_sdk.init(dsn=str(settings.SENTRY_DSN), enable_tracing=True)
+
+sessionmanager = DatabaseSessionManager(
+    settings.SQLALCHEMY_DATABASE_URI, {"echo": True}
+)
+
+
+async def get_session() -> AsyncSession:
+    async with sessionmanager.session() as session:
+        return session
 
 
 @svcs.fastapi.lifespan
@@ -38,11 +49,6 @@ async def lifespan(
     yield {"your": "other", "initial": "state"}
 
 
-def create_db_and_tables():
-    logger.debug("=== create_db_and_tables ===")
-    SQLModel.metadata.create_all(sessionmanager._engine)
-
-
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
@@ -53,13 +59,11 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def on_startup():
-    # create_db_and_tables()
     if sessionmanager._engine:
         async with sessionmanager._engine.begin() as conn:
             await conn.run_sync(
                 lambda conn: SQLModel.metadata.create_all(conn)
             )
-
 
 
 # Set all CORS enabled origins
@@ -76,10 +80,6 @@ app.include_router(
     api_router,
     prefix=settings.API_V1_STR,
 )
-
-# @app.on_event('startup')
-# def startup_event():
-#    SQLModel.metadata.create_all(bind=engine)
 
 
 @app.get("/healthy")
@@ -104,3 +104,15 @@ async def healthy(
     return JSONResponse(
         content={"ok": ok, "failing": failing}, status_code=code
     )
+
+
+"""
+from fastapi.concurrency import run_in_threadpool
+
+@app.get("/")
+async def call_my_sync_library():
+    my_data = await service.get_my_data()
+
+    client = SyncAPIClient()
+    await run_in_threadpool(client.make_request, data=my_data)
+"""

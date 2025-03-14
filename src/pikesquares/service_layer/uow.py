@@ -1,6 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 
+import structlog
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from pikesquares.adapters.repositories import (
@@ -13,8 +14,11 @@ from pikesquares.adapters.repositories import (
     RouterRepository,
 )
 
-logger = logging.getLogger("uvicorn.error")
-logger.setLevel(logging.DEBUG)
+# logger = logging.getLogger("uvicorn.error")
+# logger.setLevel(logging.DEBUG)
+
+
+logger = structlog.get_logger()
 
 
 class UnitOfWorkBase(ABC):

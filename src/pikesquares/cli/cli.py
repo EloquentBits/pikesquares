@@ -1,6 +1,7 @@
 import os
-import json
 from functools import wraps
+import grp
+import pwd
 import tempfile
 import shutil
 import logging
@@ -38,11 +39,8 @@ from pikesquares.conf import (
     make_system_dir,
 )
 from pikesquares import services
-from pikesquares.adapters.database import get_session
+from pikesquares.adapters.database import DatabaseSessionManager
 # from pikesquares.services.device import Device
-from pikesquares.presets.device import DeviceSection
-from pikesquares.presets.project import ProjectSection
-from pikesquares.presets.routers import HttpsRouterSection, HttpRouterSection
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.exceptions import StatsReadError
 
@@ -53,9 +51,17 @@ from pikesquares.exceptions import StatsReadError
 #)
 
 # from pikesquares.cli.commands.apps.validators import NameValidator
+
+from pikesquares.domain.process_compose import (
+    ProcessCompose,
+    ProcessComposeConfig,
+    ProcessComposeProcess,
+    ProcessAvailability,
+    PCAPIUnavailableError,
+    PCDeviceUnavailableError,
+)
 from pikesquares.domain import (
     base as domain_base,
-    process_compose,
     device,
     project,
     router,
@@ -176,7 +182,6 @@ def run_async(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         async def coro_wrapper():
-            logger.debug("=== run_async ===")
             return await func(*args, **kwargs)
 
         return anyio.run(coro_wrapper)
@@ -275,27 +280,25 @@ def uninstall(
 @app.command(
          rich_help_panel="Control",
          short_help="Attach to the PikeSquares Server")
-@run_async
-async def attach(
+def attach(
      ctx: typer.Context,
 ):
     """Attach to PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    pc = await services.aget(context, process_compose.ProcessCompose)
-    await pc.attach()
+    pc = services.get(context, ProcessCompose)
+    pc.attach()
 
 
 @app.command(
         rich_help_panel="Control",
         short_help="Info on the PikeSquares Server")
-@run_async
-async def info(
+def info(
     ctx: typer.Context,
 ):
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
 
-    conf = await services.aget(context, AppConfig)
+    conf = services.get(context, AppConfig)
     # console.info(f"data_dir={str(conf.DATA_DIR)}")
     logger.debug(f"virtualenv={str(conf.PYTHON_VIRTUAL_ENV)}")
 
@@ -304,19 +307,18 @@ async def info(
     # logger.debug(device)
 
     device = context.get("device")
-    pc = await services.aget(context, process_compose.ProcessCompose)
-    # pc = process_compose.ProcessCompose(conf=conf)
+    pc = services.get(context, ProcessCompose)
     try:
-        await pc.ping_api()
+        pc.ping_api()
         try:
             if device.stats:
                 console.success("🚀 PikeSquares Server is running.")
         except StatsReadError:
             console.warning("PikeSquares Server is not running.")
 
-    except process_compose.PCAPIUnavailableError:
+    except PCAPIUnavailableError:
         console.info("PCAPIUnavailableError: process-compose api not available.")
-    except process_compose.PCDeviceUnavailableError:
+    except PCDeviceUnavailableError:
         console.error("PCDeviceUnavailableError: PikeSquares Server was unable to start.")
         raise typer.Exit() from None
 
@@ -338,8 +340,7 @@ async def info(
 @app.command(
         rich_help_panel="Control",
         short_help="Launch the PikeSquares Server (if stopped)")
-@run_async
-async def up(
+def up(
     ctx: typer.Context,
     # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
@@ -347,24 +348,21 @@ async def up(
 
     context = ctx.ensure_object(dict)
     # pc = await services.aget(context, process_compose.ProcessCompose)
-    conf = await services.aget(context, AppConfig)
-    pc = process_compose.ProcessCompose(conf=conf)
+    # conf = await services.aget(context, AppConfig)
+    pc = services.get(context, ProcessCompose)
 
     try:
-        retcode, stdout, stderr = await pc.up()
+        retcode, stdout, stderr = pc.up()
         if retcode != 0:
             console.log(retcode, stdout, stderr)
             raise typer.Exit(code=1) from None
         elif retcode == 0:
             for _ in range(1, 5):
                 try:
-                    await pc.ping_api()
-                    console.success("🚀 PikeSquares Server is running.")
+                    pc.ping_api()
+                    console.success("🚀 PikeSquares Server is up and running.")
                     return True
-                except (
-                        process_compose.PCAPIUnavailableError,
-                        process_compose.PCDeviceUnavailableError
-                ):
+                except (PCAPIUnavailableError, PCDeviceUnavailableError):
                     sleep(1)
                     continue
             console.error("PikeSquares Server was unable to start.")
@@ -375,16 +373,16 @@ async def up(
         console.error("PikeSquares Server was unable to start.")
         raise typer.Exit(code=1) from None
 
+
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
-@run_async
-async def down(
+def down(
     ctx: typer.Context,
 ):
     """Stop the PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    pc = await services.aget(context, process_compose.ProcessCompose)
+    pc = services.get(context, ProcessCompose)
     try:
-        retcode, stdout, stderr = await pc.down()
+        retcode, stdout, stderr = pc.down()
         if retcode != 0:
             console.log(retcode, stdout, stderr)
             raise typer.Exit(code=1) from None
@@ -394,7 +392,7 @@ async def down(
         console.error(process_exec_error)
         console.error("PikeSquares Server was unable to shut down.")
         raise typer.Exit(code=1) from None
-    except process_compose.PCAPIUnavailableError:
+    except PCAPIUnavailableError:
         console.info("🚀 PikeSquares Server is not running at the moment.")
         raise typer.Exit(code=0) from None
 
@@ -429,11 +427,10 @@ def bootstrap(
     rich_help_panel="Control",
     short_help="Initialize a project"
 )
-@run_async
-async def init(
+def init(
      ctx: typer.Context,
     app_root_dir: Annotated[
-        AsyncPath | None,
+        Path | None,
         typer.Option(
             "--root-dir",
             "-d",
@@ -450,8 +447,8 @@ async def init(
     """Initialize a project"""
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
-    conf = await services.aget(context, AppConfig)
-    db = await services.aget(context, TinyDB)
+    conf = services.get(context, AppConfig)
+    # db = services.get(context, TinyDB)
 
     # uv init djangotutorial
     # cd djangotutorial
@@ -1028,7 +1025,7 @@ async def main(
         raise typer.Exit(1)
 
     # console.info(f"PikeSquares: v{pikesquares_version}")
-    context = services.init_context(ctx.ensure_object(dict))
+    # context = services.init_context(ctx.ensure_object(dict))
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
 
@@ -1043,10 +1040,10 @@ async def main(
     }
     if is_root:
         sysdirs = {
-            "data_dir": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), AsyncPath("/var/lib/pikesquares")),
-            "run_dir": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), AsyncPath("/var/run/pikesquares")),
-            "config_dir": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), AsyncPath("/etc/pikesquares")),
-            "log_dir": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), AsyncPath("/var/log/pikesquares")),
+            "data_dir": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), Path("/var/lib/pikesquares")),
+            "run_dir": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), Path("/var/run/pikesquares")),
+            "config_dir": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), Path("/etc/pikesquares")),
+            "log_dir": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), Path("/var/log/pikesquares")),
         }
         for varname, path_to_dir_sources in sysdirs.items():
             cli_arg = path_to_dir_sources[0]
@@ -1061,27 +1058,90 @@ async def main(
 
             path_to_dir = cli_arg or env_var_path_to_dir or default_path_to_dir
             if isinstance(path_to_dir, str):
-                path_to_dir = AsyncPath(path_to_dir)
-            if not await path_to_dir.exists():
+                path_to_dir = Path(path_to_dir)
+            if not path_to_dir.exists():
                 logger.info(f"creating dir: {path_to_dir}")
-                await make_system_dir(path_to_dir)
+                make_system_dir(path_to_dir)
             override_settings[varname] = path_to_dir
 
     if version:
         override_settings["VERSION"] = version
 
     try:
-        await register_app_conf(context, override_settings)
+        register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:
         logger.error(app_conf_error)
         raise typer.Abort() from None
 
-    conf = await services.aget(context, AppConfig)
+    conf = services.get(context, AppConfig)
+
+    sessionmanager = DatabaseSessionManager(
+        conf.SQLALCHEMY_DATABASE_URI, {"echo": True}
+    )
+
+    async def get_session() -> AsyncSession:
+        async with sessionmanager.session() as session:
+            return session
 
     services.register_factory(context, AsyncSession, get_session)
     session = await services.aget(context, AsyncSession)
 
-    await process_compose.register_process_compose(context, conf)
+    api_process = ProcessComposeProcess(
+        name="api",
+        description="PikeSquares FastAPI",
+        command=f"{conf.UV_BIN} run fastapi dev src/pikesquares/app/main.py",
+        working_dir=Path("/home/pk/dev/eqb/pikesquares"),
+        availability=ProcessAvailability(),
+    )
+    pc_config = ProcessComposeConfig(
+        processes=[
+            api_process,
+        ]
+    )
+    pc_kwargs = {
+        "config": pc_config,
+        "daemon_name": "process-compose",
+        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
+        "daemon_config": conf.config_dir / "process-compose.yaml",
+        "daemon_log": conf.log_dir / "process-compose.log",
+        "daemon_socket": conf.run_dir / "process-compose.sock",
+
+        "data_dir": conf.data_dir,
+        "uv_bin": conf.UV_BIN,
+    }
+
+    def process_compose_factory() -> ProcessCompose:
+        dc = pc_kwargs.get("daemon_config")
+        if dc:
+            dc.touch(mode=0o666, exist_ok=True)
+        """
+        owner_username = "root"
+        owner_groupname = "pikesquares"
+        try:
+            owner_uid = pwd.getpwnam("root")[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate user: {owner_username}") from None
+
+        try:
+            owner_gid = grp.getgrnam(owner_groupname)[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
+
+        os.chown(dc, owner_uid, owner_gid)
+        """
+
+        return ProcessCompose(**pc_kwargs)
+
+    services.register_factory(
+        context,
+        ProcessCompose,
+        process_compose_factory,
+        # ping=svc: await svc.ping(),
+    )
+    pc = services.get(context, ProcessCompose)
+    pc.write_config_to_disk()
+
+    # import ipdb;ipdb.set_trace()
 
     async def uow_factory():
         async with UnitOfWork(session=session) as uow:
