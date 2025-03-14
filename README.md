@@ -1,7 +1,7 @@
 <h1 align="center">
   PikeSquares  
   <br>
-  <img src="https://git.eloquentbits.com/EloquentBits/vconf/raw/branch/master/src/vconf-landing/public/PikeSquares.svg" alt="PikeSquares Logo">
+  <img src="https://raw.githubusercontent.com/EloquentBits/pikesquares/refs/heads/master/assets/PikeSquares.svg" alt="PikeSquares Logo">
 </h1>
 
 <p align="center">
@@ -32,7 +32,7 @@
 </p>
 
 <p align="center">
-<img src = "https://git.eloquentbits.com/EloquentBits/pikesquares/raw/branch/julia-patch-1/pkesquares.jpg" width = "800">
+<img src = "https://github.com/EloquentBits/pikesquares/blob/066d764e34ab21c333c2392f35e7353dca4ac600/pkesquares.jpg" width = "800">
 </p>
 
 
