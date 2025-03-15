@@ -1,4 +1,3 @@
-from functools import cached_property
 from pathlib import Path
 
 import pydantic
@@ -29,12 +28,12 @@ class BaseRouter(ServiceBase, table=True):
         return HttpRouterSection
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def service_config(self) -> Path:
         return Path(self.config_dir) / "projects" / f"{self.service_id}.json"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def touch_reload_file(self) -> Path:
         return self.service_config
 
@@ -104,7 +103,7 @@ class BaseRouter(ServiceBase, table=True):
     #    return Path()
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def port(self) -> str | None:
         try:
             return self.address.split(":")[-1]

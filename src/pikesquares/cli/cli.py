@@ -57,6 +57,8 @@ from pikesquares.domain.process_compose import (
     ProcessComposeConfig,
     ProcessComposeProcess,
     ProcessAvailability,
+    ReadinessProbe,
+    ReadinessProbeHttpGet,
     PCAPIUnavailableError,
     PCDeviceUnavailableError,
 )
@@ -1086,63 +1088,6 @@ async def main(
     services.register_factory(context, AsyncSession, get_session)
     session = await services.aget(context, AsyncSession)
 
-    api_process = ProcessComposeProcess(
-        name="api",
-        description="PikeSquares FastAPI",
-        command=f"{conf.UV_BIN} run fastapi dev src/pikesquares/app/main.py",
-        working_dir=Path("/home/pk/dev/eqb/pikesquares"),
-        availability=ProcessAvailability(),
-    )
-    pc_config = ProcessComposeConfig(
-        processes=[
-            api_process,
-        ]
-    )
-    pc_kwargs = {
-        "config": pc_config,
-        "daemon_name": "process-compose",
-        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
-        "daemon_config": conf.config_dir / "process-compose.yaml",
-        "daemon_log": conf.log_dir / "process-compose.log",
-        "daemon_socket": conf.run_dir / "process-compose.sock",
-
-        "data_dir": conf.data_dir,
-        "uv_bin": conf.UV_BIN,
-    }
-
-    def process_compose_factory() -> ProcessCompose:
-        dc = pc_kwargs.get("daemon_config")
-        if dc:
-            dc.touch(mode=0o666, exist_ok=True)
-        """
-        owner_username = "root"
-        owner_groupname = "pikesquares"
-        try:
-            owner_uid = pwd.getpwnam("root")[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate user: {owner_username}") from None
-
-        try:
-            owner_gid = grp.getgrnam(owner_groupname)[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
-
-        os.chown(dc, owner_uid, owner_gid)
-        """
-
-        return ProcessCompose(**pc_kwargs)
-
-    services.register_factory(
-        context,
-        ProcessCompose,
-        process_compose_factory,
-        # ping=svc: await svc.ping(),
-    )
-    pc = services.get(context, ProcessCompose)
-    pc.write_config_to_disk()
-
-    # import ipdb;ipdb.set_trace()
-
     async def uow_factory():
         async with UnitOfWork(session=session) as uow:
             yield uow
@@ -1215,11 +1160,12 @@ async def main(
         await sandbox_project.save_config_to_filesystem()
 
     http_router = await uow.routers.get_by_name("default-http-router")
+    http_router_port = get_first_available_port(port=8034)
     if not http_router:
         http_router = router.BaseRouter(
             service_id=f"http_router_{cuid()}",
             name="default-http-router",
-            address="0.0.0.0:8034",
+            address=f"0.0.0.0:{http_router_port}",
             subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5700)}",
             **common_kwargs,
         )
@@ -1255,8 +1201,82 @@ async def main(
         if not await AsyncPath(https_router.service_config).exists():
             await https_router.save_config_to_filesystem()
 
-    # http_router = services.get(context, DefaultHttpRouter)
-    # https_router = services.get(context, DefaultHttpsRouter)
+    api_port = 9544
+    api_process = ProcessComposeProcess(
+        description="PikeSquares FastAPI",
+        command=f"{conf.UV_BIN} run fastapi dev --port {api_port} src/pikesquares/app/main.py",
+        working_dir=Path().cwd(),
+        availability=ProcessAvailability(),
+        readiness_probe=ReadinessProbe(
+            http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
+        ),
+    )
+    sqlite3_plugin = conf.plugins_dir / "sqlite3_plugin.so"
+    if not sqlite3_plugin.exists():
+        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {str(sqlite3_plugin)}") from None
+
+    sqlite3_db = conf.data_dir / "pikesquares.db"
+    cmd = f"{conf.UWSGI_BIN} --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
+    sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{dvc.id}\' ORDER BY sort_order_index"'
+    device_process = ProcessComposeProcess(
+        description="PikeSquares Server",
+        command="".join([cmd, sql]),
+        working_dir=Path().cwd(),
+        availability=ProcessAvailability(),
+        # readiness_probe=ReadinessProbe(
+            #    http_get=ReadinessProbeHttpGet()
+        # ),
+    )
+    pc_config = ProcessComposeConfig(
+        processes={
+            "api": api_process,
+            "device": device_process,
+        },
+    )
+    pc_kwargs = {
+        "config": pc_config,
+        "daemon_name": "process-compose",
+        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
+        "daemon_config": conf.config_dir / "process-compose.yaml",
+        "daemon_log": conf.log_dir / "process-compose.log",
+        "daemon_socket": conf.run_dir / "process-compose.sock",
+
+        "data_dir": conf.data_dir,
+        "uv_bin": conf.UV_BIN,
+    }
+
+    def process_compose_factory() -> ProcessCompose:
+        dc = pc_kwargs.get("daemon_config")
+        if dc:
+            dc.touch(mode=0o666, exist_ok=True)
+        """
+        owner_username = "root"
+        owner_groupname = "pikesquares"
+        try:
+            owner_uid = pwd.getpwnam("root")[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate user: {owner_username}") from None
+
+        try:
+            owner_gid = grp.getgrnam(owner_groupname)[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
+
+        os.chown(dc, owner_uid, owner_gid)
+        """
+
+        return ProcessCompose(**pc_kwargs)
+
+    services.register_factory(
+        context,
+        ProcessCompose,
+        process_compose_factory,
+        # ping=svc: await svc.ping(),
+    )
+    pc = services.get(context, ProcessCompose)
+    pc.write_config_to_disk()
+
+    # import ipdb;ipdb.set_trace()
 
     """
     for svc in services.get_pings(context):

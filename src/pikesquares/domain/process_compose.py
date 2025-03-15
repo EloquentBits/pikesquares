@@ -1,20 +1,17 @@
 import json
 import os
-# import subprocess
 from typing import Annotated
-from pathlib import Path
+from enum import Enum
 
 import pydantic
 import structlog
 # from aiopath import AsyncPath
-# from plumbum import local as pl_local
 from plumbum import ProcessExecutionError
 from pydantic_yaml import to_yaml_str
 
-from pikesquares.conf import AppConfig
 from pikesquares.domain.managed_services import ManagedServiceBase
 from pikesquares.services.base import ServiceUnavailableError
-from pikesquares.services import register_factory
+# from pikesquares.services import register_factory
 
 logger = structlog.get_logger()
 
@@ -45,44 +42,66 @@ class ProcessComposeProcessStats(pydantic.BaseModel):
     system_time: str
 
 
+class ProcessRestart(str, Enum):
+    """ process-compose process restart options """
+
+    no = "no"  # default
+    yes = "yes"
+    on_failure = "on_failure"
+    exit_on_failure = "exit_on_failure",
+    always = "always"
+
+
 class ProcessAvailability(pydantic.BaseModel):
-    """
-    restart other options: "on_failure", "exit_on_failure", "always", "no" (default)
-    """
-    restart: str = "yes"
+    """ process-compose process availability options """
+
+    restart: str = ProcessRestart.yes
     exit_on_end: str = "no"
     backoff_seconds: int = 2
     max_restarts: int = 5
 
 
+class ReadinessProbeHttpGet(pydantic.BaseModel):
+    """ process-compose readiness probe http get section """
+
+    host: str = "127.0.0.1"
+    scheme: str = "http"
+    path: str = "/"
+    port: int = 9544
+
+
+class ReadinessProbe(pydantic.BaseModel):
+    """ process-compose readiness probe section """
+
+    http_get: ReadinessProbeHttpGet
+    initial_delay_seconds: int = 5
+    period_seconds: int = 10
+    timeout_seconds: int = 5
+    success_threshold: int = 1
+    failure_threshold: int = 3
+
+
 class ProcessComposeProcess(pydantic.BaseModel):
-    name: str
+    """ process-compose process """
+
     description: str
     command: str
     is_elevated: bool = False
     working_dir: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
-    # availability: ProcessAvailability
+    availability: ProcessAvailability
+    readiness_probe: ReadinessProbe | None = None
     disabled: bool = False
     is_daemon: bool = False
-    depends_on: list["ProcessComposeProcess"] = []
+    # depends_on: list["ProcessComposeProcess"] = []
 
 
 class ProcessComposeConfig(pydantic.BaseModel):
+    """ process-compose process config (yaml) """
 
     version: str = "0.1"
     is_strict: bool = True
     log_level: str = "debug"
-
-    # log_configuration:
-    #  fields_order: ["time", "level", "message"] # order of logging fields. The default is time, level, message
-    #  disable_json: true                         # output as plain text. The default is false
-    #  timestamp_format: "06-01-02 15:04:05.000"  # timestamp format. The default is RFC3339
-    #  no_metadata: true                          # don't log process name and replica number
-    #  add_timestamp: true                        # add timestamp to the logger. Default is false
-    #  no_color: true                             # disable ANSII colors in the logger. Default is false
-    #  flush_each_line: true                      # disable buffering and flush each line to the log file. Default is false
-
-    processes: list[ProcessComposeProcess]
+    processes: dict[str, ProcessComposeProcess]
 
 
 class ProcessCompose(ManagedServiceBase):
@@ -126,16 +145,7 @@ class ProcessCompose(ManagedServiceBase):
         cmd_env = {
             # TODO use shellingham library
             "COMPOSE_SHELL": os.environ.get("SHELL"),
-            # "PIKESQUARES_VERSION": self.conf.VERSION,
-            # "PIKESQUARES_SCIE_BASE": str(self.conf.SCIE_BASE),
-            # "PIKESQUARES_SCIE_LIFT_FILE": str(self.conf.SCIE_LIFT_FILE),
-            # "UWSGI_BIN": str(self.conf.UWSGI_BIN),
-            "PIKESQUARES_UV_BIN": str(self.uv_bin),
         }
-
-        # "CADDY_BIN": str(self.conf.CADDY_BIN),
-        # "DNSMASQ_BIN": str(self.conf.DNSMASQ_BIN),
-        # "EASYRSA_BIN": str(self.conf.EASYRSA_BIN),
 
         try:
             return self.cmd(cmd_args, cmd_env=cmd_env)
@@ -154,31 +164,16 @@ class ProcessCompose(ManagedServiceBase):
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    """
-    def attach(self) -> None:
+    def attach(self) -> tuple[int, str, str]:
+        if not self.daemon_socket.exists():
+            raise PCAPIUnavailableError()
+
+        cmd_args = ["attach", "--unix-socket", str(self.daemon_socket)]
         try:
-            compl = subprocess.run(
-                args=[
-                  # str(self.conf.PROCESS_COMPOSE_BIN),
-                  str(AsyncPath(os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")) / "process-compose"),
-                  "attach",
-                  "--unix-socket",
-                  self.daemon_socket,
-                ],
-                cwd=str(self.conf.data_dir),
-                capture_output=True,
-                check=True,
-            )
-        except subprocess.CalledProcessError as cperr:
-            logger.error(f"failed to attach to server: {cperr.stderr.decode()}")
-            return
-
-        if compl.returncode != 0:
-            logger.error("unable to attach server")
-
-        logger.error(compl.stderr.decode())
-        logger.debug(compl.stdout.decode())
-    """
+            return self.cmd(cmd_args)
+        except ProcessExecutionError as exc:
+            logger.error(exc)
+            return exc.retcode, exc.stdout, exc.stderr
 
     def ping(self) -> None:
         if not self.daemon_socket.exists():
@@ -202,10 +197,9 @@ class ProcessCompose(ManagedServiceBase):
             js = json.loads(stdout)
             try:
                 device_process = \
-                        next(
-                            filter(lambda p: p.get("name") == "api", js)
-                        )
-                logger.debug(device_process)
+                    next(
+                        filter(lambda p: p.get("name") in ["device", "api"], js)
+                    )
                 process_stats = ProcessComposeProcessStats(**device_process)
                 if process_stats.IsRunning and process_stats.status == "Running":
                     return True
