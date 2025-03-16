@@ -1,12 +1,17 @@
 from pathlib import Path
-from rich.console import Console as BaseConsole
 
+from rich.console import Console as BaseConsole
 from rich.prompt import Prompt, Confirm
 from rich.panel import Panel
 from rich.columns import Columns
 from rich.text import Text
-from rich.table import Table
-
+from rich.table import Table, Column
+from rich.layout import Layout
+from rich.progress import (
+    Progress,
+    TextColumn,
+    SpinnerColumn,
+)
 import questionary
 # import os
 
@@ -365,3 +370,67 @@ class Console(BaseConsole, _RenderMixin):
 
 console = Console()
 stderr_console = Console(stderr=True)
+
+# `init` command utils
+
+
+def make_layout():
+    layout = Layout(name="root")
+    layout.split(
+        Layout(name="overall_progress", size=5),
+        Layout(name="tasks_and_messages", size=20),
+    )
+    layout["tasks_and_messages"].split_row(
+        Layout(name="tasks",
+            ratio=2,
+            size=None,
+            # minimum_size=30,
+        ),
+        Layout(
+            name="task_messages",
+            ratio=3,
+            size=None,
+        ),
+    )
+    return layout
+
+
+class HeaderDjangoChecks:
+    def __rich__(self) -> Panel:
+        grid = Table.grid(expand=True)
+        grid.add_column(justify="center", ratio=1)
+        grid.add_column(justify="right")
+        grid.add_row(
+            "Static checks for validating Django projects",
+            "Django 5.2.4",
+        )
+        return Panel(grid, style="white on blue")
+
+
+class HeaderDjangoSettings:
+    def __rich__(self) -> Panel:
+        grid = Table.grid(expand=True)
+        grid.add_column(justify="center", ratio=1)
+        grid.add_column(justify="right")
+        grid.add_row(
+            "Discovered Django settings",
+            "Django 5.2.4",
+        )
+        return Panel(grid, style="white on blue")
+
+
+class MyProgress(Progress):
+    def get_renderables(self):
+        yield self.make_tasks_table(self.tasks)
+
+
+def make_progress():
+    return MyProgress(
+        SpinnerColumn(),
+        TextColumn("{task.fields[emoji_fld]}", table_column=Column(ratio=1)),
+        TextColumn("[progress.description]{task.description}", table_column=Column(ratio=5)),
+        # TextColumn("{task.fields[detected_fld]}", table_column=Column(ratio=1, style="green")),
+        TextColumn("{task.fields[result_mark_fld]}", table_column=Column(ratio=1)),
+        auto_refresh=False,
+        console=console,
+    )

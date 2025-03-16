@@ -1,7 +1,7 @@
 import os
 from functools import wraps
-import grp
-import pwd
+# import grp
+# import pwd
 import tempfile
 import shutil
 import logging
@@ -11,21 +11,16 @@ from pathlib import Path
 
 from rich.progress import (
     Progress,
-    TextColumn,
-    SpinnerColumn,
 )
-from rich.table import Column
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
-from rich.table import Table
 
 import typer
 from aiopath import AsyncPath
 import structlog
 import randomname
 import questionary
-from tinydb import TinyDB
 from cuid import cuid
 from dotenv import load_dotenv
 from plumbum import ProcessExecutionError
@@ -40,27 +35,16 @@ from pikesquares.conf import (
 )
 from pikesquares import services
 from pikesquares.adapters.database import DatabaseSessionManager
-# from pikesquares.services.device import Device
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.exceptions import StatsReadError
-
-#from pikesquares.services.project import (
-#    SandboxProject,
-#    Project,
-#    register_sandbox_project,
-#)
 
 # from pikesquares.cli.commands.apps.validators import NameValidator
 
 from pikesquares.domain.process_compose import (
     ProcessCompose,
-    ProcessComposeConfig,
-    ProcessComposeProcess,
-    ProcessAvailability,
-    ReadinessProbe,
-    ReadinessProbeHttpGet,
     PCAPIUnavailableError,
     PCDeviceUnavailableError,
+    register_process_compose,
 )
 from pikesquares.domain import (
     base as domain_base,
@@ -68,9 +52,16 @@ from pikesquares.domain import (
     project,
     router,
 )
-from pikesquares.services.apps import RubyRuntime, PHPRuntime
+# from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
 from pikesquares.services.apps.django import PythonRuntimeDjango
+
+from pikesquares.cli.console import (
+    make_layout,
+    make_progress,
+    HeaderDjangoChecks,
+    HeaderDjangoSettings,
+)
 
 from pikesquares.services.apps.exceptions import (
     UvSyncError,
@@ -79,19 +70,12 @@ from pikesquares.services.apps.exceptions import (
     # PythonRuntimeCheckError,
     # PythonRuntimeDjangoCheckError,
     # UvCommandExecutionError,
-    PythonRuntimeInitError,
+    # PythonRuntimeInitError,
     DjangoCheckError,
     DjangoDiffSettingsError,
     DjangoSettingsError,
 )
 
-
-from pikesquares.services.data import (
-#    RouterStats,
-    Router,
- )
-# from ..services.router import *
-# from ..services.app import *
 
 from .console import console
 from pikesquares import __app_name__, __version__, get_first_available_port
@@ -309,6 +293,7 @@ def info(
     # logger.debug(device)
 
     device = context.get("device")
+    console.info(device.stats)
     pc = services.get(context, ProcessCompose)
     try:
         pc.ping_api()
@@ -381,6 +366,7 @@ def down(
     ctx: typer.Context,
 ):
     """Stop the PikeSquares Server"""
+
     context = ctx.ensure_object(dict)
     pc = services.get(context, ProcessCompose)
     try:
@@ -406,23 +392,6 @@ def down(
     #    pass
     # except process_compose.PCDeviceUnavailableError:
     #    pass  # device.up()
-
-
-@app.command(rich_help_panel="Control", short_help="Bootstrap the PikeSquares Server)")
-def bootstrap(
-     ctx: typer.Context,
-):
-    """Bootstrap the PikeSquares Server"""
-    context = ctx.ensure_object(dict)
-    for svc_class in [
-             Device,
-             SandboxProject,
-             DefaultHttpsRouter,
-             DefaultHttpRouter,
-         ]:
-        svc = services.get(context, svc_class)
-        svc.up()
-    raise typer.Exit(code=0)
 
 
 @app.command(
@@ -472,7 +441,7 @@ def init(
         raise typer.Exit(code=1)
 
     logger.info(f"{app_root_dir=}")
-
+    """
     def build_routers(app_name: str) -> list[Router]:
 
         default_https_router = services.get(context, DefaultHttpsRouter)
@@ -495,6 +464,7 @@ def init(
             Router(**http_router_kwargs),
         ]
         return routers
+    """
 
     # from contextlib import contextmanager
     # BEAT_TIME = 0.04
@@ -539,19 +509,7 @@ def init(
     # text_column = TextColumn("{task.description}", table_column=Column(ratio=1))
     # bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
 
-    class MyProgress(Progress):
-        def get_renderables(self):
-            yield self.make_tasks_table(self.tasks)
-
-    progress = MyProgress(
-        SpinnerColumn(),
-        TextColumn("{task.fields[emoji_fld]}", table_column=Column(ratio=1)),
-        TextColumn("[progress.description]{task.description}", table_column=Column(ratio=5)),
-        # TextColumn("{task.fields[detected_fld]}", table_column=Column(ratio=1, style="green")),
-        TextColumn("{task.fields[result_mark_fld]}", table_column=Column(ratio=1)),
-        auto_refresh=False,
-        console=console,
-    )
+    progress = make_progress()
 
     detect_runtime_task = progress.add_task(
         "Detecting language runtime",
@@ -641,65 +599,7 @@ def init(
     app_tmp_dir = None
     dependencies_count = 0
 
-    def make_layout():
-        layout = Layout(name="root")
-        layout.split(
-            Layout(name="overall_progress", size=5),
-            Layout(name="tasks_and_messages", size=20),
-        )
-        layout["tasks_and_messages"].split_row(
-            Layout(name="tasks",
-                ratio=2,
-                size=None,
-                # minimum_size=30,
-            ),
-            Layout(
-                name="task_messages",
-                ratio=3,
-                size=None,
-            ),
-        )
-        return layout
-
-    class HeaderDjangoChecks:
-        def __rich__(self) -> Panel:
-            grid = Table.grid(expand=True)
-            grid.add_column(justify="center", ratio=1)
-            grid.add_column(justify="right")
-            grid.add_row(
-                "Static checks for validating Django projects",
-                "Django 5.2.4",
-            )
-            return Panel(grid, style="white on blue")
-
-    class HeaderDjangoSettings:
-        def __rich__(self) -> Panel:
-            grid = Table.grid(expand=True)
-            grid.add_column(justify="center", ratio=1)
-            grid.add_column(justify="right")
-            grid.add_row(
-                "Discovered Django settings",
-                "Django 5.2.4",
-            )
-            return Panel(grid, style="white on blue")
-
-    layout = make_layout()
-    layout["tasks"].update(Panel(
-            progress,
-            title="Initializing Project",
-            border_style="green",
-            padding=(2, 2),
-        ),
-    )
-    layout["overall_progress"].update(
-        Panel(
-            overall_progress,
-            title="Overall Progress",
-            border_style="green",
-            padding=(1, 1),
-        ),
-    )
-    layout["task_messages"].update(Panel("", title="Messages", border_style="green", padding=(2, 2),))
+    layout = make_layout(progress, overall_progress)
     task_messages_layout = layout["task_messages"]
     msg_id_styles = {
         "C": "red",
@@ -864,26 +764,28 @@ def init(
         # ).ask()
         # console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
         app_name = randomname.get_name().lower()
-        app_project = services.get(context, SandboxProject)
-        try:
-            wsgi_app = runtime.get_app(
-                conf,
-                db,
-                app_name,
-                service_id,
-                app_project,
-                pyvenv_dir,
-                build_routers(app_name),
-            )
-            logger.info(wsgi_app.config_json)
-            # console.print("[bold green]WSGI App has been provisioned.")
-        except DjangoSettingsError:
-            logger.error("[pikesquares] -- DjangoSettingsError --")
-            raise typer.Exit() from None
+        # app_project = services.get(context, SandboxProject)
+        if 0:
+            try:
+                wsgi_app = runtime.get_app(
+                    conf,
+                    # db,
+                    app_name,
+                    service_id,
+                    # app_project,
+                    pyvenv_dir,
+                    # build_routers(app_name),
+                )
+                logger.info(wsgi_app.config_json)
+                # console.print("[bold green]WSGI App has been provisioned.")
+            except DjangoSettingsError:
+                logger.error("[pikesquares] -- DjangoSettingsError --")
+                raise typer.Exit() from None
 
     # console.log(runtime.collected_project_metadata["django_settings"])
     # console.log(runtime.collected_project_metadata["django_check_messages"])
     # console.log(wsgi_app.config_json)
+
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")
 def tail_service_log(
@@ -895,18 +797,18 @@ def tail_service_log(
     obj = ctx.ensure_object(dict)
     obj["cli-style"] = console.custom_style_dope
 
-    device = services.get(obj, Device)
-    show_config_start_marker = ";uWSGI instance configuration\n"
-    show_config_end_marker = ";end of configuration\n"
+    # device = services.get(obj, Device)
+    # show_config_start_marker = ";uWSGI instance configuration\n"
+    # show_config_end_marker = ";end of configuration\n"
 
-    latest_running_config, latest_startup_log = device.startup_log(
-        show_config_start_marker, show_config_end_marker
-    )
-    for line in latest_running_config:
-        console.info(line)
+    # latest_running_config, latest_startup_log = device.startup_log(
+    #     show_config_start_marker, show_config_end_marker
+    # )
+    # for line in latest_running_config:
+    #     console.info(line)
 
-    for line in latest_startup_log:
-        console.info(line)
+    # for line in latest_startup_log:
+    #     console.info(line)
 
 
 from .commands import devices
@@ -1201,80 +1103,7 @@ async def main(
         if not await AsyncPath(https_router.service_config).exists():
             await https_router.save_config_to_filesystem()
 
-    api_port = 9544
-    api_process = ProcessComposeProcess(
-        description="PikeSquares FastAPI",
-        command=f"{conf.UV_BIN} run fastapi dev --port {api_port} src/pikesquares/app/main.py",
-        working_dir=Path().cwd(),
-        availability=ProcessAvailability(),
-        readiness_probe=ReadinessProbe(
-            http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
-        ),
-    )
-    sqlite3_plugin = conf.plugins_dir / "sqlite3_plugin.so"
-    if not sqlite3_plugin.exists():
-        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {str(sqlite3_plugin)}") from None
-
-    sqlite3_db = conf.data_dir / "pikesquares.db"
-    cmd = f"{conf.UWSGI_BIN} --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
-    sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{dvc.id}\' ORDER BY sort_order_index"'
-    device_process = ProcessComposeProcess(
-        description="PikeSquares Server",
-        command="".join([cmd, sql]),
-        working_dir=Path().cwd(),
-        availability=ProcessAvailability(),
-        # readiness_probe=ReadinessProbe(
-            #    http_get=ReadinessProbeHttpGet()
-        # ),
-    )
-    pc_config = ProcessComposeConfig(
-        processes={
-            "api": api_process,
-            "device": device_process,
-        },
-    )
-    pc_kwargs = {
-        "config": pc_config,
-        "daemon_name": "process-compose",
-        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
-        "daemon_config": conf.config_dir / "process-compose.yaml",
-        "daemon_log": conf.log_dir / "process-compose.log",
-        "daemon_socket": conf.run_dir / "process-compose.sock",
-
-        "data_dir": conf.data_dir,
-        "uv_bin": conf.UV_BIN,
-    }
-
-    def process_compose_factory() -> ProcessCompose:
-        dc = pc_kwargs.get("daemon_config")
-        if dc:
-            dc.touch(mode=0o666, exist_ok=True)
-        """
-        owner_username = "root"
-        owner_groupname = "pikesquares"
-        try:
-            owner_uid = pwd.getpwnam("root")[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate user: {owner_username}") from None
-
-        try:
-            owner_gid = grp.getgrnam(owner_groupname)[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
-
-        os.chown(dc, owner_uid, owner_gid)
-        """
-
-        return ProcessCompose(**pc_kwargs)
-
-    services.register_factory(
-        context,
-        ProcessCompose,
-        process_compose_factory,
-        # ping=svc: await svc.ping(),
-    )
-    pc = services.get(context, ProcessCompose)
-    pc.write_config_to_disk()
+    register_process_compose(context, conf)
 
     # import ipdb;ipdb.set_trace()
 

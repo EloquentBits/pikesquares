@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 import os
 from typing import Annotated
 from enum import Enum
@@ -9,8 +10,11 @@ import structlog
 from plumbum import ProcessExecutionError
 from pydantic_yaml import to_yaml_str
 
+from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.managed_services import ManagedServiceBase
+from pikesquares.domain.device import Device
 from pikesquares.services.base import ServiceUnavailableError
+from pikesquares import services
 # from pikesquares.services import register_factory
 
 logger = structlog.get_logger()
@@ -111,6 +115,21 @@ class ProcessCompose(ManagedServiceBase):
 
     uv_bin: Annotated[pydantic.FilePath, pydantic.Field()]
 
+    cmd_args: list[str] = []
+    cmd_env: dict[str, str] = {}
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.cmd_args = [
+            "--use-uds",
+            "--unix-socket",
+            self.daemon_socket,
+        ]
+        self.cmd_env = {
+            # TODO use shellingham library
+            "COMPOSE_SHELL": os.environ.get("SHELL"),
+        }
+
     def __repr__(self) -> str:
         return "process-compose"
 
@@ -127,28 +146,41 @@ class ProcessCompose(ManagedServiceBase):
                 to_yaml_str(self.config)
         )
 
-    def up(self) -> tuple[int, str, str]:
-        cmd_args = [
-            "up",
-            "--config",
-            str(self.daemon_config),
-            "--log-file",
-            str(self.daemon_log),
-            "--detached",
-            "--hide-disabled",
-            # "--tui",
-            # "false",
-            "--unix-socket",
-            str(self.daemon_socket),
+    def reload(self):
+        """ docket-compose project update """
+        if not self.daemon_socket.exists():
+            raise PCAPIUnavailableError()
 
-        ]
-        cmd_env = {
-            # TODO use shellingham library
-            "COMPOSE_SHELL": os.environ.get("SHELL"),
-        }
-
+        self.write_config_to_disk()
         try:
-            return self.cmd(cmd_args, cmd_env=cmd_env)
+            self.cmd_args.insert(0, "project")
+            self.cmd_args.insert(1, "update")
+            return self.cmd(
+                self.cmd_args,
+                cmd_env=self.cmd_env,
+            )
+        except ProcessExecutionError as exc:
+            logger.error(exc)
+            return exc.retcode, exc.stdout, exc.stderr
+
+    def up(self) -> tuple[int, str, str]:
+        # always write config to dist before starting
+        self.write_config_to_disk()
+        try:
+            return self.cmd([
+                    "up",
+                    "--config",
+                    str(self.daemon_config),
+                    "--log-file",
+                    str(self.daemon_log),
+                    "--detached",
+                    "--hide-disabled",
+                    # "--tui",
+                    # "false",
+                ] + self.cmd_args,
+                cmd_env=self.cmd_env,
+            )
+
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
@@ -157,9 +189,12 @@ class ProcessCompose(ManagedServiceBase):
         if not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
-        cmd_args = ["down", "--unix-socket", str(self.daemon_socket)]
         try:
-            return self.cmd(cmd_args)
+            cmd_args = self.cmd_args.insert(0, "down")
+            return self.cmd(
+                self.cmd_args,
+                cmd_env=self.cmd_env,
+            )
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
@@ -168,9 +203,11 @@ class ProcessCompose(ManagedServiceBase):
         if not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
-        cmd_args = ["attach", "--unix-socket", str(self.daemon_socket)]
         try:
-            return self.cmd(cmd_args)
+            return self.cmd(
+                self.cmd_args.insert(0, "attach"),
+                cmd_env=self.cmd_env,
+            )
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
@@ -187,13 +224,13 @@ class ProcessCompose(ManagedServiceBase):
             cmd_args = [
                 "process",
                 "list",
-                "--use-uds",
-                "--unix-socket",
-                self.daemon_socket,
                 "--output",
                 "json",
             ]
-            retcode, stdout, stderr = self.cmd(cmd_args)
+            _, stdout, _ = self.cmd(
+                cmd_args + self.cmd_args,
+                cmd_env=self.cmd_env,
+            )
             js = json.loads(stdout)
             try:
                 device_process = \
@@ -210,3 +247,96 @@ class ProcessCompose(ManagedServiceBase):
             return False
 
         raise PCDeviceUnavailableError()
+
+
+# factories
+def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
+    """ FastAPI process-compose process """
+    api_port = 9544
+    cmd = f"{conf.UV_BIN} run fastapi dev --port {api_port} src/pikesquares/app/main.py"
+    return ProcessComposeProcess(
+        description="PikeSquares FastAPI",
+        command=cmd,
+        working_dir=Path().cwd(),
+        availability=ProcessAvailability(),
+        readiness_probe=ReadinessProbe(
+            http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
+        ),
+    )
+
+
+def make_device_process(dvc: Device, conf: AppConfig) -> ProcessComposeProcess:
+    """ device process-compose process """
+    sqlite3_plugin = conf.plugins_dir / "sqlite3_plugin.so"
+    if not sqlite3_plugin.exists():
+        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {str(sqlite3_plugin)}") from None
+
+    sqlite3_db = conf.data_dir / "pikesquares.db"
+    cmd = f"{conf.UWSGI_BIN} --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
+    sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{dvc.id}\' ORDER BY sort_order_index"'
+    return ProcessComposeProcess(
+        description="PikeSquares Server",
+        command="".join([cmd, sql]),
+        working_dir=Path().cwd(),
+        availability=ProcessAvailability(),
+        # readiness_probe=ReadinessProbe(
+            #    http_get=ReadinessProbeHttpGet()
+        # ),
+    )
+
+
+def register_process_compose(context: dict, conf: AppConfig) -> None:
+    """ process-compose factory"""
+
+    device = context.get("device")
+    if not device:
+        raise AppConfigError("no device found in context")
+
+    pc_config = ProcessComposeConfig(
+        processes={
+            "api": make_api_process(conf),
+            "device": make_device_process(device, conf),
+        },
+    )
+    pc_kwargs = {
+        "config": pc_config,
+        "daemon_name": "process-compose",
+        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
+        "daemon_config": conf.config_dir / "process-compose.yaml",
+        "daemon_log": conf.log_dir / "process-compose.log",
+        "daemon_socket": conf.run_dir / "process-compose.sock",
+
+        "data_dir": conf.data_dir,
+        "uv_bin": conf.UV_BIN,
+    }
+
+    def process_compose_factory() -> ProcessCompose:
+        # if ctx.invoked_subcommand == "up":
+        #    dc = pc_kwargs.get("daemon_config")
+        #    if dc:
+        #        dc.touch(mode=0o666, exist_ok=True)
+
+        """
+        owner_username = "root"
+        owner_groupname = "pikesquares"
+        try:
+            owner_uid = pwd.getpwnam("root")[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate user: {owner_username}") from None
+
+        try:
+            owner_gid = grp.getgrnam(owner_groupname)[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
+
+        os.chown(dc, owner_uid, owner_gid)
+        """
+
+        return ProcessCompose(**pc_kwargs)
+
+    services.register_factory(
+        context,
+        ProcessCompose,
+        process_compose_factory,
+        # ping=svc: await svc.ping(),
+    )

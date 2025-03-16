@@ -33,13 +33,16 @@ class ManagedServiceBase(pydantic.BaseModel):
             self,
             cmd_args: list[str],
             chdir: Path | None = None,
-            cmd_env: dict | None = None,
+            cmd_env: dict[str, str] | None = None,
             # run_as_user: str = "pikesquares",
         ) -> tuple[int, str, str]:
         logger.info(f"[pikesquares] pc_cmd: {cmd_args=}")
 
-        logger.debug(cmd_env)
+        if not cmd_args:
+            raise Exception(f"no args provided for e {self.daemon_name} command")
+
         logger.debug(cmd_args)
+        logger.debug(cmd_env)
 
         try:
             if cmd_env:
@@ -48,11 +51,11 @@ class ManagedServiceBase(pydantic.BaseModel):
 
             # with pl_local.as_user(run_as_user):
             with pl_local.cwd(chdir or self.data_dir):
-                pc = pl_local[str(self.daemon_bin)]
-                retcode, stdout, stderr = pc.run(
-                    cmd_args,
-                    **{"env": cmd_env}
-                )
+                retcode, stdout, stderr = pl_local[str(self.daemon_bin)].\
+                    run(
+                        cmd_args,
+                        **{"env": cmd_env}
+                    )
                 logger.debug(f"[pikesquares] pc_cmd: {retcode=}")
                 logger.debug(f"[pikesquares] pc_cmd: {stdout=}")
                 logger.debug(f"[pikesquares] pc_cmd: {stderr=}")
