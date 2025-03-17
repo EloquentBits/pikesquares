@@ -252,6 +252,7 @@ class ProcessCompose(ManagedServiceBase):
 # factories
 def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
     """ FastAPI process-compose process """
+
     api_port = 9544
     cmd = f"{conf.UV_BIN} run fastapi dev --port {api_port} src/pikesquares/app/main.py"
     return ProcessComposeProcess(
@@ -292,10 +293,21 @@ def register_process_compose(context: dict, conf: AppConfig) -> None:
     if not device:
         raise AppConfigError("no device found in context")
 
+    http_router = context.get("http_router")
+    if not http_router:
+        raise AppConfigError("no http router found in context")
+
+    if not all([conf.UV_BIN, conf.UV_BIN.exists()]):
+        raise AppConfigError(f"unable locate uv binary @ {conf.UV_BIN}") from None
+
+    if not all([conf.UWSGI_BIN, conf.UWSGI_BIN.exists()]):
+        raise AppConfigError(f"unable locate uWSGI binary @ {conf.UWSGI_BIN}") from None
+
     pc_config = ProcessComposeConfig(
         processes={
             "api": make_api_process(conf),
             "device": make_device_process(device, conf),
+            "caddy": make_caddy_process(conf, http_router.port),
         },
     )
     pc_kwargs = {
@@ -339,4 +351,48 @@ def register_process_compose(context: dict, conf: AppConfig) -> None:
         ProcessCompose,
         process_compose_factory,
         # ping=svc: await svc.ping(),
+    )
+
+
+# caddy
+def make_caddy_process(
+    conf: AppConfig,
+    http_router_port=int,
+    ) -> ProcessComposeProcess:
+    """ Caddy process-compose process """
+
+    if not all([conf.CADDY_BIN, conf.CADDY_BIN.exists()]):
+        raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
+
+    caddy_config_file = conf.config_dir / "caddy.json"
+    vhost_key = "*.pikesquares.local"
+    if not caddy_config_file.exists():
+        caddy_config_default = f"""{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.local": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.local"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
+        caddy_config_file.write_text(caddy_config_default)
+
+    with open(caddy_config_file, "r+") as caddy_config:
+        data = json.load(caddy_config)
+        apps = data.get("apps")
+        routes = apps.get("http").\
+                get("servers").\
+                get(vhost_key).\
+                get("routes")
+        handles = routes[0].get("handle")
+        upstreams = handles[0].get("upstreams")
+        upstream_address = upstreams[0].get("dial")
+        if upstream_address != f"127.0.0.1:{http_router_port}":
+            data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0]["dial"] = \
+                f"127.0.0.1:{http_router_port}"
+            caddy_config.seek(0)
+            json.dump(data, caddy_config)
+            caddy_config.truncate()
+
+    return ProcessComposeProcess(
+        description="PikeSquares Caddy",
+        command=f"{conf.CADDY_BIN} run --config {caddy_config_file} --pidfile {conf.run_dir / 'caddy.pid'}",
+        working_dir=Path().cwd(),
+        availability=ProcessAvailability(),
+        # readiness_probe=ReadinessProbe(
+        #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
+        # ),
     )
