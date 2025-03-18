@@ -119,16 +119,10 @@ class ServiceBase(TimeStampedBase, SQLModel):
     @pydantic.computed_field
     @property
     def service_config(self) -> Path:
-        return Path(self.config_dir) / f"{self.service_id}.json"
+        return Path(self.config_dir) / f"{self.service_id}.ini"
 
-    async def save_config_to_filesystem(self) -> None:
-        await AsyncPath(self.service_config).\
-            parent.mkdir(parents=True, exist_ok=True)
-        await AsyncPath(self.service_config).\
-            write_text(json.dumps(self.uwsgi_config))
-
-    async def delete_config_from_filesystem(self) -> None:
-        await AsyncPath(self.service_config).unlink()
+    # async def delete_config_from_filesystem(self) -> None:
+    #   await AsyncPath(self.service_config).unlink()
 
     @pydantic.computed_field
     @property
@@ -149,7 +143,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
     @pydantic.computed_field
     @property
     def touch_reload_file(self) -> Path:
-        return Path(self.config_dir) / f"{self.service_id}.json"
+        return Path(self.config_dir) / f"{self.service_id}.ini"
 
     @pydantic.computed_field
     @property
@@ -165,10 +159,6 @@ class ServiceBase(TimeStampedBase, SQLModel):
     @property
     def fifo_file(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-master-fifo"
-
-    # @pydantic.computed_field
-    # def device_db_path(self) -> Path:
-    #    return Path(self.data_dir) / "device-db.json"
 
     @pydantic.computed_field
     @property
@@ -200,20 +190,12 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def spooler_dir(self) -> Path:
         return Path(self.data_dir) / "spooler"
 
-    def build_uwsgi_config(self) -> dict:
-        uwsgi_config = json.loads(
-            self.uwsgi_config_section_class(
-                self,
-                ).as_configuration().format(
-                formatter="json",
-                do_print=True,
-            )
-        )
-        if not uwsgi_config:
-            raise RuntimeError(f"unable to build uWSGI config for {str(self)}")
+    def build_uwsgi_config(self) -> Path:
+        self.uwsgi_config_section_class(self).\
+            as_configuration().\
+            tofile(self.service_config)
 
-        uwsgi_config["uwsgi"]["show-config"] = True
-        return uwsgi_config
+        # self.uwsgi_config["uwsgi"]["show-config"] = True
 
     @classmethod
     async def read_machine_id(cls) -> str:

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Union
 
 import structlog
@@ -76,6 +77,33 @@ class Configuration(_Configuration):
             logger.debug(formatted)
 
         return formatted
+
+    def tofile(self, filepath: Union[str, Path] = None) -> str:
+        """Saves configuration into a file and returns its path.
+
+        Convenience method.
+
+        :param filepath: Filepath to save configuration into.
+            If not provided a temporary file will be automatically generated.
+
+        """
+        if filepath is None:
+            with NamedTemporaryFile(prefix=f'{self.alias}_', suffix='.ini', delete=False) as f:
+                filepath = f.name
+
+        else:
+            filepath = Path(filepath).absolute()
+
+            if filepath.is_dir():
+                filepath = filepath / f'{self.alias}.ini'
+
+        filepath = str(filepath)
+
+        with open(filepath, 'w') as target_file:
+            target_file.write(self.format())
+            target_file.flush()
+
+        return filepath
 
 
 class Section(_Section):

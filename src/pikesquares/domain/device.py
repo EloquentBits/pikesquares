@@ -1,23 +1,16 @@
-from typing import Optional
 import os
 import uuid
 import shutil
 from pathlib import Path
 import sys
-from functools import cached_property
 
 import pydantic
-
 import structlog
-
 from sqlmodel import (
     SQLModel,
     Field,
     Relationship,
 )
-
-from sqlalchemy.orm import RelationshipProperty
-from sqlalchemy.schema import Column, ForeignKey
 
 from .base import ServiceBase, TimeStampedBase
 from pikesquares.exceptions import StatsReadError
@@ -41,9 +34,20 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
         return DeviceSection
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def apps_dir(self) -> Path:
         return Path(self.config_dir) / "projects"
+
+    @pydantic.computed_field
+    @property
+    def tuntap_router_stats_address(self) -> Path:
+        """uWSGI Stats Server socket address"""
+        return Path(self.run_dir) / f"{self.service_id}-tuntap-stats.sock"
+
+    @pydantic.computed_field
+    @property
+    def tuntap_router_socket_address(self) -> Path:
+        return Path(self.run_dir) / f"{self.service_id}-tuntap.sock"
 
     @pydantic.computed_field
     def stats(self) -> DeviceStats | None:
@@ -77,16 +81,16 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     # self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
     def build_uwsgi_options(self) -> list["DeviceUWSGIOptions"]:
-        # DeviceUWSGIOptions
-        uwsgi_options = []
-        for idx, opt in enumerate(self.uwsgi_config.get("uwsgi", {}).items()):
+        uwsgi_options: list[DeviceUWSGIOptions] = []
+        dvc_conf_section = self.uwsgi_config_section_class(self)
+        for key, value in dvc_conf_section._get_options():
             uwsgi_option = DeviceUWSGIOptions(
-                option_key=opt[0],
-                option_value=opt[1],
-                sort_order_index=idx,
+                option_key=key.key,
+                option_value=str(value).strip(),
                 device=self,
             )
             uwsgi_options.append(uwsgi_option)
+            uwsgi_option.sort_order_index = uwsgi_options.index(uwsgi_option)
         return uwsgi_options
 
     def start(self):
@@ -182,7 +186,7 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
     option_key: str = Field()
     option_value: str = Field()
 
-    device_id: int | None = Field(default=None, foreign_key="device.id")
+    device_id: str | None = Field(default=None, foreign_key="device.id")
     device: Device | None = Relationship(back_populates="uwsgi_options")
     sort_order_index: int | None = Field(default=None)
 

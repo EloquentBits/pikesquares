@@ -7,6 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from pikesquares.adapters.repositories import (
     DeviceReposityBase,
     DeviceUWSGIOptionsReposityBase,
+    DeviceUWSGIOptionsReposity,
     DeviceRepository,
     ProjectReposityBase,
     ProjectRepository,
@@ -61,7 +62,7 @@ class UnitOfWork(UnitOfWorkBase):
 
     async def __aenter__(self):
         self.devices = DeviceRepository(self._session)
-        self.uwsgi_options = DeviceRepository(self._session)
+        self.uwsgi_options = DeviceUWSGIOptionsReposity(self._session)
         self.projects = ProjectRepository(self._session)
         self.routers = RouterRepository(self._session)
         return await super().__aenter__()

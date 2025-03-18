@@ -1,3 +1,5 @@
+import warnings
+import secrets
 import json
 import os
 import pwd
@@ -5,12 +7,11 @@ import grp
 from pathlib import Path
 from functools import cached_property
 from typing import (
-    # Any,
-    # Dict,
-    # Tuple,
-    # Type,
+    Any,
     Optional,
     Annotated,
+    Literal,
+    Self,
 )
 
 # from questionary import Style as QuestionaryStyle
@@ -30,96 +31,110 @@ from pikesquares.cli.console import console
 logger = structlog.get_logger()
 
 
-"""
-class JsonConfigSettingsSource(PydanticBaseSettingsSource):
-    '''
-    A simple settings source class that loads variables from a JSON file
-    at the project's root.
-
-    Here we happen to choose to use the `env_file_encoding` from Config
-    when reading `config.json`
-    '''
-
-    def get_field_value(
-        self, field: FieldInfo, field_name: str
-    ) -> Tuple[Any, str, bool]:
-        encoding = self.config.get('env_file_encoding')
-        file_content_json = json.loads(
-            Path('tests/example_test_config.json').read_text(encoding)
-        )
-        field_value = file_content_json.get(field_name)
-        return field_value, field_name, False
-
-    def prepare_field_value(
-        self, field_name: str, field: FieldInfo, value: Any, value_is_complex: bool
-    ) -> Any:
-        return value
-
-    def __call__(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {}
-
-        for field_name, field in self.settings_cls.model_fields.items():
-            field_value, field_key, value_is_complex = self.get_field_value(
-                field, field_name
-            )
-            field_value = self.prepare_field_value(
-                field_name, field, field_value, value_is_complex
-            )
-            if field_value is not None:
-                d[field_key] = field_value
-
-        return d
-
-class JsonConfigSettingsSource(InitSettingsSource, ConfigFileSourceMixin):
-    '''
-    A source class that loads variables from a JSON file
-    '''
-
-    def __init__(
-        self,
-        settings_cls: type[BaseSettings],
-        json_file: PathType | None = DEFAULT_PATH,
-        json_file_encoding: str | None = None,
-    ):
-        self.json_file_path = json_file if json_file != DEFAULT_PATH else settings_cls.model_config.get('json_file')
-        self.json_file_encoding = (
-            json_file_encoding
-            if json_file_encoding is not None
-            else settings_cls.model_config.get('json_file_encoding')
-        )
-        self.json_data = self._read_files(self.json_file_path)
-        super().__init__(settings_cls, self.json_data)
-
-    def _read_file(self, file_path: Path) -> dict[str, Any]:
-        with open(file_path, encoding=self.json_file_encoding) as json_file:
-            return json.load(json_file)
-
-"""
-
-"""
-
-      "RUN_AS_UID": 1000,
-      "RUN_AS_GID": 1000,
-      "SERVER_RUN_AS_UID": 1000,
-      "SERVER_RUN_AS_GID": 1000,
-      "DATA_DIR": "/home/pk/.local/share/pikesquares",
-      "RUN_DIR": "/run/user/1000/pikesquares",
-      "LOG_DIR": "/home/pk/.local/state/pikesquares/log",
-      "CONFIG_DIR": "/home/pk/.config/pikesquares",
-      "PLUGINS_DIR": "/home/pk/.local/share/pikesquares/plugins",
-      "PKI_DIR": "/home/pk/.local/share/pikesquares/pki",
-      "EASYRSA_DIR": "/home/pk/.cache/nce/ec0fdca46c07afef341e0e0eeb2bf0cfe74a11322b77163e5d764d28cb4eec89/easyrsa",
-      "EASYRSA_BIN": "/home/pk/.cache/nce/ec0fdca46c07afef341e0e0eeb2bf0cfe74a11322b77163e5d764d28cb4eec89/easyrsa/EasyRSA-3.2.1/easyrsa",
-      "SENTRY_DSN": "123",
-      "version": "0.0.38.dev0",
-      "UWSGI_BIN": "/home/pk/.cache/nce/fafc9b47294ed168f7c6d827aa0a4a6b2fccb523c47301a08d64ba14e283109a/uwsgi/uwsgi",
-      "VIRTUAL_ENV": "/home/pk/.cache/nce/ccdb0dbe69a24abb4f4ad5bc8bf57dd9fb683143ed6c6c4fbcd8ec8b0a15d651/bindings/venvs/0.0.38.dev0"
-
-"""
-
-
 class AppConfigError(Exception):
     pass
+
+
+def parse_cors(v: Any) -> list[str] | str:
+    if isinstance(v, str) and not v.startswith("["):
+        return [i.strip() for i in v.split(",")]
+    elif isinstance(v, list | str):
+        return v
+    raise ValueError(v)
+
+
+class APISettings(pydantic.BaseModel):
+
+    API_V1_STR: str = "/api/v1"
+    SECRET_KEY: str = secrets.token_urlsafe(32)
+    # 60 minutes * 24 hours * 8 days = 8 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
+    FRONTEND_HOST: str = "http://localhost:5173"
+    ENVIRONMENT: Literal["local", "staging", "production"] = "local"
+
+    BACKEND_CORS_ORIGINS: Annotated[
+        list[pydantic.AnyUrl] | str, pydantic.BeforeValidator(parse_cors)
+    ] = []
+
+    @pydantic.computed_field  # type: ignore[prop-decorator]
+    @property
+    def all_cors_origins(self) -> list[str]:
+        return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
+            self.FRONTEND_HOST
+        ]
+
+    PROJECT_NAME: str
+    SENTRY_DSN: pydantic.HttpUrl | None = None
+    # POSTGRES_SERVER: str
+    # POSTGRES_PORT: int = 5432
+    # POSTGRES_USER: str
+    # POSTGRES_PASSWORD: str = ""
+    # POSTGRES_DB: str = ""
+
+    # @computed_field  # type: ignore[prop-decorator]
+    # @property
+    # def SQLALCHEMY_DATABASE_URI(self) -> PostgresDsn:
+    #     return MultiHostUrl.build(
+    #         scheme="postgresql+psycopg",
+    #         username=self.POSTGRES_USER,
+    #         password=self.POSTGRES_PASSWORD,
+    #         host=self.POSTGRES_SERVER,
+    #         port=self.POSTGRES_PORT,
+    #         path=self.POSTGRES_DB,
+    #     )
+
+    @pydantic.computed_field  # type: ignore[prop-decorator]
+    @property
+    def SQLALCHEMY_DATABASE_URI(self) -> str:
+        path_to_db = Path("/var/lib/pikesquares") / "pikesquares.db"
+        return f"sqlite+aiosqlite:///{str(path_to_db)}"
+
+    SMTP_TLS: bool = True
+    SMTP_SSL: bool = False
+    SMTP_PORT: int = 587
+    SMTP_HOST: str | None = None
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    EMAILS_FROM_EMAIL: pydantic.EmailStr | None = None
+    EMAILS_FROM_NAME: pydantic.EmailStr | None = None
+
+    @pydantic.model_validator(mode="after")
+    def _set_default_emails_from(self) -> Self:
+        if not self.EMAILS_FROM_NAME:
+            self.EMAILS_FROM_NAME = self.PROJECT_NAME
+        return self
+
+    EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 48
+
+    @pydantic.computed_field  # type: ignore[prop-decorator]
+    @property
+    def emails_enabled(self) -> bool:
+        return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
+
+    EMAIL_TEST_USER: pydantic.EmailStr = "test@example.com"
+    FIRST_SUPERUSER: pydantic.EmailStr
+    FIRST_SUPERUSER_PASSWORD: str
+
+    def _check_default_secret(self, var_name: str, value: str | None) -> None:
+        if value == "changethis":
+            message = (
+                f'The value of {var_name} is "changethis", '
+                "for security, please change it, at least for deployments."
+            )
+            if self.ENVIRONMENT == "local":
+                warnings.warn(message, stacklevel=1)
+            else:
+                raise ValueError(message)
+
+    @pydantic.model_validator(mode="after")
+    def _enforce_non_default_secrets(self) -> Self:
+        self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
+        # self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
+        self._check_default_secret(
+            "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
+        )
+
+        return self
 
 
 # directory layout
@@ -145,7 +160,7 @@ def make_system_dir(
         owner_username: str = "root",
         owner_groupname: str = "pikesquares",
         dir_mode: int = 0o775,
-    ) -> Path:
+    ) -> Path | None:
     if isinstance(newdir, str):
         newdir = Path(newdir)
 
@@ -257,7 +272,6 @@ class AppConfig(BaseSettings):
     CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     PROCESS_COMPOSE_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-    PROCESS_COMPOSE_CONFIG: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
     # CADDY_DIR: Optional[str] = None
     # CLI_STYLE: QuestionaryStyle
@@ -265,6 +279,10 @@ class AppConfig(BaseSettings):
     sentry_enabled: bool = False
     sentry_dsn: str | None = None
     daemonize: bool = False
+
+    # to override api_settings:
+    # export my_prefix_api_settings='{"foo": "x", "apple": 1}'
+    # api_settings: APISettings = APISettings()
 
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
@@ -354,3 +372,51 @@ def register_app_conf(
         return AppConfig(**override_settings)
 
     register_factory(context, AppConfig, conf_factory)
+
+
+def init_settings(
+    is_root: bool,
+    data_dir: Path | None = None,
+    run_dir: Path | None = None,
+    config_dir: Path | None = None,
+    log_dir: Path | None = None,
+    version: str | None = None,
+    ):
+
+    override_settings: dict[str, str | Path] = {
+        "PIKESQUARES_DATA_DIR": os.environ.get("PIKESQUARES_DATA_DIR", "/var/lib/pikesquares"),
+        "PIKESQUARES_RUN_DIR": os.environ.get("PIKESQUARES_RUN_DIR", "/var/run/pikesquares"),
+        "PIKESQUARES_LOG_DIR": os.environ.get("PIKESQUARES_LOG_DIR", "/var/log/pikesquares"),
+        "PIKESQUARES_CONFIG_DIR": os.environ.get("PIKESQUARES_CONFIG_DIR", "/etc/pikesquares"),
+
+    }
+    if is_root:
+        sysdirs = {
+            "data_dir": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), Path("/var/lib/pikesquares")),
+            "run_dir": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), Path("/var/run/pikesquares")),
+            "config_dir": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), Path("/etc/pikesquares")),
+            "log_dir": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), Path("/var/log/pikesquares")),
+        }
+        for varname, path_to_dir_sources in sysdirs.items():
+            cli_arg = path_to_dir_sources[0]
+            env_var_path_to_dir = path_to_dir_sources[1]
+            default_path_to_dir = path_to_dir_sources[2]
+            logger.info(f"{varname=}")
+            if cli_arg:
+                logger.info(f"cli args: {cli_arg}.")
+            if env_var_path_to_dir:
+                logger.info(f"env var: {env_var_path_to_dir}")
+            # ensure_sysdir(sysdir, varname)
+
+            path_to_dir = cli_arg or env_var_path_to_dir or default_path_to_dir
+            if isinstance(path_to_dir, str):
+                path_to_dir = Path(path_to_dir)
+            if not path_to_dir.exists():
+                logger.info(f"creating dir: {path_to_dir}")
+                make_system_dir(path_to_dir)
+            override_settings[varname] = path_to_dir
+
+    if version:
+        override_settings["VERSION"] = version
+
+    return override_settings

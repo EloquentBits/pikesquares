@@ -4,6 +4,8 @@ import structlog
 from . import Section
 # from .routers import BaseRouterHttps
 
+from uwsgiconf.options.routing_routers import RouterTunTap
+
 
 logger = structlog.get_logger()
 
@@ -152,6 +154,68 @@ class DeviceSection(Section):
 
         # self.run_fastrouter()
         # self.run_httpsrouter()
+
+        """
+        plugin = tuntap
+        ; create the tun device 'emperor0' and bind it to a unix socket
+        tuntap-router = emperor0 run/tuntap.socket
+        tuntap-router-firewall-out = allow 192.168.0.0/24 192.168.0.1
+        tuntap-router-firewall-out = deny 192.168.0.0/24 192.168.0.0/24
+        tuntap-router-firewall-out = allow 192.168.0.0/24 0.0.0.0
+        tuntap-router-firewall-out = deny
+        tuntap-router-firewall-in = allow 192.168.0.1 192.168.0.0/24
+        tuntap-router-firewall-in = deny 192.168.0.0/24 192.168.0.0/24
+        tuntap-router-firewall-in = allow 0.0.0.0 192.168.0.0/24
+        tuntap-router-firewall-in = deny
+
+        ; give it an ip address
+        exec-as-root = ifconfig emperor0 192.168.0.1 netmask 255.255.255.0 up
+        ; setup nat
+        exec-as-root = iptables -t nat -F
+        exec-as-root = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+        ; enable linux ip forwarding
+        exec-as-root = echo 1 >/proc/sys/net/ipv4/ip_forward
+        ; force vassals to be created in a new network namespace
+        emperor-use-clone = net
+        """
+
+        network_device_name = "psq0"
+        tuntap_router = RouterTunTap(
+            on=str(device.tuntap_router_socket_address),
+            device=network_device_name,
+            stats_server=str(device.tuntap_router_stats_address),
+        )
+        tuntap_router.add_firewall_rule(direction="out", action="allow", src="192.168.0.0/24", dst="192.168.0.1")
+        tuntap_router.add_firewall_rule(direction="out", action="deny", src="192.168.0.0/24", dst="192.168.0.0/24")
+        tuntap_router.add_firewall_rule(direction="out", action="allow", src="192.168.0.0/24", dst="0.0.0.0")
+        tuntap_router.add_firewall_rule(direction="out", action="deny")
+        tuntap_router.add_firewall_rule(direction="in", action="allow", src="192.168.0.1", dst="192.168.0.0/24")
+        tuntap_router.add_firewall_rule(direction="in", action="deny", src="192.168.0.0/24", dst="192.168.0.0/24")
+        tuntap_router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst="192.168.0.0/24")
+        tuntap_router.add_firewall_rule(direction="in", action="deny")
+        self.routing.use_router(tuntap_router)
+
+        # give it an ip address
+        self.main_process.run_command_on_event(
+                command=f"ifconfig {network_device_name} 192.168.0.1 netmask 255.255.255.0 up",
+                phase=self.main_process.phases.PRIV_DROP_PRE,
+        )
+        # setup nat
+        self.main_process.run_command_on_event(
+                command="iptables -t nat -F",
+                phase=self.main_process.phases.PRIV_DROP_PRE
+        )
+        self.main_process.run_command_on_event(
+            command="iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
+            phase=self.main_process.phases.PRIV_DROP_PRE,
+        )
+        # enable linux ip forwarding
+        self.main_process.run_command_on_event(
+            command="echo 1 >/proc/sys/net/ipv4/ip_forward",
+            phase=self.main_process.phases.PRIV_DROP_PRE,
+        )
+        # force vassals to be created in a new network namespace
+        self._set("emperor-use-clone", "net")
 
     def as_string(self):
         return self.as_configuration().print_ini()

@@ -148,20 +148,24 @@ class GenericSqlRepository(GenericRepository[T], ABC):
 
     async def list(self, **filters) -> list[T]:
         stmt = self._construct_list_stmt(**filters)
-        return await self._session.exec(stmt).all()
+        logger.debug(f"LIST SQL -> {str(stmt)}")
+        results = await self._session.exec(stmt)
+        logger.debug(results)
+        # import ipdb;ipdb.set_trace()
+        return results.all()
 
     async def add(self, record: T) -> T:
         self._session.add(record)
         await self._session.flush()
         await self._session.refresh(record)
-        await record.save_config_to_filesystem()
+        # await record.save_config_to_filesystem()
         return record
 
     async def update(self, record: T) -> T:
         self._session.add(record)
         await self._session.flush()
         await self._session.refresh(record)
-        await record.save_config_to_filesystem()
+        # await record.save_config_to_filesystem()
         return record
 
     async def delete(self, id: str) -> None:
@@ -202,7 +206,7 @@ class DeviceUWSGIOptionsReposityBase(GenericRepository[DeviceUWSGIOptions], ABC)
 
 class DeviceUWSGIOptionsReposity(GenericSqlRepository[DeviceUWSGIOptions], DeviceUWSGIOptionsReposityBase):
     def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session, Device)
+        super().__init__(session, DeviceUWSGIOptions)
 
     async def get_by_device_id(self, device_id: str) -> list[DeviceUWSGIOptions] | None:
         stmt = select(DeviceUWSGIOptions).\

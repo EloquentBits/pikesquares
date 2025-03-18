@@ -31,7 +31,7 @@ from pikesquares.conf import (
     AppConfig,
     AppConfigError,
     register_app_conf,
-    make_system_dir,
+    init_settings,
 )
 from pikesquares import services
 from pikesquares.adapters.database import DatabaseSessionManager
@@ -835,7 +835,7 @@ def _version_callback(value: bool) -> None:
 @run_async
 async def main(
     ctx: typer.Context,
-    version: Optional[bool] = typer.Option(
+    version: str | None = typer.Option(
         None,
         "--version",
         "-v",
@@ -935,42 +935,9 @@ async def main(
 
     # https://github.com/alexdelorenzo/app_paths
 
-    override_settings = {
-        "PIKESQUARES_DATA_DIR": os.environ.get("PIKESQUARES_DATA_DIR", "/var/lib/pikesquares"),
-        "PIKESQUARES_RUN_DIR": os.environ.get("PIKESQUARES_RUN_DIR", "/var/run/pikesquares"),
-        "PIKESQUARES_LOG_DIR": os.environ.get("PIKESQUARES_LOG_DIR", "/var/log/pikesquares"),
-        "PIKESQUARES_CONFIG_DIR": os.environ.get("PIKESQUARES_CONFIG_DIR", "/etc/pikesquares"),
-
-    }
-    if is_root:
-        sysdirs = {
-            "data_dir": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), Path("/var/lib/pikesquares")),
-            "run_dir": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), Path("/var/run/pikesquares")),
-            "config_dir": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), Path("/etc/pikesquares")),
-            "log_dir": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), Path("/var/log/pikesquares")),
-        }
-        for varname, path_to_dir_sources in sysdirs.items():
-            cli_arg = path_to_dir_sources[0]
-            env_var_path_to_dir = path_to_dir_sources[1]
-            default_path_to_dir = path_to_dir_sources[2]
-            logger.info(f"{varname=}")
-            if cli_arg:
-                logger.info(f"cli args: {cli_arg}.")
-            if env_var_path_to_dir:
-                logger.info(f"env var: {env_var_path_to_dir}")
-            # ensure_sysdir(sysdir, varname)
-
-            path_to_dir = cli_arg or env_var_path_to_dir or default_path_to_dir
-            if isinstance(path_to_dir, str):
-                path_to_dir = Path(path_to_dir)
-            if not path_to_dir.exists():
-                logger.info(f"creating dir: {path_to_dir}")
-                make_system_dir(path_to_dir)
-            override_settings[varname] = path_to_dir
-
-    if version:
-        override_settings["VERSION"] = version
-
+    override_settings = init_settings(
+        is_root, data_dir, run_dir, config_dir, log_dir, pikesquares_version
+    )
     try:
         register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:
@@ -1006,10 +973,12 @@ async def main(
         "run_dir": str(conf.run_dir),
         "sentry_dsn": conf.sentry_dsn,
     }
+    uwsgi_plugins = "tuntap"
 
     if not dvc:
         dvc = device.Device(
             service_id=f"device_{cuid()}",
+            uwsgi_plugins=uwsgi_plugins,
             machine_id=machine_id,
             data_dir=str(conf.data_dir),
             config_dir=str(conf.config_dir),
@@ -1017,11 +986,10 @@ async def main(
             run_dir=str(conf.run_dir),
             sentry_dsn=conf.sentry_dsn,
         )
-        dvc.uwsgi_config = dvc.build_uwsgi_config()
-        dvc.uwsgi_plugins = ""
-
+        service_config = dvc.build_uwsgi_config()
+        logger.debug(f"saved device config to {service_config}")
         for uwsgi_option in dvc.build_uwsgi_options():
-            uow.uwsgi_options.add(uwsgi_option)
+            await uow.uwsgi_options.add(uwsgi_option)
 
         await uow.devices.add(dvc)
         await uow.commit()
@@ -1031,7 +999,20 @@ async def main(
 
     # service_config = AsyncPath(conf.config_dir) / f"{dvc.service_id}.json"
     if not await AsyncPath(dvc.service_config).exists():
-        await dvc.save_config_to_filesystem()
+        service_config = dvc.build_uwsgi_config()
+        logger.debug(f"saved device config to {service_config}")
+        """
+        existing_options = await uow.uwsgi_options.list(device_id=dvc.id)
+        for uwsgi_option in dvc.build_uwsgi_options():
+            import ipdb;ipdb.set_trace()
+            #existing_options
+            #if uwsgi_option.option_key
+            #not in existing_options:
+            #    await uow.uwsgi_options.add(uwsgi_option)
+        """
+        await uow.devices.add(dvc)
+        await uow.commit()
+        logger.debug(f"Updated {dvc=} uWSGI config for {machine_id=}")
 
     context["device"] = dvc
 
@@ -1047,7 +1028,7 @@ async def main(
             name="sandbox",
             **common_kwargs,
         )
-        sandbox_project.uwsgi_config = sandbox_project.build_uwsgi_config()
+        sandbox_project.build_uwsgi_config()
         await uow.projects.add(sandbox_project)
         await uow.commit()
         logger.debug(f"Created {sandbox_project=} for {machine_id=}")
@@ -1058,8 +1039,6 @@ async def main(
         await AsyncPath(sandbox_project.apps_dir).mkdir(parents=True, exist_ok=True)
 
     context["sandbox_project"] = sandbox_project
-    if not await AsyncPath(sandbox_project.service_config).exists():
-        await sandbox_project.save_config_to_filesystem()
 
     http_router = await uow.routers.get_by_name("default-http-router")
     http_router_port = get_first_available_port(port=8034)
@@ -1071,7 +1050,7 @@ async def main(
             subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5700)}",
             **common_kwargs,
         )
-        http_router.uwsgi_config = http_router.build_uwsgi_config()
+        http_router.build_uwsgi_config()
         await uow.routers.add(http_router)
         await uow.commit()
         logger.debug(f"Created {http_router=} for {machine_id=}")
@@ -1079,8 +1058,6 @@ async def main(
         logger.debug(f"Using existing http router for {machine_id=} {http_router=}")
 
     context["http_router"] = http_router
-    if not await AsyncPath(http_router.service_config).exists():
-        await http_router.save_config_to_filesystem()
 
     if 0:
         https_router = await uow.routers.get_by_name("default-https-router")
@@ -1092,7 +1069,7 @@ async def main(
                 subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5600)}",
                 **common_kwargs,
             )
-            https_router.uwsgi_config = http_router.build_uwsgi_config()
+            https_router.build_uwsgi_config()
             await uow.routers.add(https_router)
             await uow.commit()
             logger.debug(f"Created {https_router=} for {machine_id=}")
@@ -1100,8 +1077,6 @@ async def main(
             logger.debug(f"Using existing http router for {machine_id=} {https_router=}")
 
         context["https_router"] = https_router
-        if not await AsyncPath(https_router.service_config).exists():
-            await https_router.save_config_to_filesystem()
 
     register_process_compose(context, conf)
 

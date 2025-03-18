@@ -337,3 +337,187 @@ class FastRouterSection(Section):
             )
         self.routing.use_router(fastrouter)
 """
+"""
+
+    plugin = tuntap
+
+    ; create the tun device 'emperor0' and bind it to a unix socket
+    tuntap-router = emperor0 run/tuntap.socket
+    tuntap-router-firewall-out = allow 192.168.0.0/24 192.168.0.1
+    tuntap-router-firewall-out = deny 192.168.0.0/24 192.168.0.0/24
+    tuntap-router-firewall-out = allow 192.168.0.0/24 0.0.0.0
+    tuntap-router-firewall-out = deny
+    tuntap-router-firewall-in = allow 192.168.0.1 192.168.0.0/24
+    tuntap-router-firewall-in = deny 192.168.0.0/24 192.168.0.0/24
+    tuntap-router-firewall-in = allow 0.0.0.0 192.168.0.0/24
+    tuntap-router-firewall-in = deny
+
+    ; give it an ip address
+    exec-as-root = ifconfig emperor0 192.168.0.1 netmask 255.255.255.0 up
+    ; setup nat
+    exec-as-root = iptables -t nat -F
+    exec-as-root = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+    ; enable linux ip forwarding
+    exec-as-root = echo 1 >/proc/sys/net/ipv4/ip_forward
+    ; force vassals to be created in a new network namespace
+    emperor-use-clone = net
+
+"""
+
+
+class TunTapRouterSection(Section):
+    router_name = "[[ PikeSquares App / tun-tap Router ]]"
+
+    # def __init__(
+    #    self,
+    #    name: str = "uwsgi",
+    #    runtime_dir: str = None,
+    #    # environment_name: str = None,
+    #    project_name: str = None,
+    #    address: str = "127.0.0.1:3017",
+    #    stats_server_address: str = "127.0.0.1:9897",
+    #    subscription_server_address: str = "127.0.0.1:5600",
+    #    resubscribe_to: str = None,
+    #    **kwargs,
+    # ):
+
+    def __init__(self, router, **kwargs):
+        # self.name = name
+        # self.runtime_dir = runtime_dir
+        # super().__init__(
+        #    strict_config=True,
+        #    name=self.name,
+        #    runtime_dir=self.runtime_dir,
+        #    project_name=self.router_name,
+        #    **kwargs,
+        # )
+
+        super().__init__(strict_config=True, name="uwsgi", **kwargs)
+        self.router = router
+
+        self.set_runtime_dir(str(self.router.run_dir))
+
+        self.set_plugins_params(
+             plugins=self.router.uwsgi_plugins,
+             search_dirs=[str(self.router.plugins_dir)],
+        )
+        self.print_plugins()
+
+        self.master_process.set_basic_params(enable=True)
+        self.master_process.set_exit_events(reload=True)
+
+        self.main_process.set_basic_params(
+            # touch_reload="/srv/uwsgi/%n.http-router.ini"
+            touch_reload=str(self.router.touch_reload_file),
+        )
+        self.main_process.set_owner_params(
+            uid=self.router.run_as_uid,
+            gid=self.router.run_as_gid
+        )
+        self.main_process.set_naming_params(
+            prefix=f"{self.router_name} {self.router.service_id} ",
+            autonaming=True
+        )
+        # host, port = address.split(':')
+        # if host in ('0.0.0.0', '127.0.0.1'):
+        #    address = f":{port}"
+
+        # if resubscribe_to:
+        #    address = "=0"
+        #    self.networking.register_socket(
+        #        self.networking.sockets.shared(
+        #            address="0.0.0.0:3435"
+        #        )
+        #    )
+        router_cls = self.routing.routers.tuntap
+        self.router = router_cls(
+            on=router.address,
+            forward_to=router_cls.forwarders.subscription_server(
+                address=str(router.subscription_server_address),
+            ),
+        )
+
+        self.router.set_basic_params(
+            stats_server=str(router.stats_address),
+            cheap_mode=True,
+            quiet=False,
+            keepalive=5,
+            # resubscribe_addresses=resubscribe_to
+        )
+        self.router.set_connections_params(
+            timeout_socket=500,
+            timeout_headers=10,
+            timeout_backend=60,
+        )
+        self.router.set_manage_params(
+            chunked_input=True,
+            rtsp=True,
+            source_method=True
+        )
+
+        self.logging.set_file_params(owner="true")
+        # self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
+        self.logging.add_logger(
+            self.logging.loggers.file(filepath=str(router.log_file))
+        )
+        self.routing.use_router(self.router)
+
+
+"""
+class FastRouterSection(Section):
+    def __init__(
+        self,
+        name: str = "uwsgi",
+        runtime_dir: str = None,
+        environment_name: str = None,
+        project_name: str = None,
+        address: str = "127.0.0.1:3017",
+        stats_server_address: str = "127.0.0.1:9897",
+        subscription_server_address: str = "127.0.0.1:5600",
+        resubscribe_to: str = None,
+        resubscribe_bind_to: str = None,
+        **kwargs,
+    ):
+        self.name = name
+        self.runtime_dir = runtime_dir
+
+        if project_name is None:
+            fastrouter_name = environment_name
+        else:
+            fastrouter_name = f"{environment_name} - {project_name}"
+
+        super().__init__(
+            strict_config=True,
+            name=self.name,
+            runtime_dir=self.runtime_dir,
+            project_name=fastrouter_name,
+            **kwargs,
+        )
+
+        self.master_process.set_basic_params(enable=True)
+        self.main_process.set_owner_params(uid=kwargs.get("uid"), gid=kwargs.get("gid"))
+        self.main_process.set_naming_params(
+            prefix=f"({project_name}) PikeSquares FastRouter Worker: ",
+            name=f"({project_name}) PikeSquares FastRouter Master",
+        )
+        fastrouter_cls = self.routing.routers.fast
+        fastrouter = fastrouter_cls(
+            on=address,
+            forward_to=fastrouter_cls.forwarders.subscription_server(
+                address=subscription_server_address
+            ),
+        )
+        fastrouter.set_basic_params(
+            stats_server=stats_server_address,
+            cheap_mode=True,
+            quiet=False,
+            buffer_size=8192,
+        )
+        fastrouter.set_connections_params(retry_delay=30)
+        if resubscribe_to and resubscribe_to not in subscription_server_address:
+            fastrouter.set_resubscription_params(
+                addresses=resubscribe_to,
+                bind_to=resubscribe_bind_to
+            )
+        self.routing.use_router(fastrouter)
+"""
