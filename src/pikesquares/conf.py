@@ -181,14 +181,33 @@ def make_system_dir(
     except KeyError:
         raise AppConfigError(f"unable locate group: {owner_groupname}") from None
 
-    os.chown(
-        newdir,
-        owner_uid,
-        owner_gid,
-    )
+    os.chown(newdir, owner_uid, owner_gid)
 
-    # pwd.getpwnam(owner_uid).pw_uid,
-    # pwd.getpwnam(owner_gid).pw_gid
+
+def make_system_file(
+        newfile: Path | str,
+        owner_username: str = "root",
+        owner_groupname: str = "pikesquares",
+        file_mode: int = 0o664,
+    ) -> Path | None:
+    if isinstance(newfile, str):
+        newfile = Path(newfile)
+
+    if newfile.exists():
+        return newfile
+
+    newfile.touch(mode=file_mode, exist_ok=True)
+    try:
+        owner_uid = pwd.getpwnam(owner_username)[2]
+    except KeyError:
+        raise AppConfigError(f"unable locate user: {owner_username}") from None
+
+    try:
+        owner_gid = grp.getgrnam(owner_groupname)[2]
+    except KeyError:
+        raise AppConfigError(f"unable locate group: {owner_groupname}") from None
+
+    os.chown(newfile, owner_uid, owner_gid)
 
 
 def ensure_sysdir(dir_path, varname):
@@ -287,8 +306,7 @@ class AppConfig(BaseSettings):
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        path_to_db = self.data_dir / "pikesquares.db"
-        return f"sqlite+aiosqlite:///{str(path_to_db)}"
+        return f"sqlite+aiosqlite:///{self.data_dir / "pikesquares.db"}"
 
     @pydantic.computed_field
     @cached_property
@@ -380,6 +398,7 @@ def init_settings(
     run_dir: Path | None = None,
     config_dir: Path | None = None,
     log_dir: Path | None = None,
+    db_path: Path | None = None,
     version: str | None = None,
     ):
 
@@ -415,6 +434,26 @@ def init_settings(
                 logger.info(f"creating dir: {path_to_dir}")
                 make_system_dir(path_to_dir)
             override_settings[varname] = path_to_dir
+
+            sysfiles = [
+                db_path,
+            ]
+
+            for path_to_file in sysfiles:
+                if path_to_file and not path_to_file.exists():
+                    make_system_file(path_to_file)
+
+                    # if sessionmanager._engine:
+                    #    async with sessionmanager._engine.begin() as conn:
+                    #        await conn.run_sync(
+                    #            lambda conn: SQLModel.metadata.create_all(conn)
+                    #        )
+                    # then, load the Alembic configuration and generate the
+                    # version table, "stamping" it with the most recent rev:
+                    # from alembic.config import Config
+                    # from alembic import command
+                    # alembic_cfg = Config("/path/to/yourapp/alembic.ini")
+                    # command.stamp(alembic_cfg, "head")
 
     if version:
         override_settings["VERSION"] = version

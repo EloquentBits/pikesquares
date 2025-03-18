@@ -936,7 +936,13 @@ async def main(
     # https://github.com/alexdelorenzo/app_paths
 
     override_settings = init_settings(
-        is_root, data_dir, run_dir, config_dir, log_dir, pikesquares_version
+        is_root,
+        data_dir,
+        run_dir,
+        config_dir,
+        log_dir,
+        (Path(data_dir or "/var/lib/pikesquares")) / "pikesquares.db",
+        pikesquares_version,
     )
     try:
         register_app_conf(context, override_settings)
