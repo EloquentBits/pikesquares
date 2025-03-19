@@ -68,6 +68,9 @@ fastapi-up:
 uvicorn-up:
   uv run uvicorn app.main:app --reload --debug
 
+pc-attach:
+  sudo process-compose attach -u /var/run/pikesquares/process-compose.sock
+
 pc-up-sock:
   process-compose --use-uds --unix-socket pc.sock --log-file pc.log 
 
