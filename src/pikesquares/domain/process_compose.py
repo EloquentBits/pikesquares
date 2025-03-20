@@ -269,7 +269,7 @@ def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
     )
 
 
-async def make_device_process(context: dict, dvc: Device, conf: AppConfig) -> ProcessComposeProcess:
+async def make_device_process(context: dict, device: Device, conf: AppConfig) -> ProcessComposeProcess:
     """ device process-compose process """
     sqlite3_plugin = conf.plugins_dir / "sqlite3_plugin.so"
     if not sqlite3_plugin.exists():
@@ -277,14 +277,13 @@ async def make_device_process(context: dict, dvc: Device, conf: AppConfig) -> Pr
 
     sqlite3_db = conf.data_dir / "pikesquares.db"
     cmd = f"{conf.UWSGI_BIN} --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
-    sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{dvc.id}\' ORDER BY sort_order_index"'
+    sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
 
     uow = await services.aget(context, UnitOfWork)
-    uwsgi_options = await uow.uwsgi_options.get_by_device_id(dvc.id)
-
-    logger.debug(uwsgi_options)
+    uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
+    logger.debug(f"read {len(uwsgi_options)} uwsgi options for device {device.id}")
     if not uwsgi_options:
-        raise AppConfigError("unable to read uwsgi options for device {dvc.id}")
+        raise AppConfigError("unable to read uwsgi options for device {device.id}")
 
     return ProcessComposeProcess(
         description="PikeSquares Server",
@@ -381,7 +380,7 @@ async def register_process_compose(context: dict, conf: AppConfig) -> None:
     if not device:
         raise AppConfigError("no device found in context")
 
-    http_router = context.get("http_router")
+    http_router = context.get("default-http-router")
     if not http_router:
         raise AppConfigError("no http router found in context")
 

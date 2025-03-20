@@ -47,8 +47,8 @@ from pikesquares.domain.process_compose import (
     register_process_compose,
 )
 from pikesquares.domain.device import get_or_create_device
-from pikesquares.domain.base import ServiceBase
-from pikesquares.domain import project, router
+from pikesquares.domain.project import get_or_create_project
+from pikesquares.domain.router import get_or_create_http_router
 # from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
 from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -75,7 +75,7 @@ from pikesquares.services.apps.exceptions import (
 
 
 from .console import console
-from pikesquares import __app_name__, __version__, get_first_available_port
+from pikesquares import __app_name__, __version__
 
 
 LOG_FILE = "app.log"
@@ -964,10 +964,7 @@ async def main(
         async with UnitOfWork(session=session) as uow:
             yield uow
     services.register_factory(context, UnitOfWork, uow_factory)
-
     uow = await services.aget(context, UnitOfWork)
-    device = await get_or_create_device(context, conf)
-    context["device"] = device
 
     common_kwargs = {
         "data_dir": str(conf.data_dir),
@@ -976,68 +973,29 @@ async def main(
         "run_dir": str(conf.run_dir),
         "sentry_dsn": conf.sentry_dsn,
     }
+    device = await get_or_create_device(context, common_kwargs)
+    uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
+    logger.debug(f"read {len(uwsgi_options)} uwsgi options for device {device.id}")
+    if not uwsgi_options:
+        for uwsgi_option in device.get_uwsgi_options():
+            await uow.uwsgi_options.add(uwsgi_option)
 
-    # async with UnitOfWork(session=session) as uow:
-    #    id = 1
-    #    device = await uow.devices.get_by_id(id)
-    #    logger.debug(device)
+            """
+            existing_options = await uow.uwsgi_options.list(device_id=device.id)
+            for uwsgi_option in device.build_uwsgi_options():
+                import ipdb;ipdb.set_trace()
+                #existing_options
+                #if uwsgi_option.option_key
+                #not in existing_options:
+                #    await uow.uwsgi_options.add(uwsgi_option)
+            """
 
-    sandbox_project = await uow.projects.get_by_name("sandbox")
-    if not sandbox_project:
-        sandbox_project = project.Project(
-            service_id="project_sandbox",
-            name="sandbox",
-            **common_kwargs,
-        )
-        sandbox_project.build_uwsgi_config()
-        await uow.projects.add(sandbox_project)
-        await uow.commit()
-        logger.debug(f"Created {sandbox_project=} for {device.machine_id=}")
-    else:
-        logger.debug(f"Using existing sandbox project for {device.machine_id=} {sandbox_project=}")
+    context["device"] = device
+    default_project = await get_or_create_project("default-project", context, common_kwargs)
+    context["default-project"] = default_project
 
-    if not await AsyncPath(sandbox_project.apps_dir).exists():
-        await AsyncPath(sandbox_project.apps_dir).mkdir(parents=True, exist_ok=True)
-
-    context["sandbox_project"] = sandbox_project
-
-    http_router = await uow.routers.get_by_name("default-http-router")
-    http_router_port = get_first_available_port(port=8034)
-    if not http_router:
-        http_router = router.BaseRouter(
-            service_id=f"http_router_{cuid()}",
-            name="default-http-router",
-            address=f"0.0.0.0:{http_router_port}",
-            subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5700)}",
-            **common_kwargs,
-        )
-        http_router.build_uwsgi_config()
-        await uow.routers.add(http_router)
-        await uow.commit()
-        logger.debug(f"Created {http_router=} for {device.machine_id=}")
-    else:
-        logger.debug(f"Using existing http router for {device.machine_id=} {http_router=}")
-
-    context["http_router"] = http_router
-
-    if 0:
-        https_router = await uow.routers.get_by_name("default-https-router")
-        if not https_router:
-            https_router = router.BaseRouter(
-                service_id=f"https_router_{cuid()}",
-                name="default-https-router",
-                address=f"0.0.0.0:{str(get_first_available_port(port=8443))}",
-                subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5600)}",
-                **common_kwargs,
-            )
-            https_router.build_uwsgi_config()
-            await uow.routers.add(https_router)
-            await uow.commit()
-            logger.debug(f"Created {https_router=} for {device.machine_id=}")
-        else:
-            logger.debug(f"Using existing http router for {device.machine_id=} {https_router=}")
-
-        context["https_router"] = https_router
+    default_http_router = await get_or_create_http_router("default-http-router", context, common_kwargs)
+    context["default-http-router"] = default_http_router
 
     await register_process_compose(context, conf)
     # pc = services.get(context, ProcessCompose)

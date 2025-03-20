@@ -3,7 +3,9 @@ from pathlib import Path
 import pydantic
 from sqlmodel import Field
 import structlog
+from cuid import cuid
 
+from pikesquares import get_first_available_port, services
 from .base import ServiceBase
 from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
 
@@ -30,7 +32,7 @@ class BaseRouter(ServiceBase, table=True):
     @pydantic.computed_field
     @property
     def service_config(self) -> Path:
-        return Path(self.config_dir) / "projects" / f"{self.service_id}.json"
+        return Path(self.config_dir) / "projects" / f"{self.service_id}.ini"
 
     @pydantic.computed_field
     @property
@@ -109,6 +111,54 @@ class BaseRouter(ServiceBase, table=True):
             return self.address.split(":")[-1]
         except IndexError:
             pass
+
+
+async def get_or_create_http_router(
+    name: str,
+    context: dict,
+    create_kwargs: dict,
+    ) -> BaseRouter:
+
+    from pikesquares.service_layer.uow import UnitOfWork
+
+    uow = await services.aget(context, UnitOfWork)
+    http_router = await uow.routers.get_by_name(name)
+    http_router_port = get_first_available_port(port=8034)
+    if not http_router:
+        http_router = BaseRouter(
+            service_id=f"http_router_{cuid()}",
+            name=name,
+            address=f"0.0.0.0:{http_router_port}",
+            subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5700)}",
+            **create_kwargs,
+        )
+        await uow.routers.add(http_router)
+        await uow.commit()
+        logger.debug(f"Created {http_router=}")
+    else:
+        logger.debug(f"Using existing http router {http_router=}")
+
+    return http_router
+
+    if 0:
+        https_router = await uow.routers.get_by_name("default-https-router")
+        if not https_router:
+            https_router = BaseRouter(
+                service_id=f"https_router_{cuid()}",
+                name="default-https-router",
+                address=f"0.0.0.0:{str(get_first_available_port(port=8443))}",
+                subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5600)}",
+                **create_kwargs,
+            )
+            await uow.routers.add(https_router)
+            await uow.commit()
+            logger.debug(f"Created {https_router=}")
+        else:
+            logger.debug(f"Using existing http router {https_router=}")
+
+        context["https_router"] = https_router
+
+
 
 
 """

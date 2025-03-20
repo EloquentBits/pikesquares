@@ -3,10 +3,14 @@ from functools import cached_property
 from pathlib import Path
 
 from sqlmodel import Field
+from cuid import cuid
 import pydantic
+from aiopath import AsyncPath
 import structlog
 
 from .base import ServiceBase
+from pikesquares import services
+from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.presets.project import ProjectSection
 
 
@@ -27,7 +31,7 @@ class Project(ServiceBase, table=True):
     @pydantic.computed_field
     @cached_property
     def service_config(self) -> Path:
-        return Path(self.config_dir) / "projects" / f"{self.service_id}.json"
+        return Path(self.config_dir) / "projects" / f"{self.service_id}.ini"
 
     @pydantic.computed_field
     @cached_property
@@ -95,6 +99,33 @@ class Project(ServiceBase, table=True):
         # if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
         #    shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
 
+
+async def get_or_create_project(
+    name: str,
+    context: dict,
+    create_kwargs: dict,
+    ) -> Project:
+
+    from pikesquares.service_layer.uow import UnitOfWork
+
+    uow = await services.aget(context, UnitOfWork)
+    project = await uow.projects.get_by_name(name)
+
+    if not project:
+        project = Project(
+            service_id=f"project_{cuid()}",
+            name=name,
+            **create_kwargs,
+        )
+        await uow.projects.add(project)
+        await uow.commit()
+        logger.debug(f"Created {project} ")
+    else:
+        logger.debug(f"Using existing sandbox project {project}")
+
+    if not await AsyncPath(project.apps_dir).exists():
+        await AsyncPath(project.apps_dir).mkdir(parents=True, exist_ok=True)
+    return project
 
 # SandboxProject = NewType("SandboxProject", Project)
 

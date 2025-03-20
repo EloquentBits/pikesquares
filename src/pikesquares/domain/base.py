@@ -3,6 +3,7 @@ from datetime import (
     UTC,
 )
 import uuid
+from typing import Any
 import json
 import traceback
 import socket
@@ -116,6 +117,9 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def __str__(self):
         return self.__repr__()
 
+    def model_post_init(self, __context: Any) -> None:
+        self.write_uwsgi_config()
+
     @pydantic.computed_field
     @property
     def service_config(self) -> Path:
@@ -190,7 +194,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def spooler_dir(self) -> Path:
         return Path(self.data_dir) / "spooler"
 
-    def build_uwsgi_config(self) -> Path:
+    def write_uwsgi_config(self) -> None:
         self.uwsgi_config_section_class(self).\
             as_configuration().\
             tofile(self.service_config)

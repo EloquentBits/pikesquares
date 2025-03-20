@@ -1,4 +1,5 @@
 import os
+from typing import Any
 import uuid
 import shutil
 from pathlib import Path
@@ -32,6 +33,9 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     server_run_as_uid: str = Field(default="root")
     server_run_as_gid: str = Field(default="root")
     uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
+
+    # def model_post_init(self, __context: Any) -> None:
+    #    super().model_post_init(__context)
 
     @property
     def uwsgi_config_section_class(self) -> DeviceSection:
@@ -84,7 +88,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     # config["uwsgi"]["plugin"] = "emperor_zeromq"
     # self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
-    def build_uwsgi_options(self) -> list["DeviceUWSGIOptions"]:
+    def get_uwsgi_options(self) -> list["DeviceUWSGIOptions"]:
         uwsgi_options: list[DeviceUWSGIOptions] = []
         dvc_conf_section = self.uwsgi_config_section_class(self)
         for key, value in dvc_conf_section._get_options():
@@ -205,51 +209,25 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
         return self.__repr__()
 
 
-async def get_or_create_device(context: dict, conf: AppConfig) -> Device:
+async def get_or_create_device(context: dict, create_kwargs: dict) -> Device:
     from pikesquares.service_layer.uow import UnitOfWork
     uow = await services.aget(context, UnitOfWork)
     machine_id = await ServiceBase.read_machine_id()
+    if not machine_id:
+        raise AppConfigError("unable to read the machine-id")
+
     device = await uow.devices.get_by_machine_id(machine_id)
-
-    uwsgi_plugins = "tuntap"
-
     if not device:
         device = Device(
             service_id=f"device_{cuid()}",
-            uwsgi_plugins=uwsgi_plugins,
+            uwsgi_plugins="tuntap",
             machine_id=machine_id,
-            data_dir=str(conf.data_dir),
-            config_dir=str(conf.config_dir),
-            log_dir=str(conf.log_dir),
-            run_dir=str(conf.run_dir),
-            sentry_dsn=conf.sentry_dsn,
+            **create_kwargs,
         )
-        service_config = device.build_uwsgi_config()
-        logger.debug(f"saved device config to {service_config}")
-        for uwsgi_option in device.build_uwsgi_options():
-            await uow.uwsgi_options.add(uwsgi_option)
-
         await uow.devices.add(device)
         await uow.commit()
         logger.debug(f"Created {device=} for {machine_id=}")
     else:
         logger.debug(f"Using existing device for {machine_id=} {device=}")
-
-    # service_config = AsyncPath(conf.config_dir) / f"{device.service_id}.json"
-    if not await AsyncPath(device.service_config).exists():
-        service_config = device.build_uwsgi_config()
-        logger.debug(f"saved device config to {service_config}")
-        """
-        existing_options = await uow.uwsgi_options.list(device_id=device.id)
-        for uwsgi_option in device.build_uwsgi_options():
-            import ipdb;ipdb.set_trace()
-            #existing_options
-            #if uwsgi_option.option_key
-            #not in existing_options:
-            #    await uow.uwsgi_options.add(uwsgi_option)
-        """
-        await uow.devices.add(device)
-        await uow.commit()
-        logger.debug(f"Updated {device=} uWSGI config for {machine_id=}")
 
     return device
