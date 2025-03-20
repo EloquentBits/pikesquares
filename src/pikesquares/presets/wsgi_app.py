@@ -95,7 +95,9 @@ class BaseWsgiAppSection(Section):
             autonaming=False,
             prefix=f"{process_prefix} " if process_prefix else None,
         )
-        self.master_process.set_basic_params(enable=True)
+        self.master_process.set_basic_params(
+            enable=True,
+        )
         self.master_process.set_exit_events(sig_term=True)  # Respect the convention. Make Upstart and Co happy.
         self.locks.set_basic_params(thunder_lock=True)
         self.configure_owner(owner=owner)

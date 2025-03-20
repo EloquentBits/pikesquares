@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 
 import pydantic
+from cuid import cuid
+from aiopath import AsyncPath
 import structlog
 from sqlmodel import (
     SQLModel,
@@ -13,7 +15,9 @@ from sqlmodel import (
 )
 
 from .base import ServiceBase, TimeStampedBase
+from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.exceptions import StatsReadError
+from pikesquares import services
 from pikesquares.services.data import DeviceStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
 from pikesquares.presets.device import DeviceSection
@@ -201,3 +205,51 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
         return self.__repr__()
 
 
+async def get_or_create_device(context: dict, conf: AppConfig) -> Device:
+    from pikesquares.service_layer.uow import UnitOfWork
+    uow = await services.aget(context, UnitOfWork)
+    machine_id = await ServiceBase.read_machine_id()
+    device = await uow.devices.get_by_machine_id(machine_id)
+
+    uwsgi_plugins = "tuntap"
+
+    if not device:
+        device = Device(
+            service_id=f"device_{cuid()}",
+            uwsgi_plugins=uwsgi_plugins,
+            machine_id=machine_id,
+            data_dir=str(conf.data_dir),
+            config_dir=str(conf.config_dir),
+            log_dir=str(conf.log_dir),
+            run_dir=str(conf.run_dir),
+            sentry_dsn=conf.sentry_dsn,
+        )
+        service_config = device.build_uwsgi_config()
+        logger.debug(f"saved device config to {service_config}")
+        for uwsgi_option in device.build_uwsgi_options():
+            await uow.uwsgi_options.add(uwsgi_option)
+
+        await uow.devices.add(device)
+        await uow.commit()
+        logger.debug(f"Created {device=} for {machine_id=}")
+    else:
+        logger.debug(f"Using existing device for {machine_id=} {device=}")
+
+    # service_config = AsyncPath(conf.config_dir) / f"{device.service_id}.json"
+    if not await AsyncPath(device.service_config).exists():
+        service_config = device.build_uwsgi_config()
+        logger.debug(f"saved device config to {service_config}")
+        """
+        existing_options = await uow.uwsgi_options.list(device_id=device.id)
+        for uwsgi_option in device.build_uwsgi_options():
+            import ipdb;ipdb.set_trace()
+            #existing_options
+            #if uwsgi_option.option_key
+            #not in existing_options:
+            #    await uow.uwsgi_options.add(uwsgi_option)
+        """
+        await uow.devices.add(device)
+        await uow.commit()
+        logger.debug(f"Updated {device=} uWSGI config for {machine_id=}")
+
+    return device

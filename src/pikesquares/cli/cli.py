@@ -46,12 +46,9 @@ from pikesquares.domain.process_compose import (
     PCDeviceUnavailableError,
     register_process_compose,
 )
-from pikesquares.domain import (
-    base as domain_base,
-    device,
-    project,
-    router,
-)
+from pikesquares.domain.device import get_or_create_device
+from pikesquares.domain.base import ServiceBase
+from pikesquares.domain import project, router
 # from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
 from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -968,9 +965,9 @@ async def main(
             yield uow
     services.register_factory(context, UnitOfWork, uow_factory)
 
-    machine_id = await domain_base.ServiceBase.read_machine_id()
     uow = await services.aget(context, UnitOfWork)
-    dvc = await uow.devices.get_by_machine_id(machine_id)
+    device = await get_or_create_device(context, conf)
+    context["device"] = device
 
     common_kwargs = {
         "data_dir": str(conf.data_dir),
@@ -979,48 +976,6 @@ async def main(
         "run_dir": str(conf.run_dir),
         "sentry_dsn": conf.sentry_dsn,
     }
-    uwsgi_plugins = "tuntap"
-
-    if not dvc:
-        dvc = device.Device(
-            service_id=f"device_{cuid()}",
-            uwsgi_plugins=uwsgi_plugins,
-            machine_id=machine_id,
-            data_dir=str(conf.data_dir),
-            config_dir=str(conf.config_dir),
-            log_dir=str(conf.log_dir),
-            run_dir=str(conf.run_dir),
-            sentry_dsn=conf.sentry_dsn,
-        )
-        service_config = dvc.build_uwsgi_config()
-        logger.debug(f"saved device config to {service_config}")
-        for uwsgi_option in dvc.build_uwsgi_options():
-            await uow.uwsgi_options.add(uwsgi_option)
-
-        await uow.devices.add(dvc)
-        await uow.commit()
-        logger.debug(f"Created {dvc=} for {machine_id=}")
-    else:
-        logger.debug(f"Using existing device for {machine_id=} {dvc=}")
-
-    # service_config = AsyncPath(conf.config_dir) / f"{dvc.service_id}.json"
-    if not await AsyncPath(dvc.service_config).exists():
-        service_config = dvc.build_uwsgi_config()
-        logger.debug(f"saved device config to {service_config}")
-        """
-        existing_options = await uow.uwsgi_options.list(device_id=dvc.id)
-        for uwsgi_option in dvc.build_uwsgi_options():
-            import ipdb;ipdb.set_trace()
-            #existing_options
-            #if uwsgi_option.option_key
-            #not in existing_options:
-            #    await uow.uwsgi_options.add(uwsgi_option)
-        """
-        await uow.devices.add(dvc)
-        await uow.commit()
-        logger.debug(f"Updated {dvc=} uWSGI config for {machine_id=}")
-
-    context["device"] = dvc
 
     # async with UnitOfWork(session=session) as uow:
     #    id = 1
@@ -1037,9 +992,9 @@ async def main(
         sandbox_project.build_uwsgi_config()
         await uow.projects.add(sandbox_project)
         await uow.commit()
-        logger.debug(f"Created {sandbox_project=} for {machine_id=}")
+        logger.debug(f"Created {sandbox_project=} for {device.machine_id=}")
     else:
-        logger.debug(f"Using existing sandbox project for {machine_id=} {sandbox_project=}")
+        logger.debug(f"Using existing sandbox project for {device.machine_id=} {sandbox_project=}")
 
     if not await AsyncPath(sandbox_project.apps_dir).exists():
         await AsyncPath(sandbox_project.apps_dir).mkdir(parents=True, exist_ok=True)
@@ -1059,9 +1014,9 @@ async def main(
         http_router.build_uwsgi_config()
         await uow.routers.add(http_router)
         await uow.commit()
-        logger.debug(f"Created {http_router=} for {machine_id=}")
+        logger.debug(f"Created {http_router=} for {device.machine_id=}")
     else:
-        logger.debug(f"Using existing http router for {machine_id=} {http_router=}")
+        logger.debug(f"Using existing http router for {device.machine_id=} {http_router=}")
 
     context["http_router"] = http_router
 
@@ -1078,14 +1033,14 @@ async def main(
             https_router.build_uwsgi_config()
             await uow.routers.add(https_router)
             await uow.commit()
-            logger.debug(f"Created {https_router=} for {machine_id=}")
+            logger.debug(f"Created {https_router=} for {device.machine_id=}")
         else:
-            logger.debug(f"Using existing http router for {machine_id=} {https_router=}")
+            logger.debug(f"Using existing http router for {device.machine_id=} {https_router=}")
 
         context["https_router"] = https_router
 
-    register_process_compose(context, conf)
-
+    await register_process_compose(context, conf)
+    # pc = services.get(context, ProcessCompose)
     # import ipdb;ipdb.set_trace()
 
     """

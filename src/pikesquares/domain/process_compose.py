@@ -13,6 +13,7 @@ from pydantic_yaml import to_yaml_str
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.managed_services import ManagedServiceBase
 from pikesquares.domain.device import Device
+from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.base import ServiceUnavailableError
 from pikesquares import services
 # from pikesquares.services import register_factory
@@ -186,7 +187,7 @@ class ProcessCompose(ManagedServiceBase):
             return exc.retcode, exc.stdout, exc.stderr
 
     def down(self) -> tuple[int, str, str]:
-        if not self.daemon_socket.exists():
+        if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
         try:
@@ -200,7 +201,7 @@ class ProcessCompose(ManagedServiceBase):
             return exc.retcode, exc.stdout, exc.stderr
 
     def attach(self) -> tuple[int, str, str]:
-        if not self.daemon_socket.exists():
+        if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
         try:
@@ -213,11 +214,11 @@ class ProcessCompose(ManagedServiceBase):
             return exc.retcode, exc.stdout, exc.stderr
 
     def ping(self) -> None:
-        if not self.daemon_socket.exists():
+        if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
     def ping_api(self) -> bool:
-        if not self.daemon_socket.exists():
+        if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
         try:
@@ -268,7 +269,7 @@ def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
     )
 
 
-def make_device_process(dvc: Device, conf: AppConfig) -> ProcessComposeProcess:
+async def make_device_process(context: dict, dvc: Device, conf: AppConfig) -> ProcessComposeProcess:
     """ device process-compose process """
     sqlite3_plugin = conf.plugins_dir / "sqlite3_plugin.so"
     if not sqlite3_plugin.exists():
@@ -277,6 +278,14 @@ def make_device_process(dvc: Device, conf: AppConfig) -> ProcessComposeProcess:
     sqlite3_db = conf.data_dir / "pikesquares.db"
     cmd = f"{conf.UWSGI_BIN} --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
     sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{dvc.id}\' ORDER BY sort_order_index"'
+
+    uow = await services.aget(context, UnitOfWork)
+    uwsgi_options = await uow.uwsgi_options.get_by_device_id(dvc.id)
+
+    logger.debug(uwsgi_options)
+    if not uwsgi_options:
+        raise AppConfigError("unable to read uwsgi options for device {dvc.id}")
+
     return ProcessComposeProcess(
         description="PikeSquares Server",
         command="".join([cmd, sql]),
@@ -365,7 +374,7 @@ def make_dnsmasq_process(
     )
 
 
-def register_process_compose(context: dict, conf: AppConfig) -> None:
+async def register_process_compose(context: dict, conf: AppConfig) -> None:
     """ process-compose factory"""
 
     device = context.get("device")
@@ -385,7 +394,7 @@ def register_process_compose(context: dict, conf: AppConfig) -> None:
     pc_config = ProcessComposeConfig(
         processes={
             "api": make_api_process(conf),
-            "device": make_device_process(device, conf),
+            "device": await make_device_process(context, device, conf),
             "caddy": make_caddy_process(conf, http_router.port),
         },
     )
