@@ -230,4 +230,7 @@ async def get_or_create_device(context: dict, create_kwargs: dict) -> Device:
     else:
         logger.debug(f"Using existing device for {machine_id=} {device=}")
 
+    uwsgi_config = device.write_uwsgi_config()
+    logger.debug(f"wrote config to file: {uwsgi_config}")
+
     return device

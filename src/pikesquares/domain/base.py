@@ -118,7 +118,9 @@ class ServiceBase(TimeStampedBase, SQLModel):
         return self.__repr__()
 
     def model_post_init(self, __context: Any) -> None:
-        self.write_uwsgi_config()
+        uwsgi_config = self.write_uwsgi_config()
+        logger.debug(f"wrote config to file: {uwsgi_config}")
+        import ipdb;ipdb.set_trace()
 
     @pydantic.computed_field
     @property
@@ -194,10 +196,11 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def spooler_dir(self) -> Path:
         return Path(self.data_dir) / "spooler"
 
-    def write_uwsgi_config(self) -> None:
-        self.uwsgi_config_section_class(self).\
+    def write_uwsgi_config(self) -> Path:
+        return self.uwsgi_config_section_class(self).\
             as_configuration().\
             tofile(self.service_config)
+
 
         # self.uwsgi_config["uwsgi"]["show-config"] = True
 

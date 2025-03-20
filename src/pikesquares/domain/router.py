@@ -138,6 +138,9 @@ async def get_or_create_http_router(
     else:
         logger.debug(f"Using existing http router {http_router=}")
 
+    uwsgi_config = http_router.write_uwsgi_config()
+    logger.debug(f"wrote config to file: {uwsgi_config}")
+
     return http_router
 
     if 0:
