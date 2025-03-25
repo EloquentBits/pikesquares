@@ -71,8 +71,8 @@ class DeviceSection(Section):
         #   )
 
         self.main_process.set_owner_params(
-            uid=device.server_run_as_uid,
-            gid=device.server_run_as_gid,
+            uid=device.run_as_uid,
+            gid=device.run_as_gid,
         )
         self.main_process.set_naming_params(
             prefix="[[ PikeSquares App ]] ",
@@ -93,6 +93,11 @@ class DeviceSection(Section):
         )
 
         self.main_process.change_dir(to=device.data_dir)
+
+        # self.main_process.run_command_on_event(
+        #    command=f"chmod 664 {device.data_dir / 'pikesquares.db'}",
+        #    phase=self.main_process.phases.PRIV_DROP_PRE,
+        # )
 
         self.networking.register_socket(
             self.networking.sockets.default(str(device.socket_address))

@@ -9,6 +9,7 @@ from time import sleep
 from typing import Optional, Annotated
 from pathlib import Path
 
+import sentry_sdk
 from rich.progress import (
     Progress,
 )
@@ -34,7 +35,6 @@ from pikesquares.conf import (
     AppConfig,
     AppConfigError,
     register_app_conf,
-    ensure_paths,
 )
 from pikesquares import services
 from pikesquares.adapters.database import DatabaseSessionManager
@@ -911,6 +911,7 @@ async def main(
     """
     Welcome to Pike Squares. Building blocks for your apps.
     """
+
     logger.info(f"About to execute command: {ctx.invoked_subcommand}")
     for key, value in os.environ.items():
         if key.startswith(("PIKESQUARES", "SCIE", "PEX", "PYTHON_VIRTUAL_ENV")):
@@ -940,12 +941,13 @@ async def main(
 
     # https://github.com/alexdelorenzo/app_paths
 
-    override_settings = ensure_paths(
-        data_dir,
-        run_dir,
-        config_dir,
-        log_dir,
-    )
+    override_settings = {}
+    # override_settings = ensure_paths(
+    #    data_dir,
+    #    run_dir,
+    #    config_dir,
+    #    log_dir,
+    # )
     try:
         register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:
@@ -953,6 +955,19 @@ async def main(
         raise typer.Abort() from None
 
     conf = services.get(context, AppConfig)
+
+    if conf.SENTRY_DSN:
+        sentry_sdk.init(
+            str(conf.SENTRY_DSN),
+            send_default_pii=True,
+            max_request_body_size="always",
+
+            # Setting up the release is highly recommended. The SDK will try to
+            # infer it, but explicitly setting it is more reliable:
+            # release=...,
+
+            traces_sample_rate=0,
+        )
 
     sessionmanager = DatabaseSessionManager(
         conf.SQLALCHEMY_DATABASE_URI, {"echo": True}
@@ -986,9 +1001,12 @@ async def main(
         "config_dir": str(conf.config_dir),
         "log_dir": str(conf.log_dir),
         "run_dir": str(conf.run_dir),
-        "sentry_dsn": conf.sentry_dsn,
     }
-    device = await get_or_create_device(context, common_kwargs)
+    device = await get_or_create_device(
+        context,
+        enable_tuntap_router=conf.ENABLE_TUNTAP_ROUTER,
+        create_kwargs=common_kwargs,
+    )
     uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
     logger.debug(f"read {len(uwsgi_options)} uwsgi options for device {device.id}")
     if not uwsgi_options:

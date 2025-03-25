@@ -30,8 +30,6 @@ logger = structlog.getLogger()
 class Device(ServiceBase, DevicePKIMixin, table=True):
 
     machine_id: str = Field(default=None, unique=True, max_length=32)
-    server_run_as_uid: str = Field(default="root")
-    server_run_as_gid: str = Field(default="root")
     uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
 
     enable_tuntap_router: bool = False
@@ -212,7 +210,11 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
         return self.__repr__()
 
 
-async def get_or_create_device(context: dict, create_kwargs: dict) -> Device:
+async def get_or_create_device(
+    context: dict,
+    create_kwargs: dict,
+    enable_tuntap_router: bool = False,
+    ) -> Device:
     from pikesquares.service_layer.uow import UnitOfWork
     uow = await services.aget(context, UnitOfWork)
     machine_id = await ServiceBase.read_machine_id()
@@ -221,9 +223,13 @@ async def get_or_create_device(context: dict, create_kwargs: dict) -> Device:
 
     device = await uow.devices.get_by_machine_id(machine_id)
     if not device:
+        uwsgi_plugins = []
+        if enable_tuntap_router:
+            uwsgi_plugins.append("tuntap")
+
         device = Device(
             service_id=f"device_{cuid()}",
-            uwsgi_plugins="tuntap",
+            uwsgi_plugins=", ".join(uwsgi_plugins),
             machine_id=machine_id,
             **create_kwargs,
         )

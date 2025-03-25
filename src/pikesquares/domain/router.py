@@ -20,9 +20,6 @@ class BaseRouter(ServiceBase, table=True):
     subscription_server_address: str | None = \
         Field(default=None, max_length=100)
 
-    run_as_uid: str = Field(default="root")
-    run_as_gid: str = Field(default="root")
-
     @property
     def uwsgi_config_section_class(self) -> HttpRouterSection | HttpsRouterSection:
         if int(self.port) >= 8443:
@@ -32,12 +29,10 @@ class BaseRouter(ServiceBase, table=True):
     @pydantic.computed_field
     @property
     def service_config(self) -> Path:
-        return Path(self.config_dir) / "projects" / f"{self.service_id}.ini"
-
-    @pydantic.computed_field
-    @property
-    def touch_reload_file(self) -> Path:
-        return self.service_config
+        service_config_dir = self.ensure_system_dir(
+            Path(self.config_dir) / "projects"
+        )
+        return service_config_dir / f"{self.service_id}.ini"
 
     def zmq_connect(self):
         pass

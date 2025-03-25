@@ -1,3 +1,6 @@
+import os
+import pwd
+import grp
 from datetime import (
     datetime,
     UTC,
@@ -79,7 +82,8 @@ class ServiceBase(TimeStampedBase, SQLModel):
         default_factory=lambda: str(uuid.uuid4()),
         max_length=36,
     )
-
+    run_as_uid: str = Field(default="root")
+    run_as_gid: str = Field(default="root")
     service_id: str = Field(default=None, unique=True)
     uwsgi_config: dict | None = Field(None, sa_type=JSON)
     uwsgi_plugins: str | None = Field(default=None, max_length=255)
@@ -88,24 +92,11 @@ class ServiceBase(TimeStampedBase, SQLModel):
     config_dir: str = Field(default="/etc/pikesquares", max_length=255)
     run_dir: str = Field(default="/var/run/pikesquares", max_length=255)
 
-    sentry_dsn: str | None = Field(default=None)
-
     cert_name: str | None = "_wildcard_pikesquares_dev"
 
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        if self.sentry_dsn:
-            sentry_sdk.init(
-                dsn=self.sentry_dsn,
-                traces_sample_rate=1.0,
-                release=f"{__app_name__} v{__version__}",
-            )
-            logger.info("initialized sentry-sdk")
 
     @property
     def handler_name(self) -> str:
@@ -148,7 +139,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
     @pydantic.computed_field
     @property
     def touch_reload_file(self) -> Path:
-        return Path(self.config_dir) / f"{self.service_id}.ini"
+        return self.service_config
 
     @pydantic.computed_field
     @property
@@ -199,8 +190,6 @@ class ServiceBase(TimeStampedBase, SQLModel):
         return self.uwsgi_config_section_class(self).\
             as_configuration().\
             tofile(self.service_config)
-
-
         # self.uwsgi_config["uwsgi"]["show-config"] = True
 
     @classmethod
@@ -209,6 +198,67 @@ class ServiceBase(TimeStampedBase, SQLModel):
             "/var/lib/dbus/machine-id"
         ).read_text(encoding="utf-8")
         return machine_id.strip()
+
+    def ensure_system_dir(
+            self,
+            newdir: Path | str,
+            owner_username: str = "root",
+            owner_groupname: str = "pikesquares",
+            dir_mode: int = 0o775,
+        ) -> Path:
+        if isinstance(newdir, str):
+            newdir = Path(newdir)
+
+        if newdir.exists():
+            return newdir
+
+        newdir.mkdir(
+            mode=dir_mode,
+            parents=True,
+            exist_ok=True,
+        )
+        try:
+            owner_uid = pwd.getpwnam(owner_username)[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate user: {owner_username}") from None
+
+        try:
+            owner_gid = grp.getgrnam(owner_groupname)[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
+
+        os.chown(newdir, owner_uid, owner_gid)
+
+        return newdir
+
+    def make_system_file(
+            self,
+            newfile: Path | str,
+            owner_username: str = "root",
+            owner_groupname: str = "pikesquares",
+            file_mode: int = 0o664,
+        ) -> Path:
+        if isinstance(newfile, str):
+            newfile = Path(newfile)
+
+        if newfile.exists():
+            return newfile
+
+        newfile.touch(mode=file_mode, exist_ok=True)
+        try:
+            owner_uid = pwd.getpwnam(owner_username)[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate user: {owner_username}") from None
+
+        try:
+            owner_gid = grp.getgrnam(owner_groupname)[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
+
+        os.chown(newfile, owner_uid, owner_gid)
+
+        return newfile
+
 
     @classmethod
     def read_stats(cls, stats_address: Path):

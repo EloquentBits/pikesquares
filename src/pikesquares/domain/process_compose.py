@@ -273,7 +273,12 @@ async def make_device_process(context: dict, device: Device, conf: AppConfig) ->
     """ device process-compose process """
     sqlite3_plugin = conf.plugins_dir / "sqlite3_plugin.so"
     if not sqlite3_plugin.exists():
-        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {str(sqlite3_plugin)}") from None
+
+        sqlite_plugin_alt = os.environ.get("PIKESQUARES_SQLITE_PLUGIN")
+        if sqlite_plugin_alt and Path(sqlite_plugin_alt).exists():
+            sqlite3_plugin = Path(sqlite_plugin_alt)
+        else:
+            raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {str(sqlite3_plugin)}") from None
 
     sqlite3_db = conf.data_dir / "pikesquares.db"
     cmd = f"{conf.UWSGI_BIN} --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
@@ -356,7 +361,6 @@ def make_dnsmasq_process(
         "--keep-in-foreground",
         "--port 5353",
         "--address=/pikesquares.local/192.168.0.1",
-        "--address=/pikesquares.dev/192.168.0.1",
         "--listen-address=127.0.0.34",
         "--no-resolv",
     ]

@@ -1,3 +1,7 @@
+import pwd
+import grp
+import os
+
 from pathlib import Path
 from typing import Annotated
 
@@ -28,6 +32,41 @@ class ManagedServiceBase(pydantic.BaseModel):
 
     def __str__(self) -> str:
         return f"{self.daemon_name} @ {self.daemon_bin}"
+
+    @pydantic.field_validator(
+        "daemon_log",
+        "daemon_config",
+        mode="before"
+    )
+    def ensure_daemon_files(cls, v) -> Path:
+        path = Path(v)
+        logger.debug(path)
+
+        file_path = Path(v)
+        owner_username: str = "root"
+        owner_groupname: str = "pikesquares"
+        file_mode: int = 0o664
+
+        if isinstance(file_path, str):
+            file_path = Path(file_path)
+
+        if file_path.exists():
+            return file_path
+
+        file_path.touch(mode=file_mode, exist_ok=True)
+        try:
+            owner_uid = pwd.getpwnam(owner_username)[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate user: {owner_username}") from None
+
+        try:
+            owner_gid = grp.getgrnam(owner_groupname)[2]
+        except KeyError:
+            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
+
+        os.chown(file_path, owner_uid, owner_gid)
+
+        return file_path
 
     def cmd(
             self,

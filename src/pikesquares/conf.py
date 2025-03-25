@@ -163,19 +163,23 @@ class SysFile(pydantic.BaseModel):
     owner_groupname: str = "pikesquares"
 
 
-def mkdir(
+def ensure_system_dir(
         newdir: Path | str,
         owner_username: str = "root",
         owner_groupname: str = "pikesquares",
         dir_mode: int = 0o775,
-    ) -> Path | None:
+    ) -> Path:
     if isinstance(newdir, str):
         newdir = Path(newdir)
 
     if newdir.exists():
         return newdir
 
-    newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
+    newdir.mkdir(
+        mode=dir_mode,
+        parents=True,
+        exist_ok=True,
+    )
     try:
         owner_uid = pwd.getpwnam(owner_username)[2]
     except KeyError:
@@ -187,6 +191,8 @@ def mkdir(
         raise AppConfigError(f"unable locate group: {owner_groupname}") from None
 
     os.chown(newdir, owner_uid, owner_gid)
+
+    return newdir
 
 
 def make_system_file(
@@ -290,8 +296,7 @@ class AppConfig(BaseSettings):
     # CADDY_DIR: Optional[str] = None
     # CLI_STYLE: QuestionaryStyle
 
-    sentry_enabled: bool = False
-    sentry_dsn: str | None = None
+    SENTRY_DSN: pydantic.HttpUrl | None = None
     daemonize: bool = False
     ENABLE_TUNTAP_ROUTER: bool = False
 
@@ -317,17 +322,17 @@ class AppConfig(BaseSettings):
     @pydantic.computed_field
     @cached_property
     def pki_dir(self) -> Path:
-        return mkdir(self.data_dir / "pki")
+        return ensure_system_dir(self.data_dir / "pki")
 
     @pydantic.computed_field
     @cached_property
     def uv_cache_dir(self) -> Path:
-        return mkdir(self.data_dir / "uv-cache")
+        return ensure_system_dir(self.data_dir / "uv-cache")
 
     @pydantic.computed_field
     @cached_property
     def plugins_dir(self) -> Path:
-        return mkdir(self.data_dir / "plugins")
+        return ensure_system_dir(self.data_dir / "plugins")
 
     @pydantic.computed_field
     @cached_property
@@ -336,6 +341,31 @@ class AppConfig(BaseSettings):
             return self.SCIE_LIFT_FILE
         elif self.SCIE_BASE:
             return self.SCIE_BASE / "lift.json"
+
+    @pydantic.field_validator(
+        "data_dir",
+        "log_dir",
+        "config_dir",
+        "run_dir",
+        mode="before"
+    )
+    def ensure_paths(cls, v) -> Path:
+        path = Path(v)
+        logger.debug(path)
+        ensure_system_dir(path)
+        return path
+
+    """
+    @pydantic.field_validator('temp_dir', mode="after")
+    def validate_temp_dir(cls, v, values):
+        data_dir = values.data['data_dir'] if 'data_dir' in values.data else None
+
+        if data_dir and v.is_relative_to(data_dir):
+            raise ValueError('temp_dir should not be inside data_dir')
+        return v
+
+    """
+
     """
     @pydantic.computed_field
     @property
@@ -386,43 +416,3 @@ def register_app_conf(
         return AppConfig(**override_settings)
 
     register_factory(context, AppConfig, conf_factory)
-
-
-def ensure_paths(
-    data_dir: Path | None = None,
-    run_dir: Path | None = None,
-    config_dir: Path | None = None,
-    log_dir: Path | None = None,
-    db_path: Path | None = None,
-    ) -> dict[str, str | Path]:
-
-    dir_settings: dict[str, str | Path] = {
-        "PIKESQUARES_DATA_DIR": os.environ.get("PIKESQUARES_DATA_DIR", Path("/var/lib/pikesquares")),
-        "PIKESQUARES_RUN_DIR": os.environ.get("PIKESQUARES_RUN_DIR", Path("/var/run/pikesquares")),
-        "PIKESQUARES_LOG_DIR": os.environ.get("PIKESQUARES_LOG_DIR", Path("/var/log/pikesquares")),
-        "PIKESQUARES_CONFIG_DIR": os.environ.get("PIKESQUARES_CONFIG_DIR", Path("/etc/pikesquares")),
-
-    }
-    sysdirs = {
-        "DATA_DIR": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), Path("/var/lib/pikesquares")),
-        "CONFIG_DIR": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), Path("/etc/pikesquares")),
-        "LOG_DIR": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), Path("/var/log/pikesquares")),
-        "RUN_DIR": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), Path("/var/run/pikesquares")),
-    }
-    for varname, path_to_dir_sources in sysdirs.items():
-        path_to_dir = path_to_dir_sources[0] or path_to_dir_sources[1] or path_to_dir_sources[2]
-        if not Path(path_to_dir).exists():
-            mkdir(Path(path_to_dir))
-            dir_settings[varname] = Path(path_to_dir)
-
-    data_dir = dir_settings.get("PIKESQUARES_DATA_DIR")
-    if not data_dir:
-        raise AppConfigError("missing data dir")
-
-    sysfiles = [
-        db_path or Path(data_dir) / "pikesquares.db"
-    ]
-    for path_to_file in sysfiles:
-        _ = make_system_file(path_to_file)
-
-    return dir_settings
