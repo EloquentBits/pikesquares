@@ -25,13 +25,16 @@ from cuid import cuid
 from dotenv import load_dotenv
 from plumbum import ProcessExecutionError
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import SQLModel
+from alembic.config import Config
+from alembic import command
 # from circus import Arbiter, get_arbiter
 
 from pikesquares.conf import (
     AppConfig,
     AppConfigError,
     register_app_conf,
-    init_settings,
+    ensure_paths,
 )
 from pikesquares import services
 from pikesquares.adapters.database import DatabaseSessionManager
@@ -916,9 +919,14 @@ async def main(
     is_root: bool = os.getuid() == 0
     logger.info(f"{os.getuid()=} {is_root=}")
 
-    if ctx.invoked_subcommand in set({"bootstrap", "up"}) and not is_root:
-        console.info("Please start server as root user. `sudo pikesquares up`")
-        raise typer.Exit()
+    if ctx.invoked_subcommand in set({"up", }):
+        if not is_root:
+            console.info("Please start server as root user. `sudo pikesquares up`")
+            raise typer.Exit()
+        else:
+            pass
+            # create pikesquares user and group
+            # sudo useradd -u 777 pikesquares -d /var/lib/pikesquarees
 
     pikesquares_version = version or os.environ.get("PIKESQUARES_VERSION")
     if not pikesquares_version:
@@ -932,14 +940,11 @@ async def main(
 
     # https://github.com/alexdelorenzo/app_paths
 
-    override_settings = init_settings(
-        is_root,
+    override_settings = ensure_paths(
         data_dir,
         run_dir,
         config_dir,
         log_dir,
-        (Path(data_dir or "/var/lib/pikesquares")) / "pikesquares.db",
-        pikesquares_version,
     )
     try:
         register_app_conf(context, override_settings)
@@ -960,6 +965,16 @@ async def main(
     services.register_factory(context, AsyncSession, get_session)
     session = await services.aget(context, AsyncSession)
 
+    async with sessionmanager.connect() as conn:
+        await conn.run_sync(lambda conn: SQLModel.metadata.create_all(conn))
+        # async with sessionmanager._engine.begin() as conn:
+        #    await conn.run_sync(
+        #       lambda conn: SQLModel.metadata.create_all(conn)
+        #    )
+    # generate the version table, "stamping" it with the most recent rev:
+    # alembic_cfg = Config("/home/pk/dev/eqb/pikesquares/alembic.ini")
+    # command.stamp(alembic_cfg, "head")
+
     async def uow_factory():
         async with UnitOfWork(session=session) as uow:
             yield uow
@@ -979,6 +994,7 @@ async def main(
     if not uwsgi_options:
         for uwsgi_option in device.get_uwsgi_options():
             await uow.uwsgi_options.add(uwsgi_option)
+            await uow.commit()
 
             """
             existing_options = await uow.uwsgi_options.list(device_id=device.id)

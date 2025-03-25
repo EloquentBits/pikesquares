@@ -71,6 +71,9 @@ uvicorn-up:
 pc-attach:
   sudo process-compose attach -u /var/run/pikesquares/process-compose.sock
 
+pc-down:	
+  sudo process-compose down -u /var/run/pikesquares/process-compose.sock
+
 pc-up-sock:
   process-compose --use-uds --unix-socket pc.sock --log-file pc.log 
 
@@ -79,6 +82,10 @@ pc-up-tcp:
 
 db-migrate:
   uv run alembic upgrade head
+
+db-browse:
+  harlequin -a sqlite /var/lib/pikesquares/pikesquares.db
+
 
 export-dotenv-file:
   export $(cat .env | xargs)

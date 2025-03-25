@@ -22,11 +22,11 @@ from pydantic_settings import (
     # PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
-# from pydantic.fields import FieldInfo
 import structlog
 
 from pikesquares.services import register_factory
 from pikesquares.cli.console import console
+from pikesquares.adapters.database import DatabaseSessionManager
 
 logger = structlog.get_logger()
 
@@ -147,7 +147,6 @@ class APISettings(pydantic.BaseModel):
 
 class SysDir(pydantic.BaseModel):
 
-    # path_to_dir: Path
     path_to_dir: pydantic.DirectoryPath = pydantic.Field()
     env_var: str
     dir_mode: int = 0o775
@@ -155,7 +154,16 @@ class SysDir(pydantic.BaseModel):
     owner_groupname: str = "pikesquares"
 
 
-def make_system_dir(
+class SysFile(pydantic.BaseModel):
+
+    path_to_file: pydantic.FilePath = pydantic.Field()
+    env_var: str
+    dir_mode: int = 0o664
+    owner_username: str = "root"
+    owner_groupname: str = "pikesquares"
+
+
+def mkdir(
         newdir: Path | str,
         owner_username: str = "root",
         owner_groupname: str = "pikesquares",
@@ -167,10 +175,7 @@ def make_system_dir(
     if newdir.exists():
         return newdir
 
-    logger.info(f"make_system_dir: mkdir {str(newdir)}")
     newdir.mkdir(mode=dir_mode, parents=True, exist_ok=True)
-
-    logger.info(f"make_system_dir: chown {owner_username}:{owner_groupname}")
     try:
         owner_uid = pwd.getpwnam(owner_username)[2]
     except KeyError:
@@ -189,7 +194,7 @@ def make_system_file(
         owner_username: str = "root",
         owner_groupname: str = "pikesquares",
         file_mode: int = 0o664,
-    ) -> Path | None:
+    ) -> Path:
     if isinstance(newfile, str):
         newfile = Path(newfile)
 
@@ -209,17 +214,7 @@ def make_system_file(
 
     os.chown(newfile, owner_uid, owner_gid)
 
-
-def ensure_sysdir(dir_path, varname):
-    dir_path = dir_path or os.environ.get(f"PIKESQUARES_{varname}")
-    if not dir_path:
-        dir_path = make_system_dir(Path("/var/lib/pikesquares"))
-        logger.info(f"new dir with default path: {str(dir_path)}")
-        return dir_path
-    elif not Path(dir_path).exists():
-        dir_path = make_system_dir(Path(dir_path))
-        logger.info(f"new dir with a user provided path: {str(dir_path)}")
-        return dir_path
+    return newfile
 
 
 def get_lift_file_section(lift_file: Path, lift_file_key: str):
@@ -298,6 +293,7 @@ class AppConfig(BaseSettings):
     sentry_enabled: bool = False
     sentry_dsn: str | None = None
     daemonize: bool = False
+    ENABLE_TUNTAP_ROUTER: bool = False
 
     # to override api_settings:
     # export my_prefix_api_settings='{"foo": "x", "apple": 1}'
@@ -321,17 +317,17 @@ class AppConfig(BaseSettings):
     @pydantic.computed_field
     @cached_property
     def pki_dir(self) -> Path:
-        return make_system_dir(self.data_dir / "pki")
+        return mkdir(self.data_dir / "pki")
 
     @pydantic.computed_field
     @cached_property
     def uv_cache_dir(self) -> Path:
-        return make_system_dir(self.data_dir / "uv-cache")
+        return mkdir(self.data_dir / "uv-cache")
 
     @pydantic.computed_field
     @cached_property
     def plugins_dir(self) -> Path:
-        return make_system_dir(self.data_dir / "plugins")
+        return mkdir(self.data_dir / "plugins")
 
     @pydantic.computed_field
     @cached_property
@@ -392,70 +388,41 @@ def register_app_conf(
     register_factory(context, AppConfig, conf_factory)
 
 
-def init_settings(
-    is_root: bool,
+def ensure_paths(
     data_dir: Path | None = None,
     run_dir: Path | None = None,
     config_dir: Path | None = None,
     log_dir: Path | None = None,
     db_path: Path | None = None,
-    version: str | None = None,
-    ):
+    ) -> dict[str, str | Path]:
 
-    override_settings: dict[str, str | Path] = {
-        "PIKESQUARES_DATA_DIR": os.environ.get("PIKESQUARES_DATA_DIR", "/var/lib/pikesquares"),
-        "PIKESQUARES_RUN_DIR": os.environ.get("PIKESQUARES_RUN_DIR", "/var/run/pikesquares"),
-        "PIKESQUARES_LOG_DIR": os.environ.get("PIKESQUARES_LOG_DIR", "/var/log/pikesquares"),
-        "PIKESQUARES_CONFIG_DIR": os.environ.get("PIKESQUARES_CONFIG_DIR", "/etc/pikesquares"),
+    dir_settings: dict[str, str | Path] = {
+        "PIKESQUARES_DATA_DIR": os.environ.get("PIKESQUARES_DATA_DIR", Path("/var/lib/pikesquares")),
+        "PIKESQUARES_RUN_DIR": os.environ.get("PIKESQUARES_RUN_DIR", Path("/var/run/pikesquares")),
+        "PIKESQUARES_LOG_DIR": os.environ.get("PIKESQUARES_LOG_DIR", Path("/var/log/pikesquares")),
+        "PIKESQUARES_CONFIG_DIR": os.environ.get("PIKESQUARES_CONFIG_DIR", Path("/etc/pikesquares")),
 
     }
-    if is_root:
-        sysdirs = {
-            "data_dir": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), Path("/var/lib/pikesquares")),
-            "run_dir": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), Path("/var/run/pikesquares")),
-            "config_dir": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), Path("/etc/pikesquares")),
-            "log_dir": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), Path("/var/log/pikesquares")),
-        }
-        for varname, path_to_dir_sources in sysdirs.items():
-            cli_arg = path_to_dir_sources[0]
-            env_var_path_to_dir = path_to_dir_sources[1]
-            default_path_to_dir = path_to_dir_sources[2]
-            logger.info(f"{varname=}")
-            if cli_arg:
-                logger.info(f"cli args: {cli_arg}.")
-            if env_var_path_to_dir:
-                logger.info(f"env var: {env_var_path_to_dir}")
-            # ensure_sysdir(sysdir, varname)
+    sysdirs = {
+        "DATA_DIR": (data_dir, os.environ.get("PIKESQUARES_DATA_DIR"), Path("/var/lib/pikesquares")),
+        "CONFIG_DIR": (config_dir, os.environ.get("PIKESQUARES_CONFIG_DIR"), Path("/etc/pikesquares")),
+        "LOG_DIR": (log_dir, os.environ.get("PIKESQUARES_LOG_DIR"), Path("/var/log/pikesquares")),
+        "RUN_DIR": (run_dir, os.environ.get("PIKESQUARES_RUN_DIR"), Path("/var/run/pikesquares")),
+    }
+    for varname, path_to_dir_sources in sysdirs.items():
+        path_to_dir = path_to_dir_sources[0] or path_to_dir_sources[1] or path_to_dir_sources[2]
+        if not Path(path_to_dir).exists():
+            mkdir(Path(path_to_dir))
+            dir_settings[varname] = Path(path_to_dir)
 
-            path_to_dir = cli_arg or env_var_path_to_dir or default_path_to_dir
-            if isinstance(path_to_dir, str):
-                path_to_dir = Path(path_to_dir)
-            if not path_to_dir.exists():
-                logger.info(f"creating dir: {path_to_dir}")
-                make_system_dir(path_to_dir)
-            override_settings[varname] = path_to_dir
+    data_dir = dir_settings.get("PIKESQUARES_DATA_DIR")
+    if not data_dir:
+        raise AppConfigError("missing data dir")
 
-            sysfiles = [
-                db_path,
-            ]
+    sysfiles = [
+        db_path or Path(data_dir) / "pikesquares.db"
+    ]
+    for path_to_file in sysfiles:
+        _ = make_system_file(path_to_file)
 
-            for path_to_file in sysfiles:
-                if path_to_file and not path_to_file.exists():
-                    make_system_file(path_to_file)
-
-                    # if sessionmanager._engine:
-                    #    async with sessionmanager._engine.begin() as conn:
-                    #        await conn.run_sync(
-                    #            lambda conn: SQLModel.metadata.create_all(conn)
-                    #        )
-                    # then, load the Alembic configuration and generate the
-                    # version table, "stamping" it with the most recent rev:
-                    # from alembic.config import Config
-                    # from alembic import command
-                    # alembic_cfg = Config("/path/to/yourapp/alembic.ini")
-                    # command.stamp(alembic_cfg, "head")
-
-    if version:
-        override_settings["VERSION"] = version
-
-    return override_settings
+    return dir_settings

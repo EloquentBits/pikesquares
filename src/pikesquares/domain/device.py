@@ -16,7 +16,7 @@ from sqlmodel import (
 )
 
 from .base import ServiceBase, TimeStampedBase
-from pikesquares.conf import AppConfig, AppConfigError
+from pikesquares.conf import AppConfigError
 from pikesquares.exceptions import StatsReadError
 from pikesquares import services
 from pikesquares.services.data import DeviceStats
@@ -34,17 +34,19 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     server_run_as_gid: str = Field(default="root")
     uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
 
+    enable_tuntap_router: bool = False
+
     # def model_post_init(self, __context: Any) -> None:
     #    super().model_post_init(__context)
-
-    @property
-    def uwsgi_config_section_class(self) -> DeviceSection:
-        return DeviceSection
 
     @pydantic.computed_field
     @property
     def apps_dir(self) -> Path:
         return Path(self.config_dir) / "projects"
+
+    @property
+    def uwsgi_config_section_class(self) -> DeviceSection:
+        return DeviceSection
 
     @pydantic.computed_field
     @property
@@ -90,7 +92,8 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
     def get_uwsgi_options(self) -> list["DeviceUWSGIOptions"]:
         uwsgi_options: list[DeviceUWSGIOptions] = []
-        dvc_conf_section = self.uwsgi_config_section_class(self)
+        dvc_conf_section = DeviceSection(self)
+
         for key, value in dvc_conf_section._get_options():
             uwsgi_option = DeviceUWSGIOptions(
                 option_key=key.key,
@@ -224,7 +227,7 @@ async def get_or_create_device(context: dict, create_kwargs: dict) -> Device:
             machine_id=machine_id,
             **create_kwargs,
         )
-        await uow.devices.add(device)
+        device = await uow.devices.add(device)
         await uow.commit()
         logger.debug(f"Created {device=} for {machine_id=}")
     else:

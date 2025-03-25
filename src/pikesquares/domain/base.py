@@ -117,10 +117,9 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def __str__(self):
         return self.__repr__()
 
-    def model_post_init(self, __context: Any) -> None:
-        uwsgi_config = self.write_uwsgi_config()
-        logger.debug(f"wrote config to file: {uwsgi_config}")
-        import ipdb;ipdb.set_trace()
+    # def model_post_init(self, __context: Any) -> None:
+    #    uwsgi_config = self.write_uwsgi_config()
+    #    logger.debug(f"wrote config to file: {uwsgi_config}")
 
     @pydantic.computed_field
     @property
