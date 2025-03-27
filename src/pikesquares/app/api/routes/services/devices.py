@@ -1,6 +1,6 @@
-import logging
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from svcs.fastapi import DepContainer
@@ -8,40 +8,21 @@ from svcs.fastapi import DepContainer
 from pikesquares.domain.device import Device
 from pikesquares.service_layer.uow import UnitOfWork
 
-logger = logging.getLogger("uvicorn.error")
-logger.setLevel(logging.DEBUG)
+# logger = logging.getLogger("uvicorn.error")
+# logger.setLevel(logging.DEBUG)
+
+logger = structlog.getLogger()
 
 
 router = APIRouter(prefix="/devices", tags=["services"])
 
 
-"""
-@app.get("/ping")
-async def pong():
-    return {"ping": "pong!"}
-
-@app.get("/songs", response_model=list[Song])
-async def get_songs(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(select(Song))
-    songs = result.scalars().all()
-    return [Song(name=song.name, artist=song.artist, year=song.year, id=song.id) for song in songs]
-
-@app.post("/songs")
-async def add_song(song: SongCreate, session: AsyncSession = Depends(get_session)):
-    song = Song(name=song.name, artist=song.artist, year=song.year)
-    session.add(song)
-    await session.commit()
-    await session.refresh(song)
-    return song
-"""
-
-
-# DBSessionDep = Annotated[AsyncSession, Depends(get_session)]
 @router.post("/create", response_model=Device)
 async def add_device(
         device: Device,
         services: DepContainer,
     ):
+
     session = await services.aget(AsyncSession)
     device = Device.model_validate(
        {"machineId": device.machine_id, "serviceId": device.service_id}
@@ -55,18 +36,19 @@ async def add_device(
     return device
 
 
-@router.get("/{id}", response_model=Device)
+@router.get("/{machine_id}", response_model=Device)
 async def read_device(
-        id: str,
+        machine_id: str,
         services: DepContainer,
     ) -> Any:
     """
-    Get device by ID.
+    Get device by machine id.
     """
+
     session = await services.aget(AsyncSession)
 
     async with UnitOfWork(session=session) as uow:
-        device = await uow.devices.get_by_id(id)
+        device = await uow.devices.get_by_machine_id(machine_id)
         if not device:
             raise HTTPException(status_code=404, detail="Device not found")
         return device

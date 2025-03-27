@@ -1,4 +1,4 @@
-import logging
+import traceback
 from typing import Any, AsyncIterator
 import contextlib
 
@@ -47,7 +47,9 @@ class DatabaseSessionManager:
         async with self._engine.begin() as connection:
             try:
                 yield connection
-            except Exception:
+            except Exception as exc:
+                traceback.format_exc()
+                logger.exception(exc)
                 await connection.rollback()
                 raise
 
@@ -59,7 +61,9 @@ class DatabaseSessionManager:
         session = self._sessionmaker()
         try:
             yield session
-        except Exception:
+        except Exception as exc:
+            traceback.format_exc()
+            logger.exception(exc)
             await session.rollback()
             raise
         finally:

@@ -5,7 +5,6 @@ import os
 import pwd
 import grp
 from pathlib import Path
-from functools import cached_property
 from typing import (
     Any,
     Optional,
@@ -167,6 +166,8 @@ def ensure_system_dir(
         newdir: Path | str,
         owner_username: str = "root",
         owner_groupname: str = "pikesquares",
+        owner_uid: int | None = None,
+        owner_gid: int | None = None,
         dir_mode: int = 0o775,
     ) -> Path:
     if isinstance(newdir, str):
@@ -180,17 +181,22 @@ def ensure_system_dir(
         parents=True,
         exist_ok=True,
     )
+    logger.info(f"Created Directory {newdir}")
     try:
-        owner_uid = pwd.getpwnam(owner_username)[2]
+        owner_uid = owner_uid or pwd.getpwnam(owner_username)[2]
     except KeyError:
         raise AppConfigError(f"unable locate user: {owner_username}") from None
 
     try:
-        owner_gid = grp.getgrnam(owner_groupname)[2]
+        owner_gid = owner_gid or grp.getgrnam(owner_groupname)[2]
     except KeyError:
         raise AppConfigError(f"unable locate group: {owner_groupname}") from None
-
-    os.chown(newdir, owner_uid, owner_gid)
+    # import ipdb;ipdb.set_trace()
+    logger.info(f"Changed Ownership for Directory {newdir} to {owner_uid}:{owner_gid}")
+    try:
+        os.chown(newdir, owner_uid, owner_gid)
+    except PermissionError:
+        raise AppConfigError(f"unable to chown {newdir} to: {owner_uid}:{owner_gid}") from None
 
     return newdir
 
@@ -218,7 +224,10 @@ def make_system_file(
     except KeyError:
         raise AppConfigError(f"unable locate group: {owner_groupname}") from None
 
-    os.chown(newfile, owner_uid, owner_gid)
+    try:
+        os.chown(newfile, owner_uid, owner_gid)
+    except PermissionError:
+        raise AppConfigError(f"unable to chown {newfile} to: {owner_uid}:{owner_gid}") from None
 
     return newfile
 
@@ -310,32 +319,41 @@ class AppConfig(BaseSettings):
         return f"sqlite+aiosqlite:///{self.data_dir / "pikesquares.db"}"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def default_app_run_as_uid(self) -> int:
         return pwd.getpwnam("pikesquares").pw_uid
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def default_app_run_as_gid(self) -> int:
         return pwd.getpwnam("pikesquares").pw_gid
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def pki_dir(self) -> Path:
         return ensure_system_dir(self.data_dir / "pki")
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def uv_cache_dir(self) -> Path:
         return ensure_system_dir(self.data_dir / "uv-cache")
 
     @pydantic.computed_field
-    @cached_property
+    @property
+    def pyvenvs_dir(self) -> Path:
+        return ensure_system_dir(
+            self.data_dir / "pyvenvs",
+            owner_username=os.getlogin(),
+            owner_gid=os.getgid(),
+        )
+
+    @pydantic.computed_field
+    @property
     def plugins_dir(self) -> Path:
         return ensure_system_dir(self.data_dir / "plugins")
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def lift_file(self) -> Path | None:
         if self.SCIE_LIFT_FILE:
             return self.SCIE_LIFT_FILE

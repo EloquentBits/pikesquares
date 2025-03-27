@@ -1,5 +1,4 @@
 # import shutil
-from functools import cached_property
 from pathlib import Path
 
 from sqlmodel import Field
@@ -10,6 +9,7 @@ import structlog
 
 from .base import ServiceBase
 from pikesquares import services
+from pikesquares.conf import ensure_system_dir
 from pikesquares.presets.project import ProjectSection
 
 
@@ -27,13 +27,13 @@ class Project(ServiceBase, table=True):
     @pydantic.computed_field
     @property
     def service_config(self) -> Path:
-        service_config_dir = self.ensure_system_dir(
+        service_config_dir = ensure_system_dir(
             Path(self.config_dir) / "projects"
         )
         return service_config_dir / f"{self.service_id}.ini"
 
     @pydantic.computed_field
-    @cached_property
+    @property
     def apps_dir(self) -> Path:
         return Path(self.config_dir) / f"{self.service_id}" / "apps"
 

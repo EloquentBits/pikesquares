@@ -199,38 +199,6 @@ class ServiceBase(TimeStampedBase, SQLModel):
         ).read_text(encoding="utf-8")
         return machine_id.strip()
 
-    def ensure_system_dir(
-            self,
-            newdir: Path | str,
-            owner_username: str = "root",
-            owner_groupname: str = "pikesquares",
-            dir_mode: int = 0o775,
-        ) -> Path:
-        if isinstance(newdir, str):
-            newdir = Path(newdir)
-
-        if newdir.exists():
-            return newdir
-
-        newdir.mkdir(
-            mode=dir_mode,
-            parents=True,
-            exist_ok=True,
-        )
-        try:
-            owner_uid = pwd.getpwnam(owner_username)[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate user: {owner_username}") from None
-
-        try:
-            owner_gid = grp.getgrnam(owner_groupname)[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
-
-        os.chown(newdir, owner_uid, owner_gid)
-
-        return newdir
-
     def make_system_file(
             self,
             newfile: Path | str,

@@ -7,6 +7,7 @@ from cuid import cuid
 
 from pikesquares import get_first_available_port, services
 from .base import ServiceBase
+from pikesquares.conf import ensure_system_dir
 from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
 
 logger = structlog.getLogger()
@@ -29,7 +30,7 @@ class BaseRouter(ServiceBase, table=True):
     @pydantic.computed_field
     @property
     def service_config(self) -> Path:
-        service_config_dir = self.ensure_system_dir(
+        service_config_dir = ensure_system_dir(
             Path(self.config_dir) / "projects"
         )
         return service_config_dir / f"{self.service_id}.ini"

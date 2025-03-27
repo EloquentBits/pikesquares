@@ -35,6 +35,7 @@ from pikesquares.conf import (
     AppConfig,
     AppConfigError,
     register_app_conf,
+    ensure_system_dir,
 )
 from pikesquares import services
 from pikesquares.adapters.database import DatabaseSessionManager
@@ -480,8 +481,12 @@ def init(
     service_type = "WSGI-App"
     service_type_prefix = service_type.replace("-", "_").lower()
     service_id = f"{service_type_prefix}_{cuid()}"
-    proj_type = "Python"
-    pyvenv_dir = conf.data_dir / "venvs" / service_id
+    # proj_type = "Python"
+    pyvenv_dir = ensure_system_dir(
+        conf.pyvenvs_dir / service_id,
+        owner_username=os.getlogin(),
+        owner_gid=os.getgid(),
+    )
     """
         jobs
             1) detect runtime
@@ -550,18 +555,19 @@ def init(
         result_mark_fld="",
         description_done=None,
     )
-    for task in runtime.get_tasks():
-        task_id = progress.add_task(
-            task.description,
-            visible=task.visible,
-            total=task.total,
-            start=task.start,
-            emoji_fld=task.emoji_fld,
-            result_mark_fld=task.result_mark_fld,
-            description_done=task.description_done,
-        )
-        
-    """
+
+    if 0:
+        for task in runtime.get_tasks():
+            task_id = progress.add_task(
+                task.description,
+                visible=task.visible,
+                total=task.total,
+                start=task.start,
+                emoji_fld=task.emoji_fld,
+                result_mark_fld=task.result_mark_fld,
+                description_done=task.description_done,
+            )
+
     django_check_task = progress.add_task(
         "Running Django check",
         visible=False,
@@ -581,7 +587,6 @@ def init(
         result_mark_fld="",
         description_done="Django modules discovered",
     )
-    """
 
     install_dependencies_task = progress.add_task(
         "Installing project dependencies",
@@ -599,7 +604,7 @@ def init(
     app_tmp_dir = None
     dependencies_count = 0
 
-    layout = make_layout(progress, overall_progress)
+    layout = make_layout()
     task_messages_layout = layout["task_messages"]
     msg_id_styles = {
         "C": "red",
@@ -942,12 +947,6 @@ async def main(
     # https://github.com/alexdelorenzo/app_paths
 
     override_settings = {}
-    # override_settings = ensure_paths(
-    #    data_dir,
-    #    run_dir,
-    #    config_dir,
-    #    log_dir,
-    # )
     try:
         register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:

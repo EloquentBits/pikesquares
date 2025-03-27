@@ -119,7 +119,11 @@ class GenericSqlRepository(GenericRepository[T], ABC):
 
     async def get_by_id(self, id: str) -> T | None:
         stmt = self._construct_get_stmt(id)
+        logger.debug(f"{str(stmt)=}")
+        logger.debug(f"{id=}")
         results = await self._session.exec(stmt)
+        logger.debug(f"{results=}")
+        # import ipdb;ipdb.set_trace()
         if results:
             obj = results.first()
             return obj
@@ -151,21 +155,18 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         logger.debug(f"LIST SQL -> {str(stmt)}")
         results = await self._session.exec(stmt)
         logger.debug(results)
-        # import ipdb;ipdb.set_trace()
         return results.all()
 
     async def add(self, record: T) -> T:
         self._session.add(record)
         await self._session.flush()
         await self._session.refresh(record)
-        # await record.save_config_to_filesystem()
         return record
 
     async def update(self, record: T) -> T:
         self._session.add(record)
         await self._session.flush()
         await self._session.refresh(record)
-        # await record.save_config_to_filesystem()
         return record
 
     async def delete(self, id: str) -> None:
@@ -192,9 +193,9 @@ class DeviceRepository(GenericSqlRepository[Device], DeviceReposityBase):
         stmt = select(Device).where(Device.machine_id == machine_id)
         results = await self._session.exec(stmt)
         if results:
-            logger.debug(results)
+            logger.debug(f"{results=}")
             obj = results.first()
-            logger.debug(obj)
+            logger.debug(f"{obj=}")
             return obj
 
 
