@@ -73,15 +73,14 @@ This approach embodies simplicity and precision—offering a unified, modular fr
 ##### `pikesquares up`
 <img src = "https://pikesquares-diagrams.b-cdn.net/asciinema/pks_up.gif">
 
+<!-- 
 ##### `pikesquares --help`
 <br>
-
 <img src="https://pikesquares-diagrams.b-cdn.net/asciinema/uv.gif" style="max-width: 800px; width: 100%;">
-
 ##### `pikesquares init`
 <br>
-
 <img src="https://pikesquares-diagrams.b-cdn.net/asciinema/init_test.gif">
+-->
 
 ## Philosophy
  ⚔︎⛊ In the chaos of battle, discipline wins wars. We've fought through the confusion of virtual environments, tangled runtimes, and the endless struggle of reviving old projects. From that battlefield, `pikesquares` was forged.
