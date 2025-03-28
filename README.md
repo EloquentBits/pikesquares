@@ -96,15 +96,6 @@ This approach embodies simplicity and precision—offering a unified, modular fr
 
 ⚔︎⛊ We fight in the terminal. The command line is our battlefield, where every move is deliberate, every action clear. Power comes from understanding what’s happening under the hood.
 
-<p align="center"> ꧁ ༺ ⚜ ༻ ꧂ </p>
-<p align="center">⚔️ <strong>MAKE CLI GREAT AGAIN</strong> ⚔️</p>
-<p align="center">·:*¨༺ ♱✮♱ ༻¨*:·</p>
-
-
-
-
-
-
 ## ⚠️License
 
 `pikesquares` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
