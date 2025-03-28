@@ -15,6 +15,9 @@
   <a href="https://pypi.org/project/pikesquares">
     <img src="https://img.shields.io/pypi/pyversions/pikesquares.svg" alt="PyPI - Python Version">
   </a>
+  
+
+  ![build](https://github.com/EloquentBits/pikesquares/workflows/build.yml/badge.svg)
 </p>
 
 -----
