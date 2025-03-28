@@ -20,9 +20,9 @@
 -----
 
 <p align="center">
-   <code>pikesquares</code><strong> will simplify your development workflow and increase productivity.</strong>
+   <code>PikeSquares</code><strong> will simplify your development workflow and increase productivity.</strong>
   <br><br>
-  <em>No more configuration hell 👹 Code your stack, we will make sure it runs</em>
+  <em>No more configuration hell 👹 Code your app, we will make sure it runs</em>
 </p>
 
 <br>
@@ -51,8 +51,6 @@ $ curl -fsSl https://install.pikesquares.com | bash
 ## ⚒ Overview
 
 `pikesquares` is a developer-friendly, unobtrusive tool for deploying and managing services, such as web applications, APIs, periodic jobs, and background workers.
-
-Named after a [military tactical formation](https://en.wikipedia.org/wiki/Pike_square), where 10 rows of soldiers organized in 10 columns wielded pikes ♠️, the tool takes inspiration from the same disciplined structure.
 
 As a single executable with no external dependencies, `pikesquares` runs as a long-lived service, whether locally or on virtually any cloud hosting provider.
 
@@ -87,7 +85,9 @@ This approach embodies simplicity and precision—offering a unified, modular fr
 -->
 
 ## Philosophy
- ⚔︎⛊ In the chaos of battle, discipline wins wars. We've fought through the confusion of virtual environments, tangled runtimes, and the endless struggle of reviving old projects. From that battlefield, `pikesquares` was forged.
+⚔︎⛊ Named after a [military tactical formation](https://en.wikipedia.org/wiki/Pike_square), where 10 rows of soldiers organized in 10 columns wielded pikes ♠️, the tool takes inspiration from the same disciplined structure.
+
+⚔︎⛊ In the chaos of battle, discipline wins wars. We've fought through the confusion of virtual environments, tangled runtimes, and the endless struggle of reviving old projects. From that battlefield, `pikesquares` was forged.
 
 ⚔︎⛊  No more disorder. No more wasted time. `pikesquares` stands as your formation—building, deploying, running, and scaling your application with zero configuration.
 
