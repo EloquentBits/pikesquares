@@ -1,24 +1,7 @@
-<!--h1 align="center">
-  PikeSquares  
-  <br>
-  <img src="https://raw.githubusercontent.com/EloquentBits/pikesquares/refs/heads/master/assets/PikeSquares.svg" alt="PikeSquares Logo">
-</h1-->
 
-<div align="center">
-  <img src="https://diagrams.pikesquares.com/psq-banner.png">
-</div>
+![PikeSqaures](img src="https://diagrams.pikesquares.com/psq-banner.png)
 
-<p align="center">
-  <a href="https://pypi.org/project/pikesquares">
-    <img src="https://img.shields.io/pypi/v/pikesquares.svg" alt="PyPI - Version">
-  </a>
-  <a href="https://pypi.org/project/pikesquares">
-    <img src="https://img.shields.io/pypi/pyversions/pikesquares.svg" alt="PyPI - Python Version">
-  </a>
-  
-
-  ![build](https://github.com/EloquentBits/pikesquares/workflows/build.yml/badge.svg)
-</p>
+![build](https://github.com/EloquentBits/pikesquares/actions/workflows/build.yml/badge.svg)
 
 -----
 
@@ -29,7 +12,6 @@
 </p>
 
 <br>
-
 <p align="center">
   ⚙ <a href="#installation">Installation</a> •  
   ⚙ <a href="#overview">Overview</a> •  
@@ -38,10 +20,7 @@
   ⚙ <a href="#license">License</a>
 </p>
 
-<p align="center">
-<img src = "https://diagrams.pikesquares.com/asciinema/psq-asciiart.jpg" width = "800">
-</p>
-
+![PikeSquares ascii art](https://diagrams.pikesquares.com/asciinema/psq-asciiart.jpg")
 
 ## ⚔ Installation
 
