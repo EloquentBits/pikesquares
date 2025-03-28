@@ -32,7 +32,7 @@
 </p>
 
 <p align="center">
-<img src = "https://diagrams.pikesquares.com/pks-asciiart.jpg" width = "800">
+<img src = "https://diagrams.pikesquares.com/asciinema/psq-asciiart.jpg" width = "800">
 </p>
 
 
