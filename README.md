@@ -20,21 +20,18 @@
   ⚙ <a href="#license">License</a>
 </p>
 
-![PikeSquares ascii art](https://diagrams.pikesquares.com/asciinema/psq-asciiart.jpg)
-
 ## ⚔ Installation
 
 ```bash 
 $ curl -fsSl https://install.pikesquares.com | bash
 ```
+![PikeSquares ascii art](https://diagrams.pikesquares.com/asciinema/psq-asciiart.jpg)
 
+## ⚒ How it works
 
+`PikeSquares` is a developer-friendly, unobtrusive tool for deploying and managing services, such as web applications, APIs, periodic jobs, and background workers.
 
-## ⚒ Overview
-
-`pikesquares` is a developer-friendly, unobtrusive tool for deploying and managing services, such as web applications, APIs, periodic jobs, and background workers.
-
-As a single executable with no external dependencies, `pikesquares` runs as a long-lived service, whether locally or on virtually any cloud hosting provider.
+As a single executable with no external dependencies, `PikeSquares` runs as a long-lived service, whether locally or on virtually any cloud hosting provider.
 
 This approach embodies simplicity and precision—offering a unified, modular framework that accelerates local development, testing, and deployment, making it a robust foundation for modern applications.
 
@@ -68,15 +65,15 @@ This approach embodies simplicity and precision—offering a unified, modular fr
 ## Philosophy
 ⚔︎⛊ Named after a [military tactical formation](https://en.wikipedia.org/wiki/Pike_square), where 10 rows of soldiers organized in 10 columns wielded pikes ♠️, the tool takes inspiration from the same disciplined structure.
 
-⚔︎⛊ In the chaos of battle, discipline wins wars. We've fought through the confusion of virtual environments, tangled runtimes, and the endless struggle of reviving old projects. From that battlefield, `pikesquares` was forged.
+⚔︎⛊ In the chaos of battle, discipline wins wars. We've fought through the confusion of virtual environments, tangled runtimes, and the endless struggle of reviving old projects. From that battlefield, `PikeSquares` was forged.
 
-⚔︎⛊  No more disorder. No more wasted time. `pikesquares` stands as your formation—building, deploying, running, and scaling your application with zero configuration.
+⚔︎⛊  No more disorder. No more wasted time. `PikeSquares` stands as your formation—building, deploying, running, and scaling your application with zero configuration.
 
 ⚔︎⛊ We believe in open source—software should be free and accessible, not locked behind monopolistic SaaS models.
 
-⚔︎⛊ Strength lies in simplicity. `pikesquares` is a single, lightweight binary—small, compact, and battle-ready. No bloat, no excess, just raw efficiency.
+⚔︎⛊ Strength lies in simplicity. `PikeSquares` is a single, lightweight binary—small, compact, and battle-ready. No bloat, no excess, just raw efficiency.
 
-⚔︎⛊ We are disciplined and precise.`pikesquares` won't overrun your system, clutter your directories, or disrupt your workflow. It strikes with accuracy, leaving no unnecessary trace.
+⚔︎⛊ We are disciplined and precise.`PikeSquares` won't overrun your system, clutter your directories, or disrupt your workflow. It strikes with accuracy, leaving no unnecessary trace.
 
 ⚔︎⛊ We fight in the terminal. The command line is our battlefield, where every move is deliberate, every action clear. Power comes from understanding what’s happening under the hood.
 
