@@ -55,7 +55,7 @@ As a single executable with no external dependencies, `pikesquares` runs as a lo
 This approach embodies simplicity and precision—offering a unified, modular framework that accelerates local development, testing, and deployment, making it a robust foundation for modern applications.
 
 
-
+<p align="center"><img src = "https://diagrams.pikesquares.com/block-diagram-01.jpg"></p>
 
 ## 🛠 Key Features
 
