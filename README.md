@@ -1,5 +1,5 @@
 
-![PikeSqaures](img src="https://diagrams.pikesquares.com/psq-banner.png)
+![PikeSqaures](https://diagrams.pikesquares.com/psq-banner.png)
 
 ![build](https://github.com/EloquentBits/pikesquares/actions/workflows/build.yml/badge.svg)
 
@@ -20,7 +20,7 @@
   ⚙ <a href="#license">License</a>
 </p>
 
-![PikeSquares ascii art](https://diagrams.pikesquares.com/asciinema/psq-asciiart.jpg")
+![PikeSquares ascii art](https://diagrams.pikesquares.com/asciinema/psq-asciiart.jpg)
 
 ## ⚔ Installation
 
@@ -55,15 +55,14 @@ This approach embodies simplicity and precision—offering a unified, modular fr
 ## 🔨 Usage
 
 ##### `pikesquares up`
-<img src = "https://diagrams.pikesquares.com/asciinema/pks_up.gif">
+![PikeSquares up](https://diagrams.pikesquares.com/asciinema/pks_up.gif)
 
 <!-- 
 ##### `pikesquares --help`
 <br>
-<img src="https://diagrams.pikesquares.com/asciinema/uv.gif" style="max-width: 800px; width: 100%;">
+![PikeSquares help](https://diagrams.pikesquares.com/asciinema/uv.gif)
 ##### `pikesquares init`
-<br>
-<img src="https://diagrams.pikesquares.com/asciinema/init_test.gif">
+![PikeSquares init](https://diagrams.pikesquares.com/asciinema/init_test.gif)
 -->
 
 ## Philosophy
