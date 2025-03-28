@@ -32,7 +32,7 @@
 </p>
 
 <p align="center">
-<img src = "https://github.com/EloquentBits/pikesquares/blob/066d764e34ab21c333c2392f35e7353dca4ac600/pkesquares.jpg" width = "800">
+<img src = "https://diagrams.pikesquares.com/pks-asciiart.jpg" width = "800">
 </p>
 
 
@@ -71,15 +71,15 @@ This approach embodies simplicity and precision—offering a unified, modular fr
 ## 🔨 Usage
 
 ##### `pikesquares up`
-<img src = "https://pikesquares-diagrams.b-cdn.net/asciinema/pks_up.gif">
+<img src = "https://diagrams.pikesquares.com/asciinema/pks_up.gif">
 
 <!-- 
 ##### `pikesquares --help`
 <br>
-<img src="https://pikesquares-diagrams.b-cdn.net/asciinema/uv.gif" style="max-width: 800px; width: 100%;">
+<img src="https://diagrams.pikesquares.com/asciinema/uv.gif" style="max-width: 800px; width: 100%;">
 ##### `pikesquares init`
 <br>
-<img src="https://pikesquares-diagrams.b-cdn.net/asciinema/init_test.gif">
+<img src="https://diagrams.pikesquares.com/asciinema/init_test.gif">
 -->
 
 ## Philosophy
