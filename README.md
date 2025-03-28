@@ -1,8 +1,12 @@
-<h1 align="center">
+<!--h1 align="center">
   PikeSquares  
   <br>
   <img src="https://raw.githubusercontent.com/EloquentBits/pikesquares/refs/heads/master/assets/PikeSquares.svg" alt="PikeSquares Logo">
-</h1>
+</h1-->
+
+<div align="center">
+  <img src="https://diagrams.pikesquares.com/psq-banner.png">
+</div>
 
 <p align="center">
   <a href="https://pypi.org/project/pikesquares">
