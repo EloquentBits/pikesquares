@@ -1,12 +1,75 @@
+from unittest.mock import AsyncMock
+
+import pytest
+from cuid import cuid
+import pytest_asyncio
+import structlog
+from asgi_lifespan import LifespanManager
+from httpx import ASGITransport, AsyncClient
+from sqlmodel import SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from pikesquares.domain.device import Device
+from pikesquares.adapters.repositories import DeviceRepository
+from pikesquares.adapters.database import DatabaseSessionManager
+from pikesquares.app.main import app, lifespan
+
+# from pikesquares.domain.device import Device
+# from pikesquares.service_layer.uow import UnitOfWork
+
+
+logger = structlog.getLogger()
 
 
 def pytest_addoption(parser):
-    parser.addoption(
-        "--configpath", action="store", help="Location to YAML file"
-    )
-    parser.addoption(
-        "--env", action="store", help="Environment to read from YAML file"
-    )
+    parser.addoption("--configpath", action="store", help="Location to YAML file")
+    parser.addoption("--env", action="store", help="Environment to read from YAML file")
+
+
+@pytest_asyncio.fixture(name="session")
+async def session_fixture():
+    sessionmanager = DatabaseSessionManager("sqlite+aiosqlite:///:memory:", {"echo": False})
+    if sessionmanager._engine:
+        async with sessionmanager._engine.begin() as conn:
+            await conn.run_sync(lambda conn: SQLModel.metadata.create_all(conn))
+
+    async def get_session() -> AsyncSession:
+        async with sessionmanager.session() as session:
+            yield session
+
+    session = AsyncMock(spec_set=AsyncSession)
+    lifespan.registry.register_factory(AsyncSession, get_session)
+    yield session
+
+
+@pytest_asyncio.fixture
+async def client():
+    async with LifespanManager(app) as manager:
+        async with AsyncClient(transport=ASGITransport(manager.app), base_url="http://app.io") as client:
+            logger.debug("Client is ready")
+            yield client
+
+
+# Device
+@pytest.fixture
+def device():
+    """
+    pikesquares.domain.Device fixture
+    """
+    machine_id = "c8498494a94c40319a7173da7c6c9455"
+    service_id = f"device_{cuid()}"
+    return Device(service_id=service_id, machine_id=machine_id)
+
+
+@pytest_asyncio.fixture
+def device_repo_mock(device):
+    """
+    DeviceRepository async mock
+    """
+    mock = AsyncMock(from_spec=DeviceRepository)
+    mock.get_by_machine_id = AsyncMock(return_value=device)
+    mock.get_by_id = AsyncMock(return_value=device)
+    return mock
 
 
 """

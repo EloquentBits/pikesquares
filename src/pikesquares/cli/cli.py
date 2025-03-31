@@ -1,73 +1,63 @@
+import logging
 import os
-from functools import wraps
+import shutil
+
 # import grp
 # import pwd
 import tempfile
-import shutil
-import logging
-from time import sleep
-from typing import Optional, Annotated
+from functools import wraps
 from pathlib import Path
+from time import sleep
+from typing import Annotated, Optional
 
-import sentry_sdk
-from rich.progress import (
-    Progress,
-)
-from rich.layout import Layout
-from rich.live import Live
-from rich.panel import Panel
-
-import typer
-from aiopath import AsyncPath
-import structlog
-import randomname
 import questionary
+import randomname
+import sentry_sdk
+import structlog
+import typer
 from cuid import cuid
 from dotenv import load_dotenv
 from plumbum import ProcessExecutionError
-from sqlmodel.ext.asyncio.session import AsyncSession
+from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
+from rich.progress import (
+    Progress,
+)
 from sqlmodel import SQLModel
-from alembic.config import Config
-from alembic import command
-# from circus import Arbiter, get_arbiter
+from sqlmodel.ext.asyncio.session import AsyncSession
 
+from pikesquares import __app_name__, __version__, services
+from pikesquares.adapters.database import DatabaseSessionManager
+from pikesquares.cli.console import (
+    HeaderDjangoChecks,
+    HeaderDjangoSettings,
+    make_layout,
+    make_progress,
+)
+
+# from circus import Arbiter, get_arbiter
 from pikesquares.conf import (
     AppConfig,
     AppConfigError,
-    register_app_conf,
     ensure_system_dir,
-)
-from pikesquares import services
-from pikesquares.adapters.database import DatabaseSessionManager
-from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.exceptions import StatsReadError
-
-# from pikesquares.cli.commands.apps.validators import NameValidator
-
-from pikesquares.domain.process_compose import (
-    ProcessCompose,
-    PCAPIUnavailableError,
-    PCDeviceUnavailableError,
-    register_process_compose,
+    register_app_conf,
 )
 from pikesquares.domain.device import get_or_create_device
+
+# from pikesquares.cli.commands.apps.validators import NameValidator
+from pikesquares.domain.process_compose import (
+    PCAPIUnavailableError,
+    PCDeviceUnavailableError,
+    ProcessCompose,
+    register_process_compose,
+)
 from pikesquares.domain.project import get_or_create_project
 from pikesquares.domain.router import get_or_create_http_router
-# from pikesquares.services.apps import RubyRuntime, PHPRuntime
-from pikesquares.services.apps.python import PythonRuntime
+from pikesquares.exceptions import StatsReadError
+from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.django import PythonRuntimeDjango
-
-from pikesquares.cli.console import (
-    make_layout,
-    make_progress,
-    HeaderDjangoChecks,
-    HeaderDjangoSettings,
-)
-
 from pikesquares.services.apps.exceptions import (
-    UvSyncError,
-    UvPipInstallError,
-    UvPipListError,
     # PythonRuntimeCheckError,
     # PythonRuntimeDjangoCheckError,
     # UvCommandExecutionError,
@@ -75,12 +65,15 @@ from pikesquares.services.apps.exceptions import (
     DjangoCheckError,
     DjangoDiffSettingsError,
     DjangoSettingsError,
+    UvPipInstallError,
+    UvPipListError,
+    UvSyncError,
 )
 
+# from pikesquares.services.apps import RubyRuntime, PHPRuntime
+from pikesquares.services.apps.python import PythonRuntime
 
 from .console import console
-from pikesquares import __app_name__, __version__
-
 
 LOG_FILE = "app.log"
 
@@ -179,11 +172,7 @@ def run_async(func):
 @app.command(rich_help_panel="Control", short_help="Reset device")
 def reset(
     ctx: typer.Context,
-    shutdown: Optional[str] = typer.Option(
-        "",
-        "--shutdown",
-        help="Shutdown PikeSquares server after reset."
-    ),
+    shutdown: Optional[str] = typer.Option("", "--shutdown", help="Shutdown PikeSquares server after reset."),
 ):
     """Reset PikeSquares Installation"""
 
@@ -210,10 +199,7 @@ def reset(
 
 
 @app.command(rich_help_panel="Control", short_help="Nuke installation")
-def uninstall(
-        ctx: typer.Context,
-        dry_run: bool = typer.Option(False, help="Uninstall dry run")
-    ):
+def uninstall(ctx: typer.Context, dry_run: bool = typer.Option(False, help="Uninstall dry run")):
     """Delete the entire PikeSquares installation"""
 
     context = ctx.ensure_object(dict)
@@ -264,11 +250,9 @@ def uninstall(
 #    log_func(f"Device is [b]{status}[/b]")
 
 
-@app.command(
-         rich_help_panel="Control",
-         short_help="Attach to the PikeSquares Server")
+@app.command(rich_help_panel="Control", short_help="Attach to the PikeSquares Server")
 def attach(
-     ctx: typer.Context,
+    ctx: typer.Context,
 ):
     """Attach to PikeSquares Server"""
     context = ctx.ensure_object(dict)
@@ -276,9 +260,7 @@ def attach(
     pc.attach()
 
 
-@app.command(
-        rich_help_panel="Control",
-        short_help="Info on the PikeSquares Server")
+@app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")
 def info(
     ctx: typer.Context,
 ):
@@ -292,9 +274,17 @@ def info(
     # uow = await services.aget(context, UnitOfWork)
     # device = await uow.devices.get_by_id(1)
     # logger.debug(device)
+    #
+    # console.success(":white_check_mark: reverse proxy is running")
+    # console.success(":heavy_check_mark:     reverse proxy is running")
 
     device = context.get("device")
-    console.info(device.stats)
+
+    # console.info(device.stats)
+    #
+    console.success(":heavy_check_mark:      Launching dns server... Done!")
+    console.success(":heavy_exclamation_mark:      Unable to launch")
+
     pc = services.get(context, ProcessCompose)
     try:
         pc.ping_api()
@@ -325,9 +315,7 @@ def info(
     # console.info(https_router_stats.model_dump())
 
 
-@app.command(
-        rich_help_panel="Control",
-        short_help="Launch the PikeSquares Server (if stopped)")
+@app.command(rich_help_panel="Control", short_help="Launch the PikeSquares Server (if stopped)")
 def up(
     ctx: typer.Context,
     # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
@@ -348,7 +336,23 @@ def up(
             for _ in range(1, 5):
                 try:
                     pc.ping_api()
+
+                    console.success(":heavy_check_mark:      Launching dns server... Done!")
+                    console.success(":heavy_exclamation_mark:      Unable to launch")
+
+                    # console.success(":white_check_mark: reverse proxy is running")
+                    console.success(":heavy_check_mark:     reverse proxy is running")
+                    console.success(":heavy_check_mark:     Launching reverse proxy... Done! ")
+                    console.success(":heavy_check_mark:     Launching main process manager.. Done!")
+                    console.success(":heavy_check_mark:     Launching http router.. Done!")
+                    console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+                    console.success()
+                    console.success("Your API is running at: http://127.0.0.1:9000")
+                    console.success()
+                    console.success("Next steps: cd to your project directory and run `pikesquares init`")
+                    console.success()
                     console.success("🚀 PikeSquares Server is up and running.")
+
                     return True
                 except (PCAPIUnavailableError, PCDeviceUnavailableError):
                     sleep(1)
@@ -395,12 +399,9 @@ def down(
     #    pass  # device.up()
 
 
-@app.command(
-    rich_help_panel="Control",
-    short_help="Initialize a project"
-)
+@app.command(rich_help_panel="Control", short_help="Initialize a project")
 def init(
-     ctx: typer.Context,
+    ctx: typer.Context,
     app_root_dir: Annotated[
         Path | None,
         typer.Option(
@@ -413,7 +414,7 @@ def init(
             readable=True,
             resolve_path=True,
             help="Project/App root directory",
-        )
+        ),
     ] = None,
 ):
     """Initialize a project"""
@@ -430,12 +431,14 @@ def init(
     # https://github.com/kolosochok/django-ecommerce
     # https://github.com/healthchecks/healthchecks
 
-    app_root_dir = app_root_dir or Path(questionary.path(
-        "Enter the location of your project/app root directory:",
-        default=str(Path().cwd()),
-        only_directories=True,
-        style=custom_style,
-    ).ask())
+    app_root_dir = app_root_dir or Path(
+        questionary.path(
+            "Enter the location of your project/app root directory:",
+            default=str(Path().cwd()),
+            only_directories=True,
+            style=custom_style,
+        ).ask()
+    )
 
     if app_root_dir and not app_root_dir.exists():
         console.warning(f"Project root directory does not exist: {str(app_root_dir)}")
@@ -623,14 +626,12 @@ def init(
 
                         # asynctempfile
 
-                        app_tmp_dir = Path(
-                            tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app")
-                        )
+                        app_tmp_dir = Path(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
                         shutil.copytree(
                             runtime.app_root_dir,
                             app_tmp_dir,
                             dirs_exist_ok=True,
-                            ignore=shutil.ignore_patterns(*list(runtime.PY_IGNORE_PATTERNS))
+                            ignore=shutil.ignore_patterns(*list(runtime.PY_IGNORE_PATTERNS)),
                         )
                         for p in Path(app_tmp_dir).iterdir():
                             logger.debug(p)
@@ -645,7 +646,7 @@ def init(
                             refresh=True,
                             description=task.fields.get("description_done", "N/A"),
                             emoji_fld=task.fields.get("emoji_fld", "N/A"),
-                            result_mark_fld=":heavy_check_mark:"
+                            result_mark_fld=":heavy_check_mark:",
                         )
                         if task.id == detect_runtime_task:
                             update_job_id = detect_framework_task
@@ -688,24 +689,21 @@ def init(
                         ###################################
                         # if Django - run mange.py check
                         try:
-                            runtime.collected_project_metadata["django_check_messages"] = \
-                                    runtime.django_check(app_tmp_dir=app_tmp_dir)
-                            dj_msgs = runtime.collected_project_metadata.get("django_check_messages")
-                            task_messages_layout.add_split(
-                                Layout(name="dj-check-msgs-header", ratio=1, size=None)
+                            runtime.collected_project_metadata["django_check_messages"] = runtime.django_check(
+                                app_tmp_dir=app_tmp_dir
                             )
+                            dj_msgs = runtime.collected_project_metadata.get("django_check_messages")
+                            task_messages_layout.add_split(Layout(name="dj-check-msgs-header", ratio=1, size=None))
                             task_messages_layout["dj-check-msgs-header"].update(HeaderDjangoChecks())
                             for idx, msg in enumerate(dj_msgs.messages):
-                                task_messages_layout.add_split(
-                                        Layout(name=f"dj-msg-{idx}", ratio=1, size=None)
-                                )
+                                task_messages_layout.add_split(Layout(name=f"dj-msg-{idx}", ratio=1, size=None))
                                 msg_id_style = msg_id_styles.get(msg.id.split(".")[-1][0])
                                 task_messages_layout[f"dj-msg-{idx}"].update(
                                     Panel(
                                         f"[{msg_id_style}]{msg.id}[/{msg_id_style}] - {msg.message}",
                                         border_style="green",
-                                        )
                                     )
+                                )
                         except DjangoCheckError:
                             if app_tmp_dir:
                                 runtime.check_cleanup(app_tmp_dir)
@@ -714,26 +712,22 @@ def init(
                         ###################################
                         # if Django - run diffsettings
                         try:
-                            runtime.collected_project_metadata["django_settings"] = \
-                                    runtime.django_diffsettings(app_tmp_dir=app_tmp_dir)
+                            runtime.collected_project_metadata["django_settings"] = runtime.django_diffsettings(
+                                app_tmp_dir=app_tmp_dir
+                            )
                             dj_settings = runtime.collected_project_metadata.get("django_settings")
-                            task_messages_layout.add_split(
-                                Layout(name="dj-settings-header", ratio=1, size=None)
-                            )
-                            task_messages_layout["dj-settings-header"].update(
-                                HeaderDjangoSettings()
-                            )
+                            task_messages_layout.add_split(Layout(name="dj-settings-header", ratio=1, size=None))
+                            task_messages_layout["dj-settings-header"].update(HeaderDjangoSettings())
                             for msg_index, settings_fld in enumerate(dj_settings.settings_with_titles()):
                                 task_messages_layout.add_split(
                                     Layout(name=f"dj-settings-msg-{msg_index}", ratio=1, size=None)
                                 )
-                                task_messages_layout[f"dj-settings-msg-{msg_index}"].\
-                                    update(
-                                        Panel(
-                                            f"{settings_fld[0]} - {settings_fld[1]}\n",
-                                            border_style="green",
-                                        )
+                                task_messages_layout[f"dj-settings-msg-{msg_index}"].update(
+                                    Panel(
+                                        f"{settings_fld[0]} - {settings_fld[1]}\n",
+                                        border_style="green",
                                     )
+                                )
                         except DjangoDiffSettingsError:
                             if app_tmp_dir:
                                 runtime.check_cleanup(app_tmp_dir)
@@ -756,7 +750,7 @@ def init(
                         refresh=True,
                         description=description_done or task.fields.get("description_done"),
                         emoji_fld=task.fields.get("emoji_fld", "N/A"),
-                        result_mark_fld=":heavy_check_mark:"
+                        result_mark_fld=":heavy_check_mark:",
                     )
                     completed = sum(task.completed for task in progress.tasks)
                     overall_progress.update(overall_task, completed=completed)
@@ -816,10 +810,7 @@ def tail_service_log(
     #     console.info(line)
 
 
-from .commands import devices
-from .commands import apps
-from .commands import routers
-from .commands import managed_services
+from .commands import apps, devices, managed_services, routers
 
 app.add_typer(apps.app, name="apps")
 app.add_typer(routers.app, name="routers")
@@ -827,6 +818,7 @@ app.add_typer(devices.app, name="devices")
 app.add_typer(managed_services.app, name="services")
 
 from functools import wraps
+
 import anyio
 
 
@@ -860,7 +852,7 @@ async def main(
             readable=True,
             resolve_path=True,
             help="Data directory",
-        )
+        ),
     ] = None,
     config_dir: Annotated[
         Path | None,
@@ -874,7 +866,7 @@ async def main(
             readable=True,
             resolve_path=True,
             help="Configs directory",
-        )
+        ),
     ] = None,
     log_dir: Annotated[
         Path | None,
@@ -888,7 +880,7 @@ async def main(
             readable=True,
             resolve_path=True,
             help="Logs directory",
-        )
+        ),
     ] = None,
     run_dir: Annotated[
         Path | None,
@@ -902,7 +894,7 @@ async def main(
             readable=True,
             resolve_path=True,
             help="Run directory",
-        )
+        ),
     ] = None,
     # build_configs: Optional[bool] = typer.Option(
     #    False,
@@ -925,7 +917,11 @@ async def main(
     is_root: bool = os.getuid() == 0
     logger.info(f"{os.getuid()=} {is_root=}")
 
-    if ctx.invoked_subcommand in set({"up", }):
+    if ctx.invoked_subcommand in set(
+        {
+            "up",
+        }
+    ):
         if not is_root:
             console.info("Please start server as root user. `sudo pikesquares up`")
             raise typer.Exit()
@@ -960,17 +956,13 @@ async def main(
             str(conf.SENTRY_DSN),
             send_default_pii=True,
             max_request_body_size="always",
-
             # Setting up the release is highly recommended. The SDK will try to
             # infer it, but explicitly setting it is more reliable:
             # release=...,
-
             traces_sample_rate=0,
         )
 
-    sessionmanager = DatabaseSessionManager(
-        conf.SQLALCHEMY_DATABASE_URI, {"echo": True}
-    )
+    sessionmanager = DatabaseSessionManager(conf.SQLALCHEMY_DATABASE_URI, {"echo": True})
 
     async def get_session() -> AsyncSession:
         async with sessionmanager.session() as session:
@@ -992,6 +984,7 @@ async def main(
     async def uow_factory():
         async with UnitOfWork(session=session) as uow:
             yield uow
+
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
 
@@ -1055,6 +1048,7 @@ async def main(
         if ctx.invoked_subcommand == "up":
             launch_pc(pc, device)
     """
+
 
 # def circus_arbiter_factory():
 #    watchers = []

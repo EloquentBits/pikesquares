@@ -77,6 +77,16 @@ This approach embodies simplicity and precision—offering a unified, modular fr
 
 ⚔︎⛊ We fight in the terminal. The command line is our battlefield, where every move is deliberate, every action clear. Power comes from understanding what’s happening under the hood.
 
+## Tech
+PikeSquares uses several open-source projects to work:
+- uWSGI
+- Caddy
+- dnsmasq
+- process-compose
+
+## Development
+Want to contribute? Welcome!
+
 ## ⚠️License
 
 `pikesquares` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.

@@ -1,12 +1,11 @@
-import logging
-import json
+# import logging
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, Type
+from typing import Generic, Type, TypeVar
 
 import structlog
-from sqlmodel import select, and_
-from sqlmodel.sql.expression import SelectOfScalar
+from sqlmodel import and_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel.sql.expression import SelectOfScalar
 
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import Device, DeviceUWSGIOptions
@@ -27,8 +26,7 @@ T = TypeVar("T", bound=ServiceBase)
 
 
 class GenericRepository(Generic[T], ABC):
-    """Generic base repository.
-    """
+    """Generic base repository."""
 
     @abstractmethod
     async def get_by_id(self, id: str) -> T | None:
@@ -92,8 +90,7 @@ class GenericRepository(Generic[T], ABC):
 
 
 class GenericSqlRepository(GenericRepository[T], ABC):
-    """Generic SQL Repository.
-    """
+    """Generic SQL Repository."""
 
     def __init__(self, session: AsyncSession, model_cls: Type[T]) -> None:
         """Creates a new repository instance.
@@ -125,7 +122,7 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         logger.debug(f"{results=}")
         # import ipdb;ipdb.set_trace()
         if results:
-            obj = results.first()
+            obj = await results.first()
             return obj
 
     def _construct_list_stmt(self, **filters) -> SelectOfScalar:
@@ -178,8 +175,8 @@ class GenericSqlRepository(GenericRepository[T], ABC):
 
 
 class DeviceReposityBase(GenericRepository[Device], ABC):
-    """Device repository.
-    """
+    """Device repository."""
+
     @abstractmethod
     async def get_by_machine_id(self, machine_id: str) -> Device | None:
         raise NotImplementedError()
@@ -194,33 +191,37 @@ class DeviceRepository(GenericSqlRepository[Device], DeviceReposityBase):
         results = await self._session.exec(stmt)
         if results:
             logger.debug(f"{results=}")
-            obj = results.first()
+            obj = await results.one()
             logger.debug(f"{obj=}")
             return obj
 
 
 class DeviceUWSGIOptionsReposityBase(GenericRepository[DeviceUWSGIOptions], ABC):
-    """uwsgi options repository.
-    """
+    """uwsgi options repository."""
+
     pass
 
 
-class DeviceUWSGIOptionsReposity(GenericSqlRepository[DeviceUWSGIOptions], DeviceUWSGIOptionsReposityBase):
+class DeviceUWSGIOptionsReposity(
+    GenericSqlRepository[DeviceUWSGIOptions], DeviceUWSGIOptionsReposityBase
+):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, DeviceUWSGIOptions)
 
     async def get_by_device_id(self, device_id: str) -> list[DeviceUWSGIOptions] | None:
-        stmt = select(DeviceUWSGIOptions).\
-                where(DeviceUWSGIOptions.device_id == device_id).\
-                order_by(DeviceUWSGIOptions.sort_order_index)
+        stmt = (
+            select(DeviceUWSGIOptions)
+            .where(DeviceUWSGIOptions.device_id == device_id)
+            .order_by(DeviceUWSGIOptions.sort_order_index)
+        )
         results = await self._session.exec(stmt)
         if results:
             return results.all()
 
 
 class ProjectReposityBase(GenericRepository[Project], ABC):
-    """Project repository.
-    """
+    """Project repository."""
+
     @abstractmethod
     async def get_by_name(self, name: str) -> Project | None:
         raise NotImplementedError()
@@ -241,8 +242,8 @@ class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
 
 
 class RouterReposityBase(GenericRepository[BaseRouter], ABC):
-    """Router repository.
-    """
+    """Router repository."""
+
     @abstractmethod
     async def get_by_name(self, name: str) -> BaseRouter | None:
         raise NotImplementedError()

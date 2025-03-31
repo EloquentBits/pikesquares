@@ -1,11 +1,12 @@
 from pathlib import Path
 from typing import Optional
-#import shutil
 
-import typer
 import randomname
-from cuid import cuid
 import structlog
+
+# import shutil
+import typer
+from cuid import cuid
 
 from pikesquares import (
     get_service_status,
@@ -15,9 +16,9 @@ from pikesquares.services.project import (
     projects_all,
 )
 
+from ..cli import app
 from ..console import console
 from ..validators import ServiceNameValidator
-from ..cli import app
 
 logger = structlog.get_logger()
 
@@ -28,19 +29,10 @@ HELP = f"""
     Aliases: [i]{', '.join(ALIASES)}[/i]
 """
 
-proj_cmd = typer.Typer(
-    no_args_is_help=True,
-    rich_markup_mode="rich",
-    name="projects",
-    help=HELP
-)
+proj_cmd = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", name="projects", help=HELP)
 for alias in ALIASES:
-    app.add_typer(
-        proj_cmd,
-        name=alias,
-        help=HELP,
-        hidden=True
-    )
+    app.add_typer(proj_cmd, name=alias, help=HELP, hidden=True)
+
 
 @proj_cmd.command(short_help="Create new project.\nAliases:[i] new")
 @proj_cmd.command("new", hidden=True)
@@ -58,27 +50,20 @@ def create(
 
     if not project_name:
         default_project_name = randomname.get_name()
-        project_name = console.ask(
-            f"Project name?",
-            default=default_project_name,
-            validators=[ServiceNameValidator]
-        )
+        project_name = console.ask(f"Project name?", default=default_project_name, validators=[ServiceNameValidator])
 
-    #console.success(f"Project '{project_name}' was successfully created!")
+    # console.success(f"Project '{project_name}' was successfully created!")
     project_up(conf, project_name, f"project_{cuid()}")
 
 
 @proj_cmd.command("up")
-def up(
-    ctx: typer.Context, 
-    name: Optional[str] = typer.Argument("")
-    ):
+def up(ctx: typer.Context, name: Optional[str] = typer.Argument("")):
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")
     projects = projects_all(conf)
     for project in projects:
         name = project.get('name')
-        status = get_service_status(project.get('service_id'), conf) or "Unknown",
+        status = (get_service_status(project.get('service_id'), conf) or "Unknown",)
         service_id = project.get('service_id')
         print(f"{status=} {name} [{service_id}]")
         project_up(conf, name, service_id)
@@ -87,14 +72,11 @@ def up(
 @app.command(
     "projects",
     rich_help_panel="Show",
-    short_help="Show all projects in specific environment.\nAliases:[i] projects, projects list"
+    short_help="Show all projects in specific environment.\nAliases:[i] projects, projects list",
 )
 @app.command("proj", rich_help_panel="Show", hidden=True)
 @proj_cmd.command("list")
-def list_(
-    ctx: typer.Context,
-    show_id: bool = False
-):
+def list_(ctx: typer.Context, show_id: bool = False):
     """
     Show all projects on current device
 
@@ -106,17 +88,18 @@ def list_(
     if not len(projects):
         console.warning("No projects were initialized, nothing to show!")
         raise typer.Exit()
-    
+
     projects_out = []
     for project in projects:
-        projects_out.append({
-            'name': project.get('name'),
-            'status': get_service_status(project.get('service_id'), conf) or "Unknown",
-            'id': project.get('service_id')
-        })
-    console.print_response(
-        projects_out, title=f"Projects count: {len(projects)}", show_id=show_id
-    )
+        projects_out.append(
+            {
+                'name': project.get('name'),
+                'status': get_service_status(project.get('service_id'), conf) or "Unknown",
+                'id': project.get('service_id'),
+            }
+        )
+    console.print_response(projects_out, title=f"Projects count: {len(projects)}", show_id=show_id)
+
 
 @proj_cmd.command("logs")
 def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
@@ -133,13 +116,11 @@ def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
     project_log_file = Path(f"{conf.log_dir}/{project_id}.log")
     if project_log_file.exists() and project_log_file.is_file():
         console.pager(
-            project_log_file.read_text(),
-            status_bar_format=f"{project_log_file.resolve()} (status: {status})"
+            project_log_file.read_text(), status_bar_format=f"{project_log_file.resolve()} (status: {status})"
         )
     else:
         console.error(
-            f"Error:\nLog file {project_log_file} not exists!",
-            hint=f"Check the device log file for possible errors"
+            f"Error:\nLog file {project_log_file} not exists!", hint=f"Check the device log file for possible errors"
         )
 
 
@@ -157,51 +138,51 @@ def delete(
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")
 
-    #device_db = obj['device']
+    # device_db = obj['device']
 
-    #projects_choices = {
+    # projects_choices = {
     #    k.get('name'): (k.get('cuid'), k.get('path'))
     #    for k in device_db.search(where("type") == 'Project')
-    #}
-    #if not projects_choices:
+    # }
+    # if not projects_choices:
     #    console.warning("No projects were initialized, nothing to delete!")
     #    return
-    
-    #selected_project_name = project_name
-    #if not selected_project_name:
+
+    # selected_project_name = project_name
+    # if not selected_project_name:
     #    selected_project_name = console.choose(
     #        "Which project you want to delete?",
     #        choices=projects_choices,
     #    )
 
     # rm project sources
-    #selected_project_cuid, selected_project_path = projects_choices.get(selected_project_name)
-    #if Path(selected_project_path).exists() and console.confirm(f"Are you sure you want to delete: {selected_project_path}"):
+    # selected_project_cuid, selected_project_path = projects_choices.get(selected_project_name)
+    # if Path(selected_project_path).exists() and console.confirm(f"Are you sure you want to delete: {selected_project_path}"):
     #    shutil.rmtree(selected_project_path)
 
     # rm project configs
-    #selected_project_config_path = Path(conf.CONFIG_DIR) / selected_project_cuid
-    #selected_project_config_path.with_suffix('.json').unlink(missing_ok=True)
-    #if Path(selected_project_config_path).exists():
+    # selected_project_config_path = Path(conf.CONFIG_DIR) / selected_project_cuid
+    # selected_project_config_path.with_suffix('.json').unlink(missing_ok=True)
+    # if Path(selected_project_config_path).exists():
     #    shutil.rmtree(str(selected_project_config_path.resolve()))
 
     # rm project runtimes
-    #for file in Path(conf.RUN_DIR).iterdir():
+    # for file in Path(conf.RUN_DIR).iterdir():
     #    if selected_project_cuid in str(file.resolve()):
     #        file.unlink(missing_ok=True)
 
     # rm project from db
-    #device_db.remove(where('cuid') == selected_project_cuid)
+    # device_db.remove(where('cuid') == selected_project_cuid)
 
-    #console.success(f"Removed project '{selected_project_name}'!")
+    # console.success(f"Removed project '{selected_project_name}'!")
 
 
-#@proj_cmd.command(short_help="Start project.\nAliases:[i] run")
-#@proj_cmd.command("run", hidden=True)
-#def start(
+# @proj_cmd.command(short_help="Start project.\nAliases:[i] run")
+# @proj_cmd.command("run", hidden=True)
+# def start(
 #    ctx: typer.Context,
 #    project_name: Optional[str] = typer.Argument("", help="Project to start"),
-#):
+# ):
 #    """
 #    Start project.
 
@@ -212,8 +193,8 @@ def delete(
 
 #    device_db = obj['device']
 
-    #for project_doc in db.table('projects'):
-    #    project_up(conf, project_doc.service_id)
+# for project_doc in db.table('projects'):
+#    project_up(conf, project_doc.service_id)
 
 #    if not project_name:
 #        available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
@@ -233,26 +214,26 @@ def delete(
 #        )
 #        return
 
-    #project = HandlerFactory.make_handler(project_type)(
-    #    service_id=project_id,
-    #    conf=conf,
-    #)
-    #if project.is_started():
-    #    console.info(f"Project '{project_name}' is already started!")
-    #    return
+# project = HandlerFactory.make_handler(project_type)(
+#    service_id=project_id,
+#    conf=conf,
+# )
+# if project.is_started():
+#    console.info(f"Project '{project_name}' is already started!")
+#    return
 
-    #project.prepare_service_config()
-    #project.connect()
-    #project.start()
-    #console.success(f"Project '{project_name}' was successfully started!")
+# project.prepare_service_config()
+# project.connect()
+# project.start()
+# console.success(f"Project '{project_name}' was successfully started!")
 
 
-#@proj_cmd.command(short_help="Stop project.\nAliases:[i] down")
-#@proj_cmd.command("down", hidden=True)
-#def stop(
+# @proj_cmd.command(short_help="Stop project.\nAliases:[i] down")
+# @proj_cmd.command("down", hidden=True)
+# def stop(
 #    ctx: typer.Context,
 #    project_name: Optional[str] = typer.Argument("", help="Project to stop"),
-#):
+# ):
 #    """
 #    Stop project.
 
@@ -279,16 +260,16 @@ def delete(
 #        )
 #        return
 
-    #project = HandlerFactory.make_handler(project_type)(
-    #    service_id=project_id,
-    #    conf=conf,
-    #)
-    #if not project.is_started():
-    #    console.info(f"Project '{project_name}' is not started!")
-    #    return
+# project = HandlerFactory.make_handler(project_type)(
+#    service_id=project_id,
+#    conf=conf,
+# )
+# if not project.is_started():
+#    console.info(f"Project '{project_name}' is not started!")
+#    return
 
-    #project.connect()
-    #project.stop()
-    #console.success(f"Project '{project_name}' was successfully stopped!")
+# project.connect()
+# project.stop()
+# console.success(f"Project '{project_name}' was successfully stopped!")
 
 app.add_typer(proj_cmd)

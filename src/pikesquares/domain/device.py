@@ -30,7 +30,12 @@ logger = structlog.getLogger()
 class Device(ServiceBase, DevicePKIMixin, table=True):
 
     machine_id: str = Field(default=None, unique=True, max_length=32)
-    uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
+    uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(
+        back_populates="device"
+    )
+    routers: list["BaseRouter"] = Relationship(
+        back_populates="device"
+    )
 
     enable_tuntap_router: bool = False
 

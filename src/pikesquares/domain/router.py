@@ -1,12 +1,13 @@
 from pathlib import Path
 
 import pydantic
-from sqlmodel import Field
+from sqlmodel import Field, Relationship
 import structlog
 from cuid import cuid
 
 from pikesquares import get_first_available_port, services
 from .base import ServiceBase
+from .device import Device
 from pikesquares.conf import ensure_system_dir
 from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
 
@@ -20,6 +21,9 @@ class BaseRouter(ServiceBase, table=True):
     address: str | None = Field(default=None, max_length=100)
     subscription_server_address: str | None = \
         Field(default=None, max_length=100)
+
+    device_id: str | None = Field(default=None, foreign_key="device.id")
+    device: Device | None = Relationship(back_populates="routers")
 
     @property
     def uwsgi_config_section_class(self) -> HttpRouterSection | HttpsRouterSection:
