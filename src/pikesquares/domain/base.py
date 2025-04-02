@@ -74,8 +74,7 @@ class Factory(SQLModel):
 
 
 class ServiceBase(TimeStampedBase, SQLModel):
-    """Base SQL model class.
-    """
+    """Base SQL model class."""
 
     id: str = Field(
         primary_key=True,
@@ -103,7 +102,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
         return self.__class__.__name__
 
     def __repr__(self):
-        return f"<{self.handler_name} id={self.id} service_id={self.service_id}>"
+        return f'<{self.handler_name} id="{self.id}" service_id="{self.service_id}">'
 
     def __str__(self):
         return self.__repr__()
@@ -187,25 +186,21 @@ class ServiceBase(TimeStampedBase, SQLModel):
         return Path(self.data_dir) / "spooler"
 
     def write_uwsgi_config(self) -> Path:
-        return self.uwsgi_config_section_class(self).\
-            as_configuration().\
-            tofile(self.service_config)
+        return self.uwsgi_config_section_class(self).as_configuration().tofile(self.service_config)
         # self.uwsgi_config["uwsgi"]["show-config"] = True
 
     @classmethod
     async def read_machine_id(cls) -> str:
-        machine_id = await AsyncPath(
-            "/var/lib/dbus/machine-id"
-        ).read_text(encoding="utf-8")
+        machine_id = await AsyncPath("/var/lib/dbus/machine-id").read_text(encoding="utf-8")
         return machine_id.strip()
 
     def make_system_file(
-            self,
-            newfile: Path | str,
-            owner_username: str = "root",
-            owner_groupname: str = "pikesquares",
-            file_mode: int = 0o664,
-        ) -> Path:
+        self,
+        newfile: Path | str,
+        owner_username: str = "root",
+        owner_groupname: str = "pikesquares",
+        file_mode: int = 0o664,
+    ) -> Path:
         if isinstance(newfile, str):
             newfile = Path(newfile)
 
@@ -226,7 +221,6 @@ class ServiceBase(TimeStampedBase, SQLModel):
         os.chown(newfile, owner_uid, owner_gid)
 
         return newfile
-
 
     @classmethod
     def read_stats(cls, stats_address: Path):

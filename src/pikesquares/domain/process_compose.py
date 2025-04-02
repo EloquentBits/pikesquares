@@ -1,21 +1,23 @@
 import json
-from pathlib import Path
 import os
-from typing import Annotated
 from enum import Enum
+from pathlib import Path
+from typing import Annotated
 
 import pydantic
 import structlog
+
 # from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
 from pydantic_yaml import to_yaml_str
 
+from pikesquares import services
 from pikesquares.conf import AppConfig, AppConfigError
-from pikesquares.domain.managed_services import ManagedServiceBase
 from pikesquares.domain.device import Device
+from pikesquares.domain.managed_services import ManagedServiceBase
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.base import ServiceUnavailableError
-from pikesquares import services
+
 # from pikesquares.services import register_factory
 
 logger = structlog.get_logger()
@@ -48,17 +50,17 @@ class ProcessComposeProcessStats(pydantic.BaseModel):
 
 
 class ProcessRestart(str, Enum):
-    """ process-compose process restart options """
+    """process-compose process restart options"""
 
     no = "no"  # default
     yes = "yes"
     on_failure = "on_failure"
-    exit_on_failure = "exit_on_failure",
+    exit_on_failure = ("exit_on_failure",)
     always = "always"
 
 
 class ProcessAvailability(pydantic.BaseModel):
-    """ process-compose process availability options """
+    """process-compose process availability options"""
 
     restart: str = ProcessRestart.yes
     exit_on_end: str = "no"
@@ -67,7 +69,7 @@ class ProcessAvailability(pydantic.BaseModel):
 
 
 class ReadinessProbeHttpGet(pydantic.BaseModel):
-    """ process-compose readiness probe http get section """
+    """process-compose readiness probe http get section"""
 
     host: str = "127.0.0.1"
     scheme: str = "http"
@@ -76,7 +78,7 @@ class ReadinessProbeHttpGet(pydantic.BaseModel):
 
 
 class ReadinessProbe(pydantic.BaseModel):
-    """ process-compose readiness probe section """
+    """process-compose readiness probe section"""
 
     http_get: ReadinessProbeHttpGet
     initial_delay_seconds: int = 5
@@ -87,7 +89,7 @@ class ReadinessProbe(pydantic.BaseModel):
 
 
 class ProcessComposeProcess(pydantic.BaseModel):
-    """ process-compose process """
+    """process-compose process"""
 
     description: str
     command: str
@@ -101,7 +103,7 @@ class ProcessComposeProcess(pydantic.BaseModel):
 
 
 class ProcessComposeConfig(pydantic.BaseModel):
-    """ process-compose process config (yaml) """
+    """process-compose process config (yaml)"""
 
     version: str = "0.1"
     is_strict: bool = True
@@ -143,12 +145,10 @@ class ProcessCompose(ManagedServiceBase):
     #        self.conf.run_dir) / "process-compose.sock"
 
     def write_config_to_disk(self):
-        self.daemon_config.write_text(
-                to_yaml_str(self.config)
-        )
+        self.daemon_config.write_text(to_yaml_str(self.config))
 
     def reload(self):
-        """ docket-compose project update """
+        """docket-compose project update"""
         if not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
@@ -168,7 +168,8 @@ class ProcessCompose(ManagedServiceBase):
         # always write config to dist before starting
         self.write_config_to_disk()
         try:
-            return self.cmd([
+            return self.cmd(
+                [
                     "up",
                     "--config",
                     str(self.daemon_config),
@@ -178,7 +179,8 @@ class ProcessCompose(ManagedServiceBase):
                     "--hide-disabled",
                     # "--tui",
                     # "false",
-                ] + self.cmd_args,
+                ]
+                + self.cmd_args,
                 cmd_env=self.cmd_env,
             )
 
@@ -234,10 +236,7 @@ class ProcessCompose(ManagedServiceBase):
             )
             js = json.loads(stdout)
             try:
-                device_process = \
-                    next(
-                        filter(lambda p: p.get("name") in ["device", "api"], js)
-                    )
+                device_process = next(filter(lambda p: p.get("name") in ["device", "api"], js))
                 process_stats = ProcessComposeProcessStats(**device_process)
                 if process_stats.IsRunning and process_stats.status == "Running":
                     return True
@@ -252,7 +251,7 @@ class ProcessCompose(ManagedServiceBase):
 
 # factories
 def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
-    """ FastAPI process-compose process """
+    """FastAPI process-compose process"""
 
     api_port = 9544
     # cmd = f"{conf.UV_BIN} run fastapi dev --port {api_port} src/pikesquares/app/main.py"
@@ -263,14 +262,12 @@ def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
         command=cmd,
         working_dir=conf.PYTHON_VIRTUAL_ENV or Path().cwd(),
         availability=ProcessAvailability(),
-        readiness_probe=ReadinessProbe(
-            http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
-        ),
+        readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
     )
 
 
 async def make_device_process(context: dict, device: Device, conf: AppConfig) -> ProcessComposeProcess:
-    """ device process-compose process """
+    """device process-compose process"""
     sqlite3_plugin = conf.plugins_dir / "sqlite3_plugin.so"
     if not sqlite3_plugin.exists():
 
@@ -282,7 +279,9 @@ async def make_device_process(context: dict, device: Device, conf: AppConfig) ->
 
     sqlite3_db = conf.data_dir / "pikesquares.db"
     cmd = f"{conf.UWSGI_BIN} --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
-    sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
+    sql = (
+        f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
+    )
 
     uow = await services.aget(context, UnitOfWork)
     uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
@@ -296,7 +295,7 @@ async def make_device_process(context: dict, device: Device, conf: AppConfig) ->
         working_dir=Path().cwd(),
         availability=ProcessAvailability(),
         # readiness_probe=ReadinessProbe(
-            #    http_get=ReadinessProbeHttpGet()
+        #    http_get=ReadinessProbeHttpGet()
         # ),
     )
 
@@ -305,8 +304,8 @@ async def make_device_process(context: dict, device: Device, conf: AppConfig) ->
 def make_caddy_process(
     conf: AppConfig,
     http_router_port=int,
-    ) -> ProcessComposeProcess:
-    """ Caddy process-compose process """
+) -> ProcessComposeProcess:
+    """Caddy process-compose process"""
 
     if not all([conf.CADDY_BIN, conf.CADDY_BIN.exists()]):
         raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
@@ -320,16 +319,14 @@ def make_caddy_process(
     with open(caddy_config_file, "r+") as caddy_config:
         data = json.load(caddy_config)
         apps = data.get("apps")
-        routes = apps.get("http").\
-                get("servers").\
-                get(vhost_key).\
-                get("routes")
+        routes = apps.get("http").get("servers").get(vhost_key).get("routes")
         handles = routes[0].get("handle")
         upstreams = handles[0].get("upstreams")
         upstream_address = upstreams[0].get("dial")
         if upstream_address != f"127.0.0.1:{http_router_port}":
-            data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0]["dial"] = \
-                f"127.0.0.1:{http_router_port}"
+            data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0][
+                "dial"
+            ] = f"127.0.0.1:{http_router_port}"
             caddy_config.seek(0)
             json.dump(data, caddy_config)
             caddy_config.truncate()
@@ -349,8 +346,8 @@ def make_caddy_process(
 def make_dnsmasq_process(
     conf: AppConfig,
     # http_router_port=int,
-    ) -> ProcessComposeProcess:
-    """ dnsmasq process-compose process """
+) -> ProcessComposeProcess:
+    """dnsmasq process-compose process"""
 
     # "${DNSMASQ_BIN} --keep-in-foreground --port 5353 --address=/pikesquares.local/192.168.0.1 --address=/pikesquares.dev/192.168.0.1 --listen-address=127.0.0.34 --no-resolv"
 
@@ -378,7 +375,7 @@ def make_dnsmasq_process(
 
 
 async def register_process_compose(context: dict, conf: AppConfig) -> None:
-    """ process-compose factory"""
+    """process-compose factory"""
 
     device = context.get("device")
     if not device:
@@ -408,7 +405,6 @@ async def register_process_compose(context: dict, conf: AppConfig) -> None:
         "daemon_config": conf.config_dir / "process-compose.yaml",
         "daemon_log": conf.log_dir / "process-compose.log",
         "daemon_socket": conf.run_dir / "process-compose.sock",
-
         "data_dir": conf.data_dir,
         "uv_bin": conf.UV_BIN,
     }
@@ -443,4 +439,3 @@ async def register_process_compose(context: dict, conf: AppConfig) -> None:
         process_compose_factory,
         # ping=svc: await svc.ping(),
     )
-

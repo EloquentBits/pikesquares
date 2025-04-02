@@ -1,15 +1,17 @@
 from pathlib import Path
 
 import pydantic
-from sqlmodel import Field, Relationship
 import structlog
 from cuid import cuid
+from sqlmodel import Field, Relationship
 
 from pikesquares import get_first_available_port, services
-from .base import ServiceBase
-from .device import Device
 from pikesquares.conf import ensure_system_dir
 from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
+
+from .base import ServiceBase
+
+# from .device import Device
 
 logger = structlog.getLogger()
 
@@ -19,11 +21,10 @@ class BaseRouter(ServiceBase, table=True):
     name: str = Field(default="HTTP Router", max_length=32)
 
     address: str | None = Field(default=None, max_length=100)
-    subscription_server_address: str | None = \
-        Field(default=None, max_length=100)
+    subscription_server_address: str | None = Field(default=None, max_length=100)
 
     device_id: str | None = Field(default=None, foreign_key="device.id")
-    device: Device | None = Relationship(back_populates="routers")
+    device: "Device" = Relationship(back_populates="routers")
 
     @property
     def uwsgi_config_section_class(self) -> HttpRouterSection | HttpsRouterSection:
@@ -34,9 +35,7 @@ class BaseRouter(ServiceBase, table=True):
     @pydantic.computed_field
     @property
     def service_config(self) -> Path:
-        service_config_dir = ensure_system_dir(
-            Path(self.config_dir) / "projects"
-        )
+        service_config_dir = ensure_system_dir(Path(self.config_dir) / "projects")
         return service_config_dir / f"{self.service_id}.ini"
 
     def zmq_connect(self):
@@ -89,19 +88,19 @@ class BaseRouter(ServiceBase, table=True):
     #                do_print=False,
     #            )
     #    )
-        # self.config_json["uwsgi"]["show-config"] = True
-        # self.config_json["uwsgi"]["strict"] = True
-        # self.config_json["uwsgi"]["notify-socket"] = str(self.notify_socket)
+    # self.config_json["uwsgi"]["show-config"] = True
+    # self.config_json["uwsgi"]["strict"] = True
+    # self.config_json["uwsgi"]["notify-socket"] = str(self.notify_socket)
 
-        # print(f"{wsgi_app_opts=}")
-        # print(f"wsgi app {self.config_json=}")
-        # empjs["uwsgi"]["plugin"] = "emperor_zeromq"
-        # self.service_config.write_text(json.dumps(self.config_json))
+    # print(f"{wsgi_app_opts=}")
+    # print(f"wsgi app {self.config_json=}")
+    # empjs["uwsgi"]["plugin"] = "emperor_zeromq"
+    # self.service_config.write_text(json.dumps(self.config_json))
     #    return config_json
 
     # @pydantic.computed_field
     # def resubscribe_to(self) -> Path:
-        # resubscribe_to: str = None,
+    # resubscribe_to: str = None,
     #    return Path()
 
     @pydantic.computed_field
@@ -115,28 +114,32 @@ class BaseRouter(ServiceBase, table=True):
 
 async def get_or_create_http_router(
     name: str,
+    device,
     context: dict,
     create_kwargs: dict,
-    ) -> BaseRouter:
+) -> BaseRouter:
 
     from pikesquares.service_layer.uow import UnitOfWork
 
     uow = await services.aget(context, UnitOfWork)
     http_router = await uow.routers.get_by_name(name)
-    http_router_port = get_first_available_port(port=8034)
+
     if not http_router:
+        http_router_port = get_first_available_port(port=8034)
+        http_router_address = f"0.0.0.0:{http_router_port}"
+        subscription_server_address = f"127.0.0.1:{get_first_available_port(port=5700)}"
         http_router = BaseRouter(
             service_id=f"http_router_{cuid()}",
             name=name,
-            address=f"0.0.0.0:{http_router_port}",
-            subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5700)}",
+            device=device,
+            address=http_router_address,
+            subscription_server_address=subscription_server_address,
             **create_kwargs,
         )
+        logger.debug(f"adding {http_router} to {device}")
         await uow.routers.add(http_router)
         await uow.commit()
         logger.debug(f"Created {http_router=}")
-    else:
-        logger.debug(f"Using existing http router {http_router=}")
 
     uwsgi_config = http_router.write_uwsgi_config()
     logger.debug(f"wrote config to file: {uwsgi_config}")
@@ -160,8 +163,6 @@ async def get_or_create_http_router(
             logger.debug(f"Using existing http router {https_router=}")
 
         context["https_router"] = https_router
-
-
 
 
 """

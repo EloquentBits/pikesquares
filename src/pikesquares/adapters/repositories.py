@@ -191,7 +191,7 @@ class DeviceRepository(GenericSqlRepository[Device], DeviceReposityBase):
         results = await self._session.exec(stmt)
         if results:
             logger.debug(f"{results=}")
-            obj = await results.one()
+            obj = results.one_or_none()
             logger.debug(f"{obj=}")
             return obj
 
@@ -202,9 +202,7 @@ class DeviceUWSGIOptionsReposityBase(GenericRepository[DeviceUWSGIOptions], ABC)
     pass
 
 
-class DeviceUWSGIOptionsReposity(
-    GenericSqlRepository[DeviceUWSGIOptions], DeviceUWSGIOptionsReposityBase
-):
+class DeviceUWSGIOptionsReposity(GenericSqlRepository[DeviceUWSGIOptions], DeviceUWSGIOptionsReposityBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, DeviceUWSGIOptions)
 

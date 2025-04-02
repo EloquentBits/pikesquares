@@ -1,28 +1,30 @@
 import os
-from typing import Any
-import uuid
 import shutil
-from pathlib import Path
 import sys
 
+# from typing import Any
+import uuid
+from pathlib import Path
+
 import pydantic
-from cuid import cuid
-from aiopath import AsyncPath
 import structlog
+from cuid import cuid
 from sqlmodel import (
-    SQLModel,
     Field,
     Relationship,
+    SQLModel,
 )
 
-from .base import ServiceBase, TimeStampedBase
+from pikesquares import services
 from pikesquares.conf import AppConfigError
 from pikesquares.exceptions import StatsReadError
-from pikesquares import services
+from pikesquares.presets.device import DeviceSection
 from pikesquares.services.data import DeviceStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
-from pikesquares.presets.device import DeviceSection
+from pikesquares.domain.project import get_or_create_project
+from pikesquares.domain.router import get_or_create_http_router
 
+from .base import ServiceBase, TimeStampedBase
 
 logger = structlog.getLogger()
 
@@ -30,12 +32,8 @@ logger = structlog.getLogger()
 class Device(ServiceBase, DevicePKIMixin, table=True):
 
     machine_id: str = Field(default=None, unique=True, max_length=32)
-    uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(
-        back_populates="device"
-    )
-    routers: list["BaseRouter"] = Relationship(
-        back_populates="device"
-    )
+    uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
+    routers: list["BaseRouter"] = Relationship(back_populates="device")
 
     enable_tuntap_router: bool = False
 
@@ -70,13 +68,9 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
         try:
 
-            device_stats = Device.read_stats(
-                    self.stats_address
-            )
+            device_stats = Device.read_stats(self.stats_address)
             if device_stats:
-                return DeviceStats(
-                        **device_stats
-                )
+                return DeviceStats(**device_stats)
         except StatsReadError:
             pass
 
@@ -209,7 +203,7 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
         arbitrary_types_allowed = True
 
     def __repr__(self):
-        return f"<DeviceUWSGIOptions option_key={self.option_key} option_value={self.option_value}>"
+        return f'<DeviceUWSGIOptions option_key="{self.option_key}" option_value="{self.option_value}">'
 
     def __str__(self):
         return self.__repr__()
@@ -219,8 +213,9 @@ async def get_or_create_device(
     context: dict,
     create_kwargs: dict,
     enable_tuntap_router: bool = False,
-    ) -> Device:
+) -> Device:
     from pikesquares.service_layer.uow import UnitOfWork
+
     uow = await services.aget(context, UnitOfWork)
     machine_id = await ServiceBase.read_machine_id()
     if not machine_id:
@@ -238,11 +233,21 @@ async def get_or_create_device(
             machine_id=machine_id,
             **create_kwargs,
         )
+        # device.routers.add(default_http_router)
         device = await uow.devices.add(device)
         await uow.commit()
         logger.debug(f"Created {device=} for {machine_id=}")
-    else:
-        logger.debug(f"Using existing device for {machine_id=} {device=}")
+
+    default_http_router = await get_or_create_http_router(
+        "default-http-router",
+        device,
+        context,
+        create_kwargs,
+    )
+    context["default-http-router"] = default_http_router
+
+    default_project = await get_or_create_project("default-project", context, create_kwargs)
+    context["default-project"] = default_project
 
     uwsgi_config = device.write_uwsgi_config()
     logger.debug(f"wrote config to file: {uwsgi_config}")

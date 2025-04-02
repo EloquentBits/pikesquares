@@ -10,6 +10,7 @@ from pathlib import Path
 from time import sleep
 from typing import Annotated, Optional
 
+import anyio
 import questionary
 import randomname
 import sentry_sdk
@@ -52,8 +53,6 @@ from pikesquares.domain.process_compose import (
     ProcessCompose,
     register_process_compose,
 )
-from pikesquares.domain.project import get_or_create_project
-from pikesquares.domain.router import get_or_create_http_router
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -282,8 +281,10 @@ def info(
 
     # console.info(device.stats)
     #
+    """
     console.success(":heavy_check_mark:      Launching dns server... Done!")
     console.success(":heavy_exclamation_mark:      Unable to launch")
+    """
 
     pc = services.get(context, ProcessCompose)
     try:
@@ -297,7 +298,7 @@ def info(
     except PCAPIUnavailableError:
         console.info("PCAPIUnavailableError: process-compose api not available.")
     except PCDeviceUnavailableError:
-        console.error("PCDeviceUnavailableError: PikeSquares Server was unable to start.")
+        console.error("PCDeviceUnavailableError: PikeSquares Server is not running.")
         raise typer.Exit() from None
 
     # except (process_compose.PCAPIUnavailableError,
@@ -817,10 +818,6 @@ app.add_typer(routers.app, name="routers")
 app.add_typer(devices.app, name="devices")
 app.add_typer(managed_services.app, name="services")
 
-from functools import wraps
-
-import anyio
-
 
 def _version_callback(value: bool) -> None:
     if value:
@@ -1017,11 +1014,6 @@ async def main(
             """
 
     context["device"] = device
-    default_project = await get_or_create_project("default-project", context, common_kwargs)
-    context["default-project"] = default_project
-
-    default_http_router = await get_or_create_http_router("default-http-router", context, common_kwargs)
-    context["default-http-router"] = default_http_router
 
     await register_process_compose(context, conf)
     # pc = services.get(context, ProcessCompose)
