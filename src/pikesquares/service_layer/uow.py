@@ -13,6 +13,7 @@ from pikesquares.adapters.repositories import (
     ProjectRepository,
     RouterReposityBase,
     RouterRepository,
+    WsgiAppRepository,
 )
 
 # logger = logging.getLogger("uvicorn.error")
@@ -23,8 +24,7 @@ logger = structlog.get_logger()
 
 
 class UnitOfWorkBase(ABC):
-    """Unit of work.
-    """
+    """Unit of work."""
 
     devices: DeviceReposityBase
     uwsgi_options: DeviceUWSGIOptionsReposityBase
@@ -40,14 +40,12 @@ class UnitOfWorkBase(ABC):
 
     @abstractmethod
     async def commit(self):
-        """Commits the current transaction.
-        """
+        """Commits the current transaction."""
         raise NotImplementedError()
 
     @abstractmethod
     async def rollback(self):
-        """Rollbacks the current transaction.
-        """
+        """Rollbacks the current transaction."""
         raise NotImplementedError()
 
 
@@ -65,6 +63,7 @@ class UnitOfWork(UnitOfWorkBase):
         self.uwsgi_options = DeviceUWSGIOptionsReposity(self._session)
         self.projects = ProjectRepository(self._session)
         self.routers = RouterRepository(self._session)
+        self.wsgi_apps = WsgiAppRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args):

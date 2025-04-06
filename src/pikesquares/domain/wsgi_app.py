@@ -1,17 +1,13 @@
-# import shutil
 from pathlib import Path
 
-from sqlmodel import Field
-from cuid import cuid
 import pydantic
-from aiopath import AsyncPath
 import structlog
+from sqlmodel import Field, Relationship
+
+from pikesquares.presets.wsgi_app import WsgiAppSection
+from pikesquares.services.apps.django import PythonRuntimeDjango
 
 from .base import ServiceBase
-from pikesquares.conf import ensure_system_dir
-from pikesquares.presets.project import ProjectSection
-from pikesquares.presets.wsgi_app_preset import WsgiAppSection
-
 
 logger = structlog.getLogger()
 
@@ -39,7 +35,6 @@ class Router(pydantic.BaseModel):
         return "http" if str(self.subscription_server_port).startswith("9") else "https"
 
 
-
 class VirtualHost(pydantic.BaseModel):
     address: str
     certificate_path: Path
@@ -50,12 +45,10 @@ class VirtualHost(pydantic.BaseModel):
 
     @property
     def is_https(self):
-        return all([
-            self.certificate_key,
-            self.certificate_path
-        ])
+        return all([self.certificate_key, self.certificate_path])
 
 
+"""
 class WsgiAppOptions(pydantic.BaseModel):
     root_dir: Path
     pyvenv_dir: Path
@@ -64,19 +57,23 @@ class WsgiAppOptions(pydantic.BaseModel):
     routers: list[Router] = []
     project_id: str
     workers: int = 3
-
+"""
 
 
 class WsgiApp(ServiceBase, table=True):
 
-    name: str = Field(default="sandbox", max_length=32)
+    name: str = Field(max_length=32)
+
+    project_id: str | None = Field(default=None, foreign_key="project.id")
+    project: "Project" = Relationship(back_populates="wsgi_apps")
 
     root_dir: str = Field(max_length=255)
     pyvenv_dir: str = Field(max_length=255)
     wsgi_file: str = Field(max_length=255)
-    wsgi_module:  str = Field(max_length=50)
+    wsgi_module: str = Field(max_length=50)
     project_id: str = Field(max_length=50)
-    workers: int = 1
+    workers: int = Field(default=1)
+    threads: int = Field(default=1)
 
     # routers: list["BaseRouter"] = Relationship(back_populates="device")
 
@@ -97,10 +94,7 @@ class WsgiApp(ServiceBase, table=True):
         # )
         # return service_config_dir / f"{self.service_id}.ini"
 
-        return Path(self.conf.config_dir) / \
-                f"{self.app_options.project_id}" / \
-                "apps" / \
-                f"{self.service_id}.ini"
+        return Path(self.conf.config_dir) / f"{self.app_options.project_id}" / "apps" / f"{self.service_id}.ini"
 
     @pydantic.computed_field
     @property
@@ -108,4 +102,4 @@ class WsgiApp(ServiceBase, table=True):
         return Path(self.config_dir) / f"{self.service_id}" / "apps"
 
     def ping(self) -> None:
-        print("== Project.ping ==")
+        logger.debug("== WsgiApp.ping ==")

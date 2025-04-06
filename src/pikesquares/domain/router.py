@@ -51,63 +51,24 @@ class BaseRouter(ServiceBase, table=True):
         except IndexError:
             pass
 
-
-async def get_or_create_http_router(
-    name: str,
-    device,
-    context: dict,
-    create_kwargs: dict,
-) -> BaseRouter:
-
-    from pikesquares.service_layer.uow import UnitOfWork
-
-    uow = await services.aget(context, UnitOfWork)
-    http_router = await uow.routers.get_by_name(name)
-
-    if not http_router:
-        http_router_port = get_first_available_port(port=8034)
-        http_router_address = f"0.0.0.0:{http_router_port}"
-        subscription_server_address = f"127.0.0.1:{get_first_available_port(port=5700)}"
-        http_router = BaseRouter(
-            service_id=f"http_router_{cuid()}",
-            name=name,
-            device=device,
-            address=http_router_address,
-            subscription_server_address=subscription_server_address,
+    """
+    https_router = await uow.routers.get_by_name("default-https-router")
+    if not https_router:
+        https_router = BaseRouter(
+            service_id=f"https_router_{cuid()}",
+            name="default-https-router",
+            address=f"0.0.0.0:{str(get_first_available_port(port=8443))}",
+            subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5600)}",
             **create_kwargs,
         )
-        logger.debug(f"adding {http_router} to {device}")
-        await uow.routers.add(http_router)
+        await uow.routers.add(https_router)
         await uow.commit()
-        logger.debug(f"Created {http_router=}")
+        logger.debug(f"Created {https_router=}")
+    else:
+        logger.debug(f"Using existing http router {https_router=}")
 
-    if device.enable_dir_monitor:
-        try:
-            uwsgi_config = http_router.write_uwsgi_config()
-        except PermissionError:
-            logger.error("permission denied writing router uwsgi config to disk")
-        else:
-            logger.debug(f"wrote config to file: {uwsgi_config}")
-
-    return http_router
-
-    if 0:
-        https_router = await uow.routers.get_by_name("default-https-router")
-        if not https_router:
-            https_router = BaseRouter(
-                service_id=f"https_router_{cuid()}",
-                name="default-https-router",
-                address=f"0.0.0.0:{str(get_first_available_port(port=8443))}",
-                subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5600)}",
-                **create_kwargs,
-            )
-            await uow.routers.add(https_router)
-            await uow.commit()
-            logger.debug(f"Created {https_router=}")
-        else:
-            logger.debug(f"Using existing http router {https_router=}")
-
-        context["https_router"] = https_router
+    context["https_router"] = https_router
+    """
 
 
 """

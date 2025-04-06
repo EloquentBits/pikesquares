@@ -5,8 +5,6 @@ import structlog
 from uwsgiconf.typehints import Strlist
 
 from . import Section
-from ..services.data import VirtualHost, WsgiAppOptions
-
 
 logger = structlog.get_logger()
 
@@ -27,7 +25,7 @@ class BaseWsgiAppSection(Section):
         log_dedicated: bool = None,
         process_prefix: str = None,
         ignore_write_errors: bool = None,
-        **kwargs
+        **kwargs,
     ):
         """
 
@@ -93,7 +91,7 @@ class BaseWsgiAppSection(Section):
         self.main_process.set_basic_params(vacuum=True)
         self.main_process.set_naming_params(
             autonaming=False,
-            prefix=f"{process_prefix} " if process_prefix else None,
+            prefix=f"{process_prefix} " if process_prefix else "",
         )
         self.master_process.set_basic_params(
             enable=True,
@@ -122,8 +120,8 @@ class BaseWsgiAppSection(Section):
                 self.main_process.set_owner_params(uid=owner, gid=owner)
         return self
 
-    #def set_domain_name(self, address: str, domain_name: str, 
-    #                    socket_path: str = "", 
+    # def set_domain_name(self, address: str, domain_name: str,
+    #                    socket_path: str = "",
     #                    socket_addr: str = "",
     #                    plugin=None):
     #    """Sets domain name in config (by avahi or bonjour plugin).
@@ -153,14 +151,10 @@ class BaseWsgiAppSection(Section):
 
 class WsgiAppSection(BaseWsgiAppSection):
 
-    def __init__(
-        self,
-        svc_model,
-        app_options: WsgiAppOptions,
-        virtual_hosts: list[VirtualHost] = [],
-    ):
-        self.svc_model = svc_model
-        self.virtual_hosts = virtual_hosts or []
+    # virtual_hosts: list[VirtualHost] = [],
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+        # self.virtual_hosts = virtual_hosts or []
 
         require_app = True
         embedded_plugins = self.embedded_plugins_presets.BASIC + ["python", "python2", "python3"]
@@ -168,29 +162,25 @@ class WsgiAppSection(BaseWsgiAppSection):
         super().__init__(
             name="uwsgi",
             embedded_plugins=embedded_plugins,
-            owner=f"{svc_model.conf.default_app_run_as_uid}:{svc_model.conf.default_app_run_as_gid}",
-            touch_reload=svc_model.touch_reload_file,
-            **app_options.model_dump(),
+            owner=f"{self.wsgi_app.run_as_uid}:{self.wsgi_app.run_as_gid}",
+            touch_reload=self.wsgi_app.touch_reload_file,
+            # **app_options.model_dump(),
         )
         self.python.set_basic_params(
             enable_threads=True,
             # search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
         )
-        if app_options.pyvenv_dir:
-            self.python.set_basic_params(
-                python_home=app_options.pyvenv_dir,
-            )
+        self.python.set_basic_params(python_home=self.wsgi_app.pyvenv_dir)
 
-        self.main_process.change_dir(to=app_options.root_dir)
-        self.main_process.set_pid_file(str(svc_model.pid_file))
+        self.main_process.change_dir(to=self.wsgi_app.root_dir)
+        self.main_process.set_pid_file(str(self.wsgi_app.pid_file))
 
-        self.master_process.set_basic_params(
-            enable=True,
-            no_orphans=True,
-            fifo_file=str(svc_model.fifo_file)
+        self.master_process.set_basic_params(enable=True, no_orphans=True, fifo_file=str(self.wsgi_app.fifo_file))
+
+        self.set_plugins_params(
+            plugins=self.wsgi_app.uwsgi_plugins,
+            search_dirs=self.wsgi_app.plugins_dir,
         )
-
-        self.set_plugins_params(search_dirs=svc_model.conf.plugins_dir)
 
         # if app.wsgi_module and callable(app.wsgi_module):
         #    wsgi_callable = wsgi_module.__name__
@@ -209,15 +199,10 @@ class WsgiAppSection(BaseWsgiAppSection):
         #        * mypackage.my_wsgi_module:my_app -- read from `my_app` attr of mypackage/my_wsgi_module.py
         # :param callable_name: Set WSGI callable name. Default: application.
 
-        self.python.set_wsgi_params(
-            module=str(app_options.wsgi_file),
-            callable_name=app_options.wsgi_module
-        )
+        self.python.set_wsgi_params(module=str(self.wsgi_app.wsgi_file), callable_name=self.wsgi_app.wsgi_module)
         self.applications.set_basic_params(exit_if_none=require_app)
 
-        self.networking.register_socket(
-            self.networking.sockets.default(svc_model.socket_address)
-        )
+        self.networking.register_socket(self.networking.sockets.default(str(self.wsgi_app.socket_address)))
 
         # socket_path = str(Path(self.conf.run_dir) / f"{service_id}.sock")
 
@@ -243,15 +228,9 @@ class WsgiAppSection(BaseWsgiAppSection):
         # ; pass it in subscriptions
         # subscription-notify-socket = /tmp/notify.socket
 
-        self.monitoring.set_stats_params(
-            address=str(svc_model.stats_address)
-        )
+        self.monitoring.set_stats_params(address=str(svc_model.stats_address))
         # self.logging.add_logger(self.logging.loggers.stdio())
-        self.logging.add_logger(
-            self.logging.loggers.file(
-                filepath=str(svc_model.log_file)
-            )
-        )
+        self.logging.add_logger(self.logging.loggers.file(filepath=str(svc_model.log_file)))
 
         # self.setup_virtual_hosts(virtual_hosts, socket_addr=socket_addr)
 
@@ -296,11 +275,11 @@ class WsgiAppSection(BaseWsgiAppSection):
         for router in app_options.routers:
             self.subscriptions.subscribe(
                 server=router.subscription_server_address,
-                address=str(svc_model.socket_address),  # address and port of wsgi app
+                address=str(self.wsgi_app.socket_address),  # address and port of wsgi app
                 key=router.subscription_server_key,
             )
             self.subscriptions.set_server_params(
-               client_notify_address=svc_model.subscription_notify_socket,
+                client_notify_address=svc_model.subscription_notify_socket,
             )
 
         # self.subscriptions.subscribe(
@@ -335,8 +314,6 @@ class WsgiAppSection(BaseWsgiAppSection):
             domain_name=domain_name
         )
         """
-
-
 
     """
     def setup_virtual_hosts(self, virtual_hosts: list[VirtualHost], 

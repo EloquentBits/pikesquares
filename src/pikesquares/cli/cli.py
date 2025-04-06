@@ -44,7 +44,6 @@ from pikesquares.conf import (
     ensure_system_dir,
     register_app_conf,
 )
-from pikesquares.domain.device import get_or_create_device
 
 # from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain.process_compose import (
@@ -54,6 +53,8 @@ from pikesquares.domain.process_compose import (
     register_process_compose,
 )
 from pikesquares.exceptions import StatsReadError
+from pikesquares.service_layer.handlers.device import get_or_create_device
+from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.django import PythonRuntimeDjango
 from pikesquares.services.apps.exceptions import (
@@ -348,7 +349,6 @@ def up(
                     process_compose.ping_api()
 
                     console.success(":heavy_check_mark:      Launching dns server... Done!")
-                    console.success(":heavy_exclamation_mark:      Unable to launch")
 
                     # console.success(":white_check_mark: reverse proxy is running")
                     console.success(":heavy_check_mark:     reverse proxy is running")
@@ -380,7 +380,8 @@ def up(
                 except (PCAPIUnavailableError, PCDeviceUnavailableError):
                     sleep(1)
                     continue
-            console.error("PikeSquares Server was unable to start.")
+
+            console.error(":heavy_exclamation_mark:      PikeSquares Server was unable to launch")
             raise typer.Exit(code=0) from None
 
     except ProcessExecutionError as process_exec_error:
@@ -631,6 +632,31 @@ def init(
     dependencies_count = 0
 
     layout = make_layout()
+    layout["tasks"].update(
+        Panel(
+            progress,
+            title="Initializing Project",
+            border_style="green",
+            padding=(2, 2),
+        ),
+    )
+    layout["overall_progress"].update(
+        Panel(
+            overall_progress,
+            title="Overall Progress",
+            border_style="green",
+            padding=(1, 1),
+        ),
+    )
+    layout["task_messages"].update(
+        Panel(
+            "",
+            title="Messages",
+            border_style="green",
+            padding=(2, 2),
+        )
+    )
+
     task_messages_layout = layout["task_messages"]
     msg_id_styles = {
         "C": "red",
@@ -787,22 +813,27 @@ def init(
         # console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
         app_name = randomname.get_name().lower()
         # app_project = services.get(context, SandboxProject)
-        if 0:
-            try:
-                wsgi_app = runtime.get_app(
-                    conf,
-                    # db,
-                    app_name,
-                    service_id,
-                    # app_project,
-                    pyvenv_dir,
-                    # build_routers(app_name),
-                )
-                logger.info(wsgi_app.config_json)
-                # console.print("[bold green]WSGI App has been provisioned.")
-            except DjangoSettingsError:
-                logger.error("[pikesquares] -- DjangoSettingsError --")
-                raise typer.Exit() from None
+        """
+        try:
+            wsgi_app = runtime.get_app(
+                conf,
+                # db,
+                app_name,
+                service_id,
+                # app_project,
+                pyvenv_dir,
+                # build_routers(app_name),
+            )
+            logger.info(wsgi_app.config_json)
+            # console.print("[bold green]WSGI App has been provisioned.")
+        except DjangoSettingsError:
+            logger.error("[pikesquares] -- DjangoSettingsError --")
+            raise typer.Exit() from None
+        """
+
+        create_wsgi_app(
+            runtime,
+        )
 
     # console.log(runtime.collected_project_metadata["django_settings"])
     # console.log(runtime.collected_project_metadata["django_check_messages"])
@@ -1018,6 +1049,7 @@ async def main(
     }
     device = await get_or_create_device(
         context,
+        uow,
         create_kwargs=create_kwargs,
     )
     uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)

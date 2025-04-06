@@ -8,24 +8,21 @@ from pathlib import Path
 
 import pydantic
 import structlog
-from aiopath import AsyncPath
-from cuid import cuid
+
+# from aiopath import AsyncPath
 from sqlmodel import (
     Field,
     Relationship,
     SQLModel,
 )
 
-from pikesquares import services
-from pikesquares.conf import AppConfigError
-from pikesquares.domain.project import get_or_create_project
-from pikesquares.domain.router import get_or_create_http_router
 from pikesquares.exceptions import StatsReadError
 from pikesquares.presets.device import DeviceSection
 from pikesquares.services.data import DeviceStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
 
 from .base import ServiceBase, TimeStampedBase
+
 
 logger = structlog.getLogger()
 
@@ -135,6 +132,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
         # res = device_config.main_process.actions.fifo_write(target, command)
 
+    """
     async def sync_db_with_filesystem(self, uow: "UnitOfWork"):
 
         routers = await uow.routers.get_by_device_id(self.id)
@@ -176,10 +174,12 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
         for router_config in (self.config_dir / "projects").glob("*router_*.ini"):
             logger.info(f"found router config. deleting {router_config.name}")
             router_config.unlink()
+    """
 
     def delete_logs(self):
-        for logfile in self.log_dir.glob("*.log"):
-            logfile.unlink()
+        if self.log_dir:
+            for logfile in self.log_dir.glob("*.log"):
+                logfile.unlink()
 
     def uninstall(self, dry_run: bool = False):
         for user_dir in [
@@ -222,51 +222,3 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
 
     def __str__(self):
         return self.__repr__()
-
-
-async def get_or_create_device(
-    context: dict,
-    create_kwargs: dict,
-) -> Device:
-    from pikesquares.service_layer.uow import UnitOfWork
-
-    uow = await services.aget(context, UnitOfWork)
-    machine_id = await ServiceBase.read_machine_id()
-    if not machine_id:
-        raise AppConfigError("unable to read the machine-id")
-
-    device = await uow.devices.get_by_machine_id(machine_id)
-    if not device:
-        uwsgi_plugins = []
-        if create_kwargs.get("enable_tuntap_router"):
-            uwsgi_plugins.append("tuntap")
-
-        if create_kwargs.get("enable_zeromq_monitor"):
-            uwsgi_plugins.append("emperor_zeromq")
-
-        device = Device(
-            service_id=f"device_{cuid()}",
-            uwsgi_plugins=", ".join(uwsgi_plugins),
-            machine_id=machine_id,
-            **create_kwargs,
-        )
-        # device.routers.add(default_http_router)
-        device = await uow.devices.add(device)
-        await uow.commit()
-        logger.debug(f"Created {device=} for {machine_id=}")
-
-    default_http_router = await get_or_create_http_router("default-http-router", device, context, create_kwargs)
-    context["default-http-router"] = default_http_router
-
-    default_project = await get_or_create_project("default-project", device, context, create_kwargs)
-    context["default-project"] = default_project
-
-    if device.enable_dir_monitor:
-        try:
-            uwsgi_config = device.write_uwsgi_config()
-        except PermissionError:
-            logger.error("permission denied writing project uwsgi config to disk")
-        else:
-            logger.debug(f"wrote config to file: {uwsgi_config}")
-    # await device.sync_db_with_filesystem(uow)
-    return device

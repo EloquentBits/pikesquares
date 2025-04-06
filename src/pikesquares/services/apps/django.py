@@ -3,13 +3,9 @@ from pathlib import Path
 
 import pydantic
 from plumbum import ProcessExecutionError
-from tinydb import TinyDB
 import structlog
 
-from pikesquares.conf import AppConfig
 from . import Task
-from ..data import Router, WsgiAppOptions
-from .wsgi import WsgiApp
 from .python import PythonRuntime
 from .exceptions import (
     UvCommandExecutionError,
@@ -65,14 +61,10 @@ class DjangoSettings(pydantic.BaseModel):
 
     def settings_with_titles(self) -> list[tuple[str, str]]:
         return [
-             ("Django Settings Module", self.settings_module),
-             ("Django URLConf Module", self.root_urlconf),
-             ("Django WSGI Module", self.wsgi_application)
+            ("Django Settings Module", self.settings_module),
+            ("Django URLConf Module", self.root_urlconf),
+            ("Django WSGI Module", self.wsgi_application),
         ]
-
-
-class DjangoWsgiApp(WsgiApp):
-    pass
 
 
 """
@@ -84,16 +76,15 @@ class DjangoWsgiApp(WsgiApp):
 """
 
 
-
 class PythonRuntimeDjango(PythonRuntime):
 
     framework_emoji: str = ":unicorn_face:"
 
     def init(
-            self,
-            venv: Path,
-            check: bool = True,
-        ) -> bool:
+        self,
+        venv: Path,
+        check: bool = True,
+    ) -> bool:
         logger.debug("[pikesquares] PythonRuntimeDjango.init")
         if super().init(venv, check=check):
             return True
@@ -121,23 +112,18 @@ class PythonRuntimeDjango(PythonRuntime):
         )
         return [*tasks, dj_check_task, dj_settings_task]
 
-    def check(
-            self,
-            app_tmp_dir: Path
-        ) -> bool:
+    def check(self, app_tmp_dir: Path) -> bool:
         logger.debug("[pikesquares] PythonRuntimeDjango.check")
         if super().check(app_tmp_dir):
             logger.debug("[pikesquares] PythonRuntimeDjango.check | PythonRuntime check ok")
-            #console_status.update(status="[magenta]Provisioning Python WSGI App", spinner="earth")
+            # console_status.update(status="[magenta]Provisioning Python WSGI App", spinner="earth")
             try:
-                self.collected_project_metadata["django_check_messages"] = \
-                        self.django_check(app_tmp_dir=app_tmp_dir)
+                self.collected_project_metadata["django_check_messages"] = self.django_check(app_tmp_dir=app_tmp_dir)
             except DjangoCheckError:
                 self.check_cleanup(app_tmp_dir)
                 raise PythonRuntimeDjangoCheckError("django check command failed")
             try:
-                self.collected_project_metadata["django_settings"] = \
-                        self.django_diffsettings(app_tmp_dir=app_tmp_dir)
+                self.collected_project_metadata["django_settings"] = self.django_diffsettings(app_tmp_dir=app_tmp_dir)
             except DjangoDiffSettingsError:
                 self.check_cleanup(app_tmp_dir)
                 raise PythonRuntimeDjangoCheckError("django diffsettings command failed.")
@@ -145,10 +131,10 @@ class PythonRuntimeDjango(PythonRuntime):
         return False
 
     def django_check(
-            self,
-            cmd_env: dict | None = None,
-            app_tmp_dir: Path | None = None,
-        ) -> DjangoCheckMessages:
+        self,
+        cmd_env: dict | None = None,
+        app_tmp_dir: Path | None = None,
+    ) -> DjangoCheckMessages:
         chdir = app_tmp_dir or self.app_root_dir
         logger.info(f"[pikesquares] run django check in {str(chdir)}")
         dj_msgs = DjangoCheckMessages()
@@ -200,34 +186,35 @@ class PythonRuntimeDjango(PythonRuntime):
                         logger.error(f"unable to parse message id from '{msg}'")
                         continue
                     dj_msgs.messages.append(
-                            DjangoCheckMessage(
-                                id=msg_id,
-                                message="".join(msg.split(")")[1:],
-                            ).strip()
+                        DjangoCheckMessage(
+                            id=msg_id,
+                            message="".join(
+                                msg.split(")")[1:],
+                            ).strip(),
                         )
                     )
                 return dj_msgs
             else:
-                raise DjangoCheckError(f"[pikesquares] UvExecError: unable to run django check in {str(chdir)}") from None
+                raise DjangoCheckError(
+                    f"[pikesquares] UvExecError: unable to run django check in {str(chdir)}"
+                ) from None
 
-        logger.info(
-            f"django check completed. no errors.: {retcode=} {stdout=} {stderr=}"
-        )
+        logger.info(f"django check completed. no errors.: {retcode=} {stdout=} {stderr=}")
         return dj_msgs
 
     def django_diffsettings(
         self,
         cmd_env: dict | None = None,
         app_tmp_dir: Path | None = None,
-        ) -> DjangoSettings:
+    ) -> DjangoSettings:
         logger.info("[pikesquares] django diffsettings")
         cmd_args = ["run", "manage.py", "diffsettings"]
         chdir = app_tmp_dir or self.app_root_dir
         try:
             retcode, stdout, stderr = self.uv_cmd(
-                    cmd_args,
-                    cmd_env,
-                    chdir=chdir,
+                cmd_args,
+                cmd_env,
+                chdir=chdir,
             )
             dj_settings = {}
             for line in stdout.splitlines():
@@ -245,31 +232,21 @@ class PythonRuntimeDjango(PythonRuntime):
             return django_settings
 
         except UvCommandExecutionError:
-            raise DjangoDiffSettingsError(
-                f"[pikesquares] UvExecError: unable to run django diffsettings in {chdir}"
-            )
+            raise DjangoDiffSettingsError(f"[pikesquares] UvExecError: unable to run django diffsettings in {chdir}")
 
+
+"""
     def get_app(
-        self,
-        conf: AppConfig,
-        db: TinyDB,
-        name: str,
-        service_id: str,
-        app_project,
-        venv: Path,
-        routers: list[Router]
-        ) -> DjangoWsgiApp:
+        self, conf: AppConfig, db: TinyDB, name: str, service_id: str, app_project, venv: Path, routers: list[Router]
+    ) -> DjangoWsgiApp:
 
         if "django_settings" not in self.collected_project_metadata:
             raise DjangoSettingsError("unable to detect django settings")
 
-        django_settings = self.collected_project_metadata.\
-                get("django_settings")
-
+        django_settings = self.collected_project_metadata.get("django_settings")
         logger.debug(django_settings.model_dump())
 
-        django_check_messages = self.collected_project_metadata.\
-                get("django_check_messages", [])
+        django_check_messages = self.collected_project_metadata.get("django_check_messages", [])
 
         for msg in django_check_messages.messages:
             logger.debug(f"{msg.id=}")
@@ -294,4 +271,4 @@ class PythonRuntimeDjango(PythonRuntime):
             build_config_on_init=True,
             app_options=WsgiAppOptions(**app_options),
         )
-
+"""

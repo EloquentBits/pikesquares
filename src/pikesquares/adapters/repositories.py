@@ -15,6 +15,7 @@ from pikesquares.domain.router import (
     # HttpRouter,
     # HttpsRouter,
 )
+from pikesquares.domain.wsgi_app import WsgiApp
 
 # logger = logging.getLogger("uvicorn.error")
 # logger.setLevel(logging.DEBUG)
@@ -268,6 +269,32 @@ class RouterRepository(GenericSqlRepository[BaseRouter], RouterReposityBase):
 
     async def get_by_device_id(self, device_id: str) -> BaseRouter | None:
         stmt = select(BaseRouter).where(BaseRouter.device_id == device_id)
+        results = await self._session.exec(stmt)
+        if results:
+            return results.all()
+
+
+class WsgiAppReposityBase(GenericRepository[WsgiApp], ABC):
+    """WsgiApp repository."""
+
+    @abstractmethod
+    async def get_by_name(self, name: str) -> WsgiApp | None:
+        raise NotImplementedError()
+
+
+class WsgiAppRepository(GenericSqlRepository[WsgiApp], WsgiAppReposityBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, WsgiApp)
+
+    async def get_by_name(self, name: str) -> WsgiApp | None:
+        stmt = select(WsgiApp).where(WsgiApp.name == name)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
+
+    async def get_by_project_id(self, project_id: str) -> WsgiApp | None:
+        stmt = select(WsgiApp).where(WsgiApp.project_id == project_id)
         results = await self._session.exec(stmt)
         if results:
             return results.all()
