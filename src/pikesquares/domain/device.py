@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pydantic
 import structlog
+from aiopath import AsyncPath
 from cuid import cuid
 from sqlmodel import (
     Field,
@@ -17,12 +18,12 @@ from sqlmodel import (
 
 from pikesquares import services
 from pikesquares.conf import AppConfigError
+from pikesquares.domain.project import get_or_create_project
+from pikesquares.domain.router import get_or_create_http_router
 from pikesquares.exceptions import StatsReadError
 from pikesquares.presets.device import DeviceSection
 from pikesquares.services.data import DeviceStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
-from pikesquares.domain.project import get_or_create_project
-from pikesquares.domain.router import get_or_create_http_router
 
 from .base import ServiceBase, TimeStampedBase
 
@@ -34,7 +35,13 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     machine_id: str = Field(default=None, unique=True, max_length=32)
     uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
     routers: list["BaseRouter"] = Relationship(back_populates="device")
+    projects: list["Project"] = Relationship(back_populates="device")
 
+    monitor_zmq_ip: str | None = Field(default="127.0.0.1", max_length=50)
+    monitor_zmq_port: int | None = Field(default=5242)
+
+    enable_dir_monitor: bool = False
+    enable_zeromq_monitor: bool = False
     enable_tuntap_router: bool = False
 
     # def model_post_init(self, __context: Any) -> None:
@@ -44,6 +51,11 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     @property
     def apps_dir(self) -> Path:
         return Path(self.config_dir) / "projects"
+
+    @pydantic.computed_field
+    @property
+    def zeromq_monitor_address(self) -> str:
+        return f"zmq://tcp://{self.monitor_zmq_ip}:{self.monitor_zmq_port}"
 
     @property
     def uwsgi_config_section_class(self) -> DeviceSection:
@@ -77,7 +89,6 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     def up(self):
         self.setup_pki()
         super().up()
-        # self.sync_db_with_filesystem()
 
     # self.config_json["uwsgi"]["emperor-wrapper"] = str(
     #    (Path(self.VIRTUAL_ENV) / "bin/uwsgi").resolve()
@@ -100,9 +111,6 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
             uwsgi_options.append(uwsgi_option)
             uwsgi_option.sort_order_index = uwsgi_options.index(uwsgi_option)
         return uwsgi_options
-
-    def start(self):
-        pass
 
     def start_pyuwsgi(self) -> bool:
         # we import `pyuwsgi` with `dlopen` flags set to `os.RTLD_GLOBAL` such that
@@ -127,42 +135,49 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
         # res = device_config.main_process.actions.fifo_write(target, command)
 
-    def sync_db_with_filesystem(self):
-        config_dir = self.config_dir
-        if not self.db.table("projects").all():
-            for proj_config in (config_dir / "projects").glob("project_*.json"):
-                for app_config in (config_dir / proj_config.stem / "apps").glob("*.json"):
-                    logger.info(f"found loose app config. deleting {app_config.name}")
-                    app_config.unlink()
-                logger.info(f"found loose project config. deleting {proj_config.name}")
-                proj_config.unlink()
-            # logger.info("creating sandbox project.")
-            # project_up(conf, "sandbox", f"project_{cuid()}")
+    async def sync_db_with_filesystem(self, uow: "UnitOfWork"):
 
-        if not self.db.table("routers").all():
-            for router_config in (config_dir / "projects").glob("router_*.json"):
-                logger.info(f"found loose router config. deleting {router_config.name}")
-                router_config.unlink()
+        routers = await uow.routers.get_by_device_id(self.id)
+        projects = await uow.projects.get_by_device_id(self.id)
+        logger.debug(f"cleaning up stale project configs from filesystem. Found {len(projects)} projects")
+        projects_dir = Path(self.config_dir) / "projects"
+        project_configs = [str(p.service_config) for p in projects]
+        logger.debug(f"{project_configs=}")
+        async for proj_config in AsyncPath(projects_dir).glob("project_*.ini"):
+            logger.debug(proj_config)
+            if str(proj_config) in project_configs:
+                continue
+
+            apps_dir = Path(self.config_dir) / proj_config.stem / "apps"
+            async for app_config in AsyncPath(apps_dir).glob("*.ini"):
+                logger.info(f"found loose app config. deleting {app_config.name}")
+                await AsyncPath(app_config).unlink()
+
+            logger.info(f"found loose project config. deleting {proj_config.name}")
+            await AsyncPath(proj_config).unlink()
+
+        router_configs = [str(r.service_config) for r in routers]
+        logger.debug(f"{router_configs=}")
+        async for router_config in AsyncPath(projects_dir).glob("*router_*.ini"):
+            logger.debug(router_config)
+            if str(router_config) in router_configs:
+                continue
+            logger.info(f"found loose router config. deleting {router_config.name}")
+            await AsyncPath(router_config).unlink()
 
     def delete_configs(self):
-        config_dir = self.config_dir
-        for proj_config in (config_dir / "projects").glob("project_*.json"):
-            for app_config in (config_dir / proj_config.stem / "apps").glob("*.json"):
+        for proj_config in (self.config_dir / "projects").glob("project_*.ini"):
+            for app_config in (self.config_dir / proj_config.stem / "apps").glob("*.ini"):
                 logger.info(f"deleting {app_config.name}")
                 app_config.unlink()
-
-                # FIXME
-                # app_log = self.log_dir / app_config.stem / ".log"
-                # app_log.unlink(missing_ok=True)
-                # logger.info(f"deleting {app_log.name}")
-
             logger.info(f"deleting {proj_config.name}")
             proj_config.unlink()
 
-        for router_config in (config_dir / "projects").glob("router_*.json"):
+        for router_config in (self.config_dir / "projects").glob("*router_*.ini"):
             logger.info(f"found router config. deleting {router_config.name}")
             router_config.unlink()
 
+    def delete_logs(self):
         for logfile in self.log_dir.glob("*.log"):
             logfile.unlink()
 
@@ -212,7 +227,6 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
 async def get_or_create_device(
     context: dict,
     create_kwargs: dict,
-    enable_tuntap_router: bool = False,
 ) -> Device:
     from pikesquares.service_layer.uow import UnitOfWork
 
@@ -224,8 +238,11 @@ async def get_or_create_device(
     device = await uow.devices.get_by_machine_id(machine_id)
     if not device:
         uwsgi_plugins = []
-        if enable_tuntap_router:
+        if create_kwargs.get("enable_tuntap_router"):
             uwsgi_plugins.append("tuntap")
+
+        if create_kwargs.get("enable_zeromq_monitor"):
+            uwsgi_plugins.append("emperor_zeromq")
 
         device = Device(
             service_id=f"device_{cuid()}",
@@ -238,18 +255,18 @@ async def get_or_create_device(
         await uow.commit()
         logger.debug(f"Created {device=} for {machine_id=}")
 
-    default_http_router = await get_or_create_http_router(
-        "default-http-router",
-        device,
-        context,
-        create_kwargs,
-    )
+    default_http_router = await get_or_create_http_router("default-http-router", device, context, create_kwargs)
     context["default-http-router"] = default_http_router
 
-    default_project = await get_or_create_project("default-project", context, create_kwargs)
+    default_project = await get_or_create_project("default-project", device, context, create_kwargs)
     context["default-project"] = default_project
 
-    uwsgi_config = device.write_uwsgi_config()
-    logger.debug(f"wrote config to file: {uwsgi_config}")
-
+    if device.enable_dir_monitor:
+        try:
+            uwsgi_config = device.write_uwsgi_config()
+        except PermissionError:
+            logger.error("permission denied writing project uwsgi config to disk")
+        else:
+            logger.debug(f"wrote config to file: {uwsgi_config}")
+    # await device.sync_db_with_filesystem(uow)
     return device

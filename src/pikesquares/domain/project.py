@@ -1,7 +1,7 @@
 # import shutil
 from pathlib import Path
 
-from sqlmodel import Field
+from sqlmodel import Field, Relationship
 from cuid import cuid
 import pydantic
 from aiopath import AsyncPath
@@ -19,6 +19,14 @@ logger = structlog.getLogger()
 class Project(ServiceBase, table=True):
 
     name: str = Field(default="sandbox", max_length=32)
+    device_id: str | None = Field(default=None, foreign_key="device.id")
+    device: "Device" = Relationship(back_populates="projects")
+
+    monitor_zmq_ip: str | None = Field(default="127.0.0.1", max_length=50)
+    monitor_zmq_port: int | None = Field(default=5252)
+
+    enable_dir_monitor: bool = False
+    enable_zeromq_monitor: bool = False
 
     @property
     def uwsgi_config_section_class(self) -> ProjectSection:
@@ -27,9 +35,7 @@ class Project(ServiceBase, table=True):
     @pydantic.computed_field
     @property
     def service_config(self) -> Path:
-        service_config_dir = ensure_system_dir(
-            Path(self.config_dir) / "projects"
-        )
+        service_config_dir = ensure_system_dir(Path(self.config_dir) / "projects")
         return service_config_dir / f"{self.service_id}.ini"
 
     @pydantic.computed_field
@@ -40,75 +46,31 @@ class Project(ServiceBase, table=True):
     def ping(self) -> None:
         print("== Project.ping ==")
 
-    def zmq_write_config(self):
-        pass
-        # print("sending msg to zmq")
-        # self.zmq_socket.send_multipart(
-        #    [
-        #        b"touch",
-        #        f"{self.service_id}.json".encode(),
-        #        json.dumps(self.config_json).encode(),
-        #    ]
-        # )
-        # print("sent msg to zmq")
-
-        # if not self.is_started() and str(self.service_config.resolve()).endswith(".stopped"):
-        #    shutil.move(
-        #        str(self.service_config),
-        #        self.service_config.removesuffix(".stopped")
-        #    )
-
-    # stats_addr = self.config_json["uwsgi"]["emperor-stats-server"]
-    # self.config_json["uwsgi"]["emperor"] = zmq_addr #uwsgi.cache_get(zmq_addr_key, self.cache).decode()
-    # self.config_json["uwsgi"]["emperor"] = self.apps_dir
-    # uwsgi.cache_update(f"{self.service_id}-stats-addr", str(stats_addr), 0, self.cache)
-    # self.config_json["uwsgi"]["emperor-wrapper"] = \
-    #    str((Path(self.conf.VIRTUAL_ENV) / "bin/uwsgi").resolve())
-
-    # self.config_json["uwsgi"]["show-config"] = True
-    # self.config_json["uwsgi"]["strict"] = True
-    # self.config_json["uwsgi"]["plugin"] = "logfile"
-    # if "logfile" in config_json["uwsgi"].get("plugin", ""):
-    #    config_json["uwsgi"].pop("plugin")
-
-    def zmq_connect(self):
-        pass
-        # print(f"Connecting to zmq emperor  {self.conf.EMPEROR_ZMQ_ADDRESS}")
-        # self.zmq_socket.connect(f"tcp://{self.conf.EMPEROR_ZMQ_ADDRESS}")
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
-        # self.zmq_socket.send_multipart([
-        #    b"destroy",
-        #    f"{self.service_id}.json".encode(),
-        # ])
-        # if self.service_config is None:
-        #    self.service_config = Path(self.conf.config_dir) / \
-        #            f"{self.parent_service_id}" / "apps" \
-        #            / f"{self.service_id}.json"
-
-        # if self.is_started() and not str(self.service_config.resolve()).endswith(".stopped"):
-        #    shutil.move(self.service_config, self.service_config.with_suffix(".stopped"))
+    @pydantic.computed_field
+    @property
+    def zeromq_monitor_address(self) -> str:
+        return f"zmq://tcp://{self.monitor_zmq_ip}:{self.monitor_zmq_port}"
 
 
 async def get_or_create_project(
     name: str,
+    device,
     context: dict,
     create_kwargs: dict,
-    ) -> Project:
-
+) -> Project:
     from pikesquares.service_layer.uow import UnitOfWork
 
     uow = await services.aget(context, UnitOfWork)
     project = await uow.projects.get_by_name(name)
 
     if not project:
+        uwsgi_plugins = ["emperor_zeromq"]
+
         project = Project(
             service_id=f"project_{cuid()}",
             name=name,
+            device=device,
+            uwsgi_plugins=", ".join(uwsgi_plugins),
             **create_kwargs,
         )
         await uow.projects.add(project)
@@ -120,10 +82,12 @@ async def get_or_create_project(
     if not await AsyncPath(project.apps_dir).exists():
         await AsyncPath(project.apps_dir).mkdir(parents=True, exist_ok=True)
 
-    uwsgi_config = project.write_uwsgi_config()
-    logger.debug(f"wrote config to file: {uwsgi_config}")
+    if project.enable_dir_monitor:
+        uwsgi_config = project.write_uwsgi_config()
+        logger.debug(f"wrote config to file: {uwsgi_config}")
 
     return project
+
 
 # SandboxProject = NewType("SandboxProject", Project)
 

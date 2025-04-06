@@ -2,6 +2,7 @@ import structlog
 
 
 from . import Section
+
 # from .routers import BaseRouterHttps
 
 from uwsgiconf.options.routing_routers import RouterTunTap
@@ -14,8 +15,8 @@ class DeviceSection(Section):
 
     def __init__(self, device):
         super().__init__(
-            name="uwsgi",                                       # uwsgi: [uwsgi] section header
-            strict_config=True,                                 # uwsgi: strict = true
+            name="uwsgi",  # uwsgi: [uwsgi] section header
+            strict_config=True,  # uwsgi: strict = true
             embedded_plugins=False,
         )
         self.device = device
@@ -43,10 +44,10 @@ class DeviceSection(Section):
         # tuntap,pty,mongrel2,alarm_curl,router_radius,airbrake,gridfs
 
         self.set_plugins_params(
-             plugins=device.uwsgi_plugins,
-             search_dirs=[str(device.plugins_dir)],
-             # autoload=True,
-             # required=True,
+            plugins=device.uwsgi_plugins,
+            search_dirs=[str(device.plugins_dir)],
+            # autoload=True,
+            # required=True,
         )
         self.print_plugins()
 
@@ -54,7 +55,7 @@ class DeviceSection(Section):
             enable=True,
             no_orphans=True,
             fifo_file=str(device.fifo_file),
-        )   # uwsgi: master = true
+        )  # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
         )
@@ -75,10 +76,7 @@ class DeviceSection(Section):
             gid=device.run_as_gid,
         )
         self.main_process.set_naming_params(
-            prefix="[[ PikeSquares App ]] ",
-            suffix="[suffix]",
-            name="PikeSquares App [name]",
-            autonaming=False
+            prefix="[[ PikeSquares App ]] ", suffix="[suffix]", name="PikeSquares App [name]", autonaming=False
         )
         # self.set_placeholder("vconf_run_dir", self.runtime_dir)
         self.main_process.set_pid_file(
@@ -99,22 +97,31 @@ class DeviceSection(Section):
         #    phase=self.main_process.phases.PRIV_DROP_PRE,
         # )
 
-        self.networking.register_socket(
-            self.networking.sockets.default(str(device.socket_address))
-        )
+        self.networking.register_socket(self.networking.sockets.default(str(device.socket_address)))
         # routers_dir = Path(self.conf.CONFIG_DIR) / "routers"
         # routers_dir.mkdir(parents=True, exist_ok=True)
         # empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
 
-        self.empire.set_emperor_params(
-            vassals_home=str(device.apps_dir),
-            # vassals_home = f"zmq://tcp://{device.EMPEROR_ZMQ_ADDRESS}",
-            name="PikeSquares Server",
-            spawn_asap=True,
-            stats_address=str(device.stats_address),
-            # str(Path(self._runtime_dir) / f"{device.service_id}-stats.sock"),
-            # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
-        )
+        if device.enable_dir_monitor:
+            self.empire.set_emperor_params(
+                vassals_home=str(device.apps_dir),
+                # vassals_home = f"zmq://tcp://{device.EMPEROR_ZMQ_ADDRESS}",
+                spawn_asap=True,
+                name="PikeSquares Server",
+                stats_address=str(device.stats_address),
+                # str(Path(self._runtime_dir) / f"{device.service_id}-stats.sock"),
+                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+            )
+        if device.enable_zeromq_monitor:
+            self.empire.set_emperor_params(
+                vassals_home=device.zeromq_monitor_address,
+                # vassals_home = f"zmq://tcp://{device.EMPEROR_ZMQ_ADDRESS}",
+                name="PikeSquares Server",
+                spawn_asap=True,
+                stats_address=str(device.stats_address),
+                # str(Path(self._runtime_dir) / f"{device.service_id}-stats.sock"),
+                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+            )
 
         # "--emperor=zmq://tcp://127.0.0.1:5250",
         # self.empire.set_emperor_params(
@@ -133,17 +140,11 @@ class DeviceSection(Section):
             # cheap=True,
             # base_dir=str(""),
         )
-        self.spooler.add(
-            work_dir=str(device.spooler_dir),
-            external=False
-
-        )
+        self.spooler.add(work_dir=str(device.spooler_dir), external=False)
 
         self.caching.add_cache("pikesquares-settings", max_items=100)
 
-        self.workers.set_basic_params(
-            count=1
-        )
+        self.workers.set_basic_params(count=1)
         # self.workers.set_mules_params(mules=3)
 
         # self.python.import_module(
@@ -202,13 +203,12 @@ class DeviceSection(Section):
 
             # give it an ip address
             self.main_process.run_command_on_event(
-                    command=f"ifconfig {network_device_name} 192.168.0.1 netmask 255.255.255.0 up",
-                    phase=self.main_process.phases.PRIV_DROP_PRE,
+                command=f"ifconfig {network_device_name} 192.168.0.1 netmask 255.255.255.0 up",
+                phase=self.main_process.phases.PRIV_DROP_PRE,
             )
             # setup nat
             self.main_process.run_command_on_event(
-                    command="iptables -t nat -F",
-                    phase=self.main_process.phases.PRIV_DROP_PRE
+                command="iptables -t nat -F", phase=self.main_process.phases.PRIV_DROP_PRE
             )
             self.main_process.run_command_on_event(
                 command="iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
@@ -256,7 +256,7 @@ class DeviceSection(Section):
     #    )
     #    self.routing.use_router(https_router)
 
-    #def run_fastrouter(self):
+    # def run_fastrouter(self):
     #    """
     #    Run FastRouter for Device.
     #    """
@@ -284,8 +284,7 @@ class DeviceSection(Section):
     #        #bind_to=resubscribe_bind_to
     #    )
     #    fastrouter.set_owner_params(
-    #        uid=self.conf.RUN_AS_UID, 
+    #        uid=self.conf.RUN_AS_UID,
     #        gid=self.conf.RUN_AS_GID,
     #    )
     #    self.routing.use_router(fastrouter)
-

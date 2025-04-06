@@ -51,16 +51,12 @@ class APISettings(pydantic.BaseModel):
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
-    BACKEND_CORS_ORIGINS: Annotated[
-        list[pydantic.AnyUrl] | str, pydantic.BeforeValidator(parse_cors)
-    ] = []
+    BACKEND_CORS_ORIGINS: Annotated[list[pydantic.AnyUrl] | str, pydantic.BeforeValidator(parse_cors)] = []
 
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
     def all_cors_origins(self) -> list[str]:
-        return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
-            self.FRONTEND_HOST
-        ]
+        return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [self.FRONTEND_HOST]
 
     PROJECT_NAME: str
     SENTRY_DSN: pydantic.HttpUrl | None = None
@@ -117,8 +113,7 @@ class APISettings(pydantic.BaseModel):
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (
-                f'The value of {var_name} is "changethis", '
-                "for security, please change it, at least for deployments."
+                f'The value of {var_name} is "changethis", ' "for security, please change it, at least for deployments."
             )
             if self.ENVIRONMENT == "local":
                 warnings.warn(message, stacklevel=1)
@@ -129,9 +124,7 @@ class APISettings(pydantic.BaseModel):
     def _enforce_non_default_secrets(self) -> Self:
         self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
         # self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
-        self._check_default_secret(
-            "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
-        )
+        self._check_default_secret("FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD)
 
         return self
 
@@ -163,13 +156,13 @@ class SysFile(pydantic.BaseModel):
 
 
 def ensure_system_dir(
-        newdir: Path | str,
-        owner_username: str = "root",
-        owner_groupname: str = "pikesquares",
-        owner_uid: int | None = None,
-        owner_gid: int | None = None,
-        dir_mode: int = 0o775,
-    ) -> Path:
+    newdir: Path | str,
+    owner_username: str = "root",
+    owner_groupname: str = "pikesquares",
+    owner_uid: int | None = None,
+    owner_gid: int | None = None,
+    dir_mode: int = 0o775,
+) -> Path:
     if isinstance(newdir, str):
         newdir = Path(newdir)
 
@@ -202,11 +195,11 @@ def ensure_system_dir(
 
 
 def make_system_file(
-        newfile: Path | str,
-        owner_username: str = "root",
-        owner_groupname: str = "pikesquares",
-        file_mode: int = 0o664,
-    ) -> Path:
+    newfile: Path | str,
+    owner_username: str = "root",
+    owner_groupname: str = "pikesquares",
+    file_mode: int = 0o664,
+) -> Path:
     if isinstance(newfile, str):
         newfile = Path(newfile)
 
@@ -271,24 +264,16 @@ class AppConfig(BaseSettings):
 
     # DEBUG: bool = False
     data_dir: pydantic.DirectoryPath = pydantic.Field(
-            default=Path("/var/lib/pikesquares"),
-            alias="PIKESQUARES_DATA_DIR"
+        default=Path("/var/lib/pikesquares"), alias="PIKESQUARES_DATA_DIR"
     )
 
-    log_dir: pydantic.DirectoryPath = pydantic.Field(
-            default=Path("/var/log/pikesquares"),
-            alias="PIKESQUARES_LOG_DIR"
-    )
+    log_dir: pydantic.DirectoryPath = pydantic.Field(default=Path("/var/log/pikesquares"), alias="PIKESQUARES_LOG_DIR")
 
     config_dir: pydantic.DirectoryPath = pydantic.Field(
-            default=Path("/etc/pikesquares"),
-            alias="PIKESQUARES_CONFIG_DIR"
+        default=Path("/etc/pikesquares"), alias="PIKESQUARES_CONFIG_DIR"
     )
 
-    run_dir: pydantic.DirectoryPath = pydantic.Field(
-            default=Path("/var/run/pikesquares"),
-            alias="PIKESQUARES_RUN_DIR"
-    )
+    run_dir: pydantic.DirectoryPath = pydantic.Field(default=Path("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR")
     UWSGI_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     PYTHON_VIRTUAL_ENV: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]]
 
@@ -308,6 +293,8 @@ class AppConfig(BaseSettings):
     SENTRY_DSN: pydantic.HttpUrl | None = None
     daemonize: bool = False
     ENABLE_TUNTAP_ROUTER: bool = False
+    ENABLE_ZEROMQ_MONITOR: bool = True
+    ENABLE_DIR_MONITOR: bool = False
 
     # to override api_settings:
     # export my_prefix_api_settings='{"foo": "x", "apple": 1}'
@@ -360,13 +347,7 @@ class AppConfig(BaseSettings):
         elif self.SCIE_BASE:
             return self.SCIE_BASE / "lift.json"
 
-    @pydantic.field_validator(
-        "data_dir",
-        "log_dir",
-        "config_dir",
-        "run_dir",
-        mode="before"
-    )
+    @pydantic.field_validator("data_dir", "log_dir", "config_dir", "run_dir", mode="before")
     def ensure_paths(cls, v) -> Path:
         path = Path(v)
         logger.debug(path)
@@ -427,9 +408,9 @@ class AppConfig(BaseSettings):
 
 
 def register_app_conf(
-        context: dict,
-        override_settings: dict,
-    ):
+    context: dict,
+    override_settings: dict,
+):
     def conf_factory() -> AppConfig:
         return AppConfig(**override_settings)
 

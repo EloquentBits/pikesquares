@@ -28,6 +28,7 @@ dependencies = [
     "pydantic-settings>=2.6.1",
     "pydantic-yaml>=1.4.0",
     "python-dotenv>=1.0.1",
+    "pyzmq>=26.4.0",
     "questionary>=2.0.1",
     "randomname>=0.2.1",
     "requests>=2.32.3",

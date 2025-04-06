@@ -1,44 +1,44 @@
+import errno
+import grp
+import json
 import os
 import pwd
-import grp
-from datetime import (
-    datetime,
-    UTC,
-)
-import uuid
-from typing import Any
-import json
-import traceback
 import socket
-import errno
+import traceback
+import uuid
+from datetime import (
+    UTC,
+    datetime,
+)
 from pathlib import Path
 
-import structlog
+# from typing import Any
+
+import zmq
 import pydantic
-import sentry_sdk
+import structlog
 from aiopath import AsyncPath
-from sqlmodel import (
-    SQLModel,
-    Field,
-    # select,
-    Column,
-    Integer,
-    # String,
-    # ForeignKey,
-    # Relationship,
-)
 from sqlalchemy import (
     JSON,
     DateTime,
     func,
 )
+from sqlmodel import (
+    # select,
+    # Column,
+    Field,
+    # Integer,
+    # String,
+    # ForeignKey,
+    # Relationship,
+    SQLModel,
+)
 
-from pikesquares import __version__, __app_name__
+from pikesquares import __app_name__, __version__
 from pikesquares.exceptions import (
     ServiceUnavailableError,
     StatsReadError,
 )
-
 
 logger = structlog.getLogger()
 
@@ -188,6 +188,10 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def write_uwsgi_config(self) -> Path:
         return self.uwsgi_config_section_class(self).as_configuration().tofile(self.service_config)
         # self.uwsgi_config["uwsgi"]["show-config"] = True
+        #
+
+    def get_uwsgi_config(self) -> str:
+        return self.uwsgi_config_section_class(self).as_configuration()
 
     @classmethod
     async def read_machine_id(cls) -> str:
@@ -221,6 +225,44 @@ class ServiceBase(TimeStampedBase, SQLModel):
         os.chown(newfile, owner_uid, owner_gid)
 
         return newfile
+
+    def device_zeromq_monitor_create_instance(self, device_zeromq_monitor_address: str):
+        zmq_context = zmq.Context()
+        zmq_socket = zmq.Socket(zmq_context, zmq.PUSH)
+        zmq_socket.connect(f"tcp://{device_zeromq_monitor_address}")
+        uwsgi_config = self.get_uwsgi_config()
+        zmq_socket.send_multipart(
+            [
+                b"touch",
+                f"{self.service_id}.ini".encode(),
+                uwsgi_config.format(do_print=True).encode(),
+            ]
+        )
+
+    def device_zeromq_monitor_restart_instance(self, device_zeromq_monitor_address: str):
+        zmq_context = zmq.Context()
+        zmq_socket = zmq.Socket(zmq_context, zmq.PUSH)
+        zmq_socket.connect(f"tcp://{device_zeromq_monitor_address}")
+        logger.debug("sending msg to zmq")
+        uwsgi_config = self.get_uwsgi_config()
+        zmq_socket.send_multipart(
+            [
+                b"touch",
+                f"{self.service_id}.ini".encode(),
+                uwsgi_config.format(do_print=True).encode(),
+            ]
+        )
+
+    def device_zeromq_monitor_destroy_instance(self, device_zeromq_monitor_address: str):
+        zmq_context = zmq.Context()
+        zmq_socket = zmq.Socket(zmq_context, zmq.PUSH)
+        zmq_socket.connect(f"tcp://{device_zeromq_monitor_address}")
+        zmq_socket.send_multipart(
+            [
+                b"destroy",
+                f"{self.service_id}.ini".encode(),
+            ]
+        )
 
     @classmethod
     def read_stats(cls, stats_address: Path):
@@ -264,15 +306,6 @@ class ServiceBase(TimeStampedBase, SQLModel):
             except json.JSONDecodeError:
                 logger.error(traceback.format_exc())
                 logger.info(js)
-
-    def up(self):
-        pass
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
 
     def write_master_fifo(self, command: str) -> None:
         """
@@ -321,11 +354,11 @@ class ServiceBase(TimeStampedBase, SQLModel):
         if not self.get_service_status() == "running":
             raise ServiceUnavailableError()
 
-    async def get_service_status(self) -> str | None:
+    def get_service_status(self) -> str | None:
         """
         read stats socket
         """
-        if await self.stats_address.exists() and await self.stats_address.is_socket():
+        if self.stats_address.exists() and self.stats_address.is_socket():
             return "running" if ServiceBase.read_stats(self.stats_address) else "stopped"
 
     def startup_log(self, show_config_start_marker: str, show_config_end_marker: str) -> tuple[list, list]:

@@ -11,8 +11,8 @@ class ProjectSection(Section):
 
     def __init__(self, project):
         super().__init__(
-            name="uwsgi",                                       # uwsgi: [uwsgi] section header
-            strict_config=True,                                 # uwsgi: strict = true
+            name="uwsgi",  # uwsgi: [uwsgi] section header
+            strict_config=True,  # uwsgi: strict = true
         )
         self.project = project
 
@@ -28,43 +28,43 @@ class ProjectSection(Section):
             enable=True,
             no_orphans=True,
             fifo_file=str(AsyncPath(self.project.fifo_file)),
-        )   # uwsgi: master = true
+        )  # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
             touch_reload=str((self.project.touch_reload_file)),
             # place here correct emperor wrapper
             # binary_path=str((Path(self.data_dir) / ".venv/bin/uwsgi").resolve())
             # binary_path=str((Path(self.project.VIRTUAL_ENV) / "bin/uwsgi").resolve())
-
         )
-        self.main_process.set_owner_params(
-                uid=self.project.run_as_uid,
-                gid=self.project.run_as_gid
-        )
-        self.main_process.set_naming_params(
-            prefix=f"{self.project.name} {self.project.service_id} ",
-            autonaming=True
-        )
+        self.main_process.set_owner_params(uid=self.project.run_as_uid, gid=self.project.run_as_gid)
+        self.main_process.set_naming_params(prefix=f"{self.project.name} {self.project.service_id} ", autonaming=True)
 
         self.main_process.set_pid_file(str(self.project.pid_file))
 
-        self.networking.register_socket(
-            self.networking.sockets.default(str(self.project.socket_address))
-        )
+        self.networking.register_socket(self.networking.sockets.default(str(self.project.socket_address)))
 
-        self.empire.set_emperor_params(
-            vassals_home=project.apps_dir,
-            name="PikeSquares App",
-            stats_address=project.stats_address,
-            spawn_asap=True,
-            # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
-            # stats_address=str(Path(self._runtime_dir) / f"{project.service_id}-stats.sock")
-        )
+        if project.enable_dir_monitor:
+            self.empire.set_emperor_params(
+                vassals_home=project.apps_dir,
+                name=f"PikeSquares Project {project.name}",
+                stats_address=project.stats_address,
+                spawn_asap=True,
+                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+                # stats_address=str(Path(self._runtime_dir) / f"{project.service_id}-stats.sock")
+            )
+
+        if project.enable_zeromq_monitor:
+            self.empire.set_emperor_params(
+                vassals_home=project.zeromq_monitor_address,
+                name=f"PikeSquares Project {project.name}",
+                stats_address=project.stats_address,
+                spawn_asap=True,
+                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+            )
+
         # self.run_fastrouter()
         # self.logging.add_logger(self.logging.loggers.stdio())
-        self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(self.project.log_file))
-        )
+        self.logging.add_logger(self.logging.loggers.file(filepath=str(self.project.log_file)))
 
     def as_string(self):
         return self.as_configuration().print_ini()

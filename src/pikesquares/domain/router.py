@@ -38,66 +38,6 @@ class BaseRouter(ServiceBase, table=True):
         service_config_dir = ensure_system_dir(Path(self.config_dir) / "projects")
         return service_config_dir / f"{self.service_id}.ini"
 
-    def zmq_connect(self):
-        pass
-        # print(f"Connecting to zmq emperor  {self.EMPEROR_ZMQ_ADDRESS}")
-        # self.zmq_socket.connect(f"tcp://{self.EMPEROR_ZMQ_ADDRESS}")
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
-        # self.zmq_socket.send_multipart([
-        #    b"destroy",
-        #    self.config_name.encode(),
-        # ])
-
-    def zmq_write_config(self):
-        pass
-        # if all([
-        #    self.service_config,
-        #    isinstance(self.service_config, Path),
-        #    self.service_config.exists()]):
-        #    msg = json.dumps(self.config_json).encode()
-        # self.service_config.read_text()
-
-        #    print("sending https router config to zmq")
-        #    self.zmq_socket.send_multipart(
-        #        [
-        #            b"touch",
-        #            self.config_name.encode(),
-        #            msg,
-        #        ]
-        #    )
-        #    print("sent https router config to zmq")
-        # else:
-        #    print(f"DID NOT SEND https router config to zmq {str(self.service_config.resolve())}")
-
-    # def save_config_to_tinydb(self, extra_data: dict = {}) -> None:
-    #    super().save_config_to_tinydb(
-    #        extra_data={"address": self.address}
-    #    )
-
-    # @pydantic.computed_field
-    # def default_config_json(self) -> dict:
-    #    section = self.config_section_class(self, self.plugins)
-    #    config_json = json.loads(
-    #            section.as_configuration().format(
-    #                formatter="json",
-    #                do_print=False,
-    #            )
-    #    )
-    # self.config_json["uwsgi"]["show-config"] = True
-    # self.config_json["uwsgi"]["strict"] = True
-    # self.config_json["uwsgi"]["notify-socket"] = str(self.notify_socket)
-
-    # print(f"{wsgi_app_opts=}")
-    # print(f"wsgi app {self.config_json=}")
-    # empjs["uwsgi"]["plugin"] = "emperor_zeromq"
-    # self.service_config.write_text(json.dumps(self.config_json))
-    #    return config_json
-
     # @pydantic.computed_field
     # def resubscribe_to(self) -> Path:
     # resubscribe_to: str = None,
@@ -141,8 +81,13 @@ async def get_or_create_http_router(
         await uow.commit()
         logger.debug(f"Created {http_router=}")
 
-    uwsgi_config = http_router.write_uwsgi_config()
-    logger.debug(f"wrote config to file: {uwsgi_config}")
+    if device.enable_dir_monitor:
+        try:
+            uwsgi_config = http_router.write_uwsgi_config()
+        except PermissionError:
+            logger.error("permission denied writing router uwsgi config to disk")
+        else:
+            logger.debug(f"wrote config to file: {uwsgi_config}")
 
     return http_router
 

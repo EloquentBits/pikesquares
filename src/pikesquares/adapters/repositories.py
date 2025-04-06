@@ -238,6 +238,12 @@ class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
             logger.debug(obj)
             return obj
 
+    async def get_by_device_id(self, device_id: str) -> Project | None:
+        stmt = select(Project).where(Project.device_id == device_id)
+        results = await self._session.exec(stmt)
+        if results:
+            return results.all()
+
 
 class RouterReposityBase(GenericRepository[BaseRouter], ABC):
     """Router repository."""
@@ -259,3 +265,9 @@ class RouterRepository(GenericSqlRepository[BaseRouter], RouterReposityBase):
             obj = results.first()
             logger.debug(obj)
             return obj
+
+    async def get_by_device_id(self, device_id: str) -> BaseRouter | None:
+        stmt = select(BaseRouter).where(BaseRouter.device_id == device_id)
+        results = await self._session.exec(stmt)
+        if results:
+            return results.all()

@@ -175,10 +175,17 @@ def reset(
 ):
     """Reset PikeSquares Installation"""
 
-    context = ctx.ensure_object(dict)
-    device = services.get(context, Device)
+    is_root: bool = os.getuid() == 0
+    if not is_root:
+        console.info("Please attempt to reset the installation as root user.")
+        raise typer.Exit()
 
     if not questionary.confirm("Reset PikeSquares Installation?").ask():
+        raise typer.Exit()
+
+    context = ctx.ensure_object(dict)
+    device = context.get("device")
+    if not device:
         raise typer.Exit()
 
     if all(
@@ -187,14 +194,16 @@ def reset(
             shutdown or questionary.confirm("Shutdown PikeSquares Server").ask(),
         ]
     ):
-        device.stop()
-        console.success("PikeSquares Server has been shut down.")
+        # device.stop()
+        down(ctx)
 
     if questionary.confirm("Drop db tables?").ask():
-        device.drop_db_tables()
+        # device.drop_db_tables()
+        console.info("dropped db")
 
     if questionary.confirm("Delete all configs and logs?").ask():
-        device.delete_configs()
+        # device.delete_configs()
+        console.info("deleted configs and logs")
 
 
 @app.command(rich_help_panel="Control", short_help="Nuke installation")
@@ -326,17 +335,17 @@ def up(
     context = ctx.ensure_object(dict)
     # pc = await services.aget(context, process_compose.ProcessCompose)
     # conf = await services.aget(context, AppConfig)
-    pc = services.get(context, ProcessCompose)
+    process_compose = services.get(context, ProcessCompose)
 
     try:
-        retcode, stdout, stderr = pc.up()
+        retcode, stdout, stderr = process_compose.up()
         if retcode != 0:
             console.log(retcode, stdout, stderr)
             raise typer.Exit(code=1) from None
         elif retcode == 0:
             for _ in range(1, 5):
                 try:
-                    pc.ping_api()
+                    process_compose.ping_api()
 
                     console.success(":heavy_check_mark:      Launching dns server... Done!")
                     console.success(":heavy_exclamation_mark:      Unable to launch")
@@ -345,8 +354,21 @@ def up(
                     console.success(":heavy_check_mark:     reverse proxy is running")
                     console.success(":heavy_check_mark:     Launching reverse proxy... Done! ")
                     console.success(":heavy_check_mark:     Launching main process manager.. Done!")
-                    console.success(":heavy_check_mark:     Launching http router.. Done!")
-                    console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+
+                    default_project = context.get("default-project")
+                    device = context.get("device")
+
+                    device_zeromq_monitor_address = f"{device.monitor_zmq_ip}:{device.monitor_zmq_port}"
+                    if device and default_project:
+                        default_project.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
+                        console.success(":heavy_check_mark:     Launching default project.. Done!")
+
+                    default_http_router = context.get("default-http-router")
+                    if device and default_http_router:
+                        default_http_router.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
+                        console.success(":heavy_check_mark:     Launching http rotuer.. Done!")
+                        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+
                     console.success()
                     console.success("Your API is running at: http://127.0.0.1:9000")
                     console.success()
@@ -985,16 +1007,18 @@ async def main(
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
 
-    common_kwargs = {
+    create_kwargs = {
         "data_dir": str(conf.data_dir),
         "config_dir": str(conf.config_dir),
         "log_dir": str(conf.log_dir),
         "run_dir": str(conf.run_dir),
+        "enable_tuntap_router": conf.ENABLE_TUNTAP_ROUTER,
+        "enable_zeromq_monitor": conf.ENABLE_ZEROMQ_MONITOR,
+        "enable_dir_monitor": conf.ENABLE_DIR_MONITOR,
     }
     device = await get_or_create_device(
         context,
-        enable_tuntap_router=conf.ENABLE_TUNTAP_ROUTER,
-        create_kwargs=common_kwargs,
+        create_kwargs=create_kwargs,
     )
     uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
     logger.debug(f"read {len(uwsgi_options)} uwsgi options for device {device.id}")
