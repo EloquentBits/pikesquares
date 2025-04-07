@@ -14,6 +14,7 @@ from pikesquares.adapters.repositories import (
     RouterReposityBase,
     RouterRepository,
     WsgiAppRepository,
+    WsgiAppReposityBase,
 )
 
 # logger = logging.getLogger("uvicorn.error")
@@ -30,6 +31,7 @@ class UnitOfWorkBase(ABC):
     uwsgi_options: DeviceUWSGIOptionsReposityBase
     projects: ProjectReposityBase
     routers: RouterReposityBase
+    wsgi_apps: WsgiAppReposityBase
 
     async def __aenter__(self):
         return self

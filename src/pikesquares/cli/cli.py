@@ -11,6 +11,7 @@ from time import sleep
 from typing import Annotated, Optional
 
 import anyio
+from aiopath import AsyncPath
 import questionary
 import randomname
 import sentry_sdk
@@ -327,7 +328,8 @@ def info(
 
 
 @app.command(rich_help_panel="Control", short_help="Launch the PikeSquares Server (if stopped)")
-def up(
+@run_async
+async def up(
     ctx: typer.Context,
     # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
@@ -339,7 +341,9 @@ def up(
     process_compose = services.get(context, ProcessCompose)
 
     try:
-        retcode, stdout, stderr = process_compose.up()
+
+        retcode, stdout, stderr = await process_compose.up()
+
         if retcode != 0:
             console.log(retcode, stdout, stderr)
             raise typer.Exit(code=1) from None
@@ -357,15 +361,18 @@ def up(
 
                     default_project = context.get("default-project")
                     device = context.get("device")
+                    if not device:
+                        console.error("unable to locate device in app context")
+                        raise typer.Exit(code=0) from None
 
                     device_zeromq_monitor_address = f"{device.monitor_zmq_ip}:{device.monitor_zmq_port}"
                     if device and default_project:
-                        default_project.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
+                        await default_project.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
                         console.success(":heavy_check_mark:     Launching default project.. Done!")
 
                     default_http_router = context.get("default-http-router")
                     if device and default_http_router:
-                        default_http_router.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
+                        await default_http_router.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
                         console.success(":heavy_check_mark:     Launching http rotuer.. Done!")
                         console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
@@ -391,7 +398,8 @@ def up(
 
 
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
-def down(
+@run_async
+async def down(
     ctx: typer.Context,
 ):
     """Stop the PikeSquares Server"""
@@ -399,7 +407,7 @@ def down(
     context = ctx.ensure_object(dict)
     pc = services.get(context, ProcessCompose)
     try:
-        retcode, stdout, stderr = pc.down()
+        retcode, stdout, stderr = await pc.down()
         if retcode != 0:
             console.log(retcode, stdout, stderr)
             raise typer.Exit(code=1) from None
@@ -424,10 +432,11 @@ def down(
 
 
 @app.command(rich_help_panel="Control", short_help="Initialize a project")
-def init(
+@run_async
+async def init(
     ctx: typer.Context,
     app_root_dir: Annotated[
-        Path | None,
+        AsyncPath | None,
         typer.Option(
             "--root-dir",
             "-d",
@@ -456,16 +465,17 @@ def init(
     # https://github.com/kolosochok/django-ecommerce
     # https://github.com/healthchecks/healthchecks
 
-    app_root_dir = app_root_dir or Path(
-        questionary.path(
-            "Enter the location of your project/app root directory:",
-            default=str(Path().cwd()),
-            only_directories=True,
-            style=custom_style,
-        ).ask()
-    )
+    if not app_root_dir:
+        app_root_dir = AsyncPath(
+            questionary.path(
+                "Enter the location of your project/app root directory:",
+                default=str(AsyncPath().cwd()),
+                only_directories=True,
+                style=custom_style,
+            ).ask()
+        )
 
-    if app_root_dir and not app_root_dir.exists():
+    if not await AsyncPath(app_root_dir).exists():
         console.warning(f"Project root directory does not exist: {str(app_root_dir)}")
         raise typer.Exit(code=1)
 
@@ -676,15 +686,15 @@ def init(
 
                         # asynctempfile
 
-                        app_tmp_dir = Path(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
+                        app_tmp_dir = AsyncPath(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
                         shutil.copytree(
                             runtime.app_root_dir,
                             app_tmp_dir,
                             dirs_exist_ok=True,
                             ignore=shutil.ignore_patterns(*list(runtime.PY_IGNORE_PATTERNS)),
                         )
-                        for p in Path(app_tmp_dir).iterdir():
-                            logger.debug(p)
+                        # for p in AsyncPath(app_tmp_dir).iterdir():
+                        #    logger.debug(p)
 
                     if task.id < 2:
                         progress.start_task(task.id)
@@ -831,15 +841,19 @@ def init(
             logger.error("[pikesquares] -- DjangoSettingsError --")
             raise typer.Exit() from None
         """
-
-        wsgi_app = create_wsgi_app(
+        uow = await services.aget(context, UnitOfWork)
+        wsgi_app = await create_wsgi_app(
+            uow,
             runtime,
             app_name,
             service_id,
             default_project,
             pyvenv_dir,
         )
-        logger.debug(wsgi_app)
+        if default_project:
+            proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"
+            wsgi_app.device_zeromq_monitor_create_instance(proj_zmq_addr)
+            console.success(f":heavy_check_mark:     Launching wsgi app {app_name}.. Done!")
 
     # console.log(runtime.collected_project_metadata["django_settings"])
     # console.log(runtime.collected_project_metadata["django_check_messages"])

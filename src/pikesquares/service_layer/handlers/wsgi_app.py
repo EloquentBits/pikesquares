@@ -3,6 +3,7 @@ from pathlib import Path
 import structlog
 
 from pikesquares.domain.wsgi_app import WsgiApp
+from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.domain.project import Project
 from pikesquares.services.apps.exceptions import DjangoSettingsError
 from pikesquares.services.apps.python import PythonRuntime
@@ -11,7 +12,8 @@ from pikesquares.services.apps.python import PythonRuntime
 logger = structlog.getLogger()
 
 
-def create_wsgi_app(
+async def create_wsgi_app(
+    uow: UnitOfWork,
     runtime: PythonRuntime,
     name: str,
     service_id: str,
@@ -36,7 +38,7 @@ def create_wsgi_app(
     wsgi_file = runtime.app_root_dir / Path("/".join(wsgi_parts) + ".py")
     uwsgi_plugins = []
     # if isinstance(runtime, PythonRuntimeDjango):
-    return WsgiApp(
+    wsgi_app = WsgiApp(
         service_id=service_id,
         name=name,
         project=project,
@@ -46,3 +48,8 @@ def create_wsgi_app(
         wsgi_module=django_settings.wsgi_application.split(".")[-1],
         pyvenv_dir=str(pyvenv_dir),
     )
+
+    await uow.wsgi_apps.add(wsgi_app)
+    await uow.commit()
+    logger.debug(f"Created {project} ")
+    return wsgi_app

@@ -1,20 +1,20 @@
-from pathlib import Path
 import shutil
 import tempfile
+from pathlib import Path
 
 import pydantic
 import structlog
+from aiopath import AsyncPath
 
-from .uv import UVMixin
 from . import BaseLanguageRuntime
-
 from .exceptions import (
-    UvSyncError,
-    UvPipInstallError,
     PythonRuntimeCheckError,
     PythonRuntimeDjangoCheckError,
     PythonRuntimeInitError,
+    UvPipInstallError,
+    UvSyncError,
 )
+from .uv import UVMixin
 
 logger = structlog.get_logger()
 
@@ -23,38 +23,43 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
 
     uv_bin: Path | None = None
 
-    MATCH_FILES: set[str] = set({
-        "main.py",
-        "requirements.txt",
-        "pyproject.toml",
-        "Pipfile",
-        "Pipfile.lock",
-        "uv.lock",
-    })
+    MATCH_FILES: set[str] = set(
+        {
+            "main.py",
+            "requirements.txt",
+            "pyproject.toml",
+            "Pipfile",
+            "Pipfile.lock",
+            "uv.lock",
+        }
+    )
 
-    PY_IGNORE_PATTERNS: set[str] = set({
-        "*.pyc",
-        ".gitignore",
-        "*.sqlite*",
-        "README*",
-        "LICENSE",
-        "tmp*",
-        ".git",
-        "venv",
-        ".venv",
-        "tests",
-        "__pycache__",
-    })
+    PY_IGNORE_PATTERNS: set[str] = set(
+        {
+            "*.pyc",
+            ".gitignore",
+            "*.sqlite*",
+            "README*",
+            "LICENSE",
+            "tmp*",
+            ".git",
+            "venv",
+            ".venv",
+            "tests",
+            "__pycache__",
+        }
+    )
     runtime_emoji: str = ":snake:"
 
     def get_tasks(self) -> list:
         return []
 
     @pydantic.computed_field
-    def version(self) -> str:
+    async def version(self) -> str:
         try:
-            return (self.app_root_dir / ".python-version").\
-                read_text().strip()
+            version_file = AsyncPath(self.app_root_dir) / ".python-version"
+            _ver = await version_file.read_text()
+            return _ver.strip()
         except FileNotFoundError:
             return "3.12"
 
@@ -65,10 +70,10 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
             logger.error(f"unable to delete tmp dir @ {str(app_tmp_dir)}")
 
     def init(
-            self,
-            venv: Path,
-            check: bool = True,
-        ) -> bool:
+        self,
+        venv: Path,
+        check: bool = True,
+    ) -> bool:
         logger.debug("[pikesquares] PythonRuntime.init")
         if check:
             app_tmp_dir = Path(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
@@ -89,20 +94,20 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
         return True
 
     def check(
-            self,
-            app_tmp_dir: Path,
-        ) -> bool:
+        self,
+        app_tmp_dir: Path,
+    ) -> bool:
         # copy project to tmp dir at $TMPDIR
         logger.debug("[pikesquares] PythonRuntime.check")
         logger.info(
             f"Inspecting Python project @ {str(self.app_root_dir)}",
-            #log_locals=True,
+            # log_locals=True,
         )
         shutil.copytree(
             self.app_root_dir,
             app_tmp_dir,
             dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns(*list(self.PY_IGNORE_PATTERNS))
+            ignore=shutil.ignore_patterns(*list(self.PY_IGNORE_PATTERNS)),
         )
         for p in Path(app_tmp_dir).iterdir():
             logger.debug(p)
@@ -118,15 +123,16 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
             raise PythonRuntimeCheckError("uv install dependencies failed.")
         return True
 
-
     @classmethod
     def is_django(cls, app_root_dir: Path) -> bool:
-        py_django_files: set[str] = set({
-            "urls.py",
-            "wsgi.py",
-            "settings.py",
-            "manage.py",
-        })
+        py_django_files: set[str] = set(
+            {
+                "urls.py",
+                "wsgi.py",
+                "settings.py",
+                "manage.py",
+            }
+        )
         all_files = []
         for filename in py_django_files:
             all_django_files = Path(app_root_dir).glob(f"**/{filename}")

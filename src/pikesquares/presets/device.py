@@ -86,9 +86,10 @@ class DeviceSection(Section):
         # if device.daemonize:
         #    self.main_process.daemonize(log_into=str(device.log_file))
 
-        self.main_process.set_basic_params(
-            touch_reload=str(device.touch_reload_file),
-        )
+        if device.enable_dir_monitor:
+            self.main_process.set_basic_params(
+                touch_reload=str(device.touch_reload_file),
+            )
 
         self.main_process.change_dir(to=device.data_dir)
 
@@ -129,20 +130,21 @@ class DeviceSection(Section):
         # )
 
         # uwsgiconf.options.spooler.Spooler
-        self.spooler.set_basic_params(
-            # touch_reload=str(""),
-            quiet=False,
-            process_count=1,
-            max_tasks=10,
-            harakiri=60,
-            # change_dir=str(device.DATA_DIR),
-            poll_interval=10,
-            # cheap=True,
-            # base_dir=str(""),
-        )
-        self.spooler.add(work_dir=str(device.spooler_dir), external=False)
+        if 0:
+            self.spooler.set_basic_params(
+                # touch_reload=str(""),
+                quiet=False,
+                process_count=1,
+                max_tasks=10,
+                harakiri=60,
+                # change_dir=str(device.DATA_DIR),
+                poll_interval=10,
+                # cheap=True,
+                # base_dir=str(""),
+            )
+            self.spooler.add(work_dir=str(device.spooler_dir), external=False)
 
-        self.caching.add_cache("pikesquares-settings", max_items=100)
+            self.caching.add_cache("pikesquares-settings", max_items=100)
 
         self.workers.set_basic_params(count=1)
         # self.workers.set_mules_params(mules=3)

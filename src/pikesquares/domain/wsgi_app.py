@@ -93,8 +93,7 @@ class WsgiApp(ServiceBase, table=True):
         #    Path(self.config_dir) / "projects"
         # )
         # return service_config_dir / f"{self.service_id}.ini"
-
-        return Path(self.conf.config_dir) / f"{self.app_options.project_id}" / "apps" / f"{self.service_id}.ini"
+        return Path(self.config_dir) / f"{self.project_id}" / "apps" / f"{self.service_id}.ini"
 
     @pydantic.computed_field
     @property

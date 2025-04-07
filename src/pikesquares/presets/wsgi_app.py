@@ -228,9 +228,9 @@ class WsgiAppSection(BaseWsgiAppSection):
         # ; pass it in subscriptions
         # subscription-notify-socket = /tmp/notify.socket
 
-        self.monitoring.set_stats_params(address=str(svc_model.stats_address))
+        self.monitoring.set_stats_params(address=str(self.wsgi_app.stats_address))
         # self.logging.add_logger(self.logging.loggers.stdio())
-        self.logging.add_logger(self.logging.loggers.file(filepath=str(svc_model.log_file)))
+        self.logging.add_logger(self.logging.loggers.file(filepath=str(self.wsgi_app.log_file)))
 
         # self.setup_virtual_hosts(virtual_hosts, socket_addr=socket_addr)
 
@@ -271,16 +271,19 @@ class WsgiAppSection(BaseWsgiAppSection):
         #            sni_key=pikesquares.dev-key.pem,
         #            sni_crt=pikesquares.dev.pem,
         #            sni_ca=rootCA.pem
-
-        for router in app_options.routers:
+        #
+        """
+        # FIXME see you can subscribe later somewhere else
+        for router in routers:
             self.subscriptions.subscribe(
                 server=router.subscription_server_address,
                 address=str(self.wsgi_app.socket_address),  # address and port of wsgi app
                 key=router.subscription_server_key,
             )
             self.subscriptions.set_server_params(
-                client_notify_address=svc_model.subscription_notify_socket,
+                client_notify_address=self.wsgi_app.subscription_notify_socket,
             )
+        """
 
         # self.subscriptions.subscribe(
         #    {

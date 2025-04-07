@@ -15,6 +15,7 @@ from pathlib import Path
 # from typing import Any
 
 import zmq
+import zmq.asyncio
 import pydantic
 import structlog
 from aiopath import AsyncPath
@@ -35,6 +36,7 @@ from sqlmodel import (
 )
 
 from pikesquares import __app_name__, __version__
+from pikesquares.conf import AppConfigError
 from pikesquares.exceptions import (
     ServiceUnavailableError,
     StatsReadError,
@@ -223,12 +225,13 @@ class ServiceBase(TimeStampedBase, SQLModel):
 
         return newfile
 
-    def device_zeromq_monitor_create_instance(self, device_zeromq_monitor_address: str):
-        zmq_context = zmq.Context()
-        zmq_socket = zmq.Socket(zmq_context, zmq.PUSH)
-        zmq_socket.connect(f"tcp://{device_zeromq_monitor_address}")
+    async def device_zeromq_monitor_create_instance(self, device_zeromq_monitor_address: str) -> None:
+        ctx = zmq.asyncio.Context()
+        # zmq_socket = zmq.asyncio.Socket(zmq_context, zmq.PUSH)
+        sock = ctx.socket(zmq.PUSH)
+        sock.connect(f"tcp://{device_zeromq_monitor_address}")
         uwsgi_config = self.get_uwsgi_config()
-        zmq_socket.send_multipart(
+        await sock.send_multipart(
             [
                 b"touch",
                 f"{self.service_id}.ini".encode(),
@@ -236,13 +239,13 @@ class ServiceBase(TimeStampedBase, SQLModel):
             ]
         )
 
-    def device_zeromq_monitor_restart_instance(self, device_zeromq_monitor_address: str):
-        zmq_context = zmq.Context()
-        zmq_socket = zmq.Socket(zmq_context, zmq.PUSH)
-        zmq_socket.connect(f"tcp://{device_zeromq_monitor_address}")
-        logger.debug("sending msg to zmq")
+    async def device_zeromq_monitor_restart_instance(self, device_zeromq_monitor_address: str) -> None:
+        ctx = zmq.asyncio.Context()
+        # zmq_socket = zmq.asyncio.Socket(zmq_context, zmq.PUSH)
+        sock = ctx.socket(zmq.PUSH)
+        sock.connect(f"tcp://{device_zeromq_monitor_address}")
         uwsgi_config = self.get_uwsgi_config()
-        zmq_socket.send_multipart(
+        await sock.send_multipart(
             [
                 b"touch",
                 f"{self.service_id}.ini".encode(),
@@ -250,11 +253,12 @@ class ServiceBase(TimeStampedBase, SQLModel):
             ]
         )
 
-    def device_zeromq_monitor_destroy_instance(self, device_zeromq_monitor_address: str):
-        zmq_context = zmq.Context()
-        zmq_socket = zmq.Socket(zmq_context, zmq.PUSH)
-        zmq_socket.connect(f"tcp://{device_zeromq_monitor_address}")
-        zmq_socket.send_multipart(
+    async def device_zeromq_monitor_destroy_instance(self, device_zeromq_monitor_address: str) -> None:
+        ctx = zmq.asyncio.Context()
+        # zmq_socket = zmq.asyncio.Socket(zmq_context, zmq.PUSH)
+        sock = ctx.socket(zmq.PUSH)
+        sock.connect(f"tcp://{device_zeromq_monitor_address}")
+        await sock.send_multipart(
             [
                 b"destroy",
                 f"{self.service_id}.ini".encode(),

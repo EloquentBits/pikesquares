@@ -6,8 +6,7 @@ from typing import Annotated
 
 import pydantic
 import structlog
-
-# from aiopath import AsyncPath
+from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
 from pydantic_yaml import to_yaml_str
 
@@ -144,15 +143,17 @@ class ProcessCompose(ManagedServiceBase):
     #    return await AsyncPath(
     #        self.conf.run_dir) / "process-compose.sock"
 
-    def write_config_to_disk(self):
-        self.daemon_config.write_text(to_yaml_str(self.config))
+    async def write_config_to_disk(self):
+        if self.daemon_config:
+            config = AsyncPath(self.daemon_config)
+            await config.write_text(to_yaml_str(self.config))
 
-    def reload(self):
+    async def reload(self):
         """docket-compose project update"""
         if not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
-        self.write_config_to_disk()
+        await self.write_config_to_disk()
         try:
             self.cmd_args.insert(0, "project")
             self.cmd_args.insert(1, "update")
@@ -164,9 +165,9 @@ class ProcessCompose(ManagedServiceBase):
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    def up(self) -> tuple[int, str, str]:
+    async def up(self) -> tuple[int, str, str]:
         # always write config to dist before starting
-        self.write_config_to_disk()
+        await self.write_config_to_disk()
         try:
             return self.cmd(
                 [
@@ -188,7 +189,7 @@ class ProcessCompose(ManagedServiceBase):
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    def down(self) -> tuple[int, str, str]:
+    async def down(self) -> tuple[int, str, str]:
         if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
