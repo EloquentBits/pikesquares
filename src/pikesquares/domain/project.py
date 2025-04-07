@@ -21,6 +21,8 @@ class Project(ServiceBase, table=True):
     monitor_zmq_ip: str | None = Field(default="127.0.0.1", max_length=50)
     monitor_zmq_port: int | None = Field(default=5252)
 
+    wsgi_apps: list["WsgiApp"] = Relationship(back_populates="project")
+
     enable_dir_monitor: bool = False
     enable_zeromq_monitor: bool = False
 

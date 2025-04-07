@@ -1,10 +1,9 @@
-from cuid import cuid
 import structlog
+from cuid import cuid
 
+from pikesquares import get_first_available_port
 from pikesquares.domain.router import BaseRouter
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares import get_first_available_port
-
 
 logger = structlog.getLogger()
 

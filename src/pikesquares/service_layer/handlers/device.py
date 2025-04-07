@@ -5,6 +5,9 @@ from pikesquares.conf import AppConfigError
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import Device
 from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.service_layer.handlers.routers import get_or_create_http_router
+from pikesquares.service_layer.handlers.project import get_or_create_project
+
 
 logger = structlog.getLogger()
 
@@ -39,10 +42,10 @@ async def get_or_create_device(
         await uow.commit()
         logger.debug(f"Created {device=} for {machine_id=}")
 
-    default_http_router = await get_or_create_http_router("default-http-router", device, context, create_kwargs)
+    default_http_router = await get_or_create_http_router("default-http-router", device, uow, create_kwargs)
     context["default-http-router"] = default_http_router
 
-    default_project = await get_or_create_project("default-project", device, context, create_kwargs)
+    default_project = await get_or_create_project("default-project", device, uow, create_kwargs)
     context["default-project"] = default_project
 
     if device.enable_dir_monitor:

@@ -5,6 +5,7 @@ import structlog
 from sqlmodel import Field, Relationship
 
 from pikesquares.presets.wsgi_app import WsgiAppSection
+from pikesquares.domain.project import Project
 from pikesquares.services.apps.django import PythonRuntimeDjango
 
 from .base import ServiceBase
@@ -65,13 +66,12 @@ class WsgiApp(ServiceBase, table=True):
     name: str = Field(max_length=32)
 
     project_id: str | None = Field(default=None, foreign_key="project.id")
-    project: "Project" = Relationship(back_populates="wsgi_apps")
+    project: Project = Relationship(back_populates="wsgi_apps")
 
     root_dir: str = Field(max_length=255)
     pyvenv_dir: str = Field(max_length=255)
     wsgi_file: str = Field(max_length=255)
     wsgi_module: str = Field(max_length=50)
-    project_id: str = Field(max_length=50)
     workers: int = Field(default=1)
     threads: int = Field(default=1)
 
