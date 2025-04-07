@@ -5,13 +5,12 @@ import structlog
 from cuid import cuid
 from sqlmodel import Field, Relationship
 
-from pikesquares import get_first_available_port, services
-from pikesquares.conf import ensure_system_dir
+# from pikesquares import get_first_available_port
+from pikesquares.conf import ensure_system_path
 from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
 
 from .base import ServiceBase
-
-# from .device import Device
+from .device import Device
 
 logger = structlog.getLogger()
 
@@ -24,7 +23,7 @@ class BaseRouter(ServiceBase, table=True):
     subscription_server_address: str | None = Field(default=None, max_length=100)
 
     device_id: str | None = Field(default=None, foreign_key="device.id")
-    device: "Device" = Relationship(back_populates="routers")
+    device: Device = Relationship(back_populates="routers")
 
     @property
     def uwsgi_config_section_class(self) -> HttpRouterSection | HttpsRouterSection:
@@ -34,9 +33,10 @@ class BaseRouter(ServiceBase, table=True):
 
     @pydantic.computed_field
     @property
-    def service_config(self) -> Path:
-        service_config_dir = ensure_system_dir(Path(self.config_dir) / "projects")
-        return service_config_dir / f"{self.service_id}.ini"
+    def service_config(self) -> Path | None:
+        if self.device.enable_dir_monitor:
+            service_config_dir = ensure_system_path(Path(self.config_dir) / "projects")
+            return service_config_dir / f"{self.service_id}.ini"
 
     # @pydantic.computed_field
     # def resubscribe_to(self) -> Path:
@@ -46,10 +46,11 @@ class BaseRouter(ServiceBase, table=True):
     @pydantic.computed_field
     @property
     def port(self) -> str | None:
-        try:
-            return self.address.split(":")[-1]
-        except IndexError:
-            pass
+        if self.address:
+            try:
+                return self.address.split(":")[-1]
+            except IndexError:
+                pass
 
     """
     https_router = await uow.routers.get_by_name("default-https-router")

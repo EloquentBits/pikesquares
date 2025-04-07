@@ -5,7 +5,7 @@ import pydantic
 import structlog
 from sqlmodel import Field, Relationship
 
-from pikesquares.conf import ensure_system_dir
+from pikesquares.conf import ensure_system_path
 from pikesquares.presets.project import ProjectSection
 
 from .base import ServiceBase
@@ -32,9 +32,10 @@ class Project(ServiceBase, table=True):
 
     @pydantic.computed_field
     @property
-    def service_config(self) -> Path:
-        service_config_dir = ensure_system_dir(Path(self.config_dir) / "projects")
-        return service_config_dir / f"{self.service_id}.ini"
+    def service_config(self) -> Path | None:
+        if self.enable_dir_monitor:
+            service_config_dir = ensure_system_path(Path(self.config_dir) / "projects")
+            return service_config_dir / f"{self.service_id}.ini"
 
     @pydantic.computed_field
     @property

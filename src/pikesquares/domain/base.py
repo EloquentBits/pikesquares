@@ -114,14 +114,6 @@ class ServiceBase(TimeStampedBase, SQLModel):
 
     @pydantic.computed_field
     @property
-    def service_config(self) -> Path:
-        return Path(self.config_dir) / f"{self.service_id}.ini"
-
-    # async def delete_config_from_filesystem(self) -> None:
-    #   await AsyncPath(self.service_config).unlink()
-
-    @pydantic.computed_field
-    @property
     def stats_address(self) -> Path:
         """uWSGI Stats Server socket address"""
         return Path(self.run_dir) / f"{self.service_id}-stats.sock"

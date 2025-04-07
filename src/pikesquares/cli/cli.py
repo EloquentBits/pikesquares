@@ -42,7 +42,6 @@ from pikesquares.cli.console import (
 from pikesquares.conf import (
     AppConfig,
     AppConfigError,
-    ensure_system_dir,
     register_app_conf,
 )
 
@@ -337,8 +336,11 @@ async def up(
 
     context = ctx.ensure_object(dict)
     # pc = await services.aget(context, process_compose.ProcessCompose)
-    # conf = await services.aget(context, AppConfig)
+    conf = await services.aget(context, AppConfig)
     process_compose = services.get(context, ProcessCompose)
+
+    if conf and conf.pyvenvs_dir.exists():
+        logger.debug(f"python venvs directory @ {conf.pyvenvs_dir} is available")
 
     try:
 
@@ -521,11 +523,7 @@ async def init(
     service_type_prefix = service_type.replace("-", "_").lower()
     service_id = f"{service_type_prefix}_{cuid()}"
     # proj_type = "Python"
-    pyvenv_dir = ensure_system_dir(
-        conf.pyvenvs_dir / service_id,
-        owner_username=os.getlogin(),
-        owner_gid=os.getgid(),
-    )
+    pyvenv_dir = conf.pyvenvs_dir / service_id
     """
         jobs
             1) detect runtime
@@ -967,14 +965,6 @@ async def main(
             help="Run directory",
         ),
     ] = None,
-    # build_configs: Optional[bool] = typer.Option(
-    #    False,
-    #    help="Write configs to disk"
-    # ),
-    # disable_process_compose: Optional[bool] = typer.Option(
-    #    False,
-    #    help="Run without process-compose"
-    # ),
 ) -> None:
     """
     Welcome to Pike Squares. Building blocks for your apps.
@@ -988,6 +978,7 @@ async def main(
     is_root: bool = os.getuid() == 0
     logger.info(f"{os.getuid()=} {is_root=}")
 
+    # FIXME make sure to make an exception for --help
     if ctx.invoked_subcommand in set(
         {
             "up",
@@ -1018,6 +1009,7 @@ async def main(
         register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:
         logger.error(app_conf_error)
+        console.error("invalid config. giving up.")
         raise typer.Abort() from None
 
     conf = services.get(context, AppConfig)
@@ -1083,7 +1075,6 @@ async def main(
             """
             existing_options = await uow.uwsgi_options.list(device_id=device.id)
             for uwsgi_option in device.build_uwsgi_options():
-                import ipdb;ipdb.set_trace()
                 #existing_options
                 #if uwsgi_option.option_key
                 #not in existing_options:
@@ -1094,7 +1085,6 @@ async def main(
 
     await register_process_compose(context, conf)
     # pc = services.get(context, ProcessCompose)
-    # import ipdb;ipdb.set_trace()
 
     """
     for svc in services.get_pings(context):

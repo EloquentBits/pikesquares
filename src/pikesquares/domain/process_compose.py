@@ -150,7 +150,7 @@ class ProcessCompose(ManagedServiceBase):
 
     async def reload(self):
         """docket-compose project update"""
-        if not await AsyncPath(self.daemon_socket).exists():
+        if not self.daemon_socket or not await AsyncPath(self.daemon_socket).exists():
             raise PCAPIUnavailableError()
 
         await self.write_config_to_disk()
@@ -169,23 +169,20 @@ class ProcessCompose(ManagedServiceBase):
     async def up(self) -> tuple[int, str, str]:
         # always write config to dist before starting
         await self.write_config_to_disk()
-        try:
-            return self.cmd(
-                [
-                    "up",
-                    "--config",
-                    str(self.daemon_config),
-                    "--log-file",
-                    str(self.daemon_log),
-                    "--detached",
-                    "--hide-disabled",
-                    # "--tui",
-                    # "false",
-                ]
-                + self.cmd_args,
-                cmd_env=self.cmd_env,
-            )
+        args = [
+            "up",
+            "--config",
+            str(self.daemon_config),
+            "--log-file",
+            str(self.daemon_log),
+            "--detached",
+            "--hide-disabled",
+            # "--tui",
+            # "false",
+        ] + self.cmd_args
 
+        try:
+            return self.cmd(args, cmd_env=self.cmd_env)
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr

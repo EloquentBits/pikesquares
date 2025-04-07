@@ -88,12 +88,13 @@ class WsgiApp(ServiceBase, table=True):
 
     @pydantic.computed_field
     @property
-    def service_config(self) -> Path:
-        # service_config_dir = self.ensure_system_dir(
-        #    Path(self.config_dir) / "projects"
-        # )
-        # return service_config_dir / f"{self.service_id}.ini"
-        return Path(self.config_dir) / f"{self.project_id}" / "apps" / f"{self.service_id}.ini"
+    def service_config(self) -> Path | None:
+        if self.project.enable_dir_monitor:
+            # service_config_dir = self.ensure_system_dir(
+            #    Path(self.config_dir) / "projects"
+            # )
+            # return service_config_dir / f"{self.service_id}.ini"
+            return Path(self.config_dir) / f"{self.project_id}" / "apps" / f"{self.service_id}.ini"
 
     @pydantic.computed_field
     @property

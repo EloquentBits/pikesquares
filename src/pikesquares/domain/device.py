@@ -46,8 +46,18 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
     @pydantic.computed_field
     @property
-    def apps_dir(self) -> Path:
-        return Path(self.config_dir) / "projects"
+    def apps_dir(self) -> Path | None:
+        if self.enable_dir_monitor:
+            return Path(self.config_dir) / "projects"
+
+    @pydantic.computed_field
+    @property
+    def service_config(self) -> Path | None:
+        if self.enable_dir_monitor:
+            return Path(self.config_dir) / f"{self.service_id}.ini"
+
+    # async def delete_config_from_filesystem(self) -> None:
+    #   await AsyncPath(self.service_config).unlink()
 
     @pydantic.computed_field
     @property

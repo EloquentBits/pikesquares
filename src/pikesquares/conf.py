@@ -14,7 +14,8 @@ from typing import (
 )
 
 # from questionary import Style as QuestionaryStyle
-
+from aiopath import AsyncPath
+from plumbum import local as pl_local
 import pydantic
 from pydantic_settings import (
     BaseSettings,
@@ -81,8 +82,11 @@ class APISettings(pydantic.BaseModel):
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        path_to_db = Path("/var/lib/pikesquares") / "pikesquares.db"
-        return f"sqlite+aiosqlite:///{str(path_to_db)}"
+        path_to_db = ensure_system_path(Path("/var/lib/pikesquares") / "pikesquares.db", is_dir=False)
+        return f"sqlite+aiosqlite:///{path_to_db}"
+
+        db_path: Path = ensure_system_path(self.data_dir / "pikesquares.db")
+        return f"sqlite+aiosqlite:///{db_path}"
 
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
@@ -155,26 +159,28 @@ class SysFile(pydantic.BaseModel):
     owner_groupname: str = "pikesquares"
 
 
-def ensure_system_dir(
-    newdir: Path | str,
+def ensure_system_path(
+    new_path: Path | str,
     owner_username: str = "root",
     owner_groupname: str = "pikesquares",
     owner_uid: int | None = None,
     owner_gid: int | None = None,
-    dir_mode: int = 0o775,
+    mode: int = 0o775,
+    is_dir: bool = True,
 ) -> Path:
-    if isinstance(newdir, str):
-        newdir = Path(newdir)
 
-    if newdir.exists():
-        return newdir
+    if isinstance(new_path, str):
+        new_path = Path(new_path)
 
-    newdir.mkdir(
-        mode=dir_mode,
-        parents=True,
-        exist_ok=True,
-    )
-    logger.info(f"Created Directory {newdir}")
+    if new_path.exists():
+        return new_path
+
+    new_path = pl_local.path(new_path)
+    if is_dir:
+        new_path.mkdir()
+    else:
+        new_path.touch()
+
     try:
         owner_uid = owner_uid or pwd.getpwnam(owner_username)[2]
     except KeyError:
@@ -184,45 +190,14 @@ def ensure_system_dir(
         owner_gid = owner_gid or grp.getgrnam(owner_groupname)[2]
     except KeyError:
         raise AppConfigError(f"unable locate group: {owner_groupname}") from None
-    # import ipdb;ipdb.set_trace()
-    logger.info(f"Changed Ownership for Directory {newdir} to {owner_uid}:{owner_gid}")
+
     try:
-        os.chown(newdir, owner_uid, owner_gid)
+        new_path.chown(owner_uid, owner_gid)
+        new_path.chmod(mode)
     except PermissionError:
-        raise AppConfigError(f"unable to chown {newdir} to: {owner_uid}:{owner_gid}") from None
+        raise AppConfigError(f"unable to chown {new_path} to: {owner_uid}:{owner_gid}") from None
 
-    return newdir
-
-
-def make_system_file(
-    newfile: Path | str,
-    owner_username: str = "root",
-    owner_groupname: str = "pikesquares",
-    file_mode: int = 0o664,
-) -> Path:
-    if isinstance(newfile, str):
-        newfile = Path(newfile)
-
-    if newfile.exists():
-        return newfile
-
-    newfile.touch(mode=file_mode, exist_ok=True)
-    try:
-        owner_uid = pwd.getpwnam(owner_username)[2]
-    except KeyError:
-        raise AppConfigError(f"unable locate user: {owner_username}") from None
-
-    try:
-        owner_gid = grp.getgrnam(owner_groupname)[2]
-    except KeyError:
-        raise AppConfigError(f"unable locate group: {owner_groupname}") from None
-
-    try:
-        os.chown(newfile, owner_uid, owner_gid)
-    except PermissionError:
-        raise AppConfigError(f"unable to chown {newfile} to: {owner_uid}:{owner_gid}") from None
-
-    return newfile
+    return Path(new_path)
 
 
 def get_lift_file_section(lift_file: Path, lift_file_key: str):
@@ -264,16 +239,20 @@ class AppConfig(BaseSettings):
 
     # DEBUG: bool = False
     data_dir: pydantic.DirectoryPath = pydantic.Field(
-        default=Path("/var/lib/pikesquares"), alias="PIKESQUARES_DATA_DIR"
+        default=AsyncPath("/var/lib/pikesquares"), alias="PIKESQUARES_DATA_DIR"
     )
 
-    log_dir: pydantic.DirectoryPath = pydantic.Field(default=Path("/var/log/pikesquares"), alias="PIKESQUARES_LOG_DIR")
+    log_dir: pydantic.DirectoryPath = pydantic.Field(
+        default=AsyncPath("/var/log/pikesquares"), alias="PIKESQUARES_LOG_DIR"
+    )
 
     config_dir: pydantic.DirectoryPath = pydantic.Field(
-        default=Path("/etc/pikesquares"), alias="PIKESQUARES_CONFIG_DIR"
+        default=AsyncPath("/etc/pikesquares"), alias="PIKESQUARES_CONFIG_DIR"
     )
 
-    run_dir: pydantic.DirectoryPath = pydantic.Field(default=Path("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR")
+    run_dir: pydantic.DirectoryPath = pydantic.Field(
+        default=AsyncPath("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR"
+    )
     UWSGI_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     PYTHON_VIRTUAL_ENV: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]]
 
@@ -303,7 +282,8 @@ class AppConfig(BaseSettings):
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        return f"sqlite+aiosqlite:///{self.data_dir / "pikesquares.db"}"
+        db_path: Path = ensure_system_path(self.data_dir / "pikesquares.db", is_dir=False)
+        return f"sqlite+aiosqlite:///{db_path}"
 
     @pydantic.computed_field
     @property
@@ -318,26 +298,22 @@ class AppConfig(BaseSettings):
     @pydantic.computed_field
     @property
     def pki_dir(self) -> Path:
-        return ensure_system_dir(self.data_dir / "pki")
+        return ensure_system_path(self.data_dir / "pki")
 
     @pydantic.computed_field
     @property
     def uv_cache_dir(self) -> Path:
-        return ensure_system_dir(self.data_dir / "uv-cache")
+        return ensure_system_path(self.data_dir / "uv-cache")
 
     @pydantic.computed_field
     @property
     def pyvenvs_dir(self) -> Path:
-        return ensure_system_dir(
-            self.data_dir / "pyvenvs",
-            owner_username=os.getlogin(),
-            owner_gid=os.getgid(),
-        )
+        return ensure_system_path(self.data_dir / "pyvenvs")
 
     @pydantic.computed_field
     @property
     def plugins_dir(self) -> Path:
-        return ensure_system_dir(self.data_dir / "plugins")
+        return ensure_system_path(self.data_dir / "plugins")
 
     @pydantic.computed_field
     @property
@@ -350,8 +326,7 @@ class AppConfig(BaseSettings):
     @pydantic.field_validator("data_dir", "log_dir", "config_dir", "run_dir", mode="before")
     def ensure_paths(cls, v) -> Path:
         path = Path(v)
-        logger.debug(path)
-        ensure_system_dir(path)
+        ensure_system_path(path)
         return path
 
     """
@@ -412,6 +387,10 @@ def register_app_conf(
     override_settings: dict,
 ):
     def conf_factory() -> AppConfig:
-        return AppConfig(**override_settings)
+        try:
+            return AppConfig(**override_settings)
+        except pydantic.ValidationError as exc:
+            logger.error(exc)
+            raise AppConfigError("invalid config. giving up.")
 
     register_factory(context, AppConfig, conf_factory)
