@@ -84,7 +84,6 @@ class ServiceBase(TimeStampedBase, SQLModel):
     run_as_uid: str = Field(default="root")
     run_as_gid: str = Field(default="root")
     service_id: str = Field(default=None, unique=True)
-    uwsgi_config: dict | None = Field(None, sa_type=JSON)
     uwsgi_plugins: str | None = Field(default=None, max_length=255)
     data_dir: str = Field(default="/var/lib/pikesquares", max_length=255)
     log_dir: str = Field(default="/var/log/pikesquares", max_length=255)
@@ -187,8 +186,6 @@ class ServiceBase(TimeStampedBase, SQLModel):
 
     def write_uwsgi_config(self) -> Path:
         return self.uwsgi_config_section_class(self).as_configuration().tofile(self.service_config)
-        # self.uwsgi_config["uwsgi"]["show-config"] = True
-        #
 
     def get_uwsgi_config(self) -> str:
         return self.uwsgi_config_section_class(self).as_configuration()

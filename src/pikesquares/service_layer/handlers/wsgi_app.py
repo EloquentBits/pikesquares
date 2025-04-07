@@ -3,18 +3,20 @@ from pathlib import Path
 import structlog
 
 from pikesquares.domain.wsgi_app import WsgiApp
+from pikesquares.domain.project import Project
 from pikesquares.services.apps.exceptions import DjangoSettingsError
-from pikesquares.services.apps.django import PythonRuntimeDjango
+from pikesquares.services.apps.python import PythonRuntime
+
 
 logger = structlog.getLogger()
 
 
 def create_wsgi_app(
-    runtime,
+    runtime: PythonRuntime,
     name: str,
     service_id: str,
-    app_project,
-    venv: Path,
+    project: Project,
+    pyvenv_dir: Path,
     # routers: list[Router],
 ) -> WsgiApp:
 
@@ -32,20 +34,15 @@ def create_wsgi_app(
 
     wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
     wsgi_file = runtime.app_root_dir / Path("/".join(wsgi_parts) + ".py")
-    app_options = {
-        "root_dir": runtime.app_root_dir,
-        "project_id": app_project.service_id,
-        "wsgi_file": wsgi_file,
-        "wsgi_module": django_settings.wsgi_application.split(".")[-1],
-        "pyvenv_dir": str(venv),
-        # "routers": routers,
-        "workers": 3,
-    }
     uwsgi_plugins = []
     # if isinstance(runtime, PythonRuntimeDjango):
     return WsgiApp(
         service_id=service_id,
         name=name,
+        project=project,
         uwsgi_plugins=",".join(uwsgi_plugins),
-        **app_options,
+        root_dir=str(runtime.app_root_dir),
+        wsgi_file=str(wsgi_file),
+        wsgi_module=django_settings.wsgi_application.split(".")[-1],
+        pyvenv_dir=str(pyvenv_dir),
     )

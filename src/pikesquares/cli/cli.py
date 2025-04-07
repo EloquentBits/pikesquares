@@ -445,6 +445,7 @@ def init(
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
     conf = services.get(context, AppConfig)
+    default_project = context.get("default-project")
     # db = services.get(context, TinyDB)
 
     # uv init djangotutorial
@@ -831,9 +832,14 @@ def init(
             raise typer.Exit() from None
         """
 
-        create_wsgi_app(
+        wsgi_app = create_wsgi_app(
             runtime,
+            app_name,
+            service_id,
+            default_project,
+            pyvenv_dir,
         )
+        logger.debug(wsgi_app)
 
     # console.log(runtime.collected_project_metadata["django_settings"])
     # console.log(runtime.collected_project_metadata["django_check_messages"])
