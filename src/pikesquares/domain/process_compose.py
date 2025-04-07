@@ -150,10 +150,11 @@ class ProcessCompose(ManagedServiceBase):
 
     async def reload(self):
         """docket-compose project update"""
-        if not self.daemon_socket.exists():
+        if not await AsyncPath(self.daemon_socket).exists():
             raise PCAPIUnavailableError()
 
         await self.write_config_to_disk()
+
         try:
             self.cmd_args.insert(0, "project")
             self.cmd_args.insert(1, "update")
@@ -251,7 +252,7 @@ class ProcessCompose(ManagedServiceBase):
 
 
 # factories
-def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
+async def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
     """FastAPI process-compose process"""
 
     api_port = 9544
@@ -302,20 +303,20 @@ async def make_device_process(context: dict, device: Device, conf: AppConfig) ->
 
 
 # caddy
-def make_caddy_process(
+async def make_caddy_process(
     conf: AppConfig,
     http_router_port=int,
 ) -> ProcessComposeProcess:
     """Caddy process-compose process"""
 
-    if not all([conf.CADDY_BIN, conf.CADDY_BIN.exists()]):
+    if conf.CADDY_BIN and not await AsyncPath(conf.CADDY_BIN).exists():
         raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
 
-    caddy_config_file = conf.config_dir / "caddy.json"
+    caddy_config_file = AsyncPath(conf.config_dir) / "caddy.json"
     vhost_key = "*.pikesquares.local"
-    if not caddy_config_file.exists():
+    if not await caddy_config_file.exists():
         caddy_config_default = """{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.local": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.local"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
-        caddy_config_file.write_text(caddy_config_default)
+        await caddy_config_file.write_text(caddy_config_default)
 
     with open(caddy_config_file, "r+") as caddy_config:
         data = json.load(caddy_config)
@@ -394,9 +395,9 @@ async def register_process_compose(context: dict, conf: AppConfig) -> None:
 
     pc_config = ProcessComposeConfig(
         processes={
-            "api": make_api_process(conf),
+            "api": await make_api_process(conf),
             "device": await make_device_process(context, device, conf),
-            "caddy": make_caddy_process(conf, http_router.port),
+            "caddy": await make_caddy_process(conf, http_router.port),
         },
     )
     pc_kwargs = {

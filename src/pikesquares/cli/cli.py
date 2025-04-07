@@ -373,7 +373,7 @@ async def up(
                     default_http_router = context.get("default-http-router")
                     if device and default_http_router:
                         await default_http_router.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
-                        console.success(":heavy_check_mark:     Launching http rotuer.. Done!")
+                        console.success(":heavy_check_mark:     Launching http router.. Done!")
                         console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
                     console.success()
@@ -466,13 +466,14 @@ async def init(
     # https://github.com/healthchecks/healthchecks
 
     if not app_root_dir:
+        current_dir = await AsyncPath().cwd()
         app_root_dir = AsyncPath(
-            questionary.path(
+            await questionary.path(
                 "Enter the location of your project/app root directory:",
-                default=str(AsyncPath().cwd()),
+                default=str(current_dir),
                 only_directories=True,
                 style=custom_style,
-            ).ask()
+            ).ask_async()
         )
 
     if not await AsyncPath(app_root_dir).exists():
