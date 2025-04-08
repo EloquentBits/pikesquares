@@ -366,22 +366,22 @@ async def up(
     #######################
     # emperor zeromq monitors
     #
-    default_project = context.get("default-project")
+    uow = await services.aget(context, UnitOfWork)
     device = context.get("device")
+    device_zeromq_monitor_address = f"{device.monitor_zmq_ip}:{device.monitor_zmq_port}"
     if not device:
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
-    device_zeromq_monitor_address = f"{device.monitor_zmq_ip}:{device.monitor_zmq_port}"
-    if device and default_project:
-        await default_project.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
-        console.success(":heavy_check_mark:     Launching default project.. Done!")
+    for project in await uow.projects.list():
+        await project.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
+        console.success(":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
-    default_http_router = context.get("default-http-router")
-    if device and default_http_router:
-        await default_http_router.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
+    for router in await uow.routers.list():
+        await router.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
         console.success(":heavy_check_mark:     Launching http router.. Done!")
         console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")
     console.success()
