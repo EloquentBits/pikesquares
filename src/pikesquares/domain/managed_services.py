@@ -33,11 +33,7 @@ class ManagedServiceBase(pydantic.BaseModel):
     def __str__(self) -> str:
         return f"{self.daemon_name} @ {self.daemon_bin}"
 
-    @pydantic.field_validator(
-        "daemon_log",
-        "daemon_config",
-        mode="before"
-    )
+    @pydantic.field_validator("daemon_log", "daemon_config", mode="before")
     def ensure_daemon_files(cls, v) -> Path:
         path = Path(v)
         logger.debug(path)
@@ -69,19 +65,15 @@ class ManagedServiceBase(pydantic.BaseModel):
         return file_path
 
     def cmd(
-            self,
-            cmd_args: list[str],
-            chdir: Path | None = None,
-            cmd_env: dict[str, str] | None = None,
-            # run_as_user: str = "pikesquares",
-        ) -> tuple[int, str, str]:
-        logger.info(f"[pikesquares] pc_cmd: {cmd_args=}")
+        self,
+        cmd_args: list[str],
+        chdir: Path | None = None,
+        cmd_env: dict[str, str] | None = None,
+        # run_as_user: str = "pikesquares",
+    ) -> tuple[int, str, str]:
 
         if not cmd_args:
             raise Exception(f"no args provided for e {self.daemon_name} command")
-
-        logger.debug(cmd_args)
-        logger.debug(cmd_env)
 
         try:
             if cmd_env:
@@ -90,14 +82,11 @@ class ManagedServiceBase(pydantic.BaseModel):
 
             # with pl_local.as_user(run_as_user):
             with pl_local.cwd(chdir or self.data_dir):
-                retcode, stdout, stderr = pl_local[str(self.daemon_bin)].\
-                    run(
-                        cmd_args,
-                        **{"env": cmd_env}
-                    )
-                logger.debug(f"[pikesquares] pc_cmd: {retcode=}")
-                logger.debug(f"[pikesquares] pc_cmd: {stdout=}")
-                logger.debug(f"[pikesquares] pc_cmd: {stderr=}")
+                retcode, stdout, stderr = pl_local[str(self.daemon_bin)].run(cmd_args, **{"env": cmd_env})
+                if retcode != "0":
+                    logger.debug(f"{retcode=}")
+                    logger.debug(f"{stdout=}")
+                    logger.debug(f"{stderr=}")
                 return retcode, stdout, stderr
         except ProcessExecutionError:
             raise

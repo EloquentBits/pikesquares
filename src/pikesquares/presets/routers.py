@@ -23,13 +23,24 @@ class RouterHttps(_RouterHttp):
         with the uWSGI Subscription Server.
 
     """
+
     alias = "http"  # Shares options with http.
     plugin = alias
     on_command = "https2"
 
     def __init__(
-            self, on, *, cert, key, forward_to=None, ciphers=None, client_ca=None, session_context=None, use_spdy=None,
-            export_cert_var=None):
+        self,
+        on,
+        *,
+        cert,
+        key,
+        forward_to=None,
+        ciphers=None,
+        client_ca=None,
+        session_context=None,
+        use_spdy=None,
+        export_cert_var=None,
+    ):
         """Binds https router to run on the given address.
 
         :param SocketShared|str on: Activates the router on the given address.
@@ -89,8 +100,8 @@ class HttpsRouterSection(Section):
         self.set_runtime_dir(str(self.router.run_dir))
 
         self.set_plugins_params(
-             plugins=self.router.uwsgi_plugins,
-             search_dirs=[str(self.router.plugins_dir)],
+            plugins=self.router.uwsgi_plugins,
+            search_dirs=[str(self.router.plugins_dir)],
         )
         self.print_plugins()
 
@@ -108,10 +119,7 @@ class HttpsRouterSection(Section):
             uid=self.router.run_as_uid,
             gid=self.router.run_as_gid,
         )
-        self.main_process.set_naming_params(
-            prefix=f"{self.router_name} {self.router.service_id} ",
-            autonaming=True
-        )
+        self.main_process.set_naming_params(prefix=f"{self.router_name} {self.router.service_id} ", autonaming=True)
 
         # host, port = address.split(':')
         # if host in ('0.0.0.0', '127.0.0.1'):
@@ -166,19 +174,13 @@ class HttpsRouterSection(Section):
             timeout_headers=10,
             timeout_backend=60,
         )
-        self.router.set_manage_params(
-            chunked_input=True,
-            rtsp=True,
-            source_method=True
-        )
+        self.router.set_manage_params(chunked_input=True, rtsp=True, source_method=True)
 
         self.logging.set_file_params(owner="true")
         self.routing.use_router(self.router)
 
         # self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
-        self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(router.log_file))
-        )
+        self.logging.add_logger(self.logging.loggers.file(filepath=str(router.log_file)))
 
 
 class HttpRouterSection(Section):
@@ -214,8 +216,8 @@ class HttpRouterSection(Section):
         self.set_runtime_dir(str(self.router.run_dir))
 
         self.set_plugins_params(
-             plugins=self.router.uwsgi_plugins,
-             search_dirs=[str(self.router.plugins_dir)],
+            plugins=self.router.uwsgi_plugins,
+            search_dirs=[str(self.router.plugins_dir)],
         )
         self.print_plugins()
 
@@ -226,14 +228,8 @@ class HttpRouterSection(Section):
             # touch_reload="/srv/uwsgi/%n.http-router.ini"
             touch_reload=str(self.router.touch_reload_file),
         )
-        self.main_process.set_owner_params(
-            uid=self.router.run_as_uid,
-            gid=self.router.run_as_gid
-        )
-        self.main_process.set_naming_params(
-            prefix=f"{self.router_name} {self.router.service_id} ",
-            autonaming=True
-        )
+        self.main_process.set_owner_params(uid=self.router.run_as_uid, gid=self.router.run_as_gid)
+        self.main_process.set_naming_params(prefix=f"{self.router_name} {self.router.service_id} ", autonaming=True)
         # host, port = address.split(':')
         # if host in ('0.0.0.0', '127.0.0.1'):
         #    address = f":{port}"
@@ -265,17 +261,11 @@ class HttpRouterSection(Section):
             timeout_headers=10,
             timeout_backend=60,
         )
-        self.router.set_manage_params(
-            chunked_input=True,
-            rtsp=True,
-            source_method=True
-        )
+        self.router.set_manage_params(chunked_input=True, rtsp=True, source_method=True)
 
         self.logging.set_file_params(owner="true")
         # self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
-        self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(router.log_file))
-        )
+        self.logging.add_logger(self.logging.loggers.file(filepath=str(router.log_file)))
         self.routing.use_router(self.router)
 
 
@@ -398,26 +388,21 @@ class TunTapRouterSection(Section):
         self.set_runtime_dir(str(self.router.run_dir))
 
         self.set_plugins_params(
-             plugins=self.router.uwsgi_plugins,
-             search_dirs=[str(self.router.plugins_dir)],
+            plugins=self.router.uwsgi_plugins,
+            search_dirs=[str(self.router.plugins_dir)],
         )
         self.print_plugins()
 
         self.master_process.set_basic_params(enable=True)
         self.master_process.set_exit_events(reload=True)
 
-        self.main_process.set_basic_params(
-            # touch_reload="/srv/uwsgi/%n.http-router.ini"
-            touch_reload=str(self.router.touch_reload_file),
-        )
-        self.main_process.set_owner_params(
-            uid=self.router.run_as_uid,
-            gid=self.router.run_as_gid
-        )
-        self.main_process.set_naming_params(
-            prefix=f"{self.router_name} {self.router.service_id} ",
-            autonaming=True
-        )
+        if self.router.enable_dir_monitor:
+            self.main_process.set_basic_params(
+                # touch_reload="/srv/uwsgi/%n.http-router.ini"
+                touch_reload=str(self.router.touch_reload_file),
+            )
+        self.main_process.set_owner_params(uid=self.router.run_as_uid, gid=self.router.run_as_gid)
+        self.main_process.set_naming_params(prefix=f"{self.router_name} {self.router.service_id} ", autonaming=True)
         # host, port = address.split(':')
         # if host in ('0.0.0.0', '127.0.0.1'):
         #    address = f":{port}"
@@ -449,17 +434,11 @@ class TunTapRouterSection(Section):
             timeout_headers=10,
             timeout_backend=60,
         )
-        self.router.set_manage_params(
-            chunked_input=True,
-            rtsp=True,
-            source_method=True
-        )
+        self.router.set_manage_params(chunked_input=True, rtsp=True, source_method=True)
 
         self.logging.set_file_params(owner="true")
         # self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
-        self.logging.add_logger(
-            self.logging.loggers.file(filepath=str(router.log_file))
-        )
+        self.logging.add_logger(self.logging.loggers.file(filepath=str(router.log_file)))
         self.routing.use_router(self.router)
 
 

@@ -11,22 +11,20 @@ from plumbum import ProcessExecutionError
 from pydantic_yaml import to_yaml_str
 
 from pikesquares import services
-from pikesquares.conf import AppConfig, AppConfigError
+from pikesquares.conf import AppConfig, AppConfigError, ensure_system_path
 from pikesquares.domain.device import Device
 from pikesquares.domain.managed_services import ManagedServiceBase
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.services.base import ServiceUnavailableError
 
-# from pikesquares.services import register_factory
 
 logger = structlog.get_logger()
 
 
-class PCAPIUnavailableError(ServiceUnavailableError):
+class ServiceUnavailableError(Exception):
     pass
 
 
-class PCDeviceUnavailableError(ServiceUnavailableError):
+class PCAPIUnavailableError(ServiceUnavailableError):
     pass
 
 
@@ -122,11 +120,7 @@ class ProcessCompose(ManagedServiceBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.cmd_args = [
-            "--use-uds",
-            "--unix-socket",
-            self.daemon_socket,
-        ]
+        self.cmd_args = ["--unix-socket", self.daemon_socket]
         self.cmd_env = {
             # TODO use shellingham library
             "COMPOSE_SHELL": os.environ.get("SHELL"),
@@ -138,13 +132,8 @@ class ProcessCompose(ManagedServiceBase):
     def __str__(self) -> str:
         return self.__repr__()
 
-    # @pydantic.computed_field
-    # async def get_socket_address(self) -> AsyncPath:
-    #    return await AsyncPath(
-    #        self.conf.run_dir) / "process-compose.sock"
-
-    async def write_config_to_disk(self):
-        if self.daemon_config:
+    async def write_config_to_disk(self) -> None:
+        if self.daemon_config and await AsyncPath(self.daemon_config).exists():
             config = AsyncPath(self.daemon_config)
             await config.write_text(to_yaml_str(self.config))
 
@@ -158,16 +147,14 @@ class ProcessCompose(ManagedServiceBase):
         try:
             self.cmd_args.insert(0, "project")
             self.cmd_args.insert(1, "update")
-            return self.cmd(
-                self.cmd_args,
-                cmd_env=self.cmd_env,
-            )
+            return self.cmd(self.cmd_args, cmd_env=self.cmd_env)
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    async def up(self) -> tuple[int, str, str]:
+    async def up(self) -> bool:
         # always write config to dist before starting
+        #
         await self.write_config_to_disk()
         args = [
             "up",
@@ -177,18 +164,34 @@ class ProcessCompose(ManagedServiceBase):
             str(self.daemon_log),
             "--detached",
             "--hide-disabled",
-            # "--tui",
-            # "false",
         ] + self.cmd_args
-
         try:
-            return self.cmd(args, cmd_env=self.cmd_env)
+            retcode, stdout, stderr = self.cmd(args, cmd_env=self.cmd_env)
+            if retcode:
+                logger.debug(retcode)
+            if stdout:
+                logger.debug(stdout)
+            if stderr:
+                logger.debug(stderr)
+            # if retcode != 0:
+            #    logger.error(retcode, stdout, stderr)
+            #    return False
         except ProcessExecutionError as exc:
             logger.error(exc)
-            return exc.retcode, exc.stdout, exc.stderr
+            return False
+
+        # try:
+        #    logger.debug(f"setting perms on {self.daemon_socket}")
+        #    ensure_system_path(self.daemon_socket, is_dir=False)
+        #    if self.daemon_socket:
+        #        logger.debug(f"set perms on {self.daemon_socket} to {oct(self.daemon_socket.stat().st_mode)}")
+        # except AppConfigError:
+        #    logger.error("unable to set perms on process compose socket")
+        #    return False
+        return True
 
     async def down(self) -> tuple[int, str, str]:
-        if self.daemon_socket and not self.daemon_socket.exists():
+        if self.daemon_socket and not await AsyncPath(self.daemon_socket).exists():
             raise PCAPIUnavailableError()
 
         try:
@@ -216,36 +219,27 @@ class ProcessCompose(ManagedServiceBase):
 
     def ping(self) -> None:
         if self.daemon_socket and not self.daemon_socket.exists():
-            raise PCAPIUnavailableError()
+            raise PCAPIUnavailableError("unable to reach Process Compose API")
 
-    def ping_api(self) -> bool:
-        if self.daemon_socket and not self.daemon_socket.exists():
-            raise PCAPIUnavailableError()
+    async def ping_api(self, process_name: str) -> ProcessComposeProcessStats:
+        if self.daemon_socket and not await AsyncPath(self.daemon_socket).exists():
+            raise PCAPIUnavailableError("unable to reach Process Compose API")
 
         try:
-            cmd_args = [
-                "process",
-                "list",
-                "--output",
-                "json",
-            ]
-            _, stdout, _ = self.cmd(
-                cmd_args + self.cmd_args,
-                cmd_env=self.cmd_env,
-            )
-            js = json.loads(stdout)
-            try:
-                device_process = next(filter(lambda p: p.get("name") in ["device", "api"], js))
-                process_stats = ProcessComposeProcessStats(**device_process)
-                if process_stats.IsRunning and process_stats.status == "Running":
-                    return True
-            except (IndexError, StopIteration):
-                pass
+            cmd_args = ["process", "list", "--output", "json"]
+            _, stdout, _ = self.cmd(cmd_args + self.cmd_args, cmd_env=self.cmd_env)
         except ProcessExecutionError as exc:
             logger.error(exc)
-            return False
+            raise PCAPIUnavailableError("unable to reach Process Compose API")
 
-        raise PCDeviceUnavailableError()
+        try:
+            return ProcessComposeProcessStats(
+                **next(filter(lambda p: p.get("name") == process_name, json.loads(stdout)))
+            )
+        except (IndexError, StopIteration):
+            pass
+
+        raise PCAPIUnavailableError()
 
 
 # factories
@@ -257,7 +251,7 @@ async def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
     cmd = f"{conf.UV_BIN} run uvicorn pikesquares.app.main:app --host 0.0.0.0 --port {api_port}"
 
     return ProcessComposeProcess(
-        description="PikeSquares FastAPI",
+        description="PikeSquares API",
         command=cmd,
         working_dir=conf.PYTHON_VIRTUAL_ENV or Path().cwd(),
         availability=ProcessAvailability(),
@@ -289,7 +283,7 @@ async def make_device_process(context: dict, device: Device, conf: AppConfig) ->
         raise AppConfigError("unable to read uwsgi options for device {device.id}")
 
     return ProcessComposeProcess(
-        description="PikeSquares Server",
+        description="Device Manager",
         command="".join([cmd, sql]),
         working_dir=Path().cwd(),
         availability=ProcessAvailability(),
@@ -331,7 +325,7 @@ async def make_caddy_process(
             caddy_config.truncate()
 
     return ProcessComposeProcess(
-        description="PikeSquares Caddy",
+        description="reverse proxy",
         command=f"{conf.CADDY_BIN} run --config {caddy_config_file} --pidfile {conf.run_dir / 'caddy.pid'}",
         working_dir=Path().cwd(),
         availability=ProcessAvailability(),
@@ -342,28 +336,23 @@ async def make_caddy_process(
 
 
 # dnsmasq
-def make_dnsmasq_process(
+async def make_dnsmasq_process(
     conf: AppConfig,
+    port: int = 5353,
+    addresses: list[str] | None = None,
+    listen_address: str = "127.0.0.34",
     # http_router_port=int,
 ) -> ProcessComposeProcess:
     """dnsmasq process-compose process"""
 
-    # "${DNSMASQ_BIN} --keep-in-foreground --port 5353 --address=/pikesquares.local/192.168.0.1 --address=/pikesquares.dev/192.168.0.1 --listen-address=127.0.0.34 --no-resolv"
-
-    if not all([conf.DNSMASQ_BIN, conf.DNSMASQ_BIN.exists()]):
+    if conf.DNSMASQ_BIN and not await AsyncPath(conf.DNSMASQ_BIN).exists():
         raise AppConfigError(f"unable locate dnsmasq binary @ {conf.DNSMASQ_BIN}") from None
 
-    cmd_args = [
-        "--keep-in-foreground",
-        "--port 5353",
-        "--address=/pikesquares.local/192.168.0.1",
-        "--listen-address=127.0.0.34",
-        "--no-resolv",
-    ]
-    cmd = f"{conf.DNSMASQ_BIN}  --keep-in-foreground --port 5353 --address=/pikesquares.local/192.168.0.1 --address=/pikesquares.dev/192.168.0.1 --listen-address=127.0.0.34 --no-resolv"
-
+    cmd = f"{conf.DNSMASQ_BIN} --keep-in-foreground --port {port} --listen-address {listen_address} --no-resolv"
+    for addr in addresses or ["/pikesquares.local/192.168.0.1"]:
+        cmd = cmd + f" --address {addr}"
     return ProcessComposeProcess(
-        description="PikeSquares dnsmasq",
+        description="dns resolver",
         command=cmd,
         working_dir=Path().cwd(),
         availability=ProcessAvailability(),
@@ -384,10 +373,10 @@ async def register_process_compose(context: dict, conf: AppConfig) -> None:
     if not http_router:
         raise AppConfigError("no http router found in context")
 
-    if not all([conf.UV_BIN, conf.UV_BIN.exists()]):
+    if conf.UV_BIN and not await AsyncPath(conf.UV_BIN).exists():
         raise AppConfigError(f"unable locate uv binary @ {conf.UV_BIN}") from None
 
-    if not all([conf.UWSGI_BIN, conf.UWSGI_BIN.exists()]):
+    if conf.UWSGI_BIN and not await AsyncPath(conf.UWSGI_BIN).exists():
         raise AppConfigError(f"unable locate uWSGI binary @ {conf.UWSGI_BIN}") from None
 
     pc_config = ProcessComposeConfig(
@@ -395,6 +384,7 @@ async def register_process_compose(context: dict, conf: AppConfig) -> None:
             "api": await make_api_process(conf),
             "device": await make_device_process(context, device, conf),
             "caddy": await make_caddy_process(conf, http_router.port),
+            "dnsmasq": await make_dnsmasq_process(conf),
         },
     )
     pc_kwargs = {

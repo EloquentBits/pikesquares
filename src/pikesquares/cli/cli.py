@@ -1,4 +1,5 @@
 import logging
+import asyncio
 import os
 import shutil
 
@@ -7,7 +8,6 @@ import shutil
 import tempfile
 from functools import wraps
 from pathlib import Path
-from time import sleep
 from typing import Annotated, Optional
 
 import anyio
@@ -48,7 +48,6 @@ from pikesquares.conf import (
 # from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
-    PCDeviceUnavailableError,
     ProcessCompose,
     register_process_compose,
 )
@@ -270,12 +269,12 @@ def attach(
 
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")
-def info(
+@run_async
+async def info(
     ctx: typer.Context,
 ):
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
-
     conf = services.get(context, AppConfig)
     # console.info(f"data_dir={str(conf.DATA_DIR)}")
     logger.debug(f"virtualenv={str(conf.PYTHON_VIRTUAL_ENV)}")
@@ -288,33 +287,32 @@ def info(
     # console.success(":heavy_check_mark:     reverse proxy is running")
 
     device = context.get("device")
+    process_compose = services.get(context, ProcessCompose)
+    processes = [
+        ("device", "device manager"),
+        ("caddy", "reverse proxy"),
+        ("dnsmasq", "dns server"),
+        ("api", "PikeSquares API"),
+    ]
+    # for _ in range(1, 5):
+    for process in processes:
+        try:
+            status = await process_compose.ping_api(process[0])
+            logger.debug(f"{process[0]} {status=}")
+            if status:
+                console.success(f":heavy_check_mark:     {process[1]} is running.")
+            else:
+                console.warning(f":heavy_exclamation_mark:     {process[1]} is not running.")
+        except PCAPIUnavailableError:
+            await asyncio.sleep(1)
+            continue
 
-    # console.info(device.stats)
-    #
-    """
-    console.success(":heavy_check_mark:      Launching dns server... Done!")
-    console.success(":heavy_exclamation_mark:      Unable to launch")
-    """
-
-    pc = services.get(context, ProcessCompose)
-    try:
-        pc.ping_api()
+    if device:
         try:
             if device.stats:
-                console.success("🚀 PikeSquares Server is running.")
+                console.success("🚀 PikeSquares Server is running 🚀")
         except StatsReadError:
-            console.warning("PikeSquares Server is not running.")
-
-    except PCAPIUnavailableError:
-        console.info("PCAPIUnavailableError: process-compose api not available.")
-    except PCDeviceUnavailableError:
-        console.error("PCDeviceUnavailableError: PikeSquares Server is not running.")
-        raise typer.Exit() from None
-
-    # except (process_compose.PCAPIUnavailableError,
-    #        process_compose.PCDeviceUnavailableError):
-    #    console.warning("PikeSquares Server is not running.")
-    #    raise typer.Exit() from None
+            console.warning("PikeSquares Server is not running")
 
     # http_router = services.get(context, DefaultHttpRouter)
     # stats = http_router.read_stats()
@@ -342,61 +340,54 @@ async def up(
     if conf and conf.pyvenvs_dir.exists():
         logger.debug(f"python venvs directory @ {conf.pyvenvs_dir} is available")
 
-    try:
+    up_result = await process_compose.up()
+    if not up_result:
+        console.warning(":heavy_exclamation_mark:      PikeSquares Server was unable to launch")
+        raise typer.Exit(code=0) from None
 
-        retcode, stdout, stderr = await process_compose.up()
+    # await asyncio.sleep(3)
 
-        if retcode != 0:
-            console.log(retcode, stdout, stderr)
-            raise typer.Exit(code=1) from None
-        elif retcode == 0:
-            for _ in range(1, 5):
-                try:
-                    process_compose.ping_api()
+    #######################
+    # process-compose processes
+    #
+    #    caddy, dnsmasq, device, api
+    for name, process in process_compose.config.processes.items():
+        try:
+            console.success(f"Launching {process.description}")
+            process_stats = await process_compose.ping_api(name)
+            if process_stats.IsRunning and process_stats.status == "Running":
+                console.success(f":heavy_check_mark:     {process.description}... Launched!")
+            else:
+                console.warning(f":heavy_exclamation_mark:     {process.description} unable to launch.")
+        except PCAPIUnavailableError:
+            await asyncio.sleep(1)
+            continue
 
-                    console.success(":heavy_check_mark:      Launching dns server... Done!")
+    #######################
+    # emperor zeromq monitors
+    #
+    default_project = context.get("default-project")
+    device = context.get("device")
+    if not device:
+        console.error("unable to locate device in app context")
+        raise typer.Exit(code=0) from None
 
-                    # console.success(":white_check_mark: reverse proxy is running")
-                    console.success(":heavy_check_mark:     reverse proxy is running")
-                    console.success(":heavy_check_mark:     Launching reverse proxy... Done! ")
-                    console.success(":heavy_check_mark:     Launching main process manager.. Done!")
+    device_zeromq_monitor_address = f"{device.monitor_zmq_ip}:{device.monitor_zmq_port}"
+    if device and default_project:
+        await default_project.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
+        console.success(":heavy_check_mark:     Launching default project.. Done!")
 
-                    default_project = context.get("default-project")
-                    device = context.get("device")
-                    if not device:
-                        console.error("unable to locate device in app context")
-                        raise typer.Exit(code=0) from None
-
-                    device_zeromq_monitor_address = f"{device.monitor_zmq_ip}:{device.monitor_zmq_port}"
-                    if device and default_project:
-                        await default_project.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
-                        console.success(":heavy_check_mark:     Launching default project.. Done!")
-
-                    default_http_router = context.get("default-http-router")
-                    if device and default_http_router:
-                        await default_http_router.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
-                        console.success(":heavy_check_mark:     Launching http router.. Done!")
-                        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-
-                    console.success()
-                    console.success("Your API is running at: http://127.0.0.1:9000")
-                    console.success()
-                    console.success("Next steps: cd to your project directory and run `pikesquares init`")
-                    console.success()
-                    console.success("🚀 PikeSquares Server is up and running.")
-
-                    return True
-                except (PCAPIUnavailableError, PCDeviceUnavailableError):
-                    sleep(1)
-                    continue
-
-            console.error(":heavy_exclamation_mark:      PikeSquares Server was unable to launch")
-            raise typer.Exit(code=0) from None
-
-    except ProcessExecutionError as process_exec_error:
-        console.error(process_exec_error)
-        console.error("PikeSquares Server was unable to start.")
-        raise typer.Exit(code=1) from None
+    default_http_router = context.get("default-http-router")
+    if device and default_http_router:
+        await default_http_router.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
+        console.success(":heavy_check_mark:     Launching http router.. Done!")
+        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+    console.success()
+    console.success("PikeSquares API is available at: http://127.0.0.1:9000")
+    console.success()
+    console.success("Next steps: cd to your project directory and run `pikesquares init`")
+    console.success()
+    console.success("🚀 PikeSquares Server is up and running. 🚀")
 
 
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
@@ -677,7 +668,7 @@ async def init(
     }
     with Live(layout, console=console, auto_refresh=True) as live:
         while not overall_progress.finished:
-            sleep(0.1)
+            await asyncio.sleep(0.1)
             for task in progress.tasks:
                 if not task.finished:
                     if task.id == detect_dependencies_task:
@@ -697,7 +688,7 @@ async def init(
 
                     if task.id < 2:
                         progress.start_task(task.id)
-                        sleep(0.5)
+                        await asyncio.sleep(0.5)
                         progress.update(
                             task.id,
                             completed=1,
@@ -722,7 +713,7 @@ async def init(
                     else:
                         progress.update(task.id, visible=True, refresh=True)
                         progress.start_task(task.id)
-                        sleep(0.5)
+                        await asyncio.sleep(0.5)
 
                     description_done = None
 
@@ -835,7 +826,6 @@ async def init(
                 # build_routers(app_name),
             )
             logger.info(wsgi_app.config_json)
-            # console.print("[bold green]WSGI App has been provisioned.")
         except DjangoSettingsError:
             logger.error("[pikesquares] -- DjangoSettingsError --")
             raise typer.Exit() from None
@@ -853,6 +843,7 @@ async def init(
             proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"
             wsgi_app.device_zeromq_monitor_create_instance(proj_zmq_addr)
             console.success(f":heavy_check_mark:     Launching wsgi app {app_name}.. Done!")
+            console.print("[bold green]WSGI App has been provisioned.")
 
     # console.log(runtime.collected_project_metadata["django_settings"])
     # console.log(runtime.collected_project_metadata["django_check_messages"])

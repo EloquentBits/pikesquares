@@ -34,7 +34,7 @@ class BaseRouter(ServiceBase, table=True):
     @pydantic.computed_field
     @property
     def service_config(self) -> Path | None:
-        if self.device.enable_dir_monitor:
+        if self.enable_dir_monitor:
             service_config_dir = ensure_system_path(Path(self.config_dir) / "projects")
             return service_config_dir / f"{self.service_id}.ini"
 
@@ -51,6 +51,11 @@ class BaseRouter(ServiceBase, table=True):
                 return self.address.split(":")[-1]
             except IndexError:
                 pass
+
+    @pydantic.computed_field
+    @property
+    def enable_dir_monitor(self) -> bool:
+        return False  # self.device.enable_dir_monitor
 
     """
     https_router = await uow.routers.get_by_name("default-https-router")
