@@ -55,6 +55,7 @@ from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.device import get_or_create_device
 from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
 from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.domain.process_compose import ProcessComposeProcess
 from pikesquares.services.apps.django import PythonRuntimeDjango
 from pikesquares.services.apps.exceptions import (
     # PythonRuntimeCheckError,
@@ -351,36 +352,50 @@ async def up(
     # process-compose processes
     #
     #    caddy, dnsmasq, device, api
-    for name, process in process_compose.config.processes.items():
-        try:
-            console.success(f"Launching {process.description}")
-            process_stats = await process_compose.ping_api(name)
-            if process_stats.IsRunning and process_stats.status == "Running":
-                console.success(f":heavy_check_mark:     {process.description}... Launched!")
-            else:
-                console.warning(f":heavy_exclamation_mark:     {process.description} unable to launch.")
-        except PCAPIUnavailableError:
-            await asyncio.sleep(1)
-            continue
+    #
+    try:
+        for name, process, messages in zip(
+            process_compose.config.processes.keys(),
+            process_compose.config.processes.values(),
+            process_compose.config.custom_messages.values(),
+            strict=True,
+        ):
+            logger.debug(process.description)
+            logger.debug(messages.title_start)
+            logger.debug(messages.title_stop)
+
+            try:
+                console.success(f"{messages.title_start} {process.description}")
+                process_stats = await process_compose.ping_api(name)
+                if process_stats.IsRunning and process_stats.status == "Running":
+                    console.success(f":heavy_check_mark:     {process.description}... Launched!")
+                else:
+                    console.warning(f":heavy_exclamation_mark:     {process.description} unable to launch.")
+            except PCAPIUnavailableError:
+                await asyncio.sleep(1)
+                continue
+
+    except (StopIteration, IndexError):
+        pass
 
     #######################
     # emperor zeromq monitors
     #
-    uow = await services.aget(context, UnitOfWork)
-    device = context.get("device")
-    device_zeromq_monitor_address = f"{device.monitor_zmq_ip}:{device.monitor_zmq_port}"
-    if not device:
-        console.error("unable to locate device in app context")
-        raise typer.Exit(code=0) from None
+    if 0:
+        uow = await services.aget(context, UnitOfWork)
+        device = context.get("device")
+        if not device:
+            console.error("unable to locate device in app context")
+            raise typer.Exit(code=0) from None
 
-    for project in await uow.projects.list():
-        await project.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
-        console.success(":heavy_check_mark:     Launching project [{project.name}]. Done!")
+        for project in await uow.projects.list():
+            await project.zmq_monitor_create_instance()
+            console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
-    for router in await uow.routers.list():
-        await router.device_zeromq_monitor_create_instance(device_zeromq_monitor_address)
-        console.success(":heavy_check_mark:     Launching http router.. Done!")
-        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+        for router in await uow.routers.list():
+            await router.zmq_monitor_create_instance()
+            console.success(":heavy_check_mark:     Launching http router.. Done!")
+            console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")
@@ -840,8 +855,8 @@ async def init(
             pyvenv_dir,
         )
         if default_project:
-            proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"
-            wsgi_app.device_zeromq_monitor_create_instance(proj_zmq_addr)
+            # proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"
+            wsgi_app.zmq_monitor_create_instance()
             console.success(f":heavy_check_mark:     Launching wsgi app {app_name}.. Done!")
             console.print("[bold green]WSGI App has been provisioned.")
 
@@ -1048,7 +1063,6 @@ async def main(
         "log_dir": str(conf.log_dir),
         "run_dir": str(conf.run_dir),
         "enable_tuntap_router": conf.ENABLE_TUNTAP_ROUTER,
-        "enable_zeromq_monitor": conf.ENABLE_ZEROMQ_MONITOR,
         "enable_dir_monitor": conf.ENABLE_DIR_MONITOR,
     }
     device = await get_or_create_device(

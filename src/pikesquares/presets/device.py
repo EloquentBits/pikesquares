@@ -113,9 +113,9 @@ class DeviceSection(Section):
                 # str(Path(self._runtime_dir) / f"{device.service_id}-stats.sock"),
                 # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
             )
-        if device.enable_zeromq_monitor:
+        if device.zmq_monitor_address:
             self.empire.set_emperor_params(
-                vassals_home=device.zeromq_monitor_address,
+                vassals_home=device.uwsgi_zmq_monitor_address,
                 # vassals_home = f"zmq://tcp://{device.EMPEROR_ZMQ_ADDRESS}",
                 name="PikeSquares Server",
                 spawn_asap=True,

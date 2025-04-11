@@ -1,6 +1,6 @@
 # import logging
 from abc import ABC, abstractmethod
-from typing import Generic, Type, TypeVar
+from typing import Generic, TypeVar, Sequence
 
 import structlog
 from sqlmodel import and_, select
@@ -16,6 +16,7 @@ from pikesquares.domain.router import (
     # HttpsRouter,
 )
 from pikesquares.domain.wsgi_app import WsgiApp
+from pikesquares.domain.monitors import ZMQMonitor
 
 # logger = logging.getLogger("uvicorn.error")
 # logger.setLevel(logging.DEBUG)
@@ -93,12 +94,12 @@ class GenericRepository(Generic[T], ABC):
 class GenericSqlRepository(GenericRepository[T], ABC):
     """Generic SQL Repository."""
 
-    def __init__(self, session: AsyncSession, model_cls: Type[T]) -> None:
+    def __init__(self, session: AsyncSession, model_cls: type[T]) -> None:
         """Creates a new repository instance.
 
         Args:
             session (AsyncSession): SQLModel session.
-            model_cls (Type[T]): SQLModel class type.
+            model_cls (type[T]): SQLModel class type.
         """
         self._session = session
         self._model_cls = model_cls
@@ -152,7 +153,6 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         stmt = self._construct_list_stmt(**filters)
         logger.debug(f"LIST SQL -> {str(stmt)}")
         results = await self._session.exec(stmt)
-        logger.debug(results)
         return results.all()
 
     async def add(self, record: T) -> T:
@@ -172,7 +172,6 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         if record is not None:
             await self._session.delete(record)
             await self._session.flush()
-            await record.delete_config_from_filesystem()
 
 
 class DeviceReposityBase(GenericRepository[Device], ABC):
@@ -239,7 +238,7 @@ class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
             logger.debug(obj)
             return obj
 
-    async def get_by_device_id(self, device_id: str) -> Project | None:
+    async def get_by_device_id(self, device_id: str) -> Sequence[Project] | None:
         stmt = select(Project).where(Project.device_id == device_id)
         results = await self._session.exec(stmt)
         if results:
@@ -267,7 +266,7 @@ class RouterRepository(GenericSqlRepository[BaseRouter], RouterReposityBase):
             logger.debug(obj)
             return obj
 
-    async def get_by_device_id(self, device_id: str) -> BaseRouter | None:
+    async def get_by_device_id(self, device_id: str) -> list[BaseRouter] | None:
         stmt = select(BaseRouter).where(BaseRouter.device_id == device_id)
         results = await self._session.exec(stmt)
         if results:
@@ -298,3 +297,29 @@ class WsgiAppRepository(GenericSqlRepository[WsgiApp], WsgiAppReposityBase):
         results = await self._session.exec(stmt)
         if results:
             return results.all()
+
+
+class ZMQMonitorRepositoryBase(GenericRepository[ZMQMonitor], ABC):
+    """ZMQMonitor repository."""
+
+    @abstractmethod
+    async def get_by_transport(self, transport: str) -> ZMQMonitor | None:
+        raise NotImplementedError()
+
+
+class ZMQMonitorRepository(GenericSqlRepository[ZMQMonitor], ZMQMonitorRepositoryBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, ZMQMonitor)
+
+    async def get_by_transport(self, transport: str) -> ZMQMonitor | None:
+        stmt = select(ZMQMonitor).where(ZMQMonitor.transport == transport)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
+
+    # async def get_by_project_id(self, project_id: str) -> WsgiApp | None:
+    #    stmt = select(WsgiApp).where(WsgiApp.project_id == project_id)
+    #    results = await self._session.exec(stmt)
+    #    if results:
+    ##        return results.all()

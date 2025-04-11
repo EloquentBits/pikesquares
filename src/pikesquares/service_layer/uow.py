@@ -1,20 +1,21 @@
-import logging
 from abc import ABC, abstractmethod
 
 import structlog
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from pikesquares.adapters.repositories import (
-    DeviceReposityBase,
-    DeviceUWSGIOptionsReposityBase,
-    DeviceUWSGIOptionsReposity,
     DeviceRepository,
-    ProjectReposityBase,
+    DeviceReposityBase,
+    DeviceUWSGIOptionsReposity,
+    DeviceUWSGIOptionsReposityBase,
     ProjectRepository,
-    RouterReposityBase,
+    ProjectReposityBase,
     RouterRepository,
+    RouterReposityBase,
     WsgiAppRepository,
     WsgiAppReposityBase,
+    ZMQMonitorRepository,
+    ZMQMonitorRepositoryBase,
 )
 
 # logger = logging.getLogger("uvicorn.error")
@@ -32,6 +33,7 @@ class UnitOfWorkBase(ABC):
     projects: ProjectReposityBase
     routers: RouterReposityBase
     wsgi_apps: WsgiAppReposityBase
+    zmq_monitors: ZMQMonitorRepositoryBase
 
     async def __aenter__(self):
         return self
@@ -66,6 +68,7 @@ class UnitOfWork(UnitOfWorkBase):
         self.projects = ProjectRepository(self._session)
         self.routers = RouterRepository(self._session)
         self.wsgi_apps = WsgiAppRepository(self._session)
+        self.zmq_monitors = ZMQMonitorRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args):

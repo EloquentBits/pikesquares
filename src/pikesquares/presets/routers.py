@@ -111,10 +111,10 @@ class HttpsRouterSection(Section):
             fifo_file=str(self.router.fifo_file),
         )
         self.master_process.set_exit_events(reload=True)
-        self.main_process.set_basic_params(
-            # touch_reload="/srv/uwsgi/%n.http-router.ini"
-            touch_reload=str(self.router.touch_reload_file),
-        )
+        # self.main_process.set_basic_params(
+        # touch_reload="/srv/uwsgi/%n.http-router.ini"
+        #   touch_reload=str(self.router.touch_reload_file),
+        # )
         self.main_process.set_owner_params(
             uid=self.router.run_as_uid,
             gid=self.router.run_as_gid,
@@ -224,10 +224,10 @@ class HttpRouterSection(Section):
         self.master_process.set_basic_params(enable=True)
         self.master_process.set_exit_events(reload=True)
 
-        self.main_process.set_basic_params(
-            # touch_reload="/srv/uwsgi/%n.http-router.ini"
-            touch_reload=str(self.router.touch_reload_file),
-        )
+        # self.main_process.set_basic_params(
+        # touch_reload="/srv/uwsgi/%n.http-router.ini"
+        #    touch_reload=str(self.router.touch_reload_file),
+        # )
         self.main_process.set_owner_params(uid=self.router.run_as_uid, gid=self.router.run_as_gid)
         self.main_process.set_naming_params(prefix=f"{self.router_name} {self.router.service_id} ", autonaming=True)
         # host, port = address.split(':')
@@ -396,11 +396,10 @@ class TunTapRouterSection(Section):
         self.master_process.set_basic_params(enable=True)
         self.master_process.set_exit_events(reload=True)
 
-        if self.router.enable_dir_monitor:
-            self.main_process.set_basic_params(
-                # touch_reload="/srv/uwsgi/%n.http-router.ini"
-                touch_reload=str(self.router.touch_reload_file),
-            )
+        # self.main_process.set_basic_params(
+        # touch_reload="/srv/uwsgi/%n.http-router.ini"
+        #    touch_reload=str(self.router.touch_reload_file),
+        # )
         self.main_process.set_owner_params(uid=self.router.run_as_uid, gid=self.router.run_as_gid)
         self.main_process.set_naming_params(prefix=f"{self.router_name} {self.router.service_id} ", autonaming=True)
         # host, port = address.split(':')

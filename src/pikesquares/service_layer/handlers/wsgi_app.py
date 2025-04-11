@@ -26,7 +26,8 @@ async def create_wsgi_app(
         raise DjangoSettingsError("unable to detect django settings")
 
     django_settings = runtime.collected_project_metadata.get("django_settings")
-    logger.debug(django_settings.model_dump())
+
+    # logger.debug(django_settings.model_dump())
 
     django_check_messages = runtime.collected_project_metadata.get("django_check_messages", [])
 
@@ -51,5 +52,5 @@ async def create_wsgi_app(
 
     await uow.wsgi_apps.add(wsgi_app)
     await uow.commit()
-    logger.debug(f"Created {project} ")
+    logger.debug(f"Created {wsgi_app} ")
     return wsgi_app

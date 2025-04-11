@@ -1,8 +1,6 @@
+import enum
 import errno
-import grp
 import json
-import os
-import pwd
 import socket
 import traceback
 import uuid
@@ -14,35 +12,40 @@ from pathlib import Path
 
 # from typing import Any
 
-import zmq
-import zmq.asyncio
 import pydantic
 import structlog
 from aiopath import AsyncPath
 from sqlalchemy import (
-    JSON,
+    # JSON,
     DateTime,
     func,
 )
 from sqlmodel import (
     # select,
-    # Column,
+    INTEGER,
+    Column,
     Field,
+    Enum,
     # Integer,
     # String,
     # ForeignKey,
-    # Relationship,
+    Relationship,
     SQLModel,
 )
 
+
 from pikesquares import __app_name__, __version__
-from pikesquares.conf import AppConfigError
 from pikesquares.exceptions import (
     ServiceUnavailableError,
     StatsReadError,
 )
 
 logger = structlog.getLogger()
+
+
+def enum_values(enum_class: type[enum.Enum]) -> list:
+    """Get values for enum."""
+    return [status.value for status in enum_class]
 
 
 class TimeStampedBase(SQLModel):
@@ -59,20 +62,6 @@ class TimeStampedBase(SQLModel):
             "server_default": func.now(),
         },
     )
-
-
-"""
-https://github.com/fastapi/sqlmodel/discussions/906
-:w
-
-class Customer(TypedDict):
-    name: Annotated[str, Field(description="Name")]
-    tel: Annotated[NotRequired[str | None], Field(description="Tel")] = None
-
-class Factory(SQLModel):
-    customers: Annotated[list[Customer], Field(sa_type=JSON, description="Customer list")] = []
-
-"""
 
 
 class ServiceBase(TimeStampedBase, SQLModel):
@@ -111,6 +100,19 @@ class ServiceBase(TimeStampedBase, SQLModel):
     # def model_post_init(self, __context: Any) -> None:
     #    uwsgi_config = self.write_uwsgi_config()
     #    logger.debug(f"wrote config to file: {uwsgi_config}")
+    #
+    #
+    @pydantic.computed_field
+    @property
+    def zmq_monitor_address(self) -> str:
+        # if self.zmq_monitor_ip and self.zmq_monitor_port:
+        #    return f"zmq://tcp://{self.zmq_monitor_ip}:{self.zmq_monitor_port}"
+        zmq_monitor_sock = Path(self.run_dir) / f"{self.service_id}-zmq-monitor.sock"
+        return f"ipc://{zmq_monitor_sock}"
+
+    @property
+    def uwsgi_zmq_monitor_address(self) -> str:
+        return "zmq://" + self.zmq_monitor_address
 
     @pydantic.computed_field
     @property
@@ -188,74 +190,6 @@ class ServiceBase(TimeStampedBase, SQLModel):
     async def read_machine_id(cls) -> str:
         machine_id = await AsyncPath("/var/lib/dbus/machine-id").read_text(encoding="utf-8")
         return machine_id.strip()
-
-    def make_system_file(
-        self,
-        newfile: Path | str,
-        owner_username: str = "root",
-        owner_groupname: str = "pikesquares",
-        file_mode: int = 0o664,
-    ) -> Path:
-        if isinstance(newfile, str):
-            newfile = Path(newfile)
-
-        if newfile.exists():
-            return newfile
-
-        newfile.touch(mode=file_mode, exist_ok=True)
-        try:
-            owner_uid = pwd.getpwnam(owner_username)[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate user: {owner_username}") from None
-
-        try:
-            owner_gid = grp.getgrnam(owner_groupname)[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
-
-        os.chown(newfile, owner_uid, owner_gid)
-
-        return newfile
-
-    async def device_zeromq_monitor_create_instance(self, device_zeromq_monitor_address: str) -> None:
-        ctx = zmq.asyncio.Context()
-        # zmq_socket = zmq.asyncio.Socket(zmq_context, zmq.PUSH)
-        sock = ctx.socket(zmq.PUSH)
-        sock.connect(f"tcp://{device_zeromq_monitor_address}")
-        uwsgi_config = self.get_uwsgi_config()
-        await sock.send_multipart(
-            [
-                b"touch",
-                f"{self.service_id}.ini".encode(),
-                uwsgi_config.format(do_print=True).encode(),
-            ]
-        )
-
-    async def device_zeromq_monitor_restart_instance(self, device_zeromq_monitor_address: str) -> None:
-        ctx = zmq.asyncio.Context()
-        # zmq_socket = zmq.asyncio.Socket(zmq_context, zmq.PUSH)
-        sock = ctx.socket(zmq.PUSH)
-        sock.connect(f"tcp://{device_zeromq_monitor_address}")
-        uwsgi_config = self.get_uwsgi_config()
-        await sock.send_multipart(
-            [
-                b"touch",
-                f"{self.service_id}.ini".encode(),
-                uwsgi_config.format(do_print=True).encode(),
-            ]
-        )
-
-    async def device_zeromq_monitor_destroy_instance(self, device_zeromq_monitor_address: str) -> None:
-        ctx = zmq.asyncio.Context()
-        # zmq_socket = zmq.asyncio.Socket(zmq_context, zmq.PUSH)
-        sock = ctx.socket(zmq.PUSH)
-        sock.connect(f"tcp://{device_zeromq_monitor_address}")
-        await sock.send_multipart(
-            [
-                b"destroy",
-                f"{self.service_id}.ini".encode(),
-            ]
-        )
 
     @classmethod
     def read_stats(cls, stats_address: Path):

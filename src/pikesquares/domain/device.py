@@ -29,16 +29,15 @@ logger = structlog.getLogger()
 
 class Device(ServiceBase, DevicePKIMixin, table=True):
 
+    __tablename__ = "devices"
+
     machine_id: str = Field(default=None, unique=True, max_length=32)
     uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
     routers: list["BaseRouter"] = Relationship(back_populates="device")
     projects: list["Project"] = Relationship(back_populates="device")
-
-    monitor_zmq_ip: str | None = Field(default="127.0.0.1", max_length=50)
-    monitor_zmq_port: int | None = Field(default=5242)
+    zmq_monitor: "ZMQMonitor" = Relationship(back_populates="device", sa_relationship_kwargs={"uselist": False})
 
     enable_dir_monitor: bool = False
-    enable_zeromq_monitor: bool = False
     enable_tuntap_router: bool = False
 
     # def model_post_init(self, __context: Any) -> None:
@@ -59,11 +58,6 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     # async def delete_config_from_filesystem(self) -> None:
     #   await AsyncPath(self.service_config).unlink()
 
-    @pydantic.computed_field
-    @property
-    def zeromq_monitor_address(self) -> str:
-        return f"zmq://tcp://{self.monitor_zmq_ip}:{self.monitor_zmq_port}"
-
     @property
     def uwsgi_config_section_class(self) -> DeviceSection:
         return DeviceSection
@@ -78,6 +72,11 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     @property
     def tuntap_router_socket_address(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-tuntap.sock"
+
+    @pydantic.computed_field
+    @property
+    def zmq_monitor_socket_address(self) -> Path:
+        return Path(self.run_dir) / f"{self.service_id}-zeromq-monitor.sock"
 
     @pydantic.computed_field
     def stats(self) -> DeviceStats | None:
@@ -219,7 +218,7 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
     option_key: str = Field()
     option_value: str = Field()
 
-    device_id: str | None = Field(default=None, foreign_key="device.id")
+    device_id: str | None = Field(default=None, foreign_key="devices.id")
     device: Device | None = Relationship(back_populates="uwsgi_options")
     sort_order_index: int | None = Field(default=None)
 

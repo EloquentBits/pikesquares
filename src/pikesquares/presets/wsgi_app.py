@@ -163,7 +163,7 @@ class WsgiAppSection(BaseWsgiAppSection):
             name="uwsgi",
             embedded_plugins=embedded_plugins,
             owner=f"{self.wsgi_app.run_as_uid}:{self.wsgi_app.run_as_gid}",
-            touch_reload=self.wsgi_app.touch_reload_file,
+            # touch_reload=self.wsgi_app.touch_reload_file,
             # **app_options.model_dump(),
         )
         self.python.set_basic_params(

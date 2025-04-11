@@ -17,12 +17,14 @@ logger = structlog.getLogger()
 
 class BaseRouter(ServiceBase, table=True):
 
+    __tablename__ = "routers"
+
     name: str = Field(default="HTTP Router", max_length=32)
 
     address: str | None = Field(default=None, max_length=100)
     subscription_server_address: str | None = Field(default=None, max_length=100)
 
-    device_id: str | None = Field(default=None, foreign_key="device.id")
+    device_id: str | None = Field(default=None, foreign_key="devices.id")
     device: Device = Relationship(back_populates="routers")
 
     @property

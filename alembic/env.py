@@ -28,6 +28,9 @@ if config.config_file_name is not None:
 from sqlmodel import SQLModel
 
 from pikesquares.domain.base import ServiceBase
+
+from pikesquares.domain.monitors import ZMQMonitor, DirMonitor
+
 from pikesquares.domain.device import (
     Device,
     DeviceUWSGIOptions,

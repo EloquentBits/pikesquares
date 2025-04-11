@@ -34,11 +34,10 @@ async def get_or_create_project(
     else:
         logger.debug(f"Using existing sandbox project {project}")
 
-    if project.enable_dir_monitor:
-        if not await AsyncPath(project.apps_dir).exists():
-            await AsyncPath(project.apps_dir).mkdir(parents=True, exist_ok=True)
-
-        uwsgi_config = project.write_uwsgi_config()
-        logger.debug(f"wrote config to file: {uwsgi_config}")
+    # if project.enable_dir_monitor:
+    #    if not await AsyncPath(project.apps_dir).exists():
+    #        await AsyncPath(project.apps_dir).mkdir(parents=True, exist_ok=True)
+    #    uwsgi_config = project.write_uwsgi_config()
+    #    logger.debug(f"wrote config to file: {uwsgi_config}")
 
     return project

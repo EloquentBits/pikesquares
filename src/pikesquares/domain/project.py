@@ -15,16 +15,13 @@ logger = structlog.getLogger()
 
 class Project(ServiceBase, table=True):
 
+    __tablename__ = "projects"
+
     name: str = Field(default="sandbox", max_length=32)
-    device_id: str | None = Field(default=None, foreign_key="device.id")
+    device_id: str | None = Field(default=None, foreign_key="devices.id")
     device: "Device" = Relationship(back_populates="projects")
-    monitor_zmq_ip: str | None = Field(default="127.0.0.1", max_length=50)
-    monitor_zmq_port: int | None = Field(default=5252)
-
     wsgi_apps: list["WsgiApp"] = Relationship(back_populates="project")
-
-    enable_dir_monitor: bool = False
-    enable_zeromq_monitor: bool = False
+    zmq_monitor: "ZMQMonitor" = Relationship(back_populates="project", sa_relationship_kwargs={"uselist": False})
 
     @property
     def uwsgi_config_section_class(self) -> ProjectSection:
@@ -44,11 +41,6 @@ class Project(ServiceBase, table=True):
 
     def ping(self) -> None:
         print("== Project.ping ==")
-
-    @pydantic.computed_field
-    @property
-    def zeromq_monitor_address(self) -> str:
-        return f"zmq://tcp://{self.monitor_zmq_ip}:{self.monitor_zmq_port}"
 
 
 # SandboxProject = NewType("SandboxProject", Project)

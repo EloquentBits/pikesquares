@@ -63,9 +63,11 @@ class WsgiAppOptions(pydantic.BaseModel):
 
 class WsgiApp(ServiceBase, table=True):
 
+    __tablename__ = "python_wsgi_apps"
+
     name: str = Field(max_length=32)
 
-    project_id: str | None = Field(default=None, foreign_key="project.id")
+    project_id: str | None = Field(default=None, foreign_key="projects.id")
     project: Project = Relationship(back_populates="wsgi_apps")
 
     root_dir: str = Field(max_length=255)

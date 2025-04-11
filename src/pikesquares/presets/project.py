@@ -31,7 +31,7 @@ class ProjectSection(Section):
         )  # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,
-            touch_reload=str((self.project.touch_reload_file)),
+            # touch_reload=str((self.project.touch_reload_file)),
             # place here correct emperor wrapper
             # binary_path=str((Path(self.data_dir) / ".venv/bin/uwsgi").resolve())
             # binary_path=str((Path(self.project.VIRTUAL_ENV) / "bin/uwsgi").resolve())
@@ -43,7 +43,7 @@ class ProjectSection(Section):
 
         self.networking.register_socket(self.networking.sockets.default(str(self.project.socket_address)))
 
-        if project.enable_dir_monitor:
+        if 0:  # project.enable_dir_monitor:
             self.empire.set_emperor_params(
                 vassals_home=project.apps_dir,
                 name=f"PikeSquares Project {project.name}",
@@ -53,9 +53,9 @@ class ProjectSection(Section):
                 # stats_address=str(Path(self._runtime_dir) / f"{project.service_id}-stats.sock")
             )
 
-        if project.enable_zeromq_monitor:
+        if project.zmq_monitor_address:
             self.empire.set_emperor_params(
-                vassals_home=project.zeromq_monitor_address,
+                vassals_home=project.uwsgi_zmq_monitor_address,
                 name=f"PikeSquares Project {project.name}",
                 stats_address=project.stats_address,
                 spawn_asap=True,

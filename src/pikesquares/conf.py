@@ -272,7 +272,6 @@ class AppConfig(BaseSettings):
     SENTRY_DSN: pydantic.HttpUrl | None = None
     daemonize: bool = False
     ENABLE_TUNTAP_ROUTER: bool = False
-    ENABLE_ZEROMQ_MONITOR: bool = True
     ENABLE_DIR_MONITOR: bool = False
 
     # to override api_settings:

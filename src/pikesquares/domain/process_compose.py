@@ -16,7 +16,6 @@ from pikesquares.domain.device import Device
 from pikesquares.domain.managed_services import ManagedServiceBase
 from pikesquares.service_layer.uow import UnitOfWork
 
-
 logger = structlog.get_logger()
 
 
@@ -85,6 +84,11 @@ class ReadinessProbe(pydantic.BaseModel):
     failure_threshold: int = 3
 
 
+class ProcessMessages(pydantic.BaseModel):
+    title_start: str
+    title_stop: str
+
+
 class ProcessComposeProcess(pydantic.BaseModel):
     """process-compose process"""
 
@@ -106,6 +110,7 @@ class ProcessComposeConfig(pydantic.BaseModel):
     is_strict: bool = True
     log_level: str = "debug"
     processes: dict[str, ProcessComposeProcess]
+    custom_messages: dict[str, ProcessMessages]
 
 
 class ProcessCompose(ManagedServiceBase):
@@ -135,7 +140,7 @@ class ProcessCompose(ManagedServiceBase):
     async def write_config_to_disk(self) -> None:
         if self.daemon_config and await AsyncPath(self.daemon_config).exists():
             config = AsyncPath(self.daemon_config)
-            await config.write_text(to_yaml_str(self.config))
+            await config.write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
 
     async def reload(self):
         """docket-compose project update"""
@@ -172,7 +177,7 @@ class ProcessCompose(ManagedServiceBase):
             if stdout:
                 logger.debug(stdout)
             if stderr:
-                logger.debug(stderr)
+                logger.error(stderr)
             # if retcode != 0:
             #    logger.error(retcode, stdout, stderr)
             #    return False
@@ -243,27 +248,33 @@ class ProcessCompose(ManagedServiceBase):
 
 
 # factories
-async def make_api_process(conf: AppConfig) -> ProcessComposeProcess:
+async def make_api_process(conf: AppConfig) -> tuple[ProcessComposeProcess, ProcessMessages]:
     """FastAPI process-compose process"""
 
     api_port = 9544
     # cmd = f"{conf.UV_BIN} run fastapi dev --port {api_port} src/pikesquares/app/main.py"
     cmd = f"{conf.UV_BIN} run uvicorn pikesquares.app.main:app --host 0.0.0.0 --port {api_port}"
 
-    return ProcessComposeProcess(
+    process_messages = ProcessMessages(
+        title_start="!! api start title !!!",
+        title_stop="abc",
+    )
+    process = ProcessComposeProcess(
         description="PikeSquares API",
         command=cmd,
         working_dir=conf.PYTHON_VIRTUAL_ENV or Path().cwd(),
         availability=ProcessAvailability(),
         readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
     )
+    return process, process_messages
 
 
-async def make_device_process(context: dict, device: Device, conf: AppConfig) -> ProcessComposeProcess:
+async def make_device_process(
+    context: dict, device: Device, conf: AppConfig
+) -> tuple[ProcessComposeProcess, ProcessMessages]:
     """device process-compose process"""
     sqlite3_plugin = conf.plugins_dir / "sqlite3_plugin.so"
     if not sqlite3_plugin.exists():
-
         sqlite_plugin_alt = os.environ.get("PIKESQUARES_SQLITE_PLUGIN")
         if sqlite_plugin_alt and Path(sqlite_plugin_alt).exists():
             sqlite3_plugin = Path(sqlite_plugin_alt)
@@ -271,7 +282,7 @@ async def make_device_process(context: dict, device: Device, conf: AppConfig) ->
             raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {str(sqlite3_plugin)}") from None
 
     sqlite3_db = conf.data_dir / "pikesquares.db"
-    cmd = f"{conf.UWSGI_BIN} --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
+    cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
     sql = (
         f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
     )
@@ -282,7 +293,12 @@ async def make_device_process(context: dict, device: Device, conf: AppConfig) ->
     if not uwsgi_options:
         raise AppConfigError("unable to read uwsgi options for device {device.id}")
 
-    return ProcessComposeProcess(
+    process_messages = ProcessMessages(
+        title_start="!! device start title !!",
+        title_stop="abc",
+    )
+
+    process = ProcessComposeProcess(
         description="Device Manager",
         command="".join([cmd, sql]),
         working_dir=Path().cwd(),
@@ -291,13 +307,11 @@ async def make_device_process(context: dict, device: Device, conf: AppConfig) ->
         #    http_get=ReadinessProbeHttpGet()
         # ),
     )
+    return process, process_messages
 
 
 # caddy
-async def make_caddy_process(
-    conf: AppConfig,
-    http_router_port=int,
-) -> ProcessComposeProcess:
+async def make_caddy_process(conf: AppConfig, http_router_port=int) -> tuple[ProcessComposeProcess, ProcessMessages]:
     """Caddy process-compose process"""
 
     if conf.CADDY_BIN and not await AsyncPath(conf.CADDY_BIN).exists():
@@ -324,7 +338,11 @@ async def make_caddy_process(
             json.dump(data, caddy_config)
             caddy_config.truncate()
 
-    return ProcessComposeProcess(
+    process_messages = ProcessMessages(
+        title_start="!! caddy start title !!!",
+        title_stop="abc",
+    )
+    process = ProcessComposeProcess(
         description="reverse proxy",
         command=f"{conf.CADDY_BIN} run --config {caddy_config_file} --pidfile {conf.run_dir / 'caddy.pid'}",
         working_dir=Path().cwd(),
@@ -333,6 +351,7 @@ async def make_caddy_process(
         #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
         # ),
     )
+    return process, process_messages
 
 
 # dnsmasq
@@ -342,7 +361,7 @@ async def make_dnsmasq_process(
     addresses: list[str] | None = None,
     listen_address: str = "127.0.0.34",
     # http_router_port=int,
-) -> ProcessComposeProcess:
+) -> tuple[ProcessComposeProcess, ProcessMessages]:
     """dnsmasq process-compose process"""
 
     if conf.DNSMASQ_BIN and not await AsyncPath(conf.DNSMASQ_BIN).exists():
@@ -351,7 +370,12 @@ async def make_dnsmasq_process(
     cmd = f"{conf.DNSMASQ_BIN} --keep-in-foreground --port {port} --listen-address {listen_address} --no-resolv"
     for addr in addresses or ["/pikesquares.local/192.168.0.1"]:
         cmd = cmd + f" --address {addr}"
-    return ProcessComposeProcess(
+
+    process_messages = ProcessMessages(
+        title_start="!!! dnsmasq start title !!!",
+        title_stop="abc",
+    )
+    process = ProcessComposeProcess(
         description="dns resolver",
         command=cmd,
         working_dir=Path().cwd(),
@@ -360,6 +384,7 @@ async def make_dnsmasq_process(
         #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
         # ),
     )
+    return process, process_messages
 
 
 async def register_process_compose(context: dict, conf: AppConfig) -> None:
@@ -379,12 +404,23 @@ async def register_process_compose(context: dict, conf: AppConfig) -> None:
     if conf.UWSGI_BIN and not await AsyncPath(conf.UWSGI_BIN).exists():
         raise AppConfigError(f"unable locate uWSGI binary @ {conf.UWSGI_BIN}") from None
 
-    pc_config = ProcessComposeConfig(
+    api_process, api_messages = await make_api_process(conf)
+    device_process, device_messages = await make_device_process(context, device, conf)
+    caddy_process, caddy_messages = await make_caddy_process(conf, http_router.port)
+    dnsmasq_process, dnsmasq_messages = await make_dnsmasq_process(conf)
+
+    pc_config: ProcessComposeConfig = ProcessComposeConfig(
         processes={
-            "api": await make_api_process(conf),
-            "device": await make_device_process(context, device, conf),
-            "caddy": await make_caddy_process(conf, http_router.port),
-            "dnsmasq": await make_dnsmasq_process(conf),
+            "api": api_process,
+            "device": device_process,
+            "caddy": caddy_process,
+            "dnsmasq": dnsmasq_process,
+        },
+        custom_messages={
+            "api": api_messages,
+            "device": device_messages,
+            "caddy": caddy_messages,
+            "dnsmasq": dnsmasq_messages,
         },
     )
     pc_kwargs = {
