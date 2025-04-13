@@ -233,7 +233,6 @@ class AppConfig(BaseSettings):
     )
 
     app_name: str = pydantic.Field(default="pikesquares")
-    VERSION: str = pydantic.Field()
     server_run_as_uid: str = pydantic.Field(default="root")
     server_run_as_gid: str = pydantic.Field(default="root")
 
@@ -254,7 +253,6 @@ class AppConfig(BaseSettings):
         default=AsyncPath("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR"
     )
     UWSGI_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-    PYTHON_VIRTUAL_ENV: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]]
 
     SCIE_BASE: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
     SCIE_BINDINGS: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
@@ -281,8 +279,17 @@ class AppConfig(BaseSettings):
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        db_path: Path = ensure_system_path(self.data_dir / "pikesquares.db", is_dir=False)
-        return f"sqlite+aiosqlite:///{db_path}"
+        return f"sqlite+aiosqlite:///{self.db_path}"
+
+    @pydantic.computed_field
+    @property
+    def db_path(self) -> Path:
+        return ensure_system_path(self.data_dir / "pikesquares.db", is_dir=False)
+
+    @pydantic.computed_field
+    @property
+    def sqlite_plugin(self) -> Path:
+        return self.plugins_dir / "sqlite3_plugin.so"
 
     @pydantic.computed_field
     @property

@@ -36,8 +36,6 @@ class ManagedServiceBase(pydantic.BaseModel):
     @pydantic.field_validator("daemon_log", "daemon_config", mode="before")
     def ensure_daemon_files(cls, v) -> Path:
         path = Path(v)
-        logger.debug(path)
-
         file_path = Path(v)
         owner_username: str = "root"
         owner_groupname: str = "pikesquares"

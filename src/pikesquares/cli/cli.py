@@ -278,7 +278,6 @@ async def info(
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
     # console.info(f"data_dir={str(conf.DATA_DIR)}")
-    logger.debug(f"virtualenv={str(conf.PYTHON_VIRTUAL_ENV)}")
 
     # uow = await services.aget(context, UnitOfWork)
     # device = await uow.devices.get_by_id(1)
@@ -977,10 +976,6 @@ async def main(
     """
 
     logger.info(f"About to execute command: {ctx.invoked_subcommand}")
-    for key, value in os.environ.items():
-        if key.startswith(("PIKESQUARES", "SCIE", "PEX", "PYTHON_VIRTUAL_ENV")):
-            logger.info(f"{key}: {value}")
-
     is_root: bool = os.getuid() == 0
     logger.info(f"{os.getuid()=} {is_root=}")
 
@@ -995,20 +990,13 @@ async def main(
             raise typer.Exit()
         else:
             pass
+            # TODO
             # create pikesquares user and group
             # sudo useradd -u 777 pikesquares -d /var/lib/pikesquarees
 
-    pikesquares_version = version or os.environ.get("PIKESQUARES_VERSION")
-    if not pikesquares_version:
-        console.error("Unable to read the pikesquares version")
-        raise typer.Exit(1)
-
-    # console.info(f"PikeSquares: v{pikesquares_version}")
     # context = services.init_context(ctx.ensure_object(dict))
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
-
-    # https://github.com/alexdelorenzo/app_paths
 
     override_settings = {}
     try:

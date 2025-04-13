@@ -4,7 +4,7 @@ import pytest
 import structlog
 from sqlalchemy.sql import text
 
-from pikesquares.adapters.repositories import DeviceRepository
+# from pikesquares.adapters.repositories import DeviceRepository
 
 logger = structlog.getLogger()
 
@@ -100,7 +100,7 @@ async def test_repository_can_update_a_device(session, device, device_repo_mock)
 
 
 @pytest.mark.asyncio
-async def test_repository_can_delete_a_project(session, device, device_repo_mock):
+async def test_repository_can_delete_a_device(session, device, device_repo_mock):
     # device_id = await insert_device(session, service_id, machine_id)
     insert_device_sql = (
         f"INSERT INTO device (service_id, machine_id) VALUES ('{device.service_id}', '{device.machine_id}')"

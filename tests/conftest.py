@@ -1,18 +1,19 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
-from cuid import cuid
 import pytest_asyncio
 import structlog
 from asgi_lifespan import LifespanManager
+from cuid import cuid
 from httpx import ASGITransport, AsyncClient
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from pikesquares.domain.device import Device
-from pikesquares.adapters.repositories import DeviceRepository
 from pikesquares.adapters.database import DatabaseSessionManager
+from pikesquares.adapters.repositories import DeviceRepository
 from pikesquares.app.main import app, lifespan
+from pikesquares.conf import AppConfig, register_app_conf
+from pikesquares.domain.device import Device
 
 # from pikesquares.domain.device import Device
 # from pikesquares.service_layer.uow import UnitOfWork
@@ -24,6 +25,25 @@ logger = structlog.getLogger()
 def pytest_addoption(parser):
     parser.addoption("--configpath", action="store", help="Location to YAML file")
     parser.addoption("--env", action="store", help="Environment to read from YAML file")
+
+
+@pytest.fixture(name="conf")
+async def app_config_fixture():
+    app_conf = AppConfig()
+    return app_conf
+
+
+def app_config_mock(conf):
+    """
+    AppConfig async mock
+    """
+    # mock.get_by_machine_id = AsyncMock(return_value=device)
+    mock = Mock(from_spec=AppConfig)
+    # mock.get_by_id = AsyncMock(return_value=device)
+    return mock
+
+
+# SESSION/DB
 
 
 @pytest_asyncio.fixture(name="session")

@@ -27,7 +27,7 @@ class PCAPIUnavailableError(ServiceUnavailableError):
     pass
 
 
-class ProcessComposeProcessStats(pydantic.BaseModel):
+class ProcessStats(pydantic.BaseModel):
 
     IsRunning: bool
     age: int
@@ -89,7 +89,7 @@ class ProcessMessages(pydantic.BaseModel):
     title_stop: str
 
 
-class ProcessComposeProcess(pydantic.BaseModel):
+class Process(pydantic.BaseModel):
     """process-compose process"""
 
     description: str
@@ -100,23 +100,23 @@ class ProcessComposeProcess(pydantic.BaseModel):
     readiness_probe: ReadinessProbe | None = None
     disabled: bool = False
     is_daemon: bool = False
-    # depends_on: list["ProcessComposeProcess"] = []
+    # depends_on: list["Process"] = []
 
 
-class ProcessComposeConfig(pydantic.BaseModel):
+class Config(pydantic.BaseModel):
     """process-compose process config (yaml)"""
 
     version: str = "0.1"
     is_strict: bool = True
     log_level: str = "debug"
-    processes: dict[str, ProcessComposeProcess]
+    processes: dict[str, Process]
     custom_messages: dict[str, ProcessMessages]
 
 
 class ProcessCompose(ManagedServiceBase):
 
     daemon_name: str = "process-compose"
-    config: ProcessComposeConfig
+    config: Config
 
     uv_bin: Annotated[pydantic.FilePath, pydantic.Field()]
 
@@ -226,7 +226,7 @@ class ProcessCompose(ManagedServiceBase):
         if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError("unable to reach Process Compose API")
 
-    async def ping_api(self, process_name: str) -> ProcessComposeProcessStats:
+    async def ping_api(self, process_name: str) -> ProcessStats:
         if self.daemon_socket and not await AsyncPath(self.daemon_socket).exists():
             raise PCAPIUnavailableError("unable to reach Process Compose API")
 
@@ -238,9 +238,7 @@ class ProcessCompose(ManagedServiceBase):
             raise PCAPIUnavailableError("unable to reach Process Compose API")
 
         try:
-            return ProcessComposeProcessStats(
-                **next(filter(lambda p: p.get("name") == process_name, json.loads(stdout)))
-            )
+            return ProcessStats(**next(filter(lambda p: p.get("name") == process_name, json.loads(stdout))))
         except (IndexError, StopIteration):
             pass
 
@@ -248,7 +246,7 @@ class ProcessCompose(ManagedServiceBase):
 
 
 # factories
-async def make_api_process(conf: AppConfig) -> tuple[ProcessComposeProcess, ProcessMessages]:
+async def make_api_process(conf: AppConfig) -> tuple[Process, ProcessMessages]:
     """FastAPI process-compose process"""
 
     api_port = 9544
@@ -259,46 +257,31 @@ async def make_api_process(conf: AppConfig) -> tuple[ProcessComposeProcess, Proc
         title_start="!! api start title !!!",
         title_stop="abc",
     )
-    process = ProcessComposeProcess(
+    process = Process(
         description="PikeSquares API",
         command=cmd,
-        working_dir=conf.PYTHON_VIRTUAL_ENV or Path().cwd(),
+        working_dir=Path().cwd(),
         availability=ProcessAvailability(),
         readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
     )
     return process, process_messages
 
 
-async def make_device_process(
-    context: dict, device: Device, conf: AppConfig
-) -> tuple[ProcessComposeProcess, ProcessMessages]:
+async def make_device_process(device: Device, conf: AppConfig) -> tuple[Process, ProcessMessages]:
     """device process-compose process"""
-    sqlite3_plugin = conf.plugins_dir / "sqlite3_plugin.so"
-    if not sqlite3_plugin.exists():
-        sqlite_plugin_alt = os.environ.get("PIKESQUARES_SQLITE_PLUGIN")
-        if sqlite_plugin_alt and Path(sqlite_plugin_alt).exists():
-            sqlite3_plugin = Path(sqlite_plugin_alt)
-        else:
-            raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {str(sqlite3_plugin)}") from None
 
-    sqlite3_db = conf.data_dir / "pikesquares.db"
-    cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(sqlite3_plugin)} --sqlite {str(sqlite3_db)}:"
+    # if not AsyncPath(conf.sqlite_plugin_path).exists():
+    #    sqlite_plugin_alt = os.environ.get("PIKESQUARES_SQLITE_PLUGIN")
+    #    if sqlite_plugin_alt and AsyncPath(sqlite_plugin_alt).exists():
+    #        sqlite_plugin_path = AsyncPath(sqlite_plugin_alt)
+    #    else:
+    #        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {sqlite_plugin_path}") from None
+
+    cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
     sql = (
         f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
     )
-
-    uow = await services.aget(context, UnitOfWork)
-    uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
-    logger.debug(f"read {len(uwsgi_options)} uwsgi options for device {device.id}")
-    if not uwsgi_options:
-        raise AppConfigError("unable to read uwsgi options for device {device.id}")
-
-    process_messages = ProcessMessages(
-        title_start="!! device start title !!",
-        title_stop="abc",
-    )
-
-    process = ProcessComposeProcess(
+    process = Process(
         description="Device Manager",
         command="".join([cmd, sql]),
         working_dir=Path().cwd(),
@@ -307,11 +290,16 @@ async def make_device_process(
         #    http_get=ReadinessProbeHttpGet()
         # ),
     )
-    return process, process_messages
+    messages = ProcessMessages(
+        title_start="!! device start title !!",
+        title_stop="!! device stop title !!",
+    )
+
+    return process, messages
 
 
 # caddy
-async def make_caddy_process(conf: AppConfig, http_router_port=int) -> tuple[ProcessComposeProcess, ProcessMessages]:
+async def make_caddy_process(conf: AppConfig, http_router_port=int) -> tuple[Process, ProcessMessages]:
     """Caddy process-compose process"""
 
     if conf.CADDY_BIN and not await AsyncPath(conf.CADDY_BIN).exists():
@@ -342,7 +330,7 @@ async def make_caddy_process(conf: AppConfig, http_router_port=int) -> tuple[Pro
         title_start="!! caddy start title !!!",
         title_stop="abc",
     )
-    process = ProcessComposeProcess(
+    process = Process(
         description="reverse proxy",
         command=f"{conf.CADDY_BIN} run --config {caddy_config_file} --pidfile {conf.run_dir / 'caddy.pid'}",
         working_dir=Path().cwd(),
@@ -361,7 +349,7 @@ async def make_dnsmasq_process(
     addresses: list[str] | None = None,
     listen_address: str = "127.0.0.34",
     # http_router_port=int,
-) -> tuple[ProcessComposeProcess, ProcessMessages]:
+) -> tuple[Process, ProcessMessages]:
     """dnsmasq process-compose process"""
 
     if conf.DNSMASQ_BIN and not await AsyncPath(conf.DNSMASQ_BIN).exists():
@@ -375,7 +363,7 @@ async def make_dnsmasq_process(
         title_start="!!! dnsmasq start title !!!",
         title_stop="abc",
     )
-    process = ProcessComposeProcess(
+    process = Process(
         description="dns resolver",
         command=cmd,
         working_dir=Path().cwd(),
@@ -387,9 +375,11 @@ async def make_dnsmasq_process(
     return process, process_messages
 
 
-async def register_process_compose(context: dict, conf: AppConfig) -> None:
+async def register_process_compose(context: dict) -> None:
     """process-compose factory"""
 
+    uow = await services.aget(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
     device = context.get("device")
     if not device:
         raise AppConfigError("no device found in context")
@@ -405,11 +395,11 @@ async def register_process_compose(context: dict, conf: AppConfig) -> None:
         raise AppConfigError(f"unable locate uWSGI binary @ {conf.UWSGI_BIN}") from None
 
     api_process, api_messages = await make_api_process(conf)
-    device_process, device_messages = await make_device_process(context, device, conf)
+    device_process, device_messages = await make_device_process(device, conf)
     caddy_process, caddy_messages = await make_caddy_process(conf, http_router.port)
     dnsmasq_process, dnsmasq_messages = await make_dnsmasq_process(conf)
 
-    pc_config: ProcessComposeConfig = ProcessComposeConfig(
+    pc_config: Config = Config(
         processes={
             "api": api_process,
             "device": device_process,
