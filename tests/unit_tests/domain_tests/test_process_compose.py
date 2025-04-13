@@ -44,28 +44,33 @@ async def test_make_api_process(conf):
     pass
 
 
-@pytest.mark.asyncio
-async def test_make_device_process(conf, device, process_availability):
-
+@pytest.fixture()
+def device_process(device, conf, process_availability):
     cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
     sql = (
         f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
     )
-    device_process = Process(
+    return Process(
         description="Device Manager",
         command="".join([cmd, sql]),
         working_dir=conf.data_dir,
         availability=process_availability,
     )
-    device_messages = ProcessMessages(
+
+
+@pytest.fixture()
+def device_messages():
+    return ProcessMessages(
         title_start="!! device start title !!",
         title_stop="!! device stop title !!",
     )
 
+
+@pytest.mark.asyncio
+async def test_make_device_process(conf, device, device_process, device_messages):
     # with patch.object(AsyncPath, 'exists') as mock_exists:
     #    mock_exists.return_value = True
     #    .exists()
-    #
     process, messages = await make_device_process(device, conf)
 
     assert device_messages.title_start == messages.title_start
