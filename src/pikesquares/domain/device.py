@@ -92,9 +92,8 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
         except StatsReadError:
             pass
 
-    def up(self):
-        self.setup_pki()
-        super().up()
+    # def up(self):
+    #    self.setup_pki()
 
     # self.config_json["uwsgi"]["emperor-wrapper"] = str(
     #    (Path(self.VIRTUAL_ENV) / "bin/uwsgi").resolve()

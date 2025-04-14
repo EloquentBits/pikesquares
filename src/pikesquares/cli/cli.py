@@ -55,7 +55,6 @@ from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.device import get_or_create_device
 from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.domain.process_compose import ProcessComposeProcess
 from pikesquares.services.apps.django import PythonRuntimeDjango
 from pikesquares.services.apps.exceptions import (
     # PythonRuntimeCheckError,
@@ -1075,8 +1074,7 @@ async def main(
             """
 
     context["device"] = device
-
-    await register_process_compose(context, conf)
+    await register_process_compose(context)
     # pc = services.get(context, ProcessCompose)
 
     """

@@ -286,7 +286,14 @@ class AppConfig(BaseSettings):
     def db_path(self) -> Path:
         return ensure_system_path(self.data_dir / "pikesquares.db", is_dir=False)
 
-    @pydantic.computed_field
+    @property
+    def caddy_config_path(self) -> Path:
+        return ensure_system_path(self.config_dir / "caddy.json", is_dir=False)
+
+    @property
+    def caddy_config_initial(self) -> str:
+        return """{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.local": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.local"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
+
     @property
     def sqlite_plugin(self) -> Path:
         return self.plugins_dir / "sqlite3_plugin.so"

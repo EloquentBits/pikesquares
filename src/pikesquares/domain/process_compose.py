@@ -305,14 +305,12 @@ async def make_caddy_process(conf: AppConfig, http_router_port=int) -> tuple[Pro
     if conf.CADDY_BIN and not await AsyncPath(conf.CADDY_BIN).exists():
         raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
 
-    caddy_config_file = AsyncPath(conf.config_dir) / "caddy.json"
-    vhost_key = "*.pikesquares.local"
-    if not await caddy_config_file.exists():
-        caddy_config_default = """{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.local": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.local"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
-        await caddy_config_file.write_text(caddy_config_default)
+    # await AsyncPath(conf.caddy_config_path).write_text(conf.caddy_config_initial)
 
-    with open(caddy_config_file, "r+") as caddy_config:
-        data = json.load(caddy_config)
+    with open(conf.caddy_config_path, "r+") as caddy_config:
+        vhost_key = "*.pikesquares.local"
+        # data = json.load(caddy_config)
+        data = json.loads(conf.caddy_config_initial)
         apps = data.get("apps")
         routes = apps.get("http").get("servers").get(vhost_key).get("routes")
         handles = routes[0].get("handle")
@@ -327,12 +325,12 @@ async def make_caddy_process(conf: AppConfig, http_router_port=int) -> tuple[Pro
             caddy_config.truncate()
 
     process_messages = ProcessMessages(
-        title_start="!! caddy start title !!!",
-        title_stop="abc",
+        title_start="!! caddy start title !!",
+        title_stop="!! caddy stop title !!",
     )
     process = Process(
         description="reverse proxy",
-        command=f"{conf.CADDY_BIN} run --config {caddy_config_file} --pidfile {conf.run_dir / 'caddy.pid'}",
+        command=f"{conf.CADDY_BIN} run --config {conf.caddy_config_path} --pidfile {conf.run_dir / 'caddy.pid'}",
         working_dir=Path().cwd(),
         availability=ProcessAvailability(),
         # readiness_probe=ReadinessProbe(
@@ -399,7 +397,7 @@ async def register_process_compose(context: dict) -> None:
     caddy_process, caddy_messages = await make_caddy_process(conf, http_router.port)
     dnsmasq_process, dnsmasq_messages = await make_dnsmasq_process(conf)
 
-    pc_config: Config = Config(
+    pc_config = Config(
         processes={
             "api": api_process,
             "device": device_process,
@@ -425,27 +423,6 @@ async def register_process_compose(context: dict) -> None:
     }
 
     def process_compose_factory() -> ProcessCompose:
-        # if ctx.invoked_subcommand == "up":
-        #    dc = pc_kwargs.get("daemon_config")
-        #    if dc:
-        #        dc.touch(mode=0o666, exist_ok=True)
-
-        """
-        owner_username = "root"
-        owner_groupname = "pikesquares"
-        try:
-            owner_uid = pwd.getpwnam("root")[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate user: {owner_username}") from None
-
-        try:
-            owner_gid = grp.getgrnam(owner_groupname)[2]
-        except KeyError:
-            raise AppConfigError(f"unable locate group: {owner_groupname}") from None
-
-        os.chown(dc, owner_uid, owner_gid)
-        """
-
         return ProcessCompose(**pc_kwargs)
 
     services.register_factory(

@@ -1,23 +1,26 @@
-from unittest.mock import AsyncMock, Mock, patch
+from unittest import mock
+import json
 
-from aiopath import AsyncPath
 import pytest
 import structlog
 
+# from aiopath import AsyncPath
+from pikesquares.conf import AppConfig
+from pikesquares.domain import process_compose
+from pikesquares.domain.device import Device
 from pikesquares.domain.process_compose import (
     Config,
-    ProcessStats,
-    ProcessAvailability,
-    ProcessRestart,
     Process,
-    ReadinessProbeHttpGet,
-    ReadinessProbe,
+    ProcessAvailability,
     ProcessMessages,
-    register_process_compose,
+    ProcessRestart,
+    ProcessStats,
+    ReadinessProbe,
+    ReadinessProbeHttpGet,
     make_api_process,
     make_device_process,
-    make_caddy_process,
     make_dnsmasq_process,
+    register_process_compose,
 )
 
 logger = structlog.getLogger()
@@ -25,7 +28,7 @@ logger = structlog.getLogger()
 
 @pytest.mark.asyncio
 async def test_raise_exception():
-    my_mock = AsyncMock(side_effect=KeyError)
+    my_mock = mock.AsyncMock(side_effect=KeyError)
 
     with pytest.raises(KeyError):
         await my_mock()
@@ -34,7 +37,12 @@ async def test_raise_exception():
 
 
 @pytest.mark.asyncio
-async def test_register_process_compose():
+async def test_register_process_compose(
+    conf: AppConfig,
+    device: Device,
+    device_process: Process,
+    device_messages: ProcessMessages,
+):
     context = {}
     await register_process_compose(context)
 
@@ -42,28 +50,6 @@ async def test_register_process_compose():
 @pytest.mark.asyncio
 async def test_make_api_process(conf):
     pass
-
-
-@pytest.fixture()
-def device_process(device, conf, process_availability):
-    cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
-    sql = (
-        f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
-    )
-    return Process(
-        description="Device Manager",
-        command="".join([cmd, sql]),
-        working_dir=conf.data_dir,
-        availability=process_availability,
-    )
-
-
-@pytest.fixture()
-def device_messages():
-    return ProcessMessages(
-        title_start="!! device start title !!",
-        title_stop="!! device stop title !!",
-    )
 
 
 @pytest.mark.asyncio
@@ -80,8 +66,24 @@ async def test_make_device_process(conf, device, device_process, device_messages
 
 
 @pytest.mark.asyncio
-async def test_make_caddy_process(conf):
-    pass
+async def test_make_caddy_process(
+    conf: AppConfig,
+    caddy_config: str,
+    caddy_process: Process,
+    caddy_messages: ProcessMessages,
+):
+    with (
+        mock.patch("pikesquares.domain.process_compose.json.dump") as _json_dump,
+        mock.patch("pikesquares.domain.process_compose.open", mock.mock_open()) as _open,
+    ):
+        new_process, new_messages = await process_compose.make_caddy_process(conf, http_router_port=8034)
+
+        _open.assert_called_with(conf.caddy_config_path, "r+")
+        _json_dump.assert_called_once_with(json.loads(caddy_config), _open())
+
+    assert caddy_process.command == new_process.command
+    assert caddy_messages.title_start == new_messages.title_start
+    assert caddy_messages.title_stop == new_messages.title_stop
 
 
 @pytest.mark.asyncio
