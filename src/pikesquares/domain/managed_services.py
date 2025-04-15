@@ -39,7 +39,7 @@ class ManagedServiceBase(pydantic.BaseModel):
         chdir: Path | None = None,
         cmd_env: dict[str, str] | None = None,
         # run_as_user: str = "pikesquares",
-    ) -> tuple[int, str, str]:
+    ) -> tuple[int | None, str | None, str | None]:
 
         if not cmd_args:
             raise Exception(f"no args provided for e {self.daemon_name} command")

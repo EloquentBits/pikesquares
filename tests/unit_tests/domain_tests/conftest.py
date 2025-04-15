@@ -5,6 +5,7 @@ import pytest
 
 
 from pikesquares.domain.process_compose import (
+    ProcessCompose,
     Config,
     ProcessStats,
     ProcessAvailability,
@@ -39,6 +40,14 @@ def device_process(device, conf, process_availability):
 
 
 @pytest.fixture
+def device_messages():
+    return ProcessMessages(
+        title_start="!! device start title !!",
+        title_stop="!! device stop title !!",
+    )
+
+
+@pytest.fixture
 def api_messages():
     return ProcessMessages(
         title_start="!! api start title !!",
@@ -47,7 +56,16 @@ def api_messages():
 
 
 @pytest.fixture
-def api_process(device, conf, process_availability): ...
+def api_process(conf, process_availability):
+    api_port = 9544
+    cmd = f"{conf.UV_BIN} run uvicorn pikesquares.app.main:app --host 0.0.0.0 --port {api_port}"
+    return Process(
+        description="PikeSquares API",
+        command=cmd,
+        working_dir=conf.data_dir,
+        availability=process_availability,
+        readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
+    )
 
 
 @pytest.fixture
@@ -147,6 +165,8 @@ def dnsmasq_messages():
 
 @pytest.fixture
 def dnsmasq_process(conf, process_availability):
+    port = 8034
+    listen_address = "127.0.0.34"
     cmd = f"{conf.DNSMASQ_BIN} --keep-in-foreground --port {port} --listen-address {listen_address} --no-resolv"
     cmd = cmd + " --address /pikesquares.local/192.168.0.1"
     return Process(
@@ -160,7 +180,7 @@ def dnsmasq_process(conf, process_availability):
     )
 
 
-@pytest.fixture
+@pytest.fixture(name="config_fixture")
 def config(
     device_messages,
     device_process,
@@ -187,7 +207,7 @@ def config(
     )
 
 
-def process_compose_config_mock():
+def process_compose_config_mock(conf):
     """
     Config mock
     """
@@ -208,10 +228,26 @@ def process_compose_config_mock():
     api_process = Process(
         description="PikeSquares API",
         command=cmd,
-        working_dir=Path().cwd(),
+        working_dir=conf.data_dir,
         availability=ProcessAvailability(),
         readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
     )
 
     # mock.get_by_id = AsyncMock(return_value=device)
     return mock
+
+
+@pytest.fixture(name="process_compose_fixture")
+def process_compose(conf, config_fixture):
+
+    pc_kwargs = {
+        "config": config_fixture,
+        "daemon_name": "process-compose",
+        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
+        "daemon_config": conf.config_dir / "process-compose.yaml",
+        "daemon_log": conf.log_dir / "process-compose.log",
+        "daemon_socket": conf.run_dir / "process-compose.sock",
+        "data_dir": conf.data_dir,
+        "uv_bin": conf.UV_BIN,
+    }
+    return ProcessCompose(**pc_kwargs)

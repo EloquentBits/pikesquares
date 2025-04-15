@@ -9,17 +9,15 @@ from pikesquares.conf import AppConfig
 from pikesquares.domain import process_compose
 from pikesquares.domain.device import Device
 from pikesquares.domain.process_compose import (
-    Config,
     Process,
-    ProcessAvailability,
     ProcessMessages,
-    ProcessRestart,
-    ProcessStats,
-    ReadinessProbe,
-    ReadinessProbeHttpGet,
-    make_api_process,
+    # ProcessRestart,
+    # ProcessStats,
+    # ReadinessProbe,
+    # ReadinessProbeHttpGet,
+    # make_api_process,
     make_device_process,
-    make_dnsmasq_process,
+    # make_dnsmasq_process,
     register_process_compose,
 )
 
@@ -89,3 +87,16 @@ async def test_make_caddy_process(
 @pytest.mark.asyncio
 async def test_make_dnsmasq_process(conf):
     pass
+
+
+@pytest.mark.asyncio
+async def test_process_compose_config(config_fixture):
+
+    assert len(config_fixture.processes) == 4
+    assert len(config_fixture.custom_messages) == 4
+
+
+@pytest.mark.asyncio
+async def test_process_compose(config_fixture, process_compose_fixture):
+
+    assert process_compose_fixture.config == config_fixture
