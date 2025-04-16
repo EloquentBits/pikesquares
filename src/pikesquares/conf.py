@@ -43,8 +43,16 @@ def parse_cors(v: Any) -> list[str] | str:
     raise ValueError(v)
 
 
-class APISettings(pydantic.BaseModel):
 
+
+class APISettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        # Use top level .env file (one level above ./backend/)
+        env_file="/home/jvved/dev/pikesquares/src/pikesquares/.env-app",
+        # env_file="../.env-app",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days
@@ -407,3 +415,5 @@ def register_app_conf(
             raise AppConfigError("invalid config. giving up.")
 
     register_factory(context, AppConfig, conf_factory)
+
+settings = APISettings()

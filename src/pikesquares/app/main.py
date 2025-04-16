@@ -12,8 +12,8 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from asgi_lifespan import LifespanManager
 
+from pikesquares.conf import settings
 from pikesquares.app.api.main import api_router
-from pikesquares.app.core.config import settings
 from pikesquares.adapters.database import DatabaseSessionManager
 # from pikesquares.service_layer.uow import UnitOfWork
 
@@ -25,8 +25,8 @@ logger = structlog.get_logger()
 
 # def custom_generate_unique_id(route: APIRoute) -> str:
 #    return f"{route.tags[0]}-{route.name}"
-
 logger.debug(f"{settings.SQLALCHEMY_DATABASE_URI=}")
+
 
 if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
     sentry_sdk.init(dsn=str(settings.SENTRY_DSN), enable_tracing=True)
