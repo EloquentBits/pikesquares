@@ -8,6 +8,7 @@ from cuid import cuid
 from httpx import ASGITransport, AsyncClient
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
+from testfixtures import TempDirectory, Replacer
 
 from pikesquares.adapters.database import DatabaseSessionManager
 from pikesquares.adapters.repositories import DeviceRepository
@@ -21,15 +22,54 @@ from pikesquares.domain.device import Device
 
 logger = structlog.getLogger()
 
+pytest_plugins = ("testfixtures",)
+
 
 def pytest_addoption(parser):
     parser.addoption("--configpath", action="store", help="Location to YAML file")
     parser.addoption("--env", action="store", help="Environment to read from YAML file")
 
 
+@pytest.fixture()
+def data_dir():
+    with TempDirectory() as data_dir:
+        yield data_dir
+
+
+@pytest.fixture()
+def config_dir():
+    with TempDirectory() as config_dir:
+        yield config_dir
+
+
+@pytest.fixture()
+def log_dir():
+    with TempDirectory() as log_dir:
+        yield log_dir
+
+
+@pytest.fixture()
+def run_dir():
+    with TempDirectory() as run_dir:
+        yield run_dir
+
+
 @pytest.fixture(name="conf")
-async def app_config_fixture():
+async def app_config_fixture(data_dir, config_dir, log_dir, run_dir):
+
     app_conf = AppConfig()
+    r = Replacer()
+    r.in_environ("PIKESQUARES_DATA_DIR", data_dir.as_string())
+    r.in_environ("PIKESQUARES_CONFIG_DIR", config_dir.as_string())
+    r.in_environ("PIKESQUARES_LOG_DIR", log_dir.as_string())
+    r.in_environ("PIKESQUARES_RUN_DIR", run_dir.as_string())
+    # r.replace("pikesquares.conf.AppConfig.data_dir", data_dir)
+    # r.replace("pikesquares.conf.AppConfig.config_dir", config_dir)
+    # r.replace("pikesquares.conf.AppConfig.log_dir", data_dir)
+    # r.replace("pikesquares.conf.AppConfig.run_dir", run_dir)
+    import ipdb
+
+    ipdb.set_trace()
     return app_conf
 
 
