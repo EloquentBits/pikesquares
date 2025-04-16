@@ -125,7 +125,7 @@ class ProcessCompose(ManagedServiceBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.cmd_args = ["--unix-socket", self.daemon_socket]
+        self.cmd_args = ["--unix-socket", str(self.daemon_socket)]
         self.cmd_env = {
             # TODO use shellingham library
             "COMPOSE_SHELL": os.environ.get("SHELL"),
