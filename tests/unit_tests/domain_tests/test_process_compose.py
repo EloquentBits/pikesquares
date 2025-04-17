@@ -132,8 +132,6 @@ async def test_process_compose_up(process_compose_fixture, run_dir, config_dir, 
     r.replace("plumbum.commands.base.Popen", m_popen)
     m_popen.set_command("".join(pc_up_cmd), stdout=b"o", stderr=b"e")
 
-    # import ipdb
-    # ipdb.set_trace()
     compare(await process_compose_fixture.up(), b"o")
 
     process = call.Popen(pc_up_cmd, stderr=PIPE, stdout=PIPE)

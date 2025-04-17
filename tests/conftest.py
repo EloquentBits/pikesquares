@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from testfixtures import TempDirectory, Replacer
+from polyfactory.factories.pydantic_factory import ModelFactory
 
 from pikesquares.adapters.database import DatabaseSessionManager
 from pikesquares.adapters.repositories import DeviceRepository
@@ -54,22 +55,31 @@ def run_dir():
         yield run_dir
 
 
+class AppConfigFactory(ModelFactory[AppConfig]): ...
+
+
 @pytest.fixture(name="conf")
 async def app_config_fixture(data_dir, config_dir, log_dir, run_dir):
-
-    app_conf = AppConfig()
-    r = Replacer()
-    r.in_environ("PIKESQUARES_DATA_DIR", data_dir.as_string())
-    r.in_environ("PIKESQUARES_CONFIG_DIR", config_dir.as_string())
-    r.in_environ("PIKESQUARES_LOG_DIR", log_dir.as_string())
-    r.in_environ("PIKESQUARES_RUN_DIR", run_dir.as_string())
+    # app_conf = AppConfig()
+    # r = Replacer()
+    # r.in_environ("PIKESQUARES_DATA_DIR", data_dir.as_string())
+    # r.in_environ("PIKESQUARES_CONFIG_DIR", config_dir.as_string())
+    # r.in_environ("PIKESQUARES_LOG_DIR", log_dir.as_string())
+    # r.in_environ("PIKESQUARES_RUN_DIR", run_dir.as_string())
     # r.replace("pikesquares.conf.AppConfig.data_dir", data_dir)
     # r.replace("pikesquares.conf.AppConfig.config_dir", config_dir)
     # r.replace("pikesquares.conf.AppConfig.log_dir", data_dir)
     # r.replace("pikesquares.conf.AppConfig.run_dir", run_dir)
-    import ipdb
+    app_conf = AppConfigFactory.build(
+        factory_use_construct=True,
+        data_dir=data_dir,
+        config_dir=config_dir,
+        run_dir=run_dir,
+        log_dir=log_dir,
+    )
+    # import ipdb
 
-    ipdb.set_trace()
+    # ipdb.set_trace()
     return app_conf
 
 

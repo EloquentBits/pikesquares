@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import structlog
 import pytest
 
+from polyfactory.factories.pydantic_factory import ModelFactory
 
 from pikesquares.domain.process_compose import (
     ProcessCompose,
@@ -19,9 +20,32 @@ from pikesquares.domain.process_compose import (
 logger = structlog.getLogger()
 
 
+class ProcessComposeFactory(ModelFactory[ProcessCompose]): ...
+
+
+class ConfigFactory(ModelFactory[Config]): ...
+
+
+class ProcessAvailabilityFactory(ModelFactory[ProcessAvailability]): ...
+
+
+class ProcessStatsFactory(ModelFactory[ProcessStats]): ...
+
+
+class ProcessFactory(ModelFactory[Process]): ...
+
+
+class ProcessMessagesFactory(ModelFactory[ProcessMessages]): ...
+
+
+class ReadinessProbeFactory(ModelFactory[ReadinessProbe]): ...
+
+
 @pytest.fixture()
 async def process_availability():
-    process_availability = ProcessAvailability()
+    process_availability = ProcessAvailabilityFactory.build(
+        factory_use_construct=True,
+    )
     return process_availability
 
 
@@ -31,7 +55,8 @@ def device_process(device, conf, process_availability):
     sql = (
         f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
     )
-    return Process(
+    return ProcessFactory.build(
+        factory_use_construct=True,
         description="Device Manager",
         command="".join([cmd, sql]),
         working_dir=conf.data_dir,
@@ -41,7 +66,8 @@ def device_process(device, conf, process_availability):
 
 @pytest.fixture
 def device_messages():
-    return ProcessMessages(
+    return ProcessMessagesFactory.build(
+        factory_use_construct=True,
         title_start="!! device start title !!",
         title_stop="!! device stop title !!",
     )
@@ -49,7 +75,8 @@ def device_messages():
 
 @pytest.fixture
 def api_messages():
-    return ProcessMessages(
+    return ProcessMessagesFactory.build(
+        factory_use_construct=True,
         title_start="!! api start title !!",
         title_stop="!! api stop title !!",
     )
@@ -59,18 +86,22 @@ def api_messages():
 def api_process(conf, process_availability):
     api_port = 9544
     cmd = f"{conf.UV_BIN} run uvicorn pikesquares.app.main:app --host 0.0.0.0 --port {api_port}"
-    return Process(
+    return ProcessFactory.build(
+        factory_use_construct=True,
         description="PikeSquares API",
         command=cmd,
         working_dir=conf.data_dir,
         availability=process_availability,
-        readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
+        readiness_probe=ReadinessProbeFactory.build(
+            factory_use_construct=True, http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
+        ),
     )
 
 
 @pytest.fixture
 def caddy_messages():
-    return ProcessMessages(
+    return ProcessMessagesFactory.build(
+        factory_use_construct=True,
         title_start="!! caddy start title !!",
         title_stop="!! caddy stop title !!",
     )
@@ -144,7 +175,8 @@ def caddy_config_default():
 @pytest.fixture
 def caddy_process(conf, process_availability):
     caddy_config_file = conf.config_dir / "caddy.json"
-    return Process(
+    return ProcessFactory.build(
+        factory_use_construct=True,
         description="reverse proxy",
         command=f"{conf.CADDY_BIN} run --config {caddy_config_file} --pidfile {conf.run_dir / 'caddy.pid'}",
         working_dir=conf.data_dir,
@@ -157,7 +189,8 @@ def caddy_process(conf, process_availability):
 
 @pytest.fixture
 def dnsmasq_messages():
-    return ProcessMessages(
+    return ProcessMessagesFactory.build(
+        factory_use_construct=True,
         title_start="!! dnsmasq start title !!",
         title_stop="!! dnsmasq stop title !!",
     )
@@ -169,7 +202,8 @@ def dnsmasq_process(conf, process_availability):
     listen_address = "127.0.0.34"
     cmd = f"{conf.DNSMASQ_BIN} --keep-in-foreground --port {port} --listen-address {listen_address} --no-resolv"
     cmd = cmd + " --address /pikesquares.local/192.168.0.1"
-    return Process(
+    return ProcessFactory.build(
+        factory_use_construct=True,
         description="dns resolver",
         command=cmd,
         working_dir=conf.data_dir,
@@ -191,7 +225,8 @@ def config(
     dnsmasq_messages,
     dnsmasq_process,
 ):
-    return Config(
+    return ConfigFactory.build(
+        factory_use_construct=True,
         processes={
             "api": api_process,
             "device": device_process,
@@ -250,4 +285,4 @@ def process_compose(conf, config_fixture):
         "data_dir": conf.data_dir,
         "uv_bin": conf.UV_BIN,
     }
-    return ProcessCompose(**pc_kwargs)
+    return ProcessComposeFactory.build(factory_use_construct=True, **pc_kwargs)
