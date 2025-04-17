@@ -50,6 +50,9 @@ class ManagedServiceBase(pydantic.BaseModel):
                 logger.debug(f"{cmd_env=}")
 
             # with pl_local.as_user(run_as_user):
+            # import ipdb
+
+            # ipdb.set_trace()
             with pl_local.cwd(chdir or self.data_dir):
                 retcode, stdout, stderr = pl_local[str(self.daemon_bin)].run(cmd_args, **{"env": cmd_env})
                 if retcode != "0":

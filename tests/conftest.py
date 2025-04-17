@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, Mock
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -9,6 +10,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from testfixtures import TempDirectory, Replacer
+from polyfactory.factories.pydantic_factory import ModelFactory
+from polyfactory import Ignore
 
 from pikesquares.adapters.database import DatabaseSessionManager
 from pikesquares.adapters.repositories import DeviceRepository
@@ -54,22 +57,50 @@ def run_dir():
         yield run_dir
 
 
+class AppConfigFactory(ModelFactory[AppConfig]):
+    data_dir = Ignore()
+    config_dir = Ignore()
+    run_dir = Ignore()
+    log_dir = Ignore()
+
+
 @pytest.fixture(name="conf")
 async def app_config_fixture(data_dir, config_dir, log_dir, run_dir):
-
-    app_conf = AppConfig()
-    r = Replacer()
-    r.in_environ("PIKESQUARES_DATA_DIR", data_dir.as_string())
-    r.in_environ("PIKESQUARES_CONFIG_DIR", config_dir.as_string())
-    r.in_environ("PIKESQUARES_LOG_DIR", log_dir.as_string())
-    r.in_environ("PIKESQUARES_RUN_DIR", run_dir.as_string())
+    # app_conf = AppConfig()
+    # r = Replacer()
+    # r.in_environ("PIKESQUARES_DATA_DIR", data_dir.as_string())
+    # r.in_environ("PIKESQUARES_CONFIG_DIR", config_dir.as_string())
+    # r.in_environ("PIKESQUARES_LOG_DIR", log_dir.as_string())
+    # r.in_environ("PIKESQUARES_RUN_DIR", run_dir.as_string())
     # r.replace("pikesquares.conf.AppConfig.data_dir", data_dir)
     # r.replace("pikesquares.conf.AppConfig.config_dir", config_dir)
     # r.replace("pikesquares.conf.AppConfig.log_dir", data_dir)
     # r.replace("pikesquares.conf.AppConfig.run_dir", run_dir)
-    import ipdb
 
-    ipdb.set_trace()
+    bin_dir = Path("~/.local/bin").expanduser()
+
+    # os.environ.get("PIKESQUARES_")
+    pc_bin = bin_dir / "process-compose"
+    dnsmasq_bin = bin_dir / "dnsmasq"
+    uv_bin = bin_dir / "uv"
+    caddy_bin = bin_dir / "caddy"
+    uwsgi_bin = bin_dir / "uwsgi"
+
+    app_conf = AppConfigFactory.build(
+        factory_use_construct=True,
+        data_dir=data_dir.as_path(),
+        config_dir=config_dir.as_path(),
+        run_dir=run_dir.as_path(),
+        log_dir=log_dir.as_path(),
+        DNSMASQ_BIN=dnsmasq_bin,
+        UV_BIN=uv_bin,
+        PROCESS_COMPOSE_BIN=pc_bin,
+        CADDY_BIN=caddy_bin,
+        UWSGI_BIN=uwsgi_bin,
+    )
+    # import ipdb
+
+    # ipdb.set_trace()
     return app_conf
 
 
