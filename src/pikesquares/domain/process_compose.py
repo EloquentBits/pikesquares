@@ -138,9 +138,12 @@ class ProcessCompose(ManagedServiceBase):
         return self.__repr__()
 
     async def write_config_to_disk(self) -> None:
-        if self.daemon_config and await AsyncPath(self.daemon_config).exists():
+        if self.daemon_config:  # and await AsyncPath(self.daemon_config).exists():
             config = AsyncPath(self.daemon_config)
             await config.write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
+            # import ipdb
+
+            # ipdb.set_trace()
 
     async def reload(self):
         """docket-compose project update"""
@@ -260,7 +263,7 @@ async def make_api_process(conf: AppConfig) -> tuple[Process, ProcessMessages]:
     process = Process(
         description="PikeSquares API",
         command=cmd,
-        working_dir=Path().cwd(),
+        working_dir=conf.data_dir,
         availability=ProcessAvailability(),
         readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
     )
@@ -284,7 +287,7 @@ async def make_device_process(device: Device, conf: AppConfig) -> tuple[Process,
     process = Process(
         description="Device Manager",
         command="".join([cmd, sql]),
-        working_dir=Path().cwd(),
+        working_dir=conf.data_dir,
         availability=ProcessAvailability(),
         # readiness_probe=ReadinessProbe(
         #    http_get=ReadinessProbeHttpGet()
@@ -331,7 +334,7 @@ async def make_caddy_process(conf: AppConfig, http_router_port=int) -> tuple[Pro
     process = Process(
         description="reverse proxy",
         command=f"{conf.CADDY_BIN} run --config {conf.caddy_config_path} --pidfile {conf.run_dir / 'caddy.pid'}",
-        working_dir=Path().cwd(),
+        working_dir=conf.data_dir,
         availability=ProcessAvailability(),
         # readiness_probe=ReadinessProbe(
         #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
@@ -364,7 +367,7 @@ async def make_dnsmasq_process(
     process = Process(
         description="dns resolver",
         command=cmd,
-        working_dir=Path().cwd(),
+        working_dir=conf.data_dir,
         availability=ProcessAvailability(),
         # readiness_probe=ReadinessProbe(
         #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)

@@ -1,9 +1,12 @@
 from unittest.mock import Mock
+from pathlib import Path
 
 import structlog
 import pytest
 
 from polyfactory.factories.pydantic_factory import ModelFactory
+from polyfactory import Ignore
+from testfixtures import TempDirectory
 
 from pikesquares.domain.process_compose import (
     ProcessCompose,
@@ -20,25 +23,60 @@ from pikesquares.domain.process_compose import (
 logger = structlog.getLogger()
 
 
-class ProcessComposeFactory(ModelFactory[ProcessCompose]): ...
+class ProcessComposeFactory(ModelFactory[ProcessCompose]):
+    daemon_bin = Ignore()
+    daemon_log = Ignore()
+    daemon_config = Ignore()
+    daemon_socket = Ignore()
+    data_dir = Ignore()
 
 
-class ConfigFactory(ModelFactory[Config]): ...
+class ConfigFactory(ModelFactory[Config]):
+
+    version = Ignore()
+    is_strict = Ignore()
+    log_level = Ignore()
+    processes = Ignore()
+    custom_messages = Ignore()
 
 
-class ProcessAvailabilityFactory(ModelFactory[ProcessAvailability]): ...
+class ProcessAvailabilityFactory(ModelFactory[ProcessAvailability]):
+
+    restart = Ignore()
+    exit_on_end = Ignore()
+    backoff_seconds = Ignore()
+    max_restarts = Ignore()
 
 
 class ProcessStatsFactory(ModelFactory[ProcessStats]): ...
 
 
-class ProcessFactory(ModelFactory[Process]): ...
+class ProcessFactory(ModelFactory[Process]):
+
+    description = Ignore()
+    command = Ignore()
+    is_elevated = Ignore()
+    working_dir = Ignore()
+    availability = Ignore()
+    readiness_probe = Ignore()
+    disabled = Ignore()
+    is_daemon = Ignore()
 
 
-class ProcessMessagesFactory(ModelFactory[ProcessMessages]): ...
+class ProcessMessagesFactory(ModelFactory[ProcessMessages]):
+
+    title_start = Ignore()
+    title_stop = Ignore()
 
 
-class ReadinessProbeFactory(ModelFactory[ReadinessProbe]): ...
+class ReadinessProbeFactory(ModelFactory[ReadinessProbe]):
+
+    http_get = Ignore()
+    initial_delay_seconds = Ignore()
+    period_secondt = Ignore()
+    timeout_secondt = Ignore()
+    success_thresholt = Ignore()
+    failure_thresholt = Ignore()
 
 
 @pytest.fixture()
@@ -202,16 +240,19 @@ def dnsmasq_process(conf, process_availability):
     listen_address = "127.0.0.34"
     cmd = f"{conf.DNSMASQ_BIN} --keep-in-foreground --port {port} --listen-address {listen_address} --no-resolv"
     cmd = cmd + " --address /pikesquares.local/192.168.0.1"
-    return ProcessFactory.build(
-        factory_use_construct=True,
-        description="dns resolver",
-        command=cmd,
-        working_dir=conf.data_dir,
-        availability=process_availability,
-        # readiness_probe=ReadinessProbe(
-        #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
-        # ),
-    )
+
+    with TempDirectory() as data_dir:
+
+        return ProcessFactory.build(
+            factory_use_construct=True,
+            description="dns resolver",
+            command=cmd,
+            working_dir=data_dir,
+            availability=process_availability,
+            # readiness_probe=ReadinessProbe(
+            #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
+            # ),
+        )
 
 
 @pytest.fixture(name="config_fixture")
@@ -272,17 +313,41 @@ def process_compose_config_mock(conf):
     return mock
 
 
+@pytest.fixture()
+def pc_log_dir():
+    with TempDirectory(create=True) as log_dir:
+        yield log_dir
+
+
+@pytest.fixture()
+def pc_data_dir():
+    with TempDirectory(create=True) as data_dir:
+        yield data_dir
+
+
+@pytest.fixture()
+def pc_config_dir():
+    with TempDirectory(create=True) as config_dir:
+        yield config_dir
+
+
+@pytest.fixture()
+def pc_run_dir():
+    with TempDirectory(create=True) as config_dir:
+        yield config_dir
+
+
 @pytest.fixture(name="process_compose_fixture")
-def process_compose(conf, config_fixture):
+def process_compose(conf, config_fixture, pc_log_dir, pc_config_dir, pc_run_dir, pc_data_dir):
 
     pc_kwargs = {
         "config": config_fixture,
         "daemon_name": "process-compose",
         "daemon_bin": conf.PROCESS_COMPOSE_BIN,
-        "daemon_config": conf.config_dir / "process-compose.yaml",
-        "daemon_log": conf.log_dir / "process-compose.log",
-        "daemon_socket": conf.run_dir / "process-compose.sock",
-        "data_dir": conf.data_dir,
+        "daemon_config": pc_config_dir.as_path() / "process-compose.yaml",
+        "daemon_log": pc_log_dir.as_path() / "process-compose.log",
+        "daemon_socket": pc_run_dir.as_path() / "process-compose.sock",
+        "data_dir": pc_data_dir.as_path(),
         "uv_bin": conf.UV_BIN,
     }
     return ProcessComposeFactory.build(factory_use_construct=True, **pc_kwargs)
