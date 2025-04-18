@@ -104,27 +104,27 @@ async def test_process_compose_config(config_fixture):
 
 
 @pytest.mark.asyncio
-async def test_process_compose(config_fixture, process_compose_fixture):
-    assert process_compose_fixture.config == config_fixture
+async def test_process_compose(config_fixture, pc):
+    assert pc.config == config_fixture
 
 
 @pytest.mark.asyncio
-async def test_process_compose_up(process_compose_fixture):
+async def test_process_compose_up(pc):
     # daemon_config = config_dir / "process-compose.yaml"
     # daemon_log = log_dir / "process-compose.log"
     # daemon_socket = run_dir / "process-compose.sock"
     pc_up_cmd = [
         "up",
         "--config",
-        str(process_compose_fixture.daemon_config),
+        str(pc.daemon_config),
         # str(daemon_config),
         "--log-file",
-        str(process_compose_fixture.daemon_log),
+        str(pc.daemon_log),
         # str(daemon_log),
         "--detached",
         "--hide-disabled",
         "--unix-socket",
-        str(process_compose_fixture.daemon_socket),
+        str(pc.daemon_socket),
         # str(daemon_socket),
     ]
     m_popen = MockPopen()
@@ -132,7 +132,9 @@ async def test_process_compose_up(process_compose_fixture):
     r.replace("plumbum.commands.base.Popen", m_popen)
     m_popen.set_command("".join(pc_up_cmd), stdout=b"o", stderr=b"e")
 
-    compare(await process_compose_fixture.up(), b"o")
+    compare(await pc.up(), True)
+
+    print(pc.daemon_config.read_text())
 
     process = call.Popen(pc_up_cmd, stderr=PIPE, stdout=PIPE)
     compare(m_popen.all_calls, expected=[process, process.communicate()])

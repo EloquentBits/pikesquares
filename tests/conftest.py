@@ -86,8 +86,9 @@ async def app_config_fixture(data_dir, config_dir, log_dir, run_dir):
     caddy_bin = bin_dir / "caddy"
     uwsgi_bin = bin_dir / "uwsgi"
 
-    app_conf = AppConfigFactory.build(
-        factory_use_construct=True,
+    # app_conf = AppConfigFactory.build(
+    app_conf = AppConfig(
+        # factory_use_construct=True,
         data_dir=data_dir.as_path(),
         config_dir=config_dir.as_path(),
         run_dir=run_dir.as_path(),
