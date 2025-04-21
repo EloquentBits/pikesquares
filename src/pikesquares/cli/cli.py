@@ -378,22 +378,21 @@ async def up(
 
     #######################
     # emperor zeromq monitors
-    #
-    if 0:
-        uow = await services.aget(context, UnitOfWork)
-        device = context.get("device")
-        if not device:
-            console.error("unable to locate device in app context")
-            raise typer.Exit(code=0) from None
+    uow = await services.aget(context, UnitOfWork)
+    device = context.get("device")
+    if not device:
+        console.error("unable to locate device in app context")
+        raise typer.Exit(code=0) from None
 
-        for project in await uow.projects.list():
-            await project.zmq_monitor_create_instance()
-            console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
+    zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    for project in await uow.projects.list():
+        await zmq_monitor.create_instance(f"{project.id}.ini", device)
+        console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
-        for router in await uow.routers.list():
-            await router.zmq_monitor_create_instance()
-            console.success(":heavy_check_mark:     Launching http router.. Done!")
-            console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+    for router in await uow.routers.list():
+        await zmq_monitor.create_instance(f"{router.id}.ini", router, zmq_monitor=zmq_monitor)
+        console.success(":heavy_check_mark:     Launching http router.. Done!")
+        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")
@@ -854,7 +853,7 @@ async def init(
         )
         if default_project:
             # proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"
-            wsgi_app.zmq_monitor_create_instance()
+            await wsgi_app.zmq_monitor_create_instance()
             console.success(f":heavy_check_mark:     Launching wsgi app {app_name}.. Done!")
             console.print("[bold green]WSGI App has been provisioned.")
 
@@ -1057,23 +1056,8 @@ async def main(
         uow,
         create_kwargs=create_kwargs,
     )
-    uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
-    logger.debug(f"read {len(uwsgi_options)} uwsgi options for device {device.id}")
-    if not uwsgi_options:
-        for uwsgi_option in device.get_uwsgi_options():
-            await uow.uwsgi_options.add(uwsgi_option)
-            await uow.commit()
-
-            """
-            existing_options = await uow.uwsgi_options.list(device_id=device.id)
-            for uwsgi_option in device.build_uwsgi_options():
-                #existing_options
-                #if uwsgi_option.option_key
-                #not in existing_options:
-                #    await uow.uwsgi_options.add(uwsgi_option)
-            """
-
     context["device"] = device
+
     await register_process_compose(context)
     # pc = services.get(context, ProcessCompose)
 

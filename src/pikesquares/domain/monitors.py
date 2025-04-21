@@ -1,28 +1,25 @@
 import enum
 import uuid
 
-# from pathlib import Path
-
-# from typing import Any
-
-import zmq
-import zmq.asyncio
-import pydantic
 import structlog
 
+# from pathlib import Path
+# from typing import Any
+import zmq
+import zmq.asyncio
+
+# from sqlalchemy_utils import ChoiceType
 from sqlmodel import (
     Field,
-    SQLModel,
     Relationship,
     # Column,
     # Enum,
+    SQLModel,
 )
-from sqlalchemy_utils import ChoiceType
 
-
+from .base import TimeStampedBase  # , enum_values
 from .device import Device
 from .project import Project
-from .base import TimeStampedBase  # , enum_values
 
 logger = structlog.getLogger()
 
@@ -68,8 +65,8 @@ class ZMQMonitor(AppMonitorBase, table=True):
 
     ip: str | None = Field(max_length=25, default=None)
     port: int | None = Field(default=None)
-    socket: str | None = Field(max_length=150, default=None)
     transport: str | None = Field(max_length=10, default=None)
+    socket: str | None = Field(max_length=150, default=None)
 
     device_id: int | None = Field(foreign_key="devices.id", unique=True)
     device: Device | None = Relationship(back_populates="zmq_monitor")
@@ -87,29 +84,33 @@ class ZMQMonitor(AppMonitorBase, table=True):
     #    )
     # )
     #
-    @pydantic.computed_field
     @property
-    def address(self) -> str | None:
+    def zmq_address(self) -> str | None:
         if self.transport == "tcp":  # ZMQMonitor.ZMQTransport.TCP:
             if self.ip and self.port:
-                return f"zmq://tcp://{self.ip}:{self.port}"
+                return f"tcp://{self.ip}:{self.port}"
 
         elif self.transport == "ipc":  # ZMQMonitor.ZMQTransport.IPC:
-            return f"zmq://ipc://{self.socket}"
+            return f"ipc://{self.socket}"
 
-    async def create_instance(self, name: str, uwsgi_config: str) -> None:
+    @property
+    def uwsgi_zmq_address(self) -> str | None:
+        return f"zmq://{self.zmq_address}"
+
+    async def create_instance(self, name: str, model: Device | Project) -> None:
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
-        if self.address:
-            logger.debug(f"connecting to ZMQ Monitor @ {self.address}")
-            sock.connect(self.address)
-            await sock.send_multipart([b"touch", name.encode(), uwsgi_config.encode])
+        if self.zmq_address:
+            logger.debug(f"connecting to ZMQ Monitor @ {self.zmq_address}")
+            uwsgi_config = model.get_uwsgi_config(zmq_monitor=self)
+            sock.connect(self.zmq_address)
+            await sock.send_multipart([b"touch", name.encode(), uwsgi_config.format(do_print=True).encode()])
 
     async def restart_instance(self, name: str, uwsgi_config: str) -> None:
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
-        if self.address:
-            sock.connect(self.address)
+        if self.zmq_address:
+            sock.connect(self.zmq_address)
             # uwsgi_config = self.get_uwsgi_config()
             # uwsgi_config.format(do_print=True)
             await sock.send_multipart([b"touch", name.encode(), uwsgi_config.encode()])
@@ -117,8 +118,8 @@ class ZMQMonitor(AppMonitorBase, table=True):
     async def destroy_instance(self, name: str) -> None:
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
-        if self.address:
-            sock.connect(self.address)
+        if self.zmq_address:
+            sock.connect(self.zmq_address)
             await sock.send_multipart([b"destroy", name.encode()])
 
 

@@ -2,6 +2,7 @@ import structlog
 from cuid import cuid
 
 from pikesquares import get_first_available_port
+from pikesquares.domain.device import Device
 from pikesquares.domain.router import BaseRouter
 from pikesquares.service_layer.uow import UnitOfWork
 
@@ -10,12 +11,13 @@ logger = structlog.getLogger()
 
 async def get_or_create_http_router(
     name: str,
-    device,
+    device: Device,
     uow: UnitOfWork,
     create_kwargs: dict,
-) -> BaseRouter:
+) -> tuple[BaseRouter, bool]:
 
     http_router = await uow.routers.get_by_name(name)
+    http_router_created = not http_router
 
     if not http_router:
         http_router_port = get_first_available_port(port=8034)
@@ -42,4 +44,4 @@ async def get_or_create_http_router(
         else:
             logger.debug(f"wrote config to file: {uwsgi_config}")
 
-    return http_router
+    return http_router, http_router_created

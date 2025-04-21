@@ -5,6 +5,7 @@ from cuid import cuid
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.service_layer.handlers.monitors import get_or_create_zmq_monitor
 
 logger = structlog.getLogger()
 
@@ -14,9 +15,10 @@ async def get_or_create_project(
     device: Device,
     uow: UnitOfWork,
     create_kwargs: dict,
-) -> Project:
+) -> tuple[Project, bool]:
 
     project = await uow.projects.get_by_name(name)
+    project_created = not project
 
     if not project:
         uwsgi_plugins = ["emperor_zeromq"]
@@ -29,10 +31,15 @@ async def get_or_create_project(
             **create_kwargs,
         )
         await uow.projects.add(project)
-        await uow.commit()
-        logger.debug(f"Created {project} ")
+        logger.debug(f"Created PROJECT {project} ")
+
+        zmq_monitor = await get_or_create_zmq_monitor(
+            uow,
+            project=project,
+        )
+        logger.debug(f"Created ZMQ_MONITOR for PROJECT {zmq_monitor}")
     else:
-        logger.debug(f"Using existing sandbox project {project}")
+        logger.debug(f"Using existing project {project}")
 
     # if project.enable_dir_monitor:
     #    if not await AsyncPath(project.apps_dir).exists():
@@ -40,4 +47,4 @@ async def get_or_create_project(
     #    uwsgi_config = project.write_uwsgi_config()
     #    logger.debug(f"wrote config to file: {uwsgi_config}")
 
-    return project
+    return project, project_created

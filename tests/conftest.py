@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import AsyncMock, Mock
 from pathlib import Path
 
@@ -14,13 +15,14 @@ from polyfactory.factories.pydantic_factory import ModelFactory
 from polyfactory import Ignore
 
 from pikesquares.adapters.database import DatabaseSessionManager
-from pikesquares.adapters.repositories import DeviceRepository
+from pikesquares.adapters.repositories import DeviceRepository, ZMQMonitorRepository
 from pikesquares.app.main import app, lifespan
 from pikesquares.conf import AppConfig, register_app_conf
 from pikesquares.domain.device import Device
+from pikesquares.domain.monitors import ZMQMonitor
 
 # from pikesquares.domain.device import Device
-# from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.service_layer.uow import UnitOfWork
 
 
 logger = structlog.getLogger()
@@ -161,6 +163,40 @@ def device_repo_mock(device):
     mock = AsyncMock(from_spec=DeviceRepository)
     mock.get_by_machine_id = AsyncMock(return_value=device)
     mock.get_by_id = AsyncMock(return_value=device)
+    return mock
+
+
+@pytest_asyncio.fixture(name="uow")
+async def uow_fixture(session):
+    async with UnitOfWork(session=session) as uow:
+        yield uow
+
+
+@pytest.fixture
+def monitor_id():
+    return str(uuid.uuid4())
+
+
+@pytest_asyncio.fixture(name="device_zmq_monitor")
+async def device_zmq_monitor_fixture(device, monitor_id):
+    with TempDirectory() as tmp:
+        return ZMQMonitor(
+            id=monitor_id,
+            socket=tmp.as_path() / "monitor.sock",
+            transport="ipc",
+            device_id=device.id,
+            device=device,
+        )
+
+
+@pytest_asyncio.fixture
+def zmq_monitor_repo_mock(device_zmq_monitor):
+    """
+    ZMQMonitorRepository async mock
+    """
+    mock = AsyncMock(from_spec=ZMQMonitorRepository)
+    mock.get_by_id = AsyncMock(return_value=device_zmq_monitor)
+    mock.add = AsyncMock(return_value=device_zmq_monitor)
     return mock
 
 
