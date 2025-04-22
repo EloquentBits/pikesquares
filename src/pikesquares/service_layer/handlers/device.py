@@ -1,7 +1,7 @@
 import structlog
 from cuid import cuid
-from aiopath import AsyncPath
 
+from pikesquares import services
 from pikesquares.conf import AppConfigError
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import Device
@@ -16,13 +16,14 @@ logger = structlog.getLogger()
 
 async def get_or_create_device(
     context: dict,
-    uow: UnitOfWork,
     create_kwargs: dict,
 ) -> Device:
 
     machine_id = await ServiceBase.read_machine_id()
     if not machine_id:
         raise AppConfigError("unable to read the machine-id")
+
+    uow = await services.aget(context, UnitOfWork)
 
     device = await uow.devices.get_by_machine_id(machine_id)
     device_created: bool = not device
@@ -66,18 +67,16 @@ async def get_or_create_device(
     )
     context["default-http-router"] = default_http_router
 
-    default_project, default_project_created = await get_or_create_project(
-        "default-project", device, uow, create_kwargs
-    )
+    default_project, default_project_created = await get_or_create_project("default-project", context, create_kwargs)
     context["default-project"] = default_project
 
-    if device.enable_dir_monitor:
-        try:
-            uwsgi_config = device.write_uwsgi_config()
-        except PermissionError:
-            logger.error("permission denied writing project uwsgi config to disk")
-        else:
-            logger.debug(f"wrote config to file: {uwsgi_config}")
+    # if device.enable_dir_monitor:
+    #    try:
+    #        uwsgi_config = device.write_uwsgi_config()
+    #    except PermissionError:
+    #        logger.error("permission denied writing project uwsgi config to disk")
+    #    else:
+    #        logger.debug(f"wrote config to file: {uwsgi_config}")
 
     if any([device_created, http_router_created, default_project_created]):
         await uow.commit()

@@ -384,13 +384,13 @@ async def up(
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
-    zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
     for project in await uow.projects.list():
-        await zmq_monitor.create_instance(f"{project.id}.ini", device)
+        await device_zmq_monitor.create_instance(f"{project.service_id}.ini", device)
         console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
     for router in await uow.routers.list():
-        await zmq_monitor.create_instance(f"{router.id}.ini", router, zmq_monitor=zmq_monitor)
+        await device_zmq_monitor.create_instance(f"{router.service_id}.ini", router)
         console.success(":heavy_check_mark:     Launching http router.. Done!")
         console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
@@ -1041,7 +1041,6 @@ async def main(
             yield uow
 
     services.register_factory(context, UnitOfWork, uow_factory)
-    uow = await services.aget(context, UnitOfWork)
 
     create_kwargs = {
         "data_dir": str(conf.data_dir),
@@ -1053,7 +1052,6 @@ async def main(
     }
     device = await get_or_create_device(
         context,
-        uow,
         create_kwargs=create_kwargs,
     )
     context["device"] = device

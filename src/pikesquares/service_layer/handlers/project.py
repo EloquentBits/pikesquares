@@ -2,6 +2,7 @@ import structlog
 from aiopath import AsyncPath
 from cuid import cuid
 
+from pikesquares import services
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork
@@ -12,10 +13,12 @@ logger = structlog.getLogger()
 
 async def get_or_create_project(
     name: str,
-    device: Device,
-    uow: UnitOfWork,
+    context: dict,
     create_kwargs: dict,
 ) -> tuple[Project, bool]:
+
+    uow = await services.aget(context, UnitOfWork)
+    device = context.get("device")
 
     project = await uow.projects.get_by_name(name)
     project_created = not project

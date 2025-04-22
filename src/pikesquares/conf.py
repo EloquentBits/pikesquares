@@ -254,6 +254,11 @@ class AppConfig(BaseSettings):
     UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     PROCESS_COMPOSE_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
+    CADDY_ENABLED: bool = True
+    DNSMASQ_ENABLED: bool = True
+    API_ENABLED: bool = True
+    DEVICE_ENABLED: bool = True
+
     # CADDY_DIR: Optional[str] = None
     # CLI_STYLE: QuestionaryStyle
 

@@ -181,7 +181,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
 
         if zmq_monitor:
             section.empire.set_emperor_params(
-                vassals_home=zmq_monitor.socket,
+                vassals_home=zmq_monitor.uwsgi_zmq_address,
                 name=f"{self.id}",
                 stats_address=self.stats_address,
                 spawn_asap=True,

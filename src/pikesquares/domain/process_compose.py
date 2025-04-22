@@ -262,7 +262,7 @@ async def make_api_process(conf: AppConfig) -> tuple[Process, ProcessMessages]:
         title_stop="abc",
     )
     process = Process(
-        disabled=True,
+        disabled=not conf.API_ENABLED,
         description="PikeSquares API",
         command=cmd,
         working_dir=conf.data_dir,
@@ -288,6 +288,7 @@ async def make_device_process(device: Device, conf: AppConfig) -> tuple[Process,
     )
     process = Process(
         description="Device Manager",
+        disabled=not conf.DEVICE_ENABLED,
         command="".join([cmd, sql]),
         working_dir=conf.data_dir,
         availability=ProcessAvailability(),
@@ -334,7 +335,7 @@ async def make_caddy_process(conf: AppConfig, http_router_port=int) -> tuple[Pro
         title_stop="!! caddy stop title !!",
     )
     process = Process(
-        disabled=True,
+        disabled=not conf.CADDY_ENABLED,
         description="reverse proxy",
         command=f"{conf.CADDY_BIN} run --config {conf.caddy_config_path} --pidfile {conf.run_dir / 'caddy.pid'}",
         working_dir=conf.data_dir,
@@ -368,7 +369,7 @@ async def make_dnsmasq_process(
         title_stop="abc",
     )
     process = Process(
-        disabled=True,
+        disabled=not conf.DNSMASQ_ENABLED,
         description="dns resolver",
         command=cmd,
         working_dir=conf.data_dir,
