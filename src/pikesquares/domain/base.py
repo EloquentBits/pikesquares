@@ -102,17 +102,10 @@ class ServiceBase(TimeStampedBase, SQLModel):
     #    logger.debug(f"wrote config to file: {uwsgi_config}")
     #
     #
-    @pydantic.computed_field
-    @property
-    def zmq_monitor_address(self) -> str:
-        # if self.zmq_monitor_ip and self.zmq_monitor_port:
-        #    return f"zmq://tcp://{self.zmq_monitor_ip}:{self.zmq_monitor_port}"
-        zmq_monitor_sock = Path(self.run_dir) / f"{self.service_id}-zmq-monitor.sock"
-        return f"ipc://{zmq_monitor_sock}"
 
-    @property
-    def uwsgi_zmq_monitor_address(self) -> str:
-        return "zmq://" + self.zmq_monitor_address
+    # @property
+    # def uwsgi_zmq_monitor_address(self) -> str:
+    #    return f"zmq://ipc://{self.zmq_monitor_socket} "
 
     @pydantic.computed_field
     @property
@@ -183,8 +176,19 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def write_uwsgi_config(self) -> Path:
         return self.uwsgi_config_section_class(self).as_configuration().tofile(self.service_config)
 
-    def get_uwsgi_config(self) -> str:
-        return self.uwsgi_config_section_class(self).as_configuration()
+    def get_uwsgi_config(self, zmq_monitor=None) -> str:
+        section = self.uwsgi_config_section_class(self)
+
+        if zmq_monitor:
+            section.empire.set_emperor_params(
+                vassals_home=zmq_monitor.uwsgi_zmq_address,
+                name=f"{self.id}",
+                stats_address=self.stats_address,
+                spawn_asap=True,
+                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+            )
+
+        return section.as_configuration()
 
     @classmethod
     async def read_machine_id(cls) -> str:

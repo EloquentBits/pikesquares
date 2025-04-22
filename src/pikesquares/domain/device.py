@@ -74,11 +74,6 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
         return Path(self.run_dir) / f"{self.service_id}-tuntap.sock"
 
     @pydantic.computed_field
-    @property
-    def zmq_monitor_socket_address(self) -> Path:
-        return Path(self.run_dir) / f"{self.service_id}-zeromq-monitor.sock"
-
-    @pydantic.computed_field
     def stats(self) -> DeviceStats | None:
 
         if not self.stats_address.exists():
@@ -107,6 +102,13 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
         uwsgi_options: list[DeviceUWSGIOptions] = []
         dvc_conf_section = DeviceSection(self)
 
+        dvc_conf_section.empire.set_emperor_params(
+            vassals_home=self.zmq_monitor.uwsgi_zmq_address,
+            name="PikeSquares Server",
+            spawn_asap=True,
+            stats_address=str(self.stats_address),
+        )
+
         for key, value in dvc_conf_section._get_options():
             uwsgi_option = DeviceUWSGIOptions(
                 option_key=key.key,
@@ -115,6 +117,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
             )
             uwsgi_options.append(uwsgi_option)
             uwsgi_option.sort_order_index = uwsgi_options.index(uwsgi_option)
+
         return uwsgi_options
 
     def start_pyuwsgi(self) -> bool:

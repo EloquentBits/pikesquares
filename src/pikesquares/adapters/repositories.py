@@ -190,9 +190,7 @@ class DeviceRepository(GenericSqlRepository[Device], DeviceReposityBase):
         stmt = select(Device).where(Device.machine_id == machine_id)
         results = await self._session.exec(stmt)
         if results:
-            logger.debug(f"{results=}")
             obj = results.one_or_none()
-            logger.debug(f"{obj=}")
             return obj
 
 
@@ -233,9 +231,7 @@ class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
         stmt = select(Project).where(Project.name == name)
         results = await self._session.exec(stmt)
         if results:
-            logger.debug(results)
             obj = results.first()
-            logger.debug(obj)
             return obj
 
     async def get_by_device_id(self, device_id: str) -> Sequence[Project] | None:
@@ -261,9 +257,7 @@ class RouterRepository(GenericSqlRepository[BaseRouter], RouterReposityBase):
         stmt = select(BaseRouter).where(BaseRouter.name == name)
         results = await self._session.exec(stmt)
         if results:
-            logger.debug(results)
             obj = results.first()
-            logger.debug(obj)
             return obj
 
     async def get_by_device_id(self, device_id: str) -> list[BaseRouter] | None:
@@ -310,6 +304,20 @@ class ZMQMonitorRepositoryBase(GenericRepository[ZMQMonitor], ABC):
 class ZMQMonitorRepository(GenericSqlRepository[ZMQMonitor], ZMQMonitorRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, ZMQMonitor)
+
+    async def get_by_device_id(self, device_id: str) -> ZMQMonitor | None:
+        stmt = select(ZMQMonitor).where(ZMQMonitor.device_id == device_id)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
+
+    async def get_by_project_id(self, project_id: str) -> ZMQMonitor | None:
+        stmt = select(ZMQMonitor).where(ZMQMonitor.project_id == project_id)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
 
     async def get_by_transport(self, transport: str) -> ZMQMonitor | None:
         stmt = select(ZMQMonitor).where(ZMQMonitor.transport == transport)

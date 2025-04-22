@@ -44,15 +44,14 @@ def parse_cors(v: Any) -> list[str] | str:
 
 
 
-
-class APISettings(BaseSettings):
     model_config = SettingsConfigDict(
         # Use top level .env file (one level above ./backend/)
-        env_file="/home/jvved/dev/pikesquares/src/pikesquares/.env-app",
+        env_file="src/pikesquares/.env-app",
         # env_file="../.env-app",
         env_ignore_empty=True,
         extra="ignore",
     )
+
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days
@@ -147,24 +146,6 @@ class APISettings(BaseSettings):
 #       run_dir = /var/run/pikesquares
 #       conf_dir = /etc/pikesquares
 #       log_dir = /var/log/pikesquares
-
-
-class SysDir(pydantic.BaseModel):
-
-    path_to_dir: pydantic.DirectoryPath = pydantic.Field()
-    env_var: str
-    dir_mode: int = 0o775
-    owner_username: str = "root"
-    owner_groupname: str = "pikesquares"
-
-
-class SysFile(pydantic.BaseModel):
-
-    path_to_file: pydantic.FilePath = pydantic.Field()
-    env_var: str
-    dir_mode: int = 0o664
-    owner_username: str = "root"
-    owner_groupname: str = "pikesquares"
 
 
 def ensure_system_path(
@@ -271,6 +252,11 @@ class AppConfig(BaseSettings):
     CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     PROCESS_COMPOSE_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+
+    CADDY_ENABLED: bool = True
+    DNSMASQ_ENABLED: bool = True
+    API_ENABLED: bool = True
+    DEVICE_ENABLED: bool = True
 
     # CADDY_DIR: Optional[str] = None
     # CLI_STYLE: QuestionaryStyle
@@ -416,4 +402,5 @@ def register_app_conf(
 
     register_factory(context, AppConfig, conf_factory)
 
-settings = APISettings()
+
+# api_settings = APISettings()

@@ -1,10 +1,10 @@
 import structlog
 from aiopath import AsyncPath
 
-# from pikesquares.domain.device import Device
+from pikesquares.domain.device import Device
 from pikesquares.domain.monitors import ZMQMonitor
 
-# from pikesquares.domain.project import Project
+from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
@@ -12,22 +12,30 @@ logger = structlog.getLogger()
 
 async def get_or_create_zmq_monitor(
     uow: UnitOfWork,
-    socket: AsyncPath,
-    # device: Device | None = None,
-    # project: Project | None = None,
+    device: Device | None = None,
+    project: Project | None = None,
 ) -> ZMQMonitor:
+    zmq_monitor = None
 
-    zmq_monitor = await uow.zmq_monitors.get_by_transport("ipc")
+    if device:
+        zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    elif project:
+        zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
 
     if not zmq_monitor:
-        zmq_monitor = ZMQMonitor(
-            socket=str(socket),
-            transport="ipc",
-            # device=device,
-            # project=project,
-        )
+        create_kwargs: dict[str, str | Project | Device] = {
+            "transport": "ipc",
+        }
+        if device:
+            create_kwargs["device"] = device
+            create_kwargs["socket"] = str(AsyncPath(device.run_dir) / f"{device.service_id}-zmq-monitor.sock")
+
+        if project:
+            create_kwargs["project"] = project
+            create_kwargs["socket"] = str(AsyncPath(project.run_dir) / f"{project.service_id}-zmq-monitor.sock")
+
+        zmq_monitor = ZMQMonitor(**create_kwargs)
         await uow.zmq_monitors.add(zmq_monitor)
-        await uow.commit()
         logger.debug(f"Created {zmq_monitor} ")
     else:
         logger.debug(f"Using existing zmq_monitor {zmq_monitor}")
