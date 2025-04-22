@@ -89,6 +89,9 @@ async def list_(ctx: typer.Context, show_id: bool = False):
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
     device = context.get("device")
+    if not device:
+        console.warning("unable to lookup device")
+        raise typer.Exit(0)
 
     projects = await uow.projects.list()
     if not len(projects):
@@ -96,14 +99,27 @@ async def list_(ctx: typer.Context, show_id: bool = False):
         raise typer.Exit()
 
     projects_out = []
+    device_stats = device.stats()
+    # import ipdb
+
+    # ipdb.set_trace()
+    if not device_stats:
+        console.warning("unable to lookup project stats")
+        raise typer.Exit(0)
+
     for project in projects:
-        projects_out.append(
-            {
-                'name': project.name,
-                'status': "status",  # get_service_status(project.get('service_id'), conf) or "Unknown",
-                'id': project.service_id,
-            }
-        )
+        try:
+            vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
+            projects_out.append(
+                {
+                    "name": project.name,
+                    "status": "running" if vassal_stats else "stopped",
+                    "id": project.service_id,
+                }
+            )
+        except StopIteration:
+            continue
+
     console.print_response(projects_out, title=f"Projects count: {len(projects)}", show_id=show_id)
 
 

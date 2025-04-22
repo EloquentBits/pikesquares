@@ -62,18 +62,13 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     def uwsgi_config_section_class(self) -> DeviceSection:
         return DeviceSection
 
-    @pydantic.computed_field
-    @property
-    def tuntap_router_stats_address(self) -> Path:
         """uWSGI Stats Server socket address"""
         return Path(self.run_dir) / f"{self.service_id}-tuntap-stats.sock"
 
-    @pydantic.computed_field
     @property
     def tuntap_router_socket_address(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-tuntap.sock"
 
-    @pydantic.computed_field
     def stats(self) -> DeviceStats | None:
 
         if not self.stats_address.exists():

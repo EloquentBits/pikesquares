@@ -43,8 +43,6 @@ def parse_cors(v: Any) -> list[str] | str:
         return v
     raise ValueError(v)
 
-
-
     model_config = SettingsConfigDict(
         # Use top level .env file (one level above ./backend/)
         env_file="src/pikesquares/.env-app",
@@ -53,11 +51,11 @@ def parse_cors(v: Any) -> list[str] | str:
         extra="ignore",
     )
 
+
 class APISettings(BaseSettings):
     model_config = SettingsConfigDict(
         # Use top level .env file (one level above ./backend/)
-        env_file="/home/jvved/dev/pikesquares/src/pikesquares/.env-app",
-        # env_file="../.env-app",
+        env_file=".env-app",
         env_ignore_empty=True,
         extra="ignore",
     )
@@ -68,9 +66,7 @@ class APISettings(BaseSettings):
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
-    BACKEND_CORS_ORIGINS: Annotated[
-        list[AnyUrl] | str, BeforeValidator(parse_cors)
-    ] = []
+    BACKEND_CORS_ORIGINS: Annotated[list[AnyUrl] | str, BeforeValidator(parse_cors)] = []
 
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
