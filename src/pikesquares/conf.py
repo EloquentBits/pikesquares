@@ -17,6 +17,7 @@ from typing import (
 from aiopath import AsyncPath
 from plumbum import local as pl_local
 import pydantic
+from pydantic import AnyUrl, BeforeValidator
 from pydantic_settings import (
     BaseSettings,
     # PydanticBaseSettingsSource,
@@ -52,6 +53,14 @@ def parse_cors(v: Any) -> list[str] | str:
         extra="ignore",
     )
 
+class APISettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        # Use top level .env file (one level above ./backend/)
+        env_file="/home/jvved/dev/pikesquares/src/pikesquares/.env-app",
+        # env_file="../.env-app",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days
@@ -59,7 +68,9 @@ def parse_cors(v: Any) -> list[str] | str:
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
-    BACKEND_CORS_ORIGINS: Annotated[list[pydantic.AnyUrl] | str, pydantic.BeforeValidator(parse_cors)] = []
+    BACKEND_CORS_ORIGINS: Annotated[
+        list[AnyUrl] | str, BeforeValidator(parse_cors)
+    ] = []
 
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
@@ -403,4 +414,4 @@ def register_app_conf(
     register_factory(context, AppConfig, conf_factory)
 
 
-# api_settings = APISettings()
+settings = APISettings()

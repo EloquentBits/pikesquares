@@ -12,9 +12,10 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from asgi_lifespan import LifespanManager
 
-from pikesquares.conf import settings
 from pikesquares.app.api.main import api_router
 from pikesquares.adapters.database import DatabaseSessionManager
+from pikesquares.conf import  settings
+
 # from pikesquares.service_layer.uow import UnitOfWork
 
 # logger = logging.getLogger("uvicorn.error")
@@ -79,10 +80,10 @@ async def on_startup():
 
 
 # Set all CORS enabled origins
-if settings.all_cors_origins:
+if  settings.all_cors_origins:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.all_cors_origins,
+        allow_origins= settings.all_cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

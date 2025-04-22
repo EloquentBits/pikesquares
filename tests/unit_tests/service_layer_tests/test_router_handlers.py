@@ -60,8 +60,10 @@ async def test_creates_router(device):
                 "log_dir": tmp.path,
             }
 
-        router = await get_or_create_http_router("sandbox", device, uow, create_kwargs)
 
+        router, router_created = await get_or_create_http_router("sandbox", device, uow, create_kwargs)
+
+        assert router_created is True
         assert uow.committed
         assert uow.routers.added_router.name == "sandbox"
         assert uow.routers.added_router is not None
@@ -85,8 +87,8 @@ async def test_get_router(device, fix_router):
             "log_dir": tmp.path,
         }
 
-    router = await get_or_create_http_router("sandbox", device, uow, create_kwargs)
-
+    router, router_created = await get_or_create_http_router("sandbox", device, uow, create_kwargs)
+    assert router_created is False
     assert router is fix_router
     assert uow.routers.added_router is None
     assert uow.committed is False
