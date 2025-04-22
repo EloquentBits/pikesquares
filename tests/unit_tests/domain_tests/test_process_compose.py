@@ -26,7 +26,7 @@ from pikesquares.domain.process_compose import (
     # make_api_process,
     make_device_process,
     # make_dnsmasq_process,
-    register_process_compose,
+    register_process_compose, make_dnsmasq_process,
 )
 
 logger = structlog.getLogger()
@@ -93,9 +93,13 @@ async def test_make_caddy_process(
 
 
 @pytest.mark.asyncio
-async def test_make_dnsmasq_process(conf):
-    pass
+async def test_make_dnsmasq_process(conf, dnsmasq_process, dnsmasq_messages):
+    process, messages = await make_dnsmasq_process(conf, port=5353, listen_address= "127.0.0.34")
 
+    assert dnsmasq_messages.title_start == messages.title_start
+    assert dnsmasq_messages.title_stop == messages.title_stop
+    assert dnsmasq_process.description == process.description
+    assert dnsmasq_process.command == process.command
 
 @pytest.mark.asyncio
 async def test_process_compose_config(config_fixture):

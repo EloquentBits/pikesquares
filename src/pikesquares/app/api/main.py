@@ -8,7 +8,8 @@ from pikesquares.app.api.routes.services import (
     # users, 
     # utils
 )
-from pikesquares.app.core.config import settings
+from pikesquares.conf import APISettings
+
 
 api_router = APIRouter()
 
