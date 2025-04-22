@@ -19,7 +19,7 @@ from pikesquares.adapters.repositories import DeviceRepository, ZMQMonitorReposi
 from pikesquares.app.main import app, lifespan
 from pikesquares.conf import AppConfig, register_app_conf
 from pikesquares.domain.device import Device
-from pikesquares.domain.monitors import ZMQMonitor
+from pikesquares.domain.router import BaseRouter
 
 # from pikesquares.domain.device import Device
 from pikesquares.service_layer.uow import UnitOfWork
@@ -198,6 +198,11 @@ def zmq_monitor_repo_mock(device_zmq_monitor):
     mock.get_by_id = AsyncMock(return_value=device_zmq_monitor)
     mock.add = AsyncMock(return_value=device_zmq_monitor)
     return mock
+
+@pytest.fixture
+def fix_router():
+    return BaseRouter(name = "sandbox", id = "monitor_789", address="192.168.1.1",
+        subscription_server_address="http://subscriptions.example.com")
 
 
 """

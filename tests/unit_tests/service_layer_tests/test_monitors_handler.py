@@ -45,6 +45,7 @@ async def test_creates_zmq_monitor():
         assert uow.zmq_monitors.added_zmq_monitor.socket == str(socket)
 
 
+
 @pytest.mark.asyncio
 async def test_get_zmq_monitor():
     existing = ZMQMonitor(
