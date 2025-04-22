@@ -182,7 +182,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
         if zmq_monitor:
             section.empire.set_emperor_params(
                 vassals_home=zmq_monitor.uwsgi_zmq_address,
-                name=f"{self.id}",
+                name=f"{self.service_id}",
                 stats_address=self.stats_address,
                 spawn_asap=True,
                 # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),

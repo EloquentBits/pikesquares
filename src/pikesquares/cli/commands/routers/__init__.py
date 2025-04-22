@@ -1,24 +1,26 @@
 from pathlib import Path
-# from typing import Optional
-# import shutil
 
-import typer
-from typing_extensions import Annotated
-from tinydb import TinyDB, where, Query
-from cuid import cuid
+# from cuid import cuid
 import questionary
 import structlog
 
+# from typing import Optional
+# import shutil
+import typer
+from tinydb import Query, TinyDB, where
+from typing_extensions import Annotated
+
+from pikesquares import get_first_available_port, services
+from pikesquares.cli.cli import run_async
 from pikesquares.conf import AppConfig
-from pikesquares import services
-from pikesquares import get_first_available_port
+from pikesquares.service_layer.uow import UnitOfWork
 
 # from pikesquares.services.router import (
 #    https_router_up,
 #    https_routers_all,
 # )
-
 from ...console import console
+
 # from ..validators import ServiceNameValidator
 # from ..cli import app
 
@@ -48,14 +50,12 @@ app = typer.Typer()
 #     )
 
 
-@app.command(
-    "routers",
-    rich_help_panel="Show",
-    short_help="Show all routers.\nAliases:[i] routers, routers list"
-)
+@app.command("routers", rich_help_panel="Show", short_help="Show all routers.\nAliases:[i] routers, routers list")
 @app.command("list")
-def list_(
+@run_async
+async def list_(
     ctx: typer.Context,
+    show_id: bool = False,
 ):
     """
     Show all Virtual Hosts on current device
@@ -64,38 +64,32 @@ def list_(
     """
 
     context = ctx.ensure_object(dict)
-    # db = services.get(context, TinyDB)
-    conf = services.get(context, AppConfig)
+    conf = await services.aget(context, AppConfig)
+    uow = await services.aget(context, UnitOfWork)
+    device = context.get("device")
 
-    # print(db)
-    logger.debug(conf)
-
-    """
-    routers = https_routers_all(conf)
+    routers = await uow.routers.list()
     if not len(routers):
-        console.warning("No routers were created, nothing to show!")
+        console.warning("No Routers were initialized, nothing to show!")
         raise typer.Exit()
 
     routers_out = []
     for router in routers:
-        routers_out.append({
-            "name": router.get("name"),
-            "status": router.get_service_status(
-                Path(conf.run_dir) / router.get('service_id') + "-stats.sock",
-            ) or "Unknown",
-            'id': router.get('service_id')
-        })
-    console.print_response(
-        routers_out, title=f"Routers count: {len(routers)}", show_id=show_id
-    )
-    """
+        routers_out.append(
+            {
+                "name": router.name,
+                "status": "status",  # router.get_service_status( Path(conf.run_dir) / router.get('service_id') + "-stats.sock",) or "Unknown",
+                "id": router.service_id,
+            }
+        )
+    console.print_response(routers_out, title=f"Routers count: {len(routers)}", show_id=show_id)
 
 
 @app.command(short_help="Create a new router.\nAliases:[i] new")
 @app.command("new", hidden=True)
 def create(
     ctx: typer.Context,
-    #project_name: Optional[str] = typer.Argument("", help="New project name"),
+    # project_name: Optional[str] = typer.Argument("", help="New project name"),
 ):
     """
     Create a new router
@@ -121,14 +115,15 @@ def create(
     #    conf,
     #    f"router_{cuid()}",
     #    f"0.0.0.0:{port}",
-    #)
+    # )
 
-#@proj_cmd.command(short_help="Start project.\nAliases:[i] run")
-#@proj_cmd.command("run", hidden=True)
-#def start(
+
+# @proj_cmd.command(short_help="Start project.\nAliases:[i] run")
+# @proj_cmd.command("run", hidden=True)
+# def start(
 #    ctx: typer.Context,
 #    project_name: Optional[str] = typer.Argument("", help="Project to start"),
-#):
+# ):
 #    """
 #    Start project.
 
@@ -139,8 +134,8 @@ def create(
 
 #    device_db = obj['device']
 
-    #for project_doc in db.table('projects'):
-    #    project_up(conf, project_doc.service_id)
+# for project_doc in db.table('projects'):
+#    project_up(conf, project_doc.service_id)
 
 #    if not project_name:
 #        available_projects = {p.get('name'): p.get('cuid') for p in obj['projects']()}
@@ -160,26 +155,26 @@ def create(
 #        )
 #        return
 
-    #project = HandlerFactory.make_handler(project_type)(
-    #    service_id=project_id,
-    #    conf=conf,
-    #)
-    #if project.is_started():
-    #    console.info(f"Project '{project_name}' is already started!")
-    #    return
+# project = HandlerFactory.make_handler(project_type)(
+#    service_id=project_id,
+#    conf=conf,
+# )
+# if project.is_started():
+#    console.info(f"Project '{project_name}' is already started!")
+#    return
 
-    #project.prepare_service_config()
-    #project.connect()
-    #project.start()
-    #console.success(f"Project '{project_name}' was successfully started!")
+# project.prepare_service_config()
+# project.connect()
+# project.start()
+# console.success(f"Project '{project_name}' was successfully started!")
 
 
-#@proj_cmd.command(short_help="Stop project.\nAliases:[i] down")
-#@proj_cmd.command("down", hidden=True)
-#def stop(
+# @proj_cmd.command(short_help="Stop project.\nAliases:[i] down")
+# @proj_cmd.command("down", hidden=True)
+# def stop(
 #    ctx: typer.Context,
 #    project_name: Optional[str] = typer.Argument("", help="Project to stop"),
-#):
+# ):
 #    """
 #    Stop project.
 
@@ -206,21 +201,21 @@ def create(
 #        )
 #        return
 
-    #project = HandlerFactory.make_handler(project_type)(
-    #    service_id=project_id,
-    #    conf=conf,
-    #)
-    #if not project.is_started():
-    #    console.info(f"Project '{project_name}' is not started!")
-    #    return
+# project = HandlerFactory.make_handler(project_type)(
+#    service_id=project_id,
+#    conf=conf,
+# )
+# if not project.is_started():
+#    console.info(f"Project '{project_name}' is not started!")
+#    return
 
-    #project.connect()
-    #project.stop()
-    #console.success(f"Project '{project_name}' was successfully stopped!")
+# project.connect()
+# project.stop()
+# console.success(f"Project '{project_name}' was successfully stopped!")
 
 
-#@routers_cmd.command("logs")
-#def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
+# @routers_cmd.command("logs")
+# def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
 #    obj = ctx.ensure_object(dict)
 #    conf = obj.get("conf")
 
@@ -243,12 +238,13 @@ def create(
 #            hint=f"Check the device log file for possible errors"
 #        )
 
+
 @app.command(short_help="Delete router\nAliases:[i] delete, rm")
 @app.command("rm", hidden=True)
 def delete(
     ctx: typer.Context,
     router_address: Annotated[str, typer.Option("--router-address", help="router to remove")] = "",
-    ):
+):
     """
     Delete existing https router
 
@@ -269,19 +265,17 @@ def delete(
             raise typer.Exit()
 
         for router_to_delete in questionary.checkbox(
-                f"Select the proxy(s) to be deleted?",
-                choices=[r.get("address") for r in routers_all],
-                ).ask():
+            f"Select the proxy(s) to be deleted?",
+            choices=[r.get("address") for r in routers_all],
+        ).ask():
             selected_router_cuid = get_router(router_to_delete).get("service_id")
             console.info(f"selected proxy to delete: {selected_router_cuid=}")
-            assert(selected_router_cuid)
+            assert selected_router_cuid
 
             # rm router configs
-            #router = routers_db.get(Query().service_id == selected_router_cuid)
+            # router = routers_db.get(Query().service_id == selected_router_cuid)
 
-            selected_router_config_path = Path(conf.CONFIG_DIR) / \
-                "projects" \
-                / f"{selected_router_cuid}.json"
+            selected_router_config_path = Path(conf.CONFIG_DIR) / "projects" / f"{selected_router_cuid}.json"
             console.info(f"{selected_router_config_path=}")
 
             if Path(selected_router_config_path).exists():
@@ -290,7 +284,7 @@ def delete(
 
             # rm router runtimes
             # note uwsgi vacuum should remove all of these
-            #for file in path(conf.run_dir).iterdir():
+            # for file in path(conf.run_dir).iterdir():
             #    if selected_router_cuid in str(file.resolve()):
             #        file.unlink(missing_ok=true)
             #        console.info(f"deleted app run files @ {str(file)}")
@@ -337,7 +331,8 @@ def delete(
     device_db.remove(where('cuid') == selected_project_cuid)
 
     console.success(f"Removed project '{selected_project_name}'!")
-    """ 
+    """
+
 
 if __name__ == "__main__":
     app()

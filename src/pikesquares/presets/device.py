@@ -76,7 +76,10 @@ class DeviceSection(Section):
             gid=device.run_as_gid,
         )
         self.main_process.set_naming_params(
-            prefix="[[ PikeSquares App ]] ", suffix="[suffix]", name="PikeSquares App [name]", autonaming=False
+            prefix="[[ PikeSquares ]] ",
+            suffix=f" [{device.service_id}]",
+            name="PikeSquares Device ",
+            autonaming=False,
         )
         # self.set_placeholder("vconf_run_dir", self.runtime_dir)
         self.main_process.set_pid_file(

@@ -37,7 +37,12 @@ class ProjectSection(Section):
             # binary_path=str((Path(self.project.VIRTUAL_ENV) / "bin/uwsgi").resolve())
         )
         self.main_process.set_owner_params(uid=self.project.run_as_uid, gid=self.project.run_as_gid)
-        self.main_process.set_naming_params(prefix=f"{self.project.name} {self.project.service_id} ", autonaming=True)
+        self.main_process.set_naming_params(
+            prefix="[[ PikeSquares Project]] ",
+            suffix=f" [{self.project.service_id}]",
+            name=f"{self.project.name} ",
+            autonaming=False,
+        )
 
         self.main_process.set_pid_file(str(self.project.pid_file))
 
@@ -52,8 +57,7 @@ class ProjectSection(Section):
                 # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
                 # stats_address=str(Path(self._runtime_dir) / f"{project.service_id}-stats.sock")
             )
-
-        if project.zmq_monitor_address:
+        if 0:  # project.zmq_monitor_address:
             self.empire.set_emperor_params(
                 vassals_home=project.uwsgi_zmq_monitor_address,
                 name=f"PikeSquares Project {project.name}",

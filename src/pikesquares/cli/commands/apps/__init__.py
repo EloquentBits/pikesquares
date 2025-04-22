@@ -1,35 +1,34 @@
 import time
-from pathlib import Path
 from enum import Enum
-from typing_extensions import Annotated
-from typing import Optional
 from glob import glob
+from pathlib import Path
+from typing import Optional
 
-import typer
 import questionary
 import randomname
-from cuid import cuid
-from tinydb import TinyDB, where, Query
 import structlog
+import typer
+from cuid import cuid
+from tinydb import Query, TinyDB, where
+from typing_extensions import Annotated
 
-from .validators import NameValidator
-
-from pikesquares.conf import AppConfig
 from pikesquares import services
-from pikesquares.services.project import SandboxProject, Project
+from pikesquares.conf import AppConfig
 from pikesquares.services.app import WsgiApp
+from pikesquares.services.data import Router, WsgiAppOptions
+from pikesquares.services.project import Project, SandboxProject
 from pikesquares.services.router import (
-    DefaultHttpsRouter,
     DefaultHttpRouter,
+    DefaultHttpsRouter,
 )
-from pikesquares.services.data import WsgiAppOptions, Router
-from ...console import console
 
+from ...console import console
 from .utils import (
-    provision_base_dir,
     create_venv,
+    provision_base_dir,
     venv_pip_install,
 )
+from .validators import NameValidator
 
 logger = structlog.get_logger()
 
@@ -50,8 +49,7 @@ app = typer.Typer()
 @app.command()
 def detect(
     ctx: typer.Context,
-    ):
-
+):
     """
     Detect app runtime
 
@@ -70,14 +68,11 @@ def detect(
 @app.command()
 def create(
     ctx: typer.Context,
-    project: Optional[str] = typer.Option("", "--in", "--in-project",
-        help="Name or id of project to add new app"
-    ),
+    project: Optional[str] = typer.Option("", "--in", "--in-project", help="Name or id of project to add new app"),
     name: Annotated[str, typer.Option("--name", "-n", help="app name")] = "",
     source: Annotated[str, typer.Option("--source", "-s", help="app source")] = "",
     # app_type: Annotated[str, typer.Option("--app-type", "-t", help="app source")] =  "",
     # router_address: Annotated[str, typer.Option("--router-address", "-r", help="ssl router address")] =  "",
-
     base_dir: Annotated[
         Path | None,
         typer.Option(
@@ -90,13 +85,11 @@ def create(
             readable=True,
             resolve_path=True,
             help="app base directory",
-        )
+        ),
     ] = None,
-
     # runtime: Annotated[str, typer.Option("--runtime", "-r", help="app language runtime")] = "",
     runtime: Annotated[
-        LanguageRuntime,
-        typer.Option("--runtime", "-r", case_sensitive=False, help="app language runtime")
+        LanguageRuntime, typer.Option("--runtime", "-r", case_sensitive=False, help="app language runtime")
     ] = LanguageRuntime.python,
 ):
     """
@@ -124,12 +117,15 @@ def create(
 
     base_dir = base_dir or provision_base_dir(custom_style)
     app_options["root_dir"] = base_dir
-    app_name = name or questionary.text(
-        "Choose a name for your app: ",
-        default=randomname.get_name().lower(),
-        style=custom_style,
-        validate=NameValidator,
-    ).ask()
+    app_name = (
+        name
+        or questionary.text(
+            "Choose a name for your app: ",
+            default=randomname.get_name().lower(),
+            style=custom_style,
+            validate=NameValidator,
+        ).ask()
+    )
 
     if not app_name:
         raise typer.Exit()
@@ -182,7 +178,7 @@ def create(
 
     # WSGI Module
     wsgi_module = questionary.text(
-            "Enter your app Python WSGI module name: ",
+        "Enter your app Python WSGI module name: ",
         default="application",
         style=custom_style,
     ).ask()
@@ -198,7 +194,7 @@ def create(
     pip_req_files = glob(f"{base_dir}/**/requirements.txt", recursive=True)
     if len(pip_req_files):
         pip_req_file = questionary.select(
-                "Select a pip requirements file: ",
+            "Select a pip requirements file: ",
             choices=pip_req_files + [questionary.Separator(), CHOSE_FILE_MYSELF],
             style=custom_style,
         ).ask()
@@ -251,12 +247,12 @@ def create(
     app_options["workers"] = 3
 
     wsgi_app = WsgiApp(
-            conf=services.get(context, AppConfig),
-            db=db,
-            service_id=service_id,
-            name=app_name,
-            app_options=WsgiAppOptions(**app_options),
-            build_config_on_init=True,
+        conf=services.get(context, AppConfig),
+        db=db,
+        service_id=service_id,
+        name=app_name,
+        app_options=WsgiAppOptions(**app_options),
+        build_config_on_init=True,
     )
     with console.status(f"`{app_name}` is starting...", spinner="earth"):
         wsgi_app.up()
@@ -276,11 +272,10 @@ def create(
         # wsgi_app.service_config.unlink()
         # console.info(f"removed app config {wsgi_app.name}")
 
-
     # [uWSGI http pid 3758459] rounded-hip.pikesquares.dev:8443 => marking 127.0.0.1:4018 as failed
     # [notify-socket] [subscription ack] rounded-hip.pikesquares.dev:8443 => new node: 127.0.0.1:4018
 
-    #if selected_kit_name == "Custom":
+    # if selected_kit_name == "Custom":
     #    project_path = project_db.get(where('name') == project_id).get('path')
     #    opts = console.ask_for_options(
     #        service.default_options,
@@ -288,31 +283,29 @@ def create(
     #        label=lambda v: f"Enter {v.replace('_', ' ')}"
     #    )
     #    service_options.update(opts)
-    #service.prepare_service_config(
+    # service.prepare_service_config(
     #    **service_options
-    #)
-    #console.success(f"Starting {service_type} service")
-    #service.start()
+    # )
+    # console.success(f"Starting {service_type} service")
+    # service.start()
 
-    #service_data = {
+    # service_data = {
     #    "cuid": service_id,
     #    "type": service_type,
     #    "path": str(Path(service.root_dir).resolve()),
     #    "parent_id": service.project_id,
     #    "options": service_options,
     #    "virtual_hosts": [vh.dict() for vh in service.virtual_hosts]
-    #}
+    # }
 
-    #project_db = obj['project'](project_id)
-    #apps = project_db.get(where('name') == project_id).get('apps')
-    #apps.append(service_data)
-    #project_db.update({'apps': apps}, where('name') == project_id)
-    #console.success(f"{service_type} '{service_data.get('cuid')}' was successfully created in project '{project_id}'!")
+    # project_db = obj['project'](project_id)
+    # apps = project_db.get(where('name') == project_id).get('apps')
+    # apps.append(service_data)
+    # project_db.update({'apps': apps}, where('name') == project_id)
+    # console.success(f"{service_type} '{service_data.get('cuid')}' was successfully created in project '{project_id}'!")
 
 
-@app.command(
-    short_help="Show all apps in specific project.\nAliases:[i] apps, app list"
-)
+@app.command(short_help="Show all apps in specific project.\nAliases:[i] apps, app list")
 @app.command()
 def ls(
     ctx: typer.Context,
@@ -350,10 +343,10 @@ def ls(
     if not project:
         projects_db = db.table('projects')
         project = questionary.select(
-            "Select project: ", 
+            "Select project: ",
             choices=[p.get("name") for p in projects_db.all()],
             style=custom_style,
-            ).ask()
+        ).ask()
         project_id = get_project_id(project).get("service_id")
         assert project_id
     else:
@@ -368,21 +361,21 @@ def ls(
         # status = get_service_status(
         #    (Path(conf.RUN_DIR) / f"{service_id}-stats.sock")
         # )
-        apps_out.append({
-            "name": app.get("name"),
-            # 'status': status or "uknown",
-            "id": service_id,
-        })
+        apps_out.append(
+            {
+                "name": app.get("name"),
+                # 'status': status or "uknown",
+                "id": service_id,
+            }
+        )
     if not apps_out:
         console.info("You have not created any apps yet.")
         console.info("Create apps using the `pikesquares apps create` command")
     else:
         console.print_response(
-            apps_out,
-            title=f"Apps in project '{project}'",
-            show_id=show_id,
-            exclude=["parent_id", "options"]
+            apps_out, title=f"Apps in project '{project}'", show_id=show_id, exclude=["parent_id", "options"]
         )
+
 
 @app.command(short_help="Delete existing app by name or id\nAliases:[i] delete, rm")
 @app.command()
@@ -428,9 +421,7 @@ def delete(
             # rm app configs
             app = apps_db.get(Query().service_id == selected_app_cuid)
             project_id = app.get("project_id")
-            selected_app_config_path = device.config_dir / \
-                f"{project_id}" / "apps" \
-                / f"{selected_app_cuid}.json"
+            selected_app_config_path = device.config_dir / f"{project_id}" / "apps" / f"{selected_app_cuid}.json"
 
             if selected_app_config_path.exists():
                 selected_app_config_path.unlink(missing_ok=True)

@@ -386,11 +386,11 @@ async def up(
 
     device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
     for project in await uow.projects.list():
-        await device_zmq_monitor.create_instance(f"{project.service_id}.ini", device)
+        await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
         console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
     for router in await uow.routers.list():
-        await device_zmq_monitor.create_instance(f"{router.service_id}.ini", router)
+        await device_zmq_monitor.create_or_restart_instance(f"{router.service_id}.ini", router)
         console.success(":heavy_check_mark:     Launching http router.. Done!")
         console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
@@ -886,12 +886,13 @@ def tail_service_log(
     #     console.info(line)
 
 
-from .commands import apps, devices, managed_services, routers
+from .commands import apps, devices, managed_services, routers, projects
 
 app.add_typer(apps.app, name="apps")
 app.add_typer(routers.app, name="routers")
+app.add_typer(projects.app, name="projects")
 app.add_typer(devices.app, name="devices")
-app.add_typer(managed_services.app, name="services")
+# app.add_typer(managed_services.app, name="services")
 
 
 def _version_callback(value: bool) -> None:

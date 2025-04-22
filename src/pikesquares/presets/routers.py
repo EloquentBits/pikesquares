@@ -87,7 +87,7 @@ class RouterHttps(_RouterHttp):
 
 
 class HttpsRouterSection(Section):
-    router_name: str = "[[ PikeSquares App / HTTPS Router ]]"
+    router_name: str = "[[ PikeSquares  HTTPS Router ]] "
 
     def __init__(self, router, **kwargs):
         super().__init__(
@@ -184,7 +184,7 @@ class HttpsRouterSection(Section):
 
 
 class HttpRouterSection(Section):
-    router_name = "[[ PikeSquares App / HTTP Router ]]"
+    router_name = "[[ PikeSquares  HTTP Router ]] "
 
     # def __init__(
     #    self,
@@ -229,7 +229,12 @@ class HttpRouterSection(Section):
         #    touch_reload=str(self.router.touch_reload_file),
         # )
         self.main_process.set_owner_params(uid=self.router.run_as_uid, gid=self.router.run_as_gid)
-        self.main_process.set_naming_params(prefix=f"{self.router_name} {self.router.service_id} ", autonaming=True)
+        self.main_process.set_naming_params(
+            prefix="[[ PikeSquares HTTP Router ]] ",
+            suffix=f" [{self.router.service_id}]",
+            name=self.router_name,
+            autonaming=False,
+        )
         # host, port = address.split(':')
         # if host in ('0.0.0.0', '127.0.0.1'):
         #    address = f":{port}"

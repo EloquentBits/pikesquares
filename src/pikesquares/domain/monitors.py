@@ -97,29 +97,24 @@ class ZMQMonitor(AppMonitorBase, table=True):
     def uwsgi_zmq_address(self) -> str | None:
         return f"zmq://{self.zmq_address}"
 
-    async def create_instance(self, name: str, model: Device | Project) -> None:
+    async def create_or_restart_instance(self, name: str, model: Device | Project) -> None:
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
         if self.zmq_address:
-            logger.debug(f"connecting to ZMQ Monitor @ {self.zmq_address}")
+            logger.debug(f"Launching {model.__class__.__name__} {model.service_id} in ZMQ Monitor @ {self.zmq_address}")
             uwsgi_config = model.get_uwsgi_config(zmq_monitor=self)
+            logger.debug(uwsgi_config)
             sock.connect(self.zmq_address)
             await sock.send_multipart([b"touch", name.encode(), uwsgi_config.format(do_print=True).encode()])
+        else:
+            logger.info(f"{model.__class__.__name__} no zmq socket found @ {self.zmq_address}")
 
-    async def restart_instance(self, name: str, uwsgi_config: str) -> None:
+    async def destroy_instance(self, name: str, model: Device | Project) -> None:
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
         if self.zmq_address:
             sock.connect(self.zmq_address)
-            # uwsgi_config = self.get_uwsgi_config()
-            # uwsgi_config.format(do_print=True)
-            await sock.send_multipart([b"touch", name.encode(), uwsgi_config.encode()])
-
-    async def destroy_instance(self, name: str) -> None:
-        ctx = zmq.asyncio.Context()
-        sock = ctx.socket(zmq.PUSH)
-        if self.zmq_address:
-            sock.connect(self.zmq_address)
+            logger.debug(f"Stopping {model.__class__.__name__} {model.service_id} in ZMQ Monitor @ {self.zmq_address}")
             await sock.send_multipart([b"destroy", name.encode()])
 
 
