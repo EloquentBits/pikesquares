@@ -334,7 +334,9 @@ async def up(
     context = ctx.ensure_object(dict)
     # pc = await services.aget(context, process_compose.ProcessCompose)
     conf = await services.aget(context, AppConfig)
-    process_compose = services.get(context, ProcessCompose)
+
+    await register_process_compose(context)
+    process_compose = await services.aget(context, ProcessCompose)
 
     if conf and conf.pyvenvs_dir.exists():
         logger.debug(f"python venvs directory @ {conf.pyvenvs_dir} is available")
@@ -1061,8 +1063,6 @@ async def main(
         create_kwargs=create_kwargs,
     )
     context["device"] = device
-
-    await register_process_compose(context)
     # pc = services.get(context, ProcessCompose)
 
     """

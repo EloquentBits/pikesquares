@@ -13,6 +13,7 @@ from cuid import cuid
 # )
 from pikesquares import services
 from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.service_layer.handlers.project import get_or_create_project
 from pikesquares.conf import AppConfig
 from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
@@ -38,7 +39,8 @@ app = typer.Typer()
 @app.command(
     # "new", hidden=True
 )
-def create(
+@run_async
+async def create(
     ctx: typer.Context,
     project_name: Optional[str] = typer.Argument("", help="New project name"),
 ):
@@ -47,15 +49,17 @@ def create(
 
     Aliases: [i] create, new
     """
-    obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
-
-    if not project_name:
-        default_project_name = randomname.get_name()
-        project_name = console.ask(f"Project name?", default=default_project_name, validators=[ServiceNameValidator])
-
-    # console.success(f"Project '{project_name}' was successfully created!")
-    project_up(conf, project_name, f"project_{cuid()}")
+    context = ctx.ensure_object(dict)
+    name = project_name or console.ask(
+        "Please input a Project name or hit enter to use a random value",
+        default=randomname.get_name(),
+        validators=[ServiceNameValidator],
+    )
+    project = await get_or_create_project(name, context)
+    if project:
+        console.success(f"Project '{project.name}' was successfully created!")
+    else:
+        console.warning("Failed to create a Project")
 
 
 @app.command("up")

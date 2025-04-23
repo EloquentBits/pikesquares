@@ -167,38 +167,23 @@ def ensure_system_path(
 
     is_root: bool = os.getuid() == 0
 
-    if not is_root and not new_path.exists():
+    if not is_root and not Path(new_path).exists():
         raise AppConfigError(f"unable locate user: {owner_username}") from None
 
-    new_path: local.LocalPath = local.path(Path(new_path))
-    if not new_path.exists():
+    local_path: local.LocalPath = local.path(Path(new_path))
+    if not local_path.exists():
         # Set the current numeric umask and return the previous umask.
         old_umask = os.umask(0o002)
+        os.setgid(grp.getgrnam("pikesquares")[2])
         try:
             if is_dir:
-                new_path.mkdir()
+                local_path.mkdir()
             else:
-                new_path.touch()
+                local_path.touch()
         finally:
             os.umask(old_umask)
 
-    try:
-        owner_uid = owner_uid or pwd.getpwnam(owner_username)[2]
-    except KeyError:
-        raise AppConfigError(f"unable locate user: {owner_username}") from None
-
-    try:
-        owner_gid = owner_gid or grp.getgrnam(owner_groupname)[2]
-    except KeyError:
-        raise AppConfigError(f"unable locate group: {owner_groupname}") from None
-
-    if new_path.stat().st_uid != owner_uid or new_path.stat().st_gid != owner_gid:
-        try:
-            new_path.chown(owner_uid, owner_gid)
-        except PermissionError:
-            raise AppConfigError(f"permission denied in chown {new_path} to: {owner_uid}:{owner_gid}") from None
-
-    return Path(new_path)
+    return Path(local_path)
 
 
 def get_lift_file_section(lift_file: Path, lift_file_key: str):

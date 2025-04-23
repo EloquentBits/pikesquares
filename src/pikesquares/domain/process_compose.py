@@ -143,9 +143,6 @@ class ProcessCompose(ManagedServiceBase):
         if self.daemon_config:  # and await AsyncPath(self.daemon_config).exists():
             config = AsyncPath(self.daemon_config)
             await config.write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
-            # import ipdb
-
-            # ipdb.set_trace()
 
     async def reload(self):
         """docket-compose project update"""
@@ -175,6 +172,7 @@ class ProcessCompose(ManagedServiceBase):
             "--hide-disabled",
         ] + self.cmd_args
 
+        # Set the current numeric umask and return the previous umask.
         old_umask = os.umask(0o002)
         os.setgid(grp.getgrnam("pikesquares")[2])
         try:
@@ -193,8 +191,6 @@ class ProcessCompose(ManagedServiceBase):
             return False
         finally:
             os.umask(old_umask)
-
-        # ensure_system_path(self.daemon_socket, is_dir=False)
 
         return True
 
@@ -264,7 +260,7 @@ async def make_api_process(conf: AppConfig) -> tuple[Process, ProcessMessages]:
         disabled=not conf.API_ENABLED,
         description="PikeSquares API",
         command=cmd,
-        working_dir=conf.data_dir,
+        working_dir=Path().cwd(),
         availability=ProcessAvailability(),
         readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
     )

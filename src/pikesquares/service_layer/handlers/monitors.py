@@ -14,7 +14,7 @@ async def get_or_create_zmq_monitor(
     uow: UnitOfWork,
     device: Device | None = None,
     project: Project | None = None,
-) -> ZMQMonitor:
+) -> ZMQMonitor | None:
     zmq_monitor = None
 
     if device:
@@ -35,8 +35,13 @@ async def get_or_create_zmq_monitor(
             create_kwargs["socket"] = str(AsyncPath(project.run_dir) / f"{project.service_id}-zmq-monitor.sock")
 
         zmq_monitor = ZMQMonitor(**create_kwargs)
-        await uow.zmq_monitors.add(zmq_monitor)
-        logger.debug(f"Created {zmq_monitor} ")
+        try:
+            await uow.zmq_monitors.add(zmq_monitor)
+            await uow.commit()
+            logger.debug(f"Created {zmq_monitor} ")
+        except Exception as exc:
+            logger.exception(exc)
+            await uow.rollback()
     else:
         logger.debug(f"Using existing zmq_monitor {zmq_monitor}")
 

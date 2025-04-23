@@ -14,8 +14,7 @@ logger = structlog.getLogger()
 async def get_or_create_project(
     name: str,
     context: dict,
-    create_kwargs: dict,
-) -> tuple[Project, bool]:
+) -> Project | None:
 
     uow = await services.aget(context, UnitOfWork)
     device = context.get("device")
@@ -23,7 +22,7 @@ async def get_or_create_project(
     project = await uow.projects.get_by_name(name)
     project_created = not project
 
-    if not project:
+    if not project and device:
         uwsgi_plugins = ["emperor_zeromq"]
 
         project = Project(
@@ -31,16 +30,22 @@ async def get_or_create_project(
             name=name,
             device=device,
             uwsgi_plugins=", ".join(uwsgi_plugins),
-            **create_kwargs,
+            data_dir=str(device.data_dir),
+            config_dir=str(device.config_dir),
+            log_dir=str(device.log_dir),
+            run_dir=str(device.run_dir),
         )
-        await uow.projects.add(project)
-        logger.debug(f"Created PROJECT {project} ")
-
-        zmq_monitor = await get_or_create_zmq_monitor(
-            uow,
-            project=project,
-        )
-        logger.debug(f"Created ZMQ_MONITOR for PROJECT {zmq_monitor}")
+        try:
+            await uow.projects.add(project)
+            zmq_monitor = await get_or_create_zmq_monitor(
+                uow,
+                project=project,
+            )
+            logger.debug(f"Created ZMQ_MONITOR for PROJECT {zmq_monitor}")
+            await uow.commit()
+        except Exception as exc:
+            logger.exception(exc)
+            await uow.rollback()
     else:
         logger.debug(f"Using existing project {project}")
 
@@ -50,4 +55,4 @@ async def get_or_create_project(
     #    uwsgi_config = project.write_uwsgi_config()
     #    logger.debug(f"wrote config to file: {uwsgi_config}")
 
-    return project, project_created
+    return project

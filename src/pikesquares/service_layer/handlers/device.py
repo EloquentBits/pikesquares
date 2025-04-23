@@ -17,16 +17,14 @@ logger = structlog.getLogger()
 async def get_or_create_device(
     context: dict,
     create_kwargs: dict,
-) -> Device:
+) -> Device | None:
 
     machine_id = await ServiceBase.read_machine_id()
     if not machine_id:
         raise AppConfigError("unable to read the machine-id")
 
     uow = await services.aget(context, UnitOfWork)
-
     device = await uow.devices.get_by_machine_id(machine_id)
-    device_created: bool = not device
     if not device:
         device_cuid = f"device_{cuid()}"
         uwsgi_plugins = []
@@ -41,44 +39,41 @@ async def get_or_create_device(
             machine_id=machine_id,
             **create_kwargs,
         )
-        device = await uow.devices.add(device)
-        logger.debug(f"Created {device=} for {machine_id=}")
+        try:
+            device = await uow.devices.add(device)
+            context["device"] = device
 
-        zmq_monitor = await get_or_create_zmq_monitor(uow, device=device)
-        context["device-zmq-monitor"] = zmq_monitor
-        device.zmq_monitor = zmq_monitor
-        # uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
-        # if not uwsgi_options:
-        for uwsgi_option in device.get_uwsgi_options():
-            await uow.uwsgi_options.add(uwsgi_option)
-            """
-            existing_options = await uow.uwsgi_options.list(device_id=device.id)
-            for uwsgi_option in device.build_uwsgi_options():
-                #existing_options
-                #if uwsgi_option.option_key
-                #not in existing_options:
-                #    await uow.uwsgi_options.add(uwsgi_option)
-            """
+            zmq_monitor = await get_or_create_zmq_monitor(uow, device=device)
+            context["device-zmq-monitor"] = zmq_monitor
+            device.zmq_monitor = zmq_monitor
+            # uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
+            # if not uwsgi_options:
+            for uwsgi_option in device.get_uwsgi_options():
+                await uow.uwsgi_options.add(uwsgi_option)
+                """
+                existing_options = await uow.uwsgi_options.list(device_id=device.id)
+                for uwsgi_option in device.build_uwsgi_options():
+                    #existing_options
+                    #if uwsgi_option.option_key
+                    #not in existing_options:
+                    #    await uow.uwsgi_options.add(uwsgi_option)
+                """
+            default_http_router = await get_or_create_http_router("default-http-router", context)
+            context["default-http-router"] = default_http_router
 
-        # device.routers.add(default_http_router)
+            default_project = await get_or_create_project("default-project", context)
+            context["default-project"] = default_project
 
-    default_http_router, http_router_created = await get_or_create_http_router(
-        "default-http-router", device, uow, create_kwargs
-    )
-    context["default-http-router"] = default_http_router
-
-    default_project, default_project_created = await get_or_create_project("default-project", context, create_kwargs)
-    context["default-project"] = default_project
-
-    # if device.enable_dir_monitor:
-    #    try:
-    #        uwsgi_config = device.write_uwsgi_config()
-    #    except PermissionError:
-    #        logger.error("permission denied writing project uwsgi config to disk")
-    #    else:
-    #        logger.debug(f"wrote config to file: {uwsgi_config}")
-
-    if any([device_created, http_router_created, default_project_created]):
-        await uow.commit()
+            # if device.enable_dir_monitor:
+            #    try:
+            #        uwsgi_config = device.write_uwsgi_config()
+            #    except PermissionError:
+            #        logger.error("permission denied writing project uwsgi config to disk")
+            #    else:
+            #        logger.debug(f"wrote config to file: {uwsgi_config}")
+            await uow.commit()
+        except Exception as exc:
+            logger.exception(exc)
+            await uow.rollback()
 
     return device
