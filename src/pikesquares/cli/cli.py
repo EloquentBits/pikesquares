@@ -1,9 +1,9 @@
 import logging
+import grp
 import asyncio
 import os
 import shutil
 
-# import grp
 # import pwd
 import tempfile
 from functools import wraps
@@ -976,7 +976,6 @@ async def main(
 
     logger.info(f"About to execute command: {ctx.invoked_subcommand}")
     is_root: bool = os.getuid() == 0
-    logger.info(f"{os.getuid()=} {is_root=}")
 
     # FIXME make sure to make an exception for --help
     if ctx.invoked_subcommand in set(
@@ -988,10 +987,16 @@ async def main(
             console.info("Please start server as root user. `sudo pikesquares up`")
             raise typer.Exit()
         else:
-            pass
-            # TODO
-            # create pikesquares user and group
-            # sudo useradd -u 777 pikesquares -d /var/lib/pikesquarees
+            # continue running as `pikesquares` group
+            try:
+                os.setgid(grp.getgrnam("pikesquares")[2])
+            except IndexError:
+                # TODO
+                # create pikesquares user and group
+                # sudo useradd -u 777 pikesquares -d /var/lib/pikesquarees
+                console.error("could not locate `pikesquares` group. Please create one to continue.")
+                raise typer.Abort() from None
+                # os.setgid(grp.getgrnam("pikesquares")[2])
 
     # context = services.init_context(ctx.ensure_object(dict))
     context = services.init_app(ctx.ensure_object(dict))

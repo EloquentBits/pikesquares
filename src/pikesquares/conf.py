@@ -15,7 +15,7 @@ from typing import (
 
 # from questionary import Style as QuestionaryStyle
 from aiopath import AsyncPath
-from plumbum import local as pl_local
+from plumbum import local
 import pydantic
 from pydantic import AnyUrl, BeforeValidator
 from pydantic_settings import (
@@ -161,21 +161,26 @@ def ensure_system_path(
     owner_groupname: str = "pikesquares",
     owner_uid: int | None = None,
     owner_gid: int | None = None,
-    mode: int = 0o775,
     is_dir: bool = True,
+    is_socket: bool = False,
 ) -> Path:
 
-    if isinstance(new_path, str):
-        new_path = Path(new_path)
+    is_root: bool = os.getuid() == 0
 
-    if new_path.exists():
-        return new_path
+    if not is_root and not new_path.exists():
+        raise AppConfigError(f"unable locate user: {owner_username}") from None
 
-    new_path = pl_local.path(new_path)
-    if is_dir:
-        new_path.mkdir()
-    else:
-        new_path.touch()
+    new_path: local.LocalPath = local.path(Path(new_path))
+    if not new_path.exists():
+        # Set the current numeric umask and return the previous umask.
+        old_umask = os.umask(0o002)
+        try:
+            if is_dir:
+                new_path.mkdir()
+            else:
+                new_path.touch()
+        finally:
+            os.umask(old_umask)
 
     try:
         owner_uid = owner_uid or pwd.getpwnam(owner_username)[2]
@@ -187,11 +192,11 @@ def ensure_system_path(
     except KeyError:
         raise AppConfigError(f"unable locate group: {owner_groupname}") from None
 
-    try:
-        new_path.chown(owner_uid, owner_gid)
-        new_path.chmod(mode)
-    except PermissionError:
-        raise AppConfigError(f"unable to chown {new_path} to: {owner_uid}:{owner_gid}") from None
+    if new_path.stat().st_uid != owner_uid or new_path.stat().st_gid != owner_gid:
+        try:
+            new_path.chown(owner_uid, owner_gid)
+        except PermissionError:
+            raise AppConfigError(f"permission denied in chown {new_path} to: {owner_uid}:{owner_gid}") from None
 
     return Path(new_path)
 

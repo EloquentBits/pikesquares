@@ -1,4 +1,5 @@
 import json
+import grp
 import os
 from enum import Enum
 from pathlib import Path
@@ -152,7 +153,6 @@ class ProcessCompose(ManagedServiceBase):
             raise PCAPIUnavailableError()
 
         await self.write_config_to_disk()
-
         try:
             self.cmd_args.insert(0, "project")
             self.cmd_args.insert(1, "update")
@@ -174,6 +174,9 @@ class ProcessCompose(ManagedServiceBase):
             "--detached",
             "--hide-disabled",
         ] + self.cmd_args
+
+        old_umask = os.umask(0o002)
+        os.setgid(grp.getgrnam("pikesquares")[2])
         try:
             retcode, stdout, stderr = self.cmd(args, cmd_env=self.cmd_env)
             if retcode:
@@ -188,15 +191,11 @@ class ProcessCompose(ManagedServiceBase):
         except ProcessExecutionError as exc:
             logger.error(exc)
             return False
+        finally:
+            os.umask(old_umask)
 
-        # try:
-        #    logger.debug(f"setting perms on {self.daemon_socket}")
-        #    ensure_system_path(self.daemon_socket, is_dir=False)
-        #    if self.daemon_socket:
-        #        logger.debug(f"set perms on {self.daemon_socket} to {oct(self.daemon_socket.stat().st_mode)}")
-        # except AppConfigError:
-        #    logger.error("unable to set perms on process compose socket")
-        #    return False
+        # ensure_system_path(self.daemon_socket, is_dir=False)
+
         return True
 
     async def down(self) -> tuple[int, str, str]:
