@@ -2,6 +2,8 @@ import os.path
 import pytest
 import pytest_asyncio
 from testfixtures import TempDirectory
+
+from pikesquares import services
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.handlers.project import get_or_create_project
@@ -42,26 +44,22 @@ async def fake_device():
         log_dir="/tmp/fake_log",
     )
 
+
 # Positive
 @pytest.mark.asyncio
-async def test_creates_project(fake_device):
-    with TempDirectory() as tmp:
-        uow = FakeUoW()
-        create_kwargs = {
-            "config_dir": tmp.path,
-            "data_dir": tmp.path,
-            "run_dir": tmp.path,
-            "log_dir": tmp.path,
-        }
+async def test_creates_project(device):
+    ctx = {
+        "device": device,
+    }
+    context = services.init_app(ctx)
+    uow = FakeUoW()
+    project = await get_or_create_project("sandbox", context, uow)
+    assert uow.committed
+    assert project.name == "sandbox"
+    assert uow.projects.added_project is not None
+    assert uow.projects.added_project.name == "sandbox"
+    assert os.path.exists(project.config_dir)
 
-        project = await get_or_create_project("sandbox", fake_device, uow, create_kwargs)
-
-        assert uow.committed
-        assert project.name == "sandbox"
-        assert uow.projects.added_project is not None
-        assert uow.projects.added_project.name == "sandbox"
-        assert os.path.exists(project.config_dir)  
-        
 
 @pytest.mark.asyncio
 async def test_get_project(fake_device):
@@ -82,6 +80,7 @@ async def test_get_project(fake_device):
     assert uow.projects.added_project is None
     assert uow.committed is False
 
+
 # Negative
 @pytest.mark.asyncio
 async def test_none_uow(fake_device):
@@ -95,4 +94,3 @@ async def test_none_uow(fake_device):
 
         with pytest.raises(AttributeError):
             await get_or_create_project("sandbox", fake_device, None, create_kwargs)
-            

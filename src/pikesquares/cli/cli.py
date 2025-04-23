@@ -1054,7 +1054,7 @@ async def main(
             yield uow
 
     services.register_factory(context, UnitOfWork, uow_factory)
-
+    uow = await services.aget(context, UnitOfWork)
     create_kwargs = {
         "data_dir": str(conf.data_dir),
         "config_dir": str(conf.config_dir),
@@ -1065,14 +1065,15 @@ async def main(
     }
     device = await get_or_create_device(
         context,
+        uow,
         create_kwargs=create_kwargs,
     )
     context["device"] = device
 
-    default_http_router = await get_or_create_http_router("default-http-router", context)
+    default_http_router = await get_or_create_http_router("default-http-router", context, uow)
     context["default-http-router"] = default_http_router
 
-    default_project = await get_or_create_project("default-project", context)
+    default_project = await get_or_create_project("default-project", context, uow)
     context["default-project"] = default_project
 
     # pc = services.get(context, ProcessCompose)

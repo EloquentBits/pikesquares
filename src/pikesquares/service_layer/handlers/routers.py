@@ -13,9 +13,9 @@ logger = structlog.getLogger()
 async def get_or_create_http_router(
     name: str,
     context: dict,
+    uow: UnitOfWork,
 ) -> BaseRouter:
 
-    uow = await services.aget(context, UnitOfWork)
     device = context.get("device")
     http_router = await uow.routers.get_by_name(name)
 

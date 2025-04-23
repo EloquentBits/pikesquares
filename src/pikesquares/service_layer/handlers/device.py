@@ -16,14 +16,14 @@ logger = structlog.getLogger()
 
 async def get_or_create_device(
     context: dict,
-    create_kwargs: dict,
+    uow: UnitOfWork,
+    create_kwargs: dict = dict(),
 ) -> Device | None:
 
     machine_id = await ServiceBase.read_machine_id()
     if not machine_id:
         raise AppConfigError("unable to read the machine-id")
 
-    uow = await services.aget(context, UnitOfWork)
     device = await uow.devices.get_by_machine_id(machine_id)
     if not device:
         device_cuid = f"device_{cuid()}"
@@ -55,8 +55,13 @@ async def get_or_create_device(
                     #not in existing_options:
                     #    await uow.uwsgi_options.add(uwsgi_option)
                 """
-            _ = await get_or_create_http_router("default-http-router", context)
-            _ = await get_or_create_project("default-project", context)
+            _ = await get_or_create_http_router("default-http-router", context, uow)
+            project = await get_or_create_project("default-project", context, uow)
+            _ = await get_or_create_zmq_monitor(
+                uow,
+                project=project,
+            )
+            logger.debug(f"Created ZMQ_MONITOR for PROJECT {zmq_monitor}")
 
             # if device.enable_dir_monitor:
             #    try:

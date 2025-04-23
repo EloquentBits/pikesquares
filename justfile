@@ -57,6 +57,15 @@ install:
 run: format
     dotenv run -- uv run python main.py
 
+psq-up:
+  sudo uv run pikesquares up
+
+psq-down:
+  uv run pikesquares up
+
+psq-info:
+  uv run pikesquares up
+
 uwsgi-up:
   sudo /home/pk/dev/eqb/scie-pikesquares/uwsgi/uwsgi  \
     --plugin /var/lib/pikesquares/plugins/sqlite3 \

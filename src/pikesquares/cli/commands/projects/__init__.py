@@ -70,6 +70,36 @@ async def create(
         console.warning("Failed to create a Project")
 
 
+@app.command(short_help="Stop Project Service.\nAliases:[s] stop")
+@app.command(
+    # "stop", hidden=True
+)
+@run_async
+async def stop(
+    ctx: typer.Context,
+    name: str | None = typer.Argument("", help="Project name"),
+):
+    """
+    Stop project service
+
+    Aliases: [s] stop
+    """
+    context = ctx.ensure_object(dict)
+    project = await get_or_create_project(name, context)
+    if project:
+        console.info(f"Stopping Project [{project.name}]")
+        uow = await services.aget(context, UnitOfWork)
+        device = context.get("device")
+        if not device:
+            raise AppConfigError("no device found in context")
+
+        device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+        await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
+        console.success(f":heavy_check_mark:     Stopped [{project.name}]")
+    else:
+        console.warning("Failed to stop a Project")
+
+
 @app.command(
     "projects",
     rich_help_panel="Show",

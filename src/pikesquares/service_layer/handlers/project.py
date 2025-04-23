@@ -2,11 +2,8 @@ import structlog
 from aiopath import AsyncPath
 from cuid import cuid
 
-from pikesquares import services
-from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers.monitors import get_or_create_zmq_monitor
 
 logger = structlog.getLogger()
 
@@ -14,9 +11,9 @@ logger = structlog.getLogger()
 async def get_or_create_project(
     name: str,
     context: dict,
+    uow: UnitOfWork,
 ) -> Project | None:
 
-    uow = await services.aget(context, UnitOfWork)
     device = context.get("device")
 
     project = await uow.projects.get_by_name(name)
@@ -37,11 +34,6 @@ async def get_or_create_project(
         )
         try:
             await uow.projects.add(project)
-            zmq_monitor = await get_or_create_zmq_monitor(
-                uow,
-                project=project,
-            )
-            logger.debug(f"Created ZMQ_MONITOR for PROJECT {zmq_monitor}")
             await uow.commit()
         except Exception as exc:
             logger.exception(exc)
