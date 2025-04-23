@@ -14,7 +14,7 @@ from cuid import cuid
 from pikesquares import services
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.service_layer.handlers.project import get_or_create_project
-from pikesquares.conf import AppConfig
+from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
 from pikesquares.cli.validators import ServiceNameValidator
@@ -57,22 +57,17 @@ async def create(
     )
     project = await get_or_create_project(name, context)
     if project:
-        console.success(f"Project '{project.name}' was successfully created!")
+        console.success(f":heavy_check_mark:     Project '{project.name}' was successfully created!")
+        uow = await services.aget(context, UnitOfWork)
+        device = context.get("device")
+        if not device:
+            raise AppConfigError("no device found in context")
+
+        device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+        await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
+        console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
     else:
         console.warning("Failed to create a Project")
-
-
-@app.command("up")
-def up(ctx: typer.Context, name: Optional[str] = typer.Argument("")):
-    obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
-    projects = projects_all(conf)
-    for project in projects:
-        name = project.get('name')
-        status = (get_service_status(project.get('service_id'), conf) or "Unknown",)
-        service_id = project.get('service_id')
-        print(f"{status=} {name} [{service_id}]")
-        project_up(conf, name, service_id)
 
 
 @app.command(

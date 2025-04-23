@@ -41,10 +41,7 @@ async def get_or_create_device(
         )
         try:
             device = await uow.devices.add(device)
-            context["device"] = device
-
             zmq_monitor = await get_or_create_zmq_monitor(uow, device=device)
-            context["device-zmq-monitor"] = zmq_monitor
             device.zmq_monitor = zmq_monitor
             # uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
             # if not uwsgi_options:
@@ -58,11 +55,8 @@ async def get_or_create_device(
                     #not in existing_options:
                     #    await uow.uwsgi_options.add(uwsgi_option)
                 """
-            default_http_router = await get_or_create_http_router("default-http-router", context)
-            context["default-http-router"] = default_http_router
-
-            default_project = await get_or_create_project("default-project", context)
-            context["default-project"] = default_project
+            _ = await get_or_create_http_router("default-http-router", context)
+            _ = await get_or_create_project("default-project", context)
 
             # if device.enable_dir_monitor:
             #    try:

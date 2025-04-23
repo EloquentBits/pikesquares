@@ -53,6 +53,9 @@ from pikesquares.domain.process_compose import (
 )
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.device import get_or_create_device
+from pikesquares.service_layer.handlers.routers import get_or_create_http_router
+from pikesquares.service_layer.handlers.project import get_or_create_project
+from pikesquares.service_layer.handlers.monitors import get_or_create_zmq_monitor
 from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -286,6 +289,7 @@ async def info(
     # console.success(":heavy_check_mark:     reverse proxy is running")
 
     device = context.get("device")
+    await register_process_compose(context)
     process_compose = services.get(context, ProcessCompose)
     processes = [
         ("device", "device manager"),
@@ -412,7 +416,8 @@ async def down(
     """Stop the PikeSquares Server"""
 
     context = ctx.ensure_object(dict)
-    pc = services.get(context, ProcessCompose)
+    await register_process_compose(context)
+    pc = await services.aget(context, ProcessCompose)
     try:
         retcode, stdout, stderr = await pc.down()
         if retcode != 0:
@@ -1063,6 +1068,13 @@ async def main(
         create_kwargs=create_kwargs,
     )
     context["device"] = device
+
+    default_http_router = await get_or_create_http_router("default-http-router", context)
+    context["default-http-router"] = default_http_router
+
+    default_project = await get_or_create_project("default-project", context)
+    context["default-project"] = default_project
+
     # pc = services.get(context, ProcessCompose)
 
     """

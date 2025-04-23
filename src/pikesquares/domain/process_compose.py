@@ -12,7 +12,7 @@ from plumbum import ProcessExecutionError
 from pydantic_yaml import to_yaml_str
 
 from pikesquares import services
-from pikesquares.conf import AppConfig, AppConfigError, ensure_system_path
+from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.device import Device
 from pikesquares.domain.managed_services import ManagedServiceBase
 
