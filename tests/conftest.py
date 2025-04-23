@@ -20,6 +20,7 @@ from pikesquares.app.main import app, lifespan
 from pikesquares.conf import AppConfig, register_app_conf
 from pikesquares.domain.device import Device
 from pikesquares.domain.router import BaseRouter
+from pikesquares.domain.monitors import ZMQMonitor
 
 
 # from pikesquares.domain.device import Device
