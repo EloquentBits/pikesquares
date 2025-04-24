@@ -228,3 +228,20 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
 
     def __str__(self):
         return self.__repr__()
+
+
+"""
+def register_device(
+    context: dict,
+    ) -> None:
+
+    def device_factory():
+        return Device()
+
+    services.register_factory(
+        context,
+        Device,
+        device_factory,
+        #ping=lambda svc: svc.ping()
+    )
+"""

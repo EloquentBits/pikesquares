@@ -1,9 +1,9 @@
-import json
 import grp
+import json
 import os
 from enum import Enum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NewType
 
 import pydantic
 import structlog
@@ -244,188 +244,64 @@ class ProcessCompose(ManagedServiceBase):
         raise PCAPIUnavailableError()
 
 
-# factories
-async def make_api_process(conf: AppConfig) -> tuple[Process, ProcessMessages]:
-    """FastAPI process-compose process"""
-
-    api_port = 9544
-    # cmd = f"{conf.UV_BIN} run fastapi dev --port {api_port} src/pikesquares/app/main.py"
-    cmd = f"{conf.UV_BIN} run uvicorn pikesquares.app.main:app --host 0.0.0.0 --port {api_port}"
-
-    process_messages = ProcessMessages(
-        title_start="!! api start title !!!",
-        title_stop="abc",
-    )
-    process = Process(
-        disabled=not conf.API_ENABLED,
-        description="PikeSquares API",
-        command=cmd,
-        working_dir=Path().cwd(),
-        availability=ProcessAvailability(),
-        readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
-    )
-    return process, process_messages
-
-
-async def make_device_process(device: Device, conf: AppConfig) -> tuple[Process, ProcessMessages]:
-    """device process-compose process"""
-
-    # if not AsyncPath(conf.sqlite_plugin_path).exists():
-    #    sqlite_plugin_alt = os.environ.get("PIKESQUARES_SQLITE_PLUGIN")
-    #    if sqlite_plugin_alt and AsyncPath(sqlite_plugin_alt).exists():
-    #        sqlite_plugin_path = AsyncPath(sqlite_plugin_alt)
-    #    else:
-    #        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {sqlite_plugin_path}") from None
-
-    cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
-    sql = (
-        f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
-    )
-    process = Process(
-        description="Device Manager",
-        disabled=not conf.DEVICE_ENABLED,
-        command="".join([cmd, sql]),
-        working_dir=conf.data_dir,
-        availability=ProcessAvailability(),
-        # readiness_probe=ReadinessProbe(
-        #    http_get=ReadinessProbeHttpGet()
-        # ),
-    )
-    messages = ProcessMessages(
-        title_start="!! device start title !!",
-        title_stop="!! device stop title !!",
-    )
-
-    return process, messages
-
-
-# caddy
-async def make_caddy_process(conf: AppConfig, http_router_port=int) -> tuple[Process, ProcessMessages]:
-    """Caddy process-compose process"""
-
-    if conf.CADDY_BIN and not await AsyncPath(conf.CADDY_BIN).exists():
-        raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
-
-    # await AsyncPath(conf.caddy_config_path).write_text(conf.caddy_config_initial)
-
-    with open(conf.caddy_config_path, "r+") as caddy_config:
-        vhost_key = "*.pikesquares.local"
-        # data = json.load(caddy_config)
-        data = json.loads(conf.caddy_config_initial)
-        apps = data.get("apps")
-        routes = apps.get("http").get("servers").get(vhost_key).get("routes")
-        handles = routes[0].get("handle")
-        upstreams = handles[0].get("upstreams")
-        upstream_address = upstreams[0].get("dial")
-        if upstream_address != f"127.0.0.1:{http_router_port}":
-            data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0][
-                "dial"
-            ] = f"127.0.0.1:{http_router_port}"
-            caddy_config.seek(0)
-            json.dump(data, caddy_config)
-            caddy_config.truncate()
-
-    process_messages = ProcessMessages(
-        title_start="!! caddy start title !!",
-        title_stop="!! caddy stop title !!",
-    )
-    process = Process(
-        disabled=not conf.CADDY_ENABLED,
-        description="reverse proxy",
-        command=f"{conf.CADDY_BIN} run --config {conf.caddy_config_path} --pidfile {conf.run_dir / 'caddy.pid'}",
-        working_dir=conf.data_dir,
-        availability=ProcessAvailability(),
-        # readiness_probe=ReadinessProbe(
-        #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
-        # ),
-    )
-    return process, process_messages
-
-
-# dnsmasq
-async def make_dnsmasq_process(
-    conf: AppConfig,
-    port: int = 5353,
-    addresses: list[str] | None = None,
-    listen_address: str = "127.0.0.34",
-    # http_router_port=int,
-) -> tuple[Process, ProcessMessages]:
-    """dnsmasq process-compose process"""
-
-    if conf.DNSMASQ_BIN and not await AsyncPath(conf.DNSMASQ_BIN).exists():
-        raise AppConfigError(f"unable locate dnsmasq binary @ {conf.DNSMASQ_BIN}") from None
-
-    cmd = f"{conf.DNSMASQ_BIN} --keep-in-foreground --port {port} --listen-address {listen_address} --no-resolv"
-    for addr in addresses or ["/pikesquares.local/192.168.0.1"]:
-        cmd = cmd + f" --address {addr}"
-
-    process_messages = ProcessMessages(
-        title_start="!!! dnsmasq start title !!!",
-        title_stop="abc",
-    )
-    process = Process(
-        disabled=not conf.DNSMASQ_ENABLED,
-        description="dns resolver",
-        command=cmd,
-        working_dir=conf.data_dir,
-        availability=ProcessAvailability(),
-        # readiness_probe=ReadinessProbe(
-        #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
-        # ),
-    )
-    return process, process_messages
+APIProcess = NewType("APIProcess", Process)
+CaddyProcess = NewType("CaddyProcess", Process)
+DeviceProcess = NewType("DeviceProcess", Process)
+# DeviceProcessMessages = NewType("DeviceProcessMessages", ProcessMessages)
+DNSMASQProcess = NewType("DNSMASQProcess", Process)
 
 
 async def register_process_compose(context: dict) -> None:
     """process-compose factory"""
 
-    # uow = await services.aget(context, UnitOfWork)
-    conf = services.get(context, AppConfig)
-    device = context.get("device")
-    if not device:
-        raise AppConfigError("no device found in context")
+    async def process_compose_factory(svcs_container) -> ProcessCompose:
 
-    http_router = context.get("default-http-router")
-    if not http_router:
-        raise AppConfigError("no http router found in context")
+        # uow = await services.aget(context, UnitOfWork)
+        conf = await svcs_container.aget(AppConfig)
+        device = context.get("device")
+        if not device:
+            raise AppConfigError("no device found in context")
 
-    if conf.UV_BIN and not await AsyncPath(conf.UV_BIN).exists():
-        raise AppConfigError(f"unable locate uv binary @ {conf.UV_BIN}") from None
+        http_router = context.get("default-http-router")
+        if not http_router:
+            raise AppConfigError("no http router found in context")
 
-    if conf.UWSGI_BIN and not await AsyncPath(conf.UWSGI_BIN).exists():
-        raise AppConfigError(f"unable locate uWSGI binary @ {conf.UWSGI_BIN}") from None
+        if conf.UV_BIN and not await AsyncPath(conf.UV_BIN).exists():
+            raise AppConfigError(f"unable locate uv binary @ {conf.UV_BIN}") from None
 
-    api_process, api_messages = await make_api_process(conf)
-    device_process, device_messages = await make_device_process(device, conf)
-    caddy_process, caddy_messages = await make_caddy_process(conf, http_router.port)
-    dnsmasq_process, dnsmasq_messages = await make_dnsmasq_process(conf)
+        if conf.UWSGI_BIN and not await AsyncPath(conf.UWSGI_BIN).exists():
+            raise AppConfigError(f"unable locate uWSGI binary @ {conf.UWSGI_BIN}") from None
 
-    pc_config = Config(
-        processes={
-            "api": api_process,
-            "device": device_process,
-            "caddy": caddy_process,
-            "dnsmasq": dnsmasq_process,
-        },
-        custom_messages={
-            "api": api_messages,
-            "device": device_messages,
-            "caddy": caddy_messages,
-            "dnsmasq": dnsmasq_messages,
-        },
-    )
-    pc_kwargs = {
-        "config": pc_config,
-        "daemon_name": "process-compose",
-        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
-        "daemon_config": conf.config_dir / "process-compose.yaml",
-        "daemon_log": conf.log_dir / "process-compose.log",
-        "daemon_socket": conf.run_dir / "process-compose.sock",
-        "data_dir": conf.data_dir,
-        "uv_bin": conf.UV_BIN,
-    }
+        device_process, device_messages = await svcs_container.aget(DeviceProcess)
+        caddy_process, caddy_messages = await svcs_container.aget(CaddyProcess)
+        dnsmasq_process, dnsmasq_messages = await svcs_container.aget(DNSMASQProcess)
+        api_process, api_messages = await svcs_container.aget(APIProcess)
 
-    def process_compose_factory() -> ProcessCompose:
+        pc_config = Config(
+            processes={
+                "api": api_process,
+                "device": device_process,
+                "caddy": caddy_process,
+                "dnsmasq": dnsmasq_process,
+            },
+            custom_messages={
+                "api": api_messages,
+                "device": device_messages,
+                "caddy": caddy_messages,
+                "dnsmasq": dnsmasq_messages,
+            },
+        )
+        pc_kwargs = {
+            "config": pc_config,
+            "daemon_name": "process-compose",
+            "daemon_bin": conf.PROCESS_COMPOSE_BIN,
+            "daemon_config": conf.config_dir / "process-compose.yaml",
+            "daemon_log": conf.log_dir / "process-compose.log",
+            "daemon_socket": conf.run_dir / "process-compose.sock",
+            "data_dir": conf.data_dir,
+            "uv_bin": conf.UV_BIN,
+        }
+
         return ProcessCompose(**pc_kwargs)
 
     services.register_factory(
@@ -433,4 +309,198 @@ async def register_process_compose(context: dict) -> None:
         ProcessCompose,
         process_compose_factory,
         # ping=svc: await svc.ping(),
+    )
+
+
+def device_close():
+    logger.debug("device closed")
+
+
+async def register_device_process(context: dict) -> None:
+    """register device"""
+
+    async def device_process_factory(svcs_container) -> tuple[Process, ProcessMessages] | None:
+        """device process-compose process"""
+
+        # if not AsyncPath(conf.sqlite_plugin_path).exists():
+        #    sqlite_plugin_alt = os.environ.get("PIKESQUARES_SQLITE_PLUGIN")
+        #    if sqlite_plugin_alt and AsyncPath(sqlite_plugin_alt).exists():
+        #        sqlite_plugin_path = AsyncPath(sqlite_plugin_alt)
+        #    else:
+        #        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {sqlite_plugin_path}") from None
+        #
+        conf = await svcs_container.aget(AppConfig)
+        device = context.get("device")
+        if device:
+            cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
+            sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
+            process = Process(
+                description="Device Manager",
+                disabled=not conf.DEVICE_ENABLED,
+                command="".join([cmd, sql]),
+                working_dir=conf.data_dir,
+                availability=ProcessAvailability(),
+                # readiness_probe=ReadinessProbe(
+                #    http_get=ReadinessProbeHttpGet()
+                # ),
+            )
+            messages = ProcessMessages(
+                title_start="!! device start title !!",
+                title_stop="!! device stop title !!",
+            )
+
+            return process, messages
+
+    services.register_factory(
+        context,
+        DeviceProcess,
+        device_process_factory,
+        on_registry_close=device_close,
+    )
+
+
+def api_close():
+    logger.debug("api closed")
+
+
+async def register_api_process(context: dict) -> None:
+    """register device"""
+
+    async def api_process_factory(svcs_container) -> tuple[APIProcess, ProcessMessages]:
+        """FastAPI process-compose process"""
+
+        conf = await svcs_container.aget(AppConfig)
+        api_port = 9544
+        # cmd = f"{conf.UV_BIN} run fastapi dev --port {api_port} src/pikesquares/app/main.py"
+        cmd = f"{conf.UV_BIN} run uvicorn pikesquares.app.main:app --host 0.0.0.0 --port {api_port}"
+
+        process_messages = ProcessMessages(
+            title_start="!! api start title !!!",
+            title_stop="abc",
+        )
+        process = Process(
+            disabled=not conf.API_ENABLED,
+            description="PikeSquares API",
+            command=cmd,
+            working_dir=Path().cwd(),
+            availability=ProcessAvailability(),
+            readiness_probe=ReadinessProbe(http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)),
+        )
+        return process, process_messages
+
+    services.register_factory(
+        context,
+        APIProcess,
+        api_process_factory,
+        on_registry_close=api_close,
+    )
+
+
+def dnsmasq_close():
+    logger.debug("dnsmasq closed")
+
+
+async def register_dnsmasq_process(
+    context: dict,
+    port: int = 5353,
+    addresses: list[str] | None = None,
+    listen_address: str = "127.0.0.34",
+) -> None:
+    """register device"""
+
+    async def dnsmasq_process_factory(svcs_container) -> tuple[DNSMASQProcess, ProcessMessages]:
+        """dnsmasq process-compose process"""
+
+        conf = await svcs_container.aget(AppConfig)
+
+        if conf.DNSMASQ_BIN and not await AsyncPath(conf.DNSMASQ_BIN).exists():
+            raise AppConfigError(f"unable locate dnsmasq binary @ {conf.DNSMASQ_BIN}") from None
+
+        cmd = f"{conf.DNSMASQ_BIN} --keep-in-foreground --port {port} --listen-address {listen_address} --no-resolv"
+        for addr in addresses or ["/pikesquares.local/192.168.0.1"]:
+            cmd = cmd + f" --address {addr}"
+
+        process_messages = ProcessMessages(
+            title_start="!!! dnsmasq start title !!!",
+            title_stop="abc",
+        )
+        process = Process(
+            disabled=not conf.DNSMASQ_ENABLED,
+            description="dns resolver",
+            command=cmd,
+            working_dir=conf.data_dir,
+            availability=ProcessAvailability(),
+            # readiness_probe=ReadinessProbe(
+            #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
+            # ),
+        )
+        return process, process_messages
+
+    services.register_factory(
+        context,
+        DNSMASQProcess,
+        dnsmasq_process_factory,
+        on_registry_close=dnsmasq_close,
+    )
+
+
+def caddy_close():
+    logger.debug("caddy closed")
+
+
+async def register_caddy_process(
+    context: dict,
+    http_router_port=int,
+) -> None:
+    """register caddy"""
+
+    # caddy
+    async def caddy_process_factory(svcs_container) -> tuple[CaddyProcess, ProcessMessages]:
+        """Caddy process-compose process"""
+
+        conf = await svcs_container.aget(AppConfig)
+
+        if conf.CADDY_BIN and not await AsyncPath(conf.CADDY_BIN).exists():
+            raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
+
+        # await AsyncPath(conf.caddy_config_path).write_text(conf.caddy_config_initial)
+
+        with open(conf.caddy_config_path, "r+") as caddy_config:
+            vhost_key = "*.pikesquares.local"
+            # data = json.load(caddy_config)
+            data = json.loads(conf.caddy_config_initial)
+            apps = data.get("apps")
+            routes = apps.get("http").get("servers").get(vhost_key).get("routes")
+            handles = routes[0].get("handle")
+            upstreams = handles[0].get("upstreams")
+            upstream_address = upstreams[0].get("dial")
+            if upstream_address != f"127.0.0.1:{http_router_port}":
+                data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0][
+                    "dial"
+                ] = f"127.0.0.1:{http_router_port}"
+                caddy_config.seek(0)
+                json.dump(data, caddy_config)
+                caddy_config.truncate()
+
+        process_messages = ProcessMessages(
+            title_start="!! caddy start title !!",
+            title_stop="!! caddy stop title !!",
+        )
+        process = Process(
+            disabled=not conf.CADDY_ENABLED,
+            description="reverse proxy",
+            command=f"{conf.CADDY_BIN} run --config {conf.caddy_config_path} --pidfile {conf.run_dir / 'caddy.pid'}",
+            working_dir=conf.data_dir,
+            availability=ProcessAvailability(),
+            # readiness_probe=ReadinessProbe(
+            #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
+            # ),
+        )
+        return process, process_messages
+
+    services.register_factory(
+        context,
+        CaddyProcess,
+        caddy_process_factory,
+        on_registry_close=caddy_close,
     )

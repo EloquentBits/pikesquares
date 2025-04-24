@@ -200,7 +200,7 @@ class DeviceUWSGIOptionsReposityBase(GenericRepository[DeviceUWSGIOptions], ABC)
     pass
 
 
-class DeviceUWSGIOptionsReposity(GenericSqlRepository[DeviceUWSGIOptions], DeviceUWSGIOptionsReposityBase):
+class DeviceUWSGIOptionsRepository(GenericSqlRepository[DeviceUWSGIOptions], DeviceUWSGIOptionsReposityBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, DeviceUWSGIOptions)
 
@@ -241,7 +241,7 @@ class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
             return results.all()
 
 
-class RouterReposityBase(GenericRepository[BaseRouter], ABC):
+class RouterRepositoryBase(GenericRepository[BaseRouter], ABC):
     """Router repository."""
 
     @abstractmethod
@@ -249,7 +249,7 @@ class RouterReposityBase(GenericRepository[BaseRouter], ABC):
         raise NotImplementedError()
 
 
-class RouterRepository(GenericSqlRepository[BaseRouter], RouterReposityBase):
+class RouterRepository(GenericSqlRepository[BaseRouter], RouterRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, BaseRouter)
 

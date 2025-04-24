@@ -83,6 +83,11 @@ def get_pings(context: dict) -> list[ServicePing]:
     return svcs_from(context).get_pings()
 
 
+def close_registry(context: dict) -> None:
+    if reg := context.pop(_KEY_REGISTRY, None):
+        reg.close()
+
+
 @overload
 def get(context: dict, svc_type: type[T1], /) -> T1: ...
 

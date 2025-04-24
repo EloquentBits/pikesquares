@@ -6,12 +6,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from pikesquares.adapters.repositories import (
     DeviceRepository,
     DeviceReposityBase,
-    DeviceUWSGIOptionsReposity,
+    DeviceUWSGIOptionsRepository,
     DeviceUWSGIOptionsReposityBase,
     ProjectRepository,
     ProjectReposityBase,
     RouterRepository,
-    RouterReposityBase,
+    RouterRepositoryBase,
     WsgiAppRepository,
     WsgiAppReposityBase,
     ZMQMonitorRepository,
@@ -31,7 +31,7 @@ class UnitOfWorkBase(ABC):
     devices: DeviceReposityBase
     uwsgi_options: DeviceUWSGIOptionsReposityBase
     projects: ProjectReposityBase
-    routers: RouterReposityBase
+    routers: RouterRepositoryBase
     wsgi_apps: WsgiAppReposityBase
     zmq_monitors: ZMQMonitorRepositoryBase
 
@@ -64,7 +64,7 @@ class UnitOfWork(UnitOfWorkBase):
 
     async def __aenter__(self):
         self.devices = DeviceRepository(self._session)
-        self.uwsgi_options = DeviceUWSGIOptionsReposity(self._session)
+        self.uwsgi_options = DeviceUWSGIOptionsRepository(self._session)
         self.projects = ProjectRepository(self._session)
         self.routers = RouterRepository(self._session)
         self.wsgi_apps = WsgiAppRepository(self._session)
@@ -72,10 +72,13 @@ class UnitOfWork(UnitOfWorkBase):
         return await super().__aenter__()
 
     async def __aexit__(self, *args):
+        logger.debug("UOW close session")
         await self._session.close()
 
     async def commit(self):
+        logger.debug("UOW commit session")
         await self._session.commit()
 
     async def rollback(self):
+        logger.debug("UOW rollback session")
         await self._session.rollback()

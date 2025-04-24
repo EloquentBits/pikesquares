@@ -1,3 +1,4 @@
+import atexit
 import logging
 import grp
 import asyncio
@@ -46,16 +47,21 @@ from pikesquares.conf import (
 )
 
 # from pikesquares.cli.commands.apps.validators import NameValidator
+from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ProcessCompose,
     register_process_compose,
+    register_device_process,
+    register_dnsmasq_process,
+    register_api_process,
+    register_caddy_process,
 )
 from pikesquares.exceptions import StatsReadError
-from pikesquares.service_layer.handlers.device import get_or_create_device
-from pikesquares.service_layer.handlers.routers import get_or_create_http_router
-from pikesquares.service_layer.handlers.project import get_or_create_project
-from pikesquares.service_layer.handlers.monitors import get_or_create_zmq_monitor
+from pikesquares.service_layer.handlers.device import create_device
+from pikesquares.service_layer.handlers.routers import create_http_router
+from pikesquares.service_layer.handlers.project import create_project
+from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -147,7 +153,6 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 logger = structlog.get_logger()
-logger.info("This message will only be written to the log file ---- CLI ---")
 
 load_dotenv()
 
@@ -278,7 +283,7 @@ async def info(
 ):
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    conf = services.get(context, AppConfig)
+    conf = await services.aget(context, AppConfig)
     # console.info(f"data_dir={str(conf.DATA_DIR)}")
 
     # uow = await services.aget(context, UnitOfWork)
@@ -290,21 +295,21 @@ async def info(
 
     device = context.get("device")
     await register_process_compose(context)
-    process_compose = services.get(context, ProcessCompose)
+    process_compose = await services.aget(context, ProcessCompose)
     processes = [
         ("device", "device manager"),
-        ("caddy", "reverse proxy"),
-        ("dnsmasq", "dns server"),
-        ("api", "PikeSquares API"),
+        # ("caddy", "reverse proxy"),
+        # ("dnsmasq", "dns server"),
+        # ("api", "PikeSquares API"),
     ]
     # for _ in range(1, 5):
     for process in processes:
         try:
-            status = await process_compose.ping_api(process[0])
-            logger.debug(f"{process[0]} {status=}")
-            if status:
+            stats = await process_compose.ping_api(process[0])
+            logger.debug(f"{process[0]} {stats=}")
+            if stats.status == "Running":
                 console.success(f":heavy_check_mark:     {process[1]} is running.")
-            else:
+            elif stats.status == "Completed":
                 console.warning(f":heavy_exclamation_mark:     {process[1]} is not running.")
         except PCAPIUnavailableError:
             await asyncio.sleep(1)
@@ -325,6 +330,7 @@ async def info(
     # https_router = services.get(context, DefaultHttpsRouter)
     # https_router_stats = RouterStats(https_router.read_stats())
     # console.info(https_router_stats.model_dump())
+    #
 
 
 @app.command(rich_help_panel="Control", short_help="Launch the PikeSquares Server (if stopped)")
@@ -1055,26 +1061,59 @@ async def main(
 
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
-    create_kwargs = {
-        "data_dir": str(conf.data_dir),
-        "config_dir": str(conf.config_dir),
-        "log_dir": str(conf.log_dir),
-        "run_dir": str(conf.run_dir),
-        "enable_tuntap_router": conf.ENABLE_TUNTAP_ROUTER,
-        "enable_dir_monitor": conf.ENABLE_DIR_MONITOR,
-    }
-    device = await get_or_create_device(
-        context,
-        uow,
-        create_kwargs=create_kwargs,
-    )
+    machine_id = await ServiceBase.read_machine_id()
+    if not machine_id:
+        raise AppConfigError("unable to read the machine-id")
+
+    device = await uow.devices.get_by_machine_id(machine_id)
+    if not device:
+        create_kwargs = {
+            "data_dir": str(conf.data_dir),
+            "config_dir": str(conf.config_dir),
+            "log_dir": str(conf.log_dir),
+            "run_dir": str(conf.run_dir),
+            "enable_tuntap_router": conf.ENABLE_TUNTAP_ROUTER,
+            "enable_dir_monitor": conf.ENABLE_DIR_MONITOR,
+        }
+
+        device = await create_device(
+            context,
+            uow,
+            machine_id,
+            create_kwargs=create_kwargs,
+        )
+        context["device"] = device
+
+        device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
+            uow, device=device
+        )
+        # if not uwsgi_options:
+        for uwsgi_option in device.get_uwsgi_options():
+            await uow.uwsgi_options.add(uwsgi_option)
+            """
+            existing_options = await uow.uwsgi_options.list(device_id=device.id)
+            for uwsgi_option in device.build_uwsgi_options():
+                #existing_options
+                #if uwsgi_option.option_key
+                #not in existing_options:
+                #    await uow.uwsgi_options.add(uwsgi_option)
+            """
     context["device"] = device
+    project = await uow.projects.get_by_name("default-project") or await create_project("default-project", context, uow)
+    project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+    if not project.zmq_monitor:
+        project.zmq_monitor = await create_zmq_monitor(uow, project=project)
+    context["default-project"] = project
 
-    default_http_router = await get_or_create_http_router("default-http-router", context, uow)
-    context["default-http-router"] = default_http_router
+    http_router = await uow.routers.get_by_name("default-http-router") or await create_http_router(
+        "default-http-router", context, uow
+    )
+    context["default-http-router"] = http_router
 
-    default_project = await get_or_create_project("default-project", context, uow)
-    context["default-project"] = default_project
+    await register_device_process(context)
+    await register_api_process(context)
+    await register_dnsmasq_process(context)
+    await register_caddy_process(context)
 
     # pc = services.get(context, ProcessCompose)
 
@@ -1099,6 +1138,11 @@ async def main(
         if ctx.invoked_subcommand == "up":
             launch_pc(pc, device)
     """
+
+    @atexit.register
+    def cleanup():
+        logger.debug("CLEANUP")
+        services.close_registry(context)
 
 
 # def circus_arbiter_factory():

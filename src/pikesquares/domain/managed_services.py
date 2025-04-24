@@ -51,7 +51,7 @@ class ManagedServiceBase(pydantic.BaseModel):
             # with pl_local.as_user(run_as_user):
             with pl_local.cwd(chdir or self.data_dir):
                 retcode, stdout, stderr = pl_local[str(self.daemon_bin)].run(cmd_args, **{"env": cmd_env})
-                if retcode != "0":
+                if int(retcode) != 0:
                     logger.debug(f"{retcode=}")
                     logger.debug(f"{stdout=}")
                     logger.debug(f"{stderr=}")
