@@ -13,6 +13,7 @@ from typing import Annotated, Optional
 
 import anyio
 from aiopath import AsyncPath
+from sqlalchemy.sql import text
 import questionary
 import randomname
 import sentry_sdk
@@ -50,6 +51,7 @@ from pikesquares.conf import (
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
+    ServiceUnavailableError,
     ProcessCompose,
     register_process_compose,
     register_device_process,
@@ -308,19 +310,29 @@ async def info(
             stats = await process_compose.ping_api(process[0])
             logger.debug(f"{process[0]} {stats=}")
             if stats.status == "Running":
-                console.success(f":heavy_check_mark:     {process[1]} is running.")
+                console.success(f":heavy_check_mark:     {process[1]} \[process-compose] is running.")
             elif stats.status == "Completed":
-                console.warning(f":heavy_exclamation_mark:     {process[1]} is not running.")
+                console.warning(f":heavy_exclamation_mark:     {process[1]} \[process-compose] is not running.")
         except PCAPIUnavailableError:
             await asyncio.sleep(1)
             continue
 
+    for svc in services.get_pings(context):
+        logger.debug(f"pinging {svc.name=}")
+        # pikesquares.domain.process_compose.DNSMASQProcess
+        svc_name = svc.name.split(".")[-1]
+        try:
+            await svc.aping()
+            console.success(f":heavy_check_mark:     {svc_name} \[svcs] is running")
+        except ServiceUnavailableError:
+            console.warning(f":heavy_exclamation_mark:     {svc_name} \[svcs] is not running.")
+
     if device:
         try:
             if device.stats:
-                console.success("🚀 PikeSquares Server is running 🚀")
+                console.success("🚀 PikeSquares Server \[uWSGI] is running 🚀")
         except StatsReadError:
-            console.warning("PikeSquares Server is not running")
+            console.warning("PikeSquares Server \[uWSGI] is not running")
 
     # http_router = services.get(context, DefaultHttpRouter)
     # stats = http_router.read_stats()
@@ -1042,7 +1054,12 @@ async def main(
         async with sessionmanager.session() as session:
             return session
 
-    services.register_factory(context, AsyncSession, get_session)
+    services.register_factory(
+        context,
+        AsyncSession,
+        get_session,
+        ping=lambda session: session.execute(text("SELECT 1")),
+    )
     session = await services.aget(context, AsyncSession)
 
     async with sessionmanager.connect() as conn:
@@ -1116,28 +1133,6 @@ async def main(
     await register_caddy_process(context)
 
     # pc = services.get(context, ProcessCompose)
-
-    """
-    for svc in services.get_pings(context):
-        # print(f"pinging {svc.name=}")
-        try:
-            svc.ping()
-            if ctx.invoked_subcommand == "up":
-                console.info("looks like PikeSquares Server is already running.")
-                console.info("try `pikesquares attach` to see running processes.")
-                raise typer.Exit() from None
-            elif ctx.invoked_subcommand == "down":
-                console.info("Shutting down PikeSquares Server.")
-                pc.down()
-                raise typer.Exit() from None
-        except process_compose.ServiceUnavailableError:
-            console.info(f"=== {svc.name} Service Unavailable ===")
-            if ctx.invoked_subcommand == "down":
-                raise typer.Exit() from None
-
-        if ctx.invoked_subcommand == "up":
-            launch_pc(pc, device)
-    """
 
     @atexit.register
     def cleanup():
