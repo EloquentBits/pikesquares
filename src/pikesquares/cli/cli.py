@@ -49,6 +49,7 @@ from pikesquares.conf import (
 
 # from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain.base import ServiceBase
+from pikesquares.domain.device import register_device_stats
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ServiceUnavailableError,
@@ -205,7 +206,8 @@ def reset(
         ]
     ):
         # device.stop()
-        down(ctx)
+        # down(ctx)
+        pass
 
     if questionary.confirm("Drop db tables?").ask():
         # device.drop_db_tables()
@@ -300,9 +302,9 @@ async def info(
     process_compose = await services.aget(context, ProcessCompose)
     processes = [
         ("device", "device manager"),
-        # ("caddy", "reverse proxy"),
-        # ("dnsmasq", "dns server"),
-        # ("api", "PikeSquares API"),
+        ("caddy", "reverse proxy"),
+        ("dnsmasq", "dns server"),
+        ("api", "PikeSquares API"),
     ]
     # for _ in range(1, 5):
     for process in processes:
@@ -314,8 +316,8 @@ async def info(
             elif stats.status == "Completed":
                 console.warning(f":heavy_exclamation_mark:     {process[1]} \[process-compose] is not running.")
         except PCAPIUnavailableError:
-            await asyncio.sleep(1)
-            continue
+            console.warning(f":heavy_exclamation_mark:     Process Compose is not running.")
+            break
 
     for svc in services.get_pings(context):
         logger.debug(f"pinging {svc.name=}")
@@ -328,11 +330,21 @@ async def info(
             console.warning(f":heavy_exclamation_mark:     {svc_name} \[svcs] is not running.")
 
     if device:
+        uow = await services.aget(context, UnitOfWork)
+        # device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+        # for project in await uow.projects.list():
+        # project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+        # await device_zmq_monitor.create_or_restart_instance(
+        #    f"{project.service_id}.ini", project, project_zmq_monitor
+        # )
+        # console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
+
         try:
             if device.stats:
-                console.success("🚀 PikeSquares Server \[uWSGI] is running 🚀")
+                console.success(":heavy_check_mark:     Device Stats Server \[uWSGI] is running")
+                # console.success("🚀 Device Stats Server \[uWSGI] is running 🚀")
         except StatsReadError:
-            console.warning("PikeSquares Server \[uWSGI] is not running")
+            console.warning(":heavy_exclamation_mark:     Device Stats Server \[uWSGI] is not running")
 
     # http_router = services.get(context, DefaultHttpRouter)
     # stats = http_router.read_stats()
@@ -410,7 +422,8 @@ async def up(
 
     device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
     for project in await uow.projects.list():
-        await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
+        project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+        await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project, project_zmq_monitor)
         console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
     for router in await uow.routers.list():
@@ -1117,9 +1130,9 @@ async def main(
             """
     context["device"] = device
     project = await uow.projects.get_by_name("default-project") or await create_project("default-project", context, uow)
-    project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-    if not project.zmq_monitor:
-        project.zmq_monitor = await create_zmq_monitor(uow, project=project)
+    project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or await create_zmq_monitor(
+        uow, project=project
+    )
     context["default-project"] = project
 
     http_router = await uow.routers.get_by_name("default-http-router") or await create_http_router(
@@ -1131,6 +1144,8 @@ async def main(
     await register_api_process(context)
     await register_dnsmasq_process(context)
     await register_caddy_process(context)
+
+    await register_device_stats(context)
 
     # pc = services.get(context, ProcessCompose)
 
