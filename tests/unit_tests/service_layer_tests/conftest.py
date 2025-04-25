@@ -12,15 +12,6 @@ def context(device, registry):
     return {"device": device, 
             "svcs_registry": registry}
 
-# @pytest.fixture
-# def create_kwargs(data_dir, config_dir, run_dir, log_dir):
-#     return {
-#         "data_dir": data_dir.as_path(),
-#         "config_dir": config_dir.as_path(),
-#         "run_dir": run_dir.as_path(),
-#         "log_dir": log_dir.as_path(),
-#     }
-    
 @pytest.fixture
 def project(device, data_dir, config_dir, run_dir, log_dir):
     return Project(

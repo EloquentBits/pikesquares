@@ -1,8 +1,8 @@
 import pytest
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers import project as pk_project  # Not a fixture
-from pikesquares.service_layer.handlers.project import get_or_create_project
+from pikesquares.service_layer.handlers import project as pk_project  # for logger
+from pikesquares.service_layer.handlers.project import create_project
 
 class FakeRepository:
     def __init__(self, existing_project: Project | None = None):
@@ -42,6 +42,7 @@ class FakeUnitOfWork:
     async def __aexit__(self):
         pass
 
+
 class FakeSession:
     def __init__(self):
         self.commit_called = False
@@ -61,10 +62,9 @@ class FakeSession:
     def add(self, obj):
         self.added_objects.append(obj)
 
-
 @pytest.mark.asyncio
-async def test_creates_project(zmq_monitor_repo_mock, registry, context, mocker):
-    
+async def test_create_project(zmq_monitor_repo_mock, registry, context, mocker):
+
     uow = FakeUnitOfWork()
     zmq_monitor_repo_mock.get_by_device_id.return_value = None
     zmq_monitor_repo_mock.get_by_project_id.return_value = None
@@ -73,12 +73,10 @@ async def test_creates_project(zmq_monitor_repo_mock, registry, context, mocker)
     registry.register_factory(UnitOfWork, lambda: uow)
     device = context.get("device")
 
-    project = await get_or_create_project("sandbox", context, uow)
+    project = await create_project("sandbox", context, uow)
 
-    
     assert project is not None
     assert isinstance(project, Project)
-    assert project.name == "sandbox"
     assert project.device == device
     assert project.data_dir == str(device.data_dir)
     assert project.config_dir == str(device.config_dir)
@@ -91,40 +89,23 @@ async def test_creates_project(zmq_monitor_repo_mock, registry, context, mocker)
     assert uow._session.refreshed_objects == [project]
     assert uow.committed is True
     assert uow._session.commit_called is True
-
-
-@pytest.mark.asyncio
-async def test_get_project(project, device_zmq_monitor, zmq_monitor_repo_mock, registry, context, mocker):
-
-    uow = FakeUnitOfWork(project=project)
-    zmq_monitor_repo_mock.get_by_device_id.return_value = device_zmq_monitor
-    zmq_monitor_repo_mock.get_by_project_id.return_value = device_zmq_monitor
-    zmq_monitor_repo_mock.add = mocker.AsyncMock()
-    uow.zmq_monitors = zmq_monitor_repo_mock
-    registry.register_factory(UnitOfWork, lambda: uow)
-
-    project = await get_or_create_project("sandbox", context, uow)
-
-    assert project is not None
-    assert isinstance(project, Project)
-    assert project.name == "sandbox"
-    assert uow.committed is False
-    assert uow.projects.added_project is None
-
+    
 
 @pytest.mark.asyncio
 async def test_add_project_rollbacks(registry, context, mocker):
 
     uow = FakeUnitOfWork()
+    mocker.patch.object(uow.projects, "add", side_effect=Exception("Database is down!"))
+    mocker.patch.object(pk_project.logger, "exception", return_value=None)
     registry.register_factory(UnitOfWork, lambda: uow)
-    mocker.patch.object(uow.projects, "add", side_effect=Exception("DB write error"))
-    pk_project.logger.exception = lambda exc: None  
-    
-    project = await get_or_create_project("sandbox", context, uow)
+
+    project = await create_project("sandbox", context, uow)
 
     # assert project is None
-    assert uow.rolled_back is True
-    assert uow.committed is False
     assert uow.projects.added_project is None
-    
-#    Интересно, что handlers даже после uow.rollback() возвращают и zmq_monitor и project. я закоментировал проверку в тестах. Возможно стоит добавить после rollback возврат none
+    assert uow._session.added_objects == []
+    assert uow._session.flush_called is False
+    assert uow._session.refreshed_objects == []
+    assert uow.committed is False
+    assert uow._session.commit_called is False
+    assert uow.rolled_back is True

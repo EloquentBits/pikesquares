@@ -1,11 +1,9 @@
 import pytest
 from aiopath import AsyncPath
 
-from pikesquares.service_layer.handlers import monitors
+from pikesquares.service_layer.handlers import monitors # for logger
 from pikesquares.domain.monitors import ZMQMonitor
-from pikesquares.service_layer.handlers.monitors import get_or_create_zmq_monitor
-
-
+from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 
 class FakeRepository:
     def __init__(self, existing_zmq_monitor: ZMQMonitor | None = None):
@@ -22,12 +20,11 @@ class FakeRepository:
         await self._session.flush()
         await self._session.refresh(zmq_monitor)
 
-
 class FakeUnitOfWork:
     def __init__(self, zmq_monitor: ZMQMonitor | None = None):
         self.zmq_monitors = FakeRepository(existing_zmq_monitor=zmq_monitor)
         self.committed = False
-        self.rolled_back = False 
+        self.rolled_back = False
         self._session = FakeSession()
         self.zmq_monitors._session = self._session
 
@@ -43,7 +40,6 @@ class FakeUnitOfWork:
 
     async def __aexit__(self):
         pass
-
 
 class FakeSession:
     def __init__(self):
@@ -63,49 +59,43 @@ class FakeSession:
 
     def add(self, obj):
         self.added_objects.append(obj)
-        
 
-# Positive
+
 @pytest.mark.asyncio
-async def test_creates_zmq_monitor(project, run_dir):
-    
+async def test_create_zmq_monitor(project, run_dir):
+
     uow = FakeUnitOfWork()
     expected_socket = str(AsyncPath(run_dir.path) / f"{project.service_id}-zmq-monitor.sock")
 
-    zmq_monitor = await get_or_create_zmq_monitor(uow, project=project)
+    zmq_monitor = await create_zmq_monitor(uow, project=project)
 
-    assert uow.committed is True
     assert zmq_monitor is not None
     assert isinstance(zmq_monitor, ZMQMonitor)
     assert zmq_monitor.transport == "ipc"
     assert zmq_monitor.socket == expected_socket
+    assert zmq_monitor.project == project
     assert uow.zmq_monitors.added_zmq_monitor is zmq_monitor
+    assert uow._session.added_objects == [zmq_monitor]
+    assert uow._session.flush_called is True
+    assert uow._session.refreshed_objects == [zmq_monitor]
+    assert uow.committed is True
+    assert uow._session.commit_called is True
 
-    
 
 @pytest.mark.asyncio
-async def test_get_zmq_monitor(project, device_zmq_monitor):
-
-    uow = FakeUnitOfWork(zmq_monitor=device_zmq_monitor)
-    zmq_monitor = await get_or_create_zmq_monitor(uow, project=project)
-
-    assert uow.committed is False
-    assert zmq_monitor is zmq_monitor
-    assert uow.zmq_monitors.added_zmq_monitor is None
-
-
-# Negative
-@pytest.mark.asyncio
-async def test_creates_zmq_monitor_rollback(project, mocker):
+async def test_create_zmq_monitor_rollback(project, run_dir, mocker):
 
     uow = FakeUnitOfWork()
-    uow.zmq_monitors._session = uow._session
-    mocker.patch.object(uow.zmq_monitors, "add", side_effect=Exception("DB write error"))
-    monitors.logger.exception = lambda exc: None  
+    mocker.patch.object(uow.zmq_monitors, "add", side_effect=Exception("Database is down!"))
+    mocker.patch.object(monitors.logger, "exception", return_value=None)
 
-    zmq_monitor = await get_or_create_zmq_monitor(uow, project=project)
+    zmq_monitor = await create_zmq_monitor(uow, project=project)
 
-    # assert zmq_monitor is  None
-    assert uow.rolled_back is True 
-    assert uow.committed is False  
+    # assert zmq_monitor is None
     assert uow.zmq_monitors.added_zmq_monitor is None
+    assert uow._session.added_objects == []
+    assert uow._session.flush_called is False
+    assert uow._session.refreshed_objects == []
+    assert uow.committed is False
+    assert uow._session.commit_called is False
+    assert uow.rolled_back is True
