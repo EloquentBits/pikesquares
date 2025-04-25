@@ -10,7 +10,7 @@ from pikesquares.service_layer.uow import UnitOfWork
 logger = structlog.getLogger()
 
 
-async def get_or_create_zmq_monitor(
+async def create_zmq_monitor(
     uow: UnitOfWork,
     device: Device | None = None,
     project: Project | None = None,

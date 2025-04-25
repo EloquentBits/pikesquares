@@ -27,7 +27,6 @@ import structlog
 
 from pikesquares.services import register_factory
 from pikesquares.cli.console import console
-from pikesquares.adapters.database import DatabaseSessionManager
 
 logger = structlog.get_logger()
 

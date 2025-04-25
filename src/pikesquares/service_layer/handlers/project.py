@@ -8,7 +8,7 @@ from pikesquares.service_layer.uow import UnitOfWork
 logger = structlog.getLogger()
 
 
-async def get_or_create_project(
+async def create_project(
     name: str,
     context: dict,
     uow: UnitOfWork,
@@ -16,30 +16,24 @@ async def get_or_create_project(
 
     device = context.get("device")
 
-    project = await uow.projects.get_by_name(name)
-    project_created = not project
+    uwsgi_plugins = ["emperor_zeromq"]
 
-    if not project and device:
-        uwsgi_plugins = ["emperor_zeromq"]
-
-        project = Project(
-            service_id=f"project_{cuid()}",
-            name=name,
-            device=device,
-            uwsgi_plugins=", ".join(uwsgi_plugins),
-            data_dir=str(device.data_dir),
-            config_dir=str(device.config_dir),
-            log_dir=str(device.log_dir),
-            run_dir=str(device.run_dir),
-        )
-        try:
-            await uow.projects.add(project)
-            await uow.commit()
-        except Exception as exc:
-            logger.exception(exc)
-            await uow.rollback()
-    else:
-        logger.debug(f"Using existing project {project}")
+    project = Project(
+        service_id=f"project_{cuid()}",
+        name=name,
+        device=device,
+        uwsgi_plugins=", ".join(uwsgi_plugins),
+        data_dir=str(device.data_dir),
+        config_dir=str(device.config_dir),
+        log_dir=str(device.log_dir),
+        run_dir=str(device.run_dir),
+    )
+    try:
+        await uow.projects.add(project)
+        await uow.commit()
+    except Exception as exc:
+        logger.exception(exc)
+        await uow.rollback()
 
     # if project.enable_dir_monitor:
     #    if not await AsyncPath(project.apps_dir).exists():

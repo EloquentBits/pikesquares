@@ -13,7 +13,7 @@ from cuid import cuid
 # )
 from pikesquares import services
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers.project import get_or_create_project
+from pikesquares.service_layer.handlers.project import create_project
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
@@ -50,15 +50,15 @@ async def create(
     Aliases: [i] create, new
     """
     context = ctx.ensure_object(dict)
+    uow = await services.aget(context, UnitOfWork)
     name = project_name or console.ask(
-        "Please input a Project name or hit enter to use a random value",
+        "Please submit a project name or hit the Enter key to proceed with  a random value",
         default=randomname.get_name(),
         validators=[ServiceNameValidator],
     )
-    project = await get_or_create_project(name, context)
+    project = await create_project(name, context, uow)
     if project:
         console.success(f":heavy_check_mark:     Project '{project.name}' was successfully created!")
-        uow = await services.aget(context, UnitOfWork)
         device = context.get("device")
         if not device:
             raise AppConfigError("no device found in context")
@@ -122,10 +122,14 @@ async def list_(ctx: typer.Context, show_id: bool = False):
         console.warning("unable to lookup device")
         raise typer.Exit(0)
 
+    device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+
     projects = await uow.projects.list()
     if not len(projects):
         console.warning("No projects were initialized, nothing to show!")
         raise typer.Exit()
+
+    zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
 
     projects_out = []
     device_stats = device.stats()
