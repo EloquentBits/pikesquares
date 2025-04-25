@@ -251,6 +251,11 @@ DeviceProcess = NewType("DeviceProcess", Process)
 DNSMASQProcess = NewType("DNSMASQProcess", Process)
 
 
+async def process_compose_ping(pc: ProcessCompose):
+    # raise ServiceUnavailableError("process compose down")
+    return True
+
+
 async def register_process_compose(context: dict) -> None:
     """process-compose factory"""
 
@@ -308,12 +313,19 @@ async def register_process_compose(context: dict) -> None:
         context,
         ProcessCompose,
         process_compose_factory,
+        ping=process_compose_ping,
         # ping=svc: await svc.ping(),
     )
 
 
 def device_close():
     logger.debug("device closed")
+
+
+async def device_ping(device_data: tuple[DeviceProcess, ProcessMessages]):
+    process, msgs = device_data
+    # raise ServiceUnavailableError("dnsmasq down")
+    return True
 
 
 async def register_device_process(context: dict) -> None:
@@ -355,12 +367,19 @@ async def register_device_process(context: dict) -> None:
         context,
         DeviceProcess,
         device_process_factory,
+        ping=device_ping,
         on_registry_close=device_close,
     )
 
 
 def api_close():
     logger.debug("api closed")
+
+
+async def api_ping(api_data: tuple[APIProcess, ProcessMessages]):
+    process, msgs = api_data
+    # raise ServiceUnavailableError("dnsmasq down")
+    return True
 
 
 async def register_api_process(context: dict) -> None:
@@ -392,12 +411,19 @@ async def register_api_process(context: dict) -> None:
         context,
         APIProcess,
         api_process_factory,
+        ping=api_ping,
         on_registry_close=api_close,
     )
 
 
 def dnsmasq_close():
     logger.debug("dnsmasq closed")
+
+
+async def dnsmasq_ping(dnsmasq_data: tuple[DNSMASQProcess, ProcessMessages]):
+    process, msgs = dnsmasq_data
+    # raise ServiceUnavailableError("dnsmasq down")
+    return True
 
 
 async def register_dnsmasq_process(
@@ -440,12 +466,19 @@ async def register_dnsmasq_process(
         context,
         DNSMASQProcess,
         dnsmasq_process_factory,
+        ping=dnsmasq_ping,
         on_registry_close=dnsmasq_close,
     )
 
 
 def caddy_close():
     logger.debug("caddy closed")
+
+
+async def caddy_ping(caddy_data: tuple[CaddyProcess, ProcessMessages]):
+    process, msgs = caddy_data
+    # raise ServiceUnavailableError("dnsmasq down")
+    return True
 
 
 async def register_caddy_process(
@@ -502,5 +535,6 @@ async def register_caddy_process(
         context,
         CaddyProcess,
         caddy_process_factory,
+        ping=caddy_ping,
         on_registry_close=caddy_close,
     )
