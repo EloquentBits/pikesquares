@@ -18,6 +18,7 @@ from sqlmodel import (
 
 from pikesquares.exceptions import StatsReadError
 from pikesquares.presets.device import DeviceSection
+from pikesquares import services
 from pikesquares.services.data import DeviceStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
 
@@ -245,3 +246,26 @@ def register_device(
         #ping=lambda svc: svc.ping()
     )
 """
+
+
+async def ping_device_stats(device_stats: DeviceStats):
+    if device_stats:
+        return True
+
+
+async def register_device_stats(
+    context: dict,
+) -> None:
+
+    async def device_stats_factory():
+        device = context.get("device")
+        if device:
+            return device.stats
+
+    services.register_factory(
+        context,
+        DeviceStats,
+        device_stats_factory,
+        ping=ping_device_stats,
+        # ping=lambda svc: svc.ping()
+    )
