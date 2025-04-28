@@ -72,13 +72,10 @@ class UnitOfWork(UnitOfWorkBase):
         return await super().__aenter__()
 
     async def __aexit__(self, *args):
-        logger.debug("UOW close session")
         await self._session.close()
 
     async def commit(self):
-        logger.debug("UOW commit session")
         await self._session.commit()
 
     async def rollback(self):
-        logger.debug("UOW rollback session")
         await self._session.rollback()

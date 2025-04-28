@@ -1,4 +1,4 @@
-import enum
+#import enum
 import uuid
 
 import structlog
@@ -20,6 +20,7 @@ from sqlmodel import (
 from .base import TimeStampedBase  # , enum_values
 from .device import Device
 from .project import Project
+from .wsgi_app import WsgiApp
 
 logger = structlog.getLogger()
 
@@ -97,7 +98,7 @@ class ZMQMonitor(AppMonitorBase, table=True):
     def uwsgi_zmq_address(self) -> str | None:
         return f"zmq://{self.zmq_address}"
 
-    async def create_or_restart_instance(self, name: str, model: Device | Project, zmq_monitor=None) -> None:
+    async def create_or_restart_instance(self, name: str, model: Device | Project | WsgiApp, zmq_monitor=None) -> None:
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
         if self.zmq_address:

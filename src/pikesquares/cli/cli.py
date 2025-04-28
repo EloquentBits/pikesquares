@@ -67,7 +67,7 @@ from pikesquares.service_layer.handlers.project import create_project
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.services.apps.django import PythonRuntimeDjango
+from pikesquares.services.apps.django import PythonRuntimeDjango, DjangoSettings
 from pikesquares.services.apps.exceptions import (
     # PythonRuntimeCheckError,
     # PythonRuntimeDjangoCheckError,
@@ -279,6 +279,119 @@ def attach(
     pc = services.get(context, ProcessCompose)
     pc.attach()
 
+@app.command(rich_help_panel="Control", short_help="Launch a Service")
+@run_async
+async def launch(
+    ctx: typer.Context,
+):
+    """Launch a Service """
+    context = ctx.ensure_object(dict)
+    conf = await services.aget(context, AppConfig)
+    uow = await services.aget(context, UnitOfWork)
+    device = context.get("device")
+    if not device:
+        console.error("unable to locate device in app context")
+        raise typer.Exit(code=0) from None
+
+
+    app_name = "bugsink"
+    project_name = "bugsink"
+
+    project = await uow.projects.get_by_name(project_name) or await create_project(project_name, context, uow)
+    project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or await create_zmq_monitor(
+        uow, project=project
+    )
+    if not all([project,  project.zmq_monitor]):
+        logger.error(f"unable to set up project [{project_name}]")
+        raise typer.Exit(code=1) from None
+
+    app_root_dir = AsyncPath("/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/bugsink")
+
+    wsgi_app = await uow.wsgi_apps.get_by_name(app_name) 
+    runtime_base = PythonRuntime
+    py_kwargs = {
+        "app_root_dir": app_root_dir,
+        "uv_bin": conf.UV_BIN,
+        # "rich_live": live,
+    }
+    # console.info(py_kwargs)
+    if PythonRuntime.is_django(app_root_dir):
+        runtime = PythonRuntimeDjango(**py_kwargs)
+    else:
+        runtime = runtime_base(**py_kwargs)
+
+    if not wsgi_app:
+
+        service_type = "WSGI-App"
+        service_type_prefix = service_type.replace("-", "_").lower()
+        service_id = f"{service_type_prefix}_{cuid()}"
+        # proj_type = "Python"
+        pyvenv_dir = conf.pyvenvs_dir / service_id
+        wsgi_file = None
+        wsgi_module = None
+
+        if not await AsyncPath(app_root_dir).exists():
+            console.warning(f"Project root directory does not exist: {str(app_root_dir)}")
+            raise typer.Exit(code=1)
+        logger.info(f"{app_root_dir=}")
+
+        if isinstance(runtime, PythonRuntimeDjango):
+            django_settings = DjangoSettings(
+                settings_module ="bugsink_conf",
+                root_urlconf = "bugsink.urls",
+                wsgi_application = "bugsink.wsgi.application",
+            )
+            django_settings = django_settings or runtime.collected_project_metadata.get("django_settings")
+            if not django_settings:
+                raise DjangoSettingsError("unable to detect django settings")
+
+            logger.debug(django_settings.model_dump())
+            if 0:
+                django_check_messages = runtime.collected_project_metadata.get("django_check_messages", [])
+
+                for msg in django_check_messages.messages:
+                    logger.debug(f"{msg.id=}")
+                    logger.debug(f"{msg.message=}")
+
+            wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
+            wsgi_file = AsyncPath(runtime.app_root_dir) / AsyncPath("/".join(wsgi_parts) + ".py")
+            wsgi_module = django_settings.wsgi_application.split(".")[-1]
+
+        if not all([wsgi_file, wsgi_module]):
+            logger.info("unable to detect all the wsgi required settings.")
+            raise typer.Exit(0)
+
+        uwsgi_plugins = ["logfile",]
+
+        wsgi_app = await create_wsgi_app(
+            uow,
+            runtime,
+            service_id,
+            app_name,
+            wsgi_file,
+            wsgi_module,
+            project,
+            pyvenv_dir,
+            uwsgi_plugins=uwsgi_plugins,
+        )
+    else:
+        logger.info(f"launching existing app {wsgi_app.name} [{wsgi_app.service_id}]")
+
+    if not await AsyncPath(wsgi_app.pyvenv_dir).exists():
+        logger.info(f"installing dependencies into venv @ {wsgi_app.pyvenv_dir}")
+        cmd_env = {
+            # "UV_CACHE_DIR": str(conf.pv_cache_dir),
+            "UV_PROJECT_ENVIRONMENT": wsgi_app.pyvenv_dir,
+        }
+        runtime.create_venv(Path(wsgi_app.pyvenv_dir), cmd_env=cmd_env)
+        runtime.install_dependencies()
+
+    if project and project.zmq_monitor:
+        logger.debug(f"Launching {wsgi_app.name} [{wsgi_app.service_id}]")
+        await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
+        console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
+
+
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")
 @run_async
@@ -298,6 +411,10 @@ async def info(
     # console.success(":heavy_check_mark:     reverse proxy is running")
 
     device = context.get("device")
+    if not device:
+        console.error("unable to locate device in app context")
+        raise typer.Exit(code=0) from None
+
     await register_process_compose(context)
     process_compose = await services.aget(context, ProcessCompose)
     processes = [
@@ -329,22 +446,21 @@ async def info(
         except ServiceUnavailableError:
             console.warning(f":heavy_exclamation_mark:     {svc_name} \[svcs] is not running.")
 
-    if device:
-        uow = await services.aget(context, UnitOfWork)
-        # device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-        # for project in await uow.projects.list():
-        # project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-        # await device_zmq_monitor.create_or_restart_instance(
-        #    f"{project.service_id}.ini", project, project_zmq_monitor
-        # )
-        # console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
+    # uow = await services.aget(context, UnitOfWork)
+    # device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    # for project in await uow.projects.list():
+    # project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+    # await device_zmq_monitor.create_or_restart_instance(
+    #    f"{project.service_id}.ini", project, project_zmq_monitor
+    # )
+    # console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
-        try:
-            if device.stats:
-                console.success(":heavy_check_mark:     Device Stats Server \[uWSGI] is running")
-                # console.success("🚀 Device Stats Server \[uWSGI] is running 🚀")
-        except StatsReadError:
-            console.warning(":heavy_exclamation_mark:     Device Stats Server \[uWSGI] is not running")
+    try:
+        if device.stats:
+            console.success(":heavy_check_mark:     Device Stats Server \[uWSGI] is running")
+            # console.success("🚀 Device Stats Server \[uWSGI] is running 🚀")
+    except StatsReadError:
+        console.warning(":heavy_exclamation_mark:     Device Stats Server \[uWSGI] is not running")
 
     # http_router = services.get(context, DefaultHttpRouter)
     # stats = http_router.read_stats()

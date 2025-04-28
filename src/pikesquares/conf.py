@@ -72,7 +72,7 @@ class APISettings(BaseSettings):
     def all_cors_origins(self) -> list[str]:
         return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [self.FRONTEND_HOST]
 
-    PROJECT_NAME: str
+    PROJECT_NAME: str = "PikeSquares API"
     SENTRY_DSN: pydantic.HttpUrl | None = None
     # POSTGRES_SERVER: str
     # POSTGRES_PORT: int = 5432
@@ -124,8 +124,8 @@ class APISettings(BaseSettings):
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
 
     EMAIL_TEST_USER: pydantic.EmailStr = "test@example.com"
-    FIRST_SUPERUSER: pydantic.EmailStr
-    FIRST_SUPERUSER_PASSWORD: str
+    FIRST_SUPERUSER: pydantic.EmailStr = "admin@pikesquares.com"
+    FIRST_SUPERUSER_PASSWORD: str = "secret"
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
