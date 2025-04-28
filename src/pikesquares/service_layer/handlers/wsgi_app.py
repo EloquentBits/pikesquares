@@ -1,12 +1,14 @@
 from pathlib import Path
 
 import structlog
+from aiopath import AsyncPath
 
 from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.domain.project import Project
 from pikesquares.services.apps.exceptions import DjangoSettingsError
 from pikesquares.services.apps.python import PythonRuntime
+from pikesquares.services.apps.django import PythonRuntimeDjango, DjangoSettings 
 
 
 logger = structlog.getLogger()
@@ -15,42 +17,38 @@ logger = structlog.getLogger()
 async def create_wsgi_app(
     uow: UnitOfWork,
     runtime: PythonRuntime,
-    name: str,
     service_id: str,
+    name: str,
+    wsgi_file: AsyncPath,
+    wsgi_module: str,
     project: Project,
     pyvenv_dir: Path,
+    uwsgi_plugins: list[str] | None = None,
     # routers: list[Router],
 ) -> WsgiApp:
 
-    if "django_settings" not in runtime.collected_project_metadata:
-        raise DjangoSettingsError("unable to detect django settings")
+    #if uwsgi_plugins is not None:
+    #    uwsgi_plugins = ",".join(uwsgi_plugins)
+    #else:
+    #    uwsgi_plugins = []
 
-    django_settings = runtime.collected_project_metadata.get("django_settings")
-
-    # logger.debug(django_settings.model_dump())
-
-    django_check_messages = runtime.collected_project_metadata.get("django_check_messages", [])
-
-    for msg in django_check_messages.messages:
-        logger.debug(f"{msg.id=}")
-        logger.debug(f"{msg.message=}")
-
-    wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
-    wsgi_file = runtime.app_root_dir / Path("/".join(wsgi_parts) + ".py")
-    uwsgi_plugins = []
-    # if isinstance(runtime, PythonRuntimeDjango):
     wsgi_app = WsgiApp(
         service_id=service_id,
         name=name,
         project=project,
-        uwsgi_plugins=",".join(uwsgi_plugins),
+        uwsgi_plugins=",".join(uwsgi_plugins) if uwsgi_plugins else "",
         root_dir=str(runtime.app_root_dir),
         wsgi_file=str(wsgi_file),
-        wsgi_module=django_settings.wsgi_application.split(".")[-1],
+        wsgi_module=wsgi_module,
         pyvenv_dir=str(pyvenv_dir),
     )
 
-    await uow.wsgi_apps.add(wsgi_app)
-    await uow.commit()
-    logger.debug(f"Created {wsgi_app} ")
+    try:
+        await uow.wsgi_apps.add(wsgi_app)
+        await uow.commit()
+        logger.debug(f"Created {wsgi_app}")
+    except Exception as exc:
+        logger.exception(exc)
+        await uow.rollback()
+
     return wsgi_app

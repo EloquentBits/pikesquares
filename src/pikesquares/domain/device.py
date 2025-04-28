@@ -250,7 +250,10 @@ def register_device(
 
 async def ping_device_stats(device_stats: DeviceStats):
     if device_stats:
+        logger.debug(f"{device_stats.emperor=}")
         return True
+    else:
+        return False
 
 
 async def register_device_stats(
@@ -260,7 +263,10 @@ async def register_device_stats(
     async def device_stats_factory():
         device = context.get("device")
         if device:
-            return device.stats
+            try:
+                return Device.read_stats(device.stats_address)
+            except StatsReadError:
+                pass
 
     services.register_factory(
         context,

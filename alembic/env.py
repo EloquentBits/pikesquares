@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from pikesquares.app.core.config import settings
+from pikesquares.conf import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

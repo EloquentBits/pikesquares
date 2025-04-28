@@ -79,8 +79,7 @@ class UVMixin:
                 May also be set with the UV_CACHE_DIR environment variable.
             """
             try:
-                retcode, stdout, stderr = self.uv_cmd(
-                    [
+                retcode, stdout, stderr = self.uv_cmd([
                       *cmd_args,
                      "sync",
                      # "--directory", str(app_root_dir),
@@ -89,6 +88,8 @@ class UVMixin:
                      # "--no-sync",
                      "--all-groups", "--all-extras",
                      "--verbose",
+                    "--python",
+                    "/usr/bin/python3",
                      # If the lockfile is not up-to-date,
                      # an error will be raised instead of updating the lockfile.
                      "--locked",
