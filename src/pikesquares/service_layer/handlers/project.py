@@ -33,7 +33,7 @@ async def create_project(
         await uow.commit()
     except Exception as exc:
         logger.exception(exc)
-        await uow.rollback()
+        raise exc
 
     # if project.enable_dir_monitor:
     #    if not await AsyncPath(project.apps_dir).exists():

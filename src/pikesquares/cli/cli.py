@@ -536,16 +536,17 @@ async def up(
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
-    device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-    for project in await uow.projects.list():
-        project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-        await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project, project_zmq_monitor)
-        console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
+    async with uow:
+        device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+        for project in await uow.projects.list():
+            project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+            await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project, project_zmq_monitor)
+            console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
-    for router in await uow.routers.list():
-        await device_zmq_monitor.create_or_restart_instance(f"{router.service_id}.ini", router)
-        console.success(":heavy_check_mark:     Launching http router.. Done!")
-        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+        for router in await uow.routers.list():
+            await device_zmq_monitor.create_or_restart_instance(f"{router.service_id}.ini", router)
+            console.success(":heavy_check_mark:     Launching http router.. Done!")
+            console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")
@@ -997,14 +998,16 @@ async def init(
             raise typer.Exit() from None
         """
         uow = await services.aget(context, UnitOfWork)
-        wsgi_app = await create_wsgi_app(
-            uow,
-            runtime,
-            app_name,
-            service_id,
-            default_project,
-            pyvenv_dir,
-        )
+
+        async with uow:
+            wsgi_app = await create_wsgi_app(
+                uow,
+                runtime,
+                app_name,
+                service_id,
+                default_project,
+                pyvenv_dir,
+            )
         if default_project:
             # proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"
             await wsgi_app.zmq_monitor_create_instance()
@@ -1207,54 +1210,56 @@ async def main(
 
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
+    
     machine_id = await ServiceBase.read_machine_id()
     if not machine_id:
         raise AppConfigError("unable to read the machine-id")
 
-    device = await uow.devices.get_by_machine_id(machine_id)
-    if not device:
-        create_kwargs = {
-            "data_dir": str(conf.data_dir),
-            "config_dir": str(conf.config_dir),
-            "log_dir": str(conf.log_dir),
-            "run_dir": str(conf.run_dir),
-            "enable_tuntap_router": conf.ENABLE_TUNTAP_ROUTER,
-            "enable_dir_monitor": conf.ENABLE_DIR_MONITOR,
-        }
+    async with uow:
+        device = await uow.devices.get_by_machine_id(machine_id)
+        if not device:
+            create_kwargs = {
+                "data_dir": str(conf.data_dir),
+                "config_dir": str(conf.config_dir),
+                "log_dir": str(conf.log_dir),
+                "run_dir": str(conf.run_dir),
+                "enable_tuntap_router": conf.ENABLE_TUNTAP_ROUTER,
+                "enable_dir_monitor": conf.ENABLE_DIR_MONITOR,
+            }
 
-        device = await create_device(
-            context,
-            uow,
-            machine_id,
-            create_kwargs=create_kwargs,
-        )
+            device = await create_device(
+                context,
+                uow,
+                machine_id,
+                create_kwargs=create_kwargs,
+            )
+            context["device"] = device
+
+            device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
+                uow, device=device
+            )
+            # if not uwsgi_options:
+            for uwsgi_option in device.get_uwsgi_options():
+                await uow.uwsgi_options.add(uwsgi_option)
+                """
+                existing_options = await uow.uwsgi_options.list(device_id=device.id)
+                for uwsgi_option in device.build_uwsgi_options():
+                    #existing_options
+                    #if uwsgi_option.option_key
+                    #not in existing_options:
+                    #    await uow.uwsgi_options.add(uwsgi_option)
+                """
         context["device"] = device
-
-        device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
-            uow, device=device
+        project = await uow.projects.get_by_name("default-project") or await create_project("default-project", context, uow)
+        project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or await create_zmq_monitor(
+            uow, project=project
         )
-        # if not uwsgi_options:
-        for uwsgi_option in device.get_uwsgi_options():
-            await uow.uwsgi_options.add(uwsgi_option)
-            """
-            existing_options = await uow.uwsgi_options.list(device_id=device.id)
-            for uwsgi_option in device.build_uwsgi_options():
-                #existing_options
-                #if uwsgi_option.option_key
-                #not in existing_options:
-                #    await uow.uwsgi_options.add(uwsgi_option)
-            """
-    context["device"] = device
-    project = await uow.projects.get_by_name("default-project") or await create_project("default-project", context, uow)
-    project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or await create_zmq_monitor(
-        uow, project=project
-    )
-    context["default-project"] = project
+        context["default-project"] = project
 
-    http_router = await uow.routers.get_by_name("default-http-router") or await create_http_router(
-        "default-http-router", context, uow
-    )
-    context["default-http-router"] = http_router
+        http_router = await uow.routers.get_by_name("default-http-router") or await create_http_router(
+            "default-http-router", context, uow
+        )
+        context["default-http-router"] = http_router
 
     await register_device_process(context)
     await register_api_process(context)
