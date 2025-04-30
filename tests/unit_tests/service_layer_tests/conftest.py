@@ -17,7 +17,7 @@ def context(device, registry):
 def project(device, data_dir, config_dir, run_dir, log_dir):
     return Project(
         service_id="test-service",
-        name="test_project",
+        name="sandbox",
         device=device,
         data_dir=data_dir.as_path(),
         config_dir=config_dir.as_path(),
