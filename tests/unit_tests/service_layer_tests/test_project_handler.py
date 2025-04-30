@@ -1,7 +1,7 @@
 import pytest
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers import project as pk_project  # for logger
+from pikesquares.service_layer.handlers import project
 from pikesquares.service_layer.handlers.project import create_project
 
 class FakeRepository:
@@ -9,9 +9,6 @@ class FakeRepository:
         self._project = existing_project
         self.added_project = None
         self._session = None
-
-    async def get_by_name(self, name: str) -> Project | None:
-        return self._project
 
     async def add(self, project: Project):
         self.added_project = project
@@ -32,9 +29,6 @@ class FakeUnitOfWork:
     async def commit(self):
         self.committed = True
         await self._session.commit()
-
-    async def rollback(self):
-        self.rolled_back = True
 
     async def __aenter__(self):
         return self
@@ -89,23 +83,23 @@ async def test_create_project(zmq_monitor_repo_mock, registry, context, mocker):
     assert uow._session.refreshed_objects == [project]
     assert uow.committed is True
     assert uow._session.commit_called is True
-    
 
 @pytest.mark.asyncio
-async def test_add_project_rollbacks(registry, context, mocker):
+async def test_create_project_fails(registry, context, mocker):
 
     uow = FakeUnitOfWork()
     mocker.patch.object(uow.projects, "add", side_effect=Exception("Database is down!"))
-    mocker.patch.object(pk_project.logger, "exception", return_value=None)
+    logger_mock = mocker.patch.object(project.logger, "exception")
     registry.register_factory(UnitOfWork, lambda: uow)
 
-    project = await create_project("sandbox", context, uow)
 
-    # assert project is None
+    with pytest.raises(Exception, match="Database is down!"):
+        await create_project("sandbox", context, uow)
+
+    assert "Database is down!" in str(logger_mock.call_args[0][0])
     assert uow.projects.added_project is None
     assert uow._session.added_objects == []
     assert uow._session.flush_called is False
     assert uow._session.refreshed_objects == []
     assert uow.committed is False
     assert uow._session.commit_called is False
-    assert uow.rolled_back is True

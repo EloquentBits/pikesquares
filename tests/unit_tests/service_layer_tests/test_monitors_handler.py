@@ -1,6 +1,5 @@
 import pytest
 from aiopath import AsyncPath
-
 from pikesquares.service_layer.handlers import monitors # for logger
 from pikesquares.domain.monitors import ZMQMonitor
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
@@ -31,9 +30,6 @@ class FakeUnitOfWork:
     async def commit(self):
         self.committed = True
         await self._session.commit()
-
-    async def rollback(self):
-        self.rolled_back = True
 
     async def __aenter__(self):
         return self
@@ -87,15 +83,15 @@ async def test_create_zmq_monitor_rollback(project, run_dir, mocker):
 
     uow = FakeUnitOfWork()
     mocker.patch.object(uow.zmq_monitors, "add", side_effect=Exception("Database is down!"))
-    mocker.patch.object(monitors.logger, "exception", return_value=None)
+    logger_mock = mocker.patch.object(monitors.logger, "exception")
 
-    zmq_monitor = await create_zmq_monitor(uow, project=project)
+    with pytest.raises(Exception, match="Database is down!"):
+        await create_zmq_monitor(uow, project=project)
 
-    # assert zmq_monitor is None
+    assert "Database is down!" in str(logger_mock.call_args[0][0])
     assert uow.zmq_monitors.added_zmq_monitor is None
     assert uow._session.added_objects == []
     assert uow._session.flush_called is False
     assert uow._session.refreshed_objects == []
     assert uow.committed is False
     assert uow._session.commit_called is False
-    assert uow.rolled_back is True
