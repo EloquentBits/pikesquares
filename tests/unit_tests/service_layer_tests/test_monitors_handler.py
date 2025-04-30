@@ -1,6 +1,6 @@
 import pytest
 from aiopath import AsyncPath
-from pikesquares.service_layer.handlers import monitors # for logger
+from pikesquares.service_layer.handlers import monitors
 from pikesquares.domain.monitors import ZMQMonitor
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 
@@ -11,6 +11,9 @@ class FakeRepository:
         self._session = None
 
     async def get_by_project_id(self, project_id: str) -> ZMQMonitor | None:
+        return self._zmq_monitor
+
+    async def get_by_device_id(self, device_id: str) -> ZMQMonitor | None:
         return self._zmq_monitor
 
     async def add(self, zmq_monitor: ZMQMonitor):
@@ -58,10 +61,10 @@ class FakeSession:
 
 
 @pytest.mark.asyncio
-async def test_create_zmq_monitor(project, run_dir):
+async def test_create_zmq_monitor_with_project(project):
 
     uow = FakeUnitOfWork()
-    expected_socket = str(AsyncPath(run_dir.path) / f"{project.service_id}-zmq-monitor.sock")
+    expected_socket = str(AsyncPath(project.run_dir) / f"{project.service_id}-zmq-monitor.sock")
 
     zmq_monitor = await create_zmq_monitor(uow, project=project)
 
@@ -78,8 +81,69 @@ async def test_create_zmq_monitor(project, run_dir):
     assert uow._session.commit_called is True
 
 
+
 @pytest.mark.asyncio
-async def test_create_zmq_monitor_rollback(project, run_dir, mocker):
+async def test_create_zmq_monitor_with_device(device):
+    uow = FakeUnitOfWork()
+    expected_socket = str(AsyncPath(device.run_dir) / f"{device.service_id}-zmq-monitor.sock")
+
+    zmq_monitor = await create_zmq_monitor(uow, device=device)
+
+    assert zmq_monitor is not None
+    assert isinstance(zmq_monitor, ZMQMonitor)
+    assert zmq_monitor.transport == "ipc"
+    assert zmq_monitor.socket == expected_socket
+    assert zmq_monitor.device == device
+    assert uow.zmq_monitors.added_zmq_monitor is zmq_monitor
+    assert uow._session.added_objects == [zmq_monitor]
+    assert uow._session.flush_called is True
+    assert uow._session.refreshed_objects == [zmq_monitor]
+    assert uow.committed is True
+    assert uow._session.commit_called is True
+
+
+@pytest.mark.asyncio
+async def test_create_zmq_monitor_with_device_and_project(device, project):
+    uow = FakeUnitOfWork()
+    expected_socket = str(AsyncPath(project.run_dir) / f"{project.service_id}-zmq-monitor.sock")
+
+    zmq_monitor = await create_zmq_monitor(uow, device=device, project=project)
+
+    assert zmq_monitor is not None
+    assert isinstance(zmq_monitor, ZMQMonitor)
+    assert zmq_monitor.transport == "ipc"
+    assert zmq_monitor.socket == expected_socket
+    assert zmq_monitor.device == device
+    assert uow.zmq_monitors.added_zmq_monitor is zmq_monitor
+    assert uow._session.added_objects == [zmq_monitor]
+    assert uow._session.flush_called is True
+    assert uow._session.refreshed_objects == [zmq_monitor]
+    assert uow.committed is True
+    assert uow._session.commit_called is True
+
+
+@pytest.mark.asyncio
+async def test_create_zmq_monitor_without_device_or_project():
+    uow = FakeUnitOfWork()
+
+    zmq_monitor = await create_zmq_monitor(uow)
+
+    assert zmq_monitor is not None
+    assert isinstance(zmq_monitor, ZMQMonitor)
+    assert zmq_monitor.transport == "ipc"
+    assert zmq_monitor.device is None
+    assert zmq_monitor.project is None
+    assert zmq_monitor.socket is None
+    assert uow.zmq_monitors.added_zmq_monitor is zmq_monitor
+    assert uow._session.added_objects == [zmq_monitor]
+    assert uow._session.flush_called is True
+    assert uow._session.refreshed_objects == [zmq_monitor]
+    assert uow.committed is True
+    assert uow._session.commit_called is True
+    
+
+@pytest.mark.asyncio
+async def test_create_zmq_monitor_fails(project, run_dir, mocker):
 
     uow = FakeUnitOfWork()
     mocker.patch.object(uow.zmq_monitors, "add", side_effect=Exception("Database is down!"))
@@ -95,3 +159,4 @@ async def test_create_zmq_monitor_rollback(project, run_dir, mocker):
     assert uow._session.refreshed_objects == []
     assert uow.committed is False
     assert uow._session.commit_called is False
+

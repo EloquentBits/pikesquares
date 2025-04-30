@@ -1,6 +1,5 @@
 import pytest
 from pikesquares.domain.project import Project
-from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.service_layer.handlers import project
 from pikesquares.service_layer.handlers.project import create_project
 
@@ -57,16 +56,10 @@ class FakeSession:
         self.added_objects.append(obj)
 
 @pytest.mark.asyncio
-async def test_create_project(zmq_monitor_repo_mock, registry, context, mocker):
+async def test_create_project_success(zmq_monitor_repo_mock, registry, context, mocker):
 
     uow = FakeUnitOfWork()
-    zmq_monitor_repo_mock.get_by_device_id.return_value = None
-    zmq_monitor_repo_mock.get_by_project_id.return_value = None
-    zmq_monitor_repo_mock.add = mocker.AsyncMock()
-    uow.zmq_monitors = zmq_monitor_repo_mock
-    registry.register_factory(UnitOfWork, lambda: uow)
     device = context.get("device")
-
     project = await create_project("sandbox", context, uow)
 
     assert project is not None
@@ -90,7 +83,6 @@ async def test_create_project_fails(registry, context, mocker):
     uow = FakeUnitOfWork()
     mocker.patch.object(uow.projects, "add", side_effect=Exception("Database is down!"))
     logger_mock = mocker.patch.object(project.logger, "exception")
-    registry.register_factory(UnitOfWork, lambda: uow)
 
 
     with pytest.raises(Exception, match="Database is down!"):
