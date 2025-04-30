@@ -38,7 +38,7 @@ async def create_http_router(
         logger.debug(f"Created {http_router=}")
     except Exception as exc:
         logger.exception(exc)
-        await uow.rollback()
+        raise exc
 
     # if device.enable_dir_monitor:
     #    try:

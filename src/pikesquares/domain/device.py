@@ -70,6 +70,10 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     def tuntap_router_socket_address(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-tuntap.sock"
 
+    @property
+    def tuntap_router_stats_address(self) -> Path:
+        return Path(self.run_dir) / f"{self.service_id}-tuntap-stats.sock"
+
     def stats(self) -> DeviceStats | None:
 
         if not self.stats_address.exists():

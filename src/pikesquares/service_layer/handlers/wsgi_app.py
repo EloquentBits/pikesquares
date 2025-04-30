@@ -49,6 +49,6 @@ async def create_wsgi_app(
         logger.debug(f"Created {wsgi_app}")
     except Exception as exc:
         logger.exception(exc)
-        await uow.rollback()
+        raise exc
 
     return wsgi_app
