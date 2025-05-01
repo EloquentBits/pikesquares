@@ -37,10 +37,8 @@ async def create_zmq_monitor(
         zmq_monitor = ZMQMonitor(**create_kwargs)
         try:
             await uow.zmq_monitors.add(zmq_monitor)
-            await uow.commit()
             logger.debug(f"Created {zmq_monitor} ")
         except Exception as exc:
-            logger.exception(exc)
             raise exc
     else:
         logger.debug(f"Using existing zmq_monitor {zmq_monitor}")
