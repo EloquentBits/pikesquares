@@ -41,7 +41,7 @@ async def create_zmq_monitor(
             logger.debug(f"Created {zmq_monitor} ")
         except Exception as exc:
             logger.exception(exc)
-            await uow.rollback()
+            raise exc
     else:
         logger.debug(f"Using existing zmq_monitor {zmq_monitor}")
 

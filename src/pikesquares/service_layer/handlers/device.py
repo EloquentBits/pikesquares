@@ -39,9 +39,7 @@ async def create_device(
         #        logger.error("permission denied writing project uwsgi config to disk")
         #    else:
         #        logger.debug(f"wrote config to file: {uwsgi_config}")
-        await uow.commit()
     except Exception as exc:
-        logger.exception(exc)
-        await uow.rollback()
+        raise exc
 
     return device
