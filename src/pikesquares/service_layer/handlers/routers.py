@@ -34,8 +34,8 @@ async def create_http_router(
     try:
         logger.debug(f"adding {http_router} to {device}")
         await uow.routers.add(http_router)
-        await uow.commit()
         logger.debug(f"Created {http_router=}")
+
     except Exception as exc:
         logger.exception(exc)
         raise exc

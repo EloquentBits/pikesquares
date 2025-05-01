@@ -1190,7 +1190,7 @@ async def main(
         context,
         AsyncSession,
         get_session,
-        ping=lambda session: session.execute(text("SELECT 1")),
+        #ping=lambda session: session.execute(text("SELECT 1")),
     )
     session = await services.aget(context, AsyncSession)
 
@@ -1217,49 +1217,53 @@ async def main(
 
     async with uow:
         device = await uow.devices.get_by_machine_id(machine_id)
-        if not device:
-            create_kwargs = {
-                "data_dir": str(conf.data_dir),
-                "config_dir": str(conf.config_dir),
-                "log_dir": str(conf.log_dir),
-                "run_dir": str(conf.run_dir),
-                "enable_tuntap_router": conf.ENABLE_TUNTAP_ROUTER,
-                "enable_dir_monitor": conf.ENABLE_DIR_MONITOR,
-            }
+        try:
+            if not device:
+                create_kwargs = {
+                    "data_dir": str(conf.data_dir),
+                    "config_dir": str(conf.config_dir),
+                    "log_dir": str(conf.log_dir),
+                    "run_dir": str(conf.run_dir),
+                    "enable_tuntap_router": conf.ENABLE_TUNTAP_ROUTER,
+                    "enable_dir_monitor": conf.ENABLE_DIR_MONITOR,
+                }
 
-            device = await create_device(
-                context,
-                uow,
-                machine_id,
-                create_kwargs=create_kwargs,
-            )
+                device = await create_device(
+                    context,
+                    uow,
+                    machine_id,
+                    create_kwargs=create_kwargs,
+                )
+                context["device"] = device
+
+                device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
+                    uow, device=device
+                )
+                # if not uwsgi_options:
+                for uwsgi_option in device.get_uwsgi_options():
+                    await uow.uwsgi_options.add(uwsgi_option)
+                    """
+                    existing_options = await uow.uwsgi_options.list(device_id=device.id)
+                    for uwsgi_option in device.build_uwsgi_options():
+                        #existing_options
+                        #if uwsgi_option.option_key
+                        #not in existing_options:
+                        #    await uow.uwsgi_options.add(uwsgi_option)
+                    """
             context["device"] = device
-
-            device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
-                uow, device=device
+            project = await uow.projects.get_by_name("default-project") or await create_project("default-project", context, uow)
+            project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or await create_zmq_monitor(
+                uow, project=project
             )
-            # if not uwsgi_options:
-            for uwsgi_option in device.get_uwsgi_options():
-                await uow.uwsgi_options.add(uwsgi_option)
-                """
-                existing_options = await uow.uwsgi_options.list(device_id=device.id)
-                for uwsgi_option in device.build_uwsgi_options():
-                    #existing_options
-                    #if uwsgi_option.option_key
-                    #not in existing_options:
-                    #    await uow.uwsgi_options.add(uwsgi_option)
-                """
-        context["device"] = device
-        project = await uow.projects.get_by_name("default-project") or await create_project("default-project", context, uow)
-        project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or await create_zmq_monitor(
-            uow, project=project
-        )
-        context["default-project"] = project
+            context["default-project"] = project
 
-        http_router = await uow.routers.get_by_name("default-http-router") or await create_http_router(
-            "default-http-router", context, uow
-        )
-        context["default-http-router"] = http_router
+            http_router = await uow.routers.get_by_name("default-http-router") or await create_http_router(
+                "default-http-router", context, uow
+            )
+            context["default-http-router"] = http_router
+        except Exception as exc:
+            logger.exception(exc)
+            await uow.rollback()
 
     await register_device_process(context)
     await register_api_process(context)
