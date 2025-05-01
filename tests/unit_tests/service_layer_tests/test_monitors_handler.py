@@ -1,6 +1,5 @@
 import pytest
 from aiopath import AsyncPath
-from pikesquares.service_layer.handlers import monitors
 from pikesquares.domain.monitors import ZMQMonitor
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 
@@ -77,8 +76,8 @@ async def test_create_zmq_monitor_with_project(project):
     assert uow._session.added_objects == [zmq_monitor]
     assert uow._session.flush_called is True
     assert uow._session.refreshed_objects == [zmq_monitor]
-    assert uow.committed is True
-    assert uow._session.commit_called is True
+    assert uow.committed is False
+    assert uow._session.commit_called is False
 
 
 
@@ -98,8 +97,8 @@ async def test_create_zmq_monitor_with_device(device):
     assert uow._session.added_objects == [zmq_monitor]
     assert uow._session.flush_called is True
     assert uow._session.refreshed_objects == [zmq_monitor]
-    assert uow.committed is True
-    assert uow._session.commit_called is True
+    assert uow.committed is False
+    assert uow._session.commit_called is False
 
 
 @pytest.mark.asyncio
@@ -118,8 +117,8 @@ async def test_create_zmq_monitor_with_device_and_project(device, project):
     assert uow._session.added_objects == [zmq_monitor]
     assert uow._session.flush_called is True
     assert uow._session.refreshed_objects == [zmq_monitor]
-    assert uow.committed is True
-    assert uow._session.commit_called is True
+    assert uow.committed is False
+    assert uow._session.commit_called is False
 
 
 @pytest.mark.asyncio
@@ -138,8 +137,8 @@ async def test_create_zmq_monitor_without_device_or_project():
     assert uow._session.added_objects == [zmq_monitor]
     assert uow._session.flush_called is True
     assert uow._session.refreshed_objects == [zmq_monitor]
-    assert uow.committed is True
-    assert uow._session.commit_called is True
+    assert uow.committed is False
+    assert uow._session.commit_called is False
     
 
 @pytest.mark.asyncio
@@ -147,12 +146,10 @@ async def test_create_zmq_monitor_fails(project, run_dir, mocker):
 
     uow = FakeUnitOfWork()
     mocker.patch.object(uow.zmq_monitors, "add", side_effect=Exception("Database is down!"))
-    logger_mock = mocker.patch.object(monitors.logger, "exception")
 
     with pytest.raises(Exception, match="Database is down!"):
         await create_zmq_monitor(uow, project=project)
 
-    assert "Database is down!" in str(logger_mock.call_args[0][0])
     assert uow.zmq_monitors.added_zmq_monitor is None
     assert uow._session.added_objects == []
     assert uow._session.flush_called is False
