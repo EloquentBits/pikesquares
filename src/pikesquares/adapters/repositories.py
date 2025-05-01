@@ -12,6 +12,8 @@ from pikesquares.domain.device import Device, DeviceUWSGIOptions
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import (
     BaseRouter,
+    TuntapGateway,
+    TuntapDevice,
     # HttpRouter,
     # HttpsRouter,
 )
@@ -331,3 +333,68 @@ class ZMQMonitorRepository(GenericSqlRepository[ZMQMonitor], ZMQMonitorRepositor
     #    results = await self._session.exec(stmt)
     #    if results:
     ##        return results.all()
+
+
+
+class TuntapGatewayRepositoryBase(GenericRepository[TuntapGateway], ABC):
+    """TuntapGateway repository."""
+
+    @abstractmethod
+    async def get_by_name(self, name: str) -> TuntapGateway | None:
+        raise NotImplementedError()
+
+
+    async def get_by_device_id(self, device_id: str) -> Sequence[TuntapGateway] | None:
+        raise NotImplementedError()
+
+class TuntapGatewayRepository(GenericSqlRepository[TuntapGateway], TuntapGatewayRepositoryBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, TuntapGateway)
+
+    async def get_by_name(self, name: str) -> TuntapGateway | None:
+        stmt = select(TuntapGateway).where(TuntapGateway.name == name)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
+
+    async def get_by_device_id(self, device_id: str) -> Sequence[TuntapGateway] | None:
+        stmt = (
+            select(TuntapGateway)
+            .where(TuntapGateway.device_id == device_id)
+        )
+        results = await self._session.exec(stmt)
+        if results:
+            return results.all()
+
+
+class TuntapDeviceRepositoryBase(GenericRepository[TuntapDevice], ABC):
+    """TuntapDevice repository."""
+
+    @abstractmethod
+    async def get_by_name(self, name: str) -> TuntapGateway | None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_by_tuntap_gateway_id(self, tuntap_gateway_id: str) -> TuntapDevice | None:
+        raise NotImplementedError()
+
+
+class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRepositoryBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, TuntapDevice)
+
+
+    async def get_by_name(self, name: str) -> Project | None:
+        stmt = select(TuntapDevice).where(TuntapDevice.name == name)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
+
+    async def get_by_tuntap_gateway_id(self, tuntap_gateway_id: str) -> TuntapDevice | None:
+        stmt = select(ZMQMonitor).where(TuntapDevice.tuntap_gateway_id == tuntap_gateway_id)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj

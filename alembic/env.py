@@ -31,17 +31,19 @@ from pikesquares.domain.base import ServiceBase
 
 from pikesquares.domain.monitors import ZMQMonitor, DirMonitor
 
-from pikesquares.domain.device import (
-    Device,
-    DeviceUWSGIOptions,
-)
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import (
+    TuntapDevice,
+    TuntapGateway,
     BaseRouter,
     # HttpRouter,
     # HttpsRouter,
 )
 from pikesquares.domain.wsgi_app import WsgiApp
+from pikesquares.domain.device import (
+    Device,
+    DeviceUWSGIOptions,
+)
 
 
 target_metadata = SQLModel.metadata

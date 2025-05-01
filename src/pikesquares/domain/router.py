@@ -1,18 +1,61 @@
+import uuid
 from pathlib import Path
 
 import pydantic
 import structlog
 from cuid import cuid
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 # from pikesquares import get_first_available_port
 from pikesquares.conf import ensure_system_path
 from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
 
-from .base import ServiceBase
+from .base import ServiceBase, TimeStampedBase
 from .device import Device
+from uwsgiconf.options.routing_routers import RouterTunTap
 
 logger = structlog.getLogger()
+
+
+class TuntapGateway(TimeStampedBase, table=True):
+    """tuntap router"""
+
+    __tablename__ = "tuntap_gateways"
+
+
+    id: str = Field(
+        primary_key=True,
+        default_factory=lambda: str(uuid.uuid4()),
+        max_length=36,
+    )
+    name: str = Field(default="device0", max_length=32)
+    socket: str | None = Field(max_length=150, default=None)
+    ip: str | None = Field(max_length=25, default=None)
+    netmask: str | None = Field(max_length=25, default=None)
+    device_id: str | None = Field(default=None, foreign_key="devices.id")
+    device: Device = Relationship(back_populates="tuntap_gateways")
+
+    tuntap_devices: list["TuntapDevice"] = Relationship(back_populates="tuntap_gateway")
+
+
+class TuntapDevice(TimeStampedBase, table=True):
+    """tuntap device"""
+
+    __tablename__ = "tuntap_devices"
+
+
+    id: str = Field(
+        primary_key=True,
+        default_factory=lambda: str(uuid.uuid4()),
+        max_length=36,
+    )
+    name: str = Field(default="device0", max_length=32)
+    ip: str | None = Field(max_length=25, default=None)
+    netmask: str | None = Field(max_length=25, default=None)
+
+    tuntap_gateway_id: int | None = Field(foreign_key="tuntap_gateways.id", unique=True)
+    tuntap_gateway: TuntapGateway | None = Relationship(back_populates="tuntap_devices")
+
 
 
 class BaseRouter(ServiceBase, table=True):
@@ -33,12 +76,77 @@ class BaseRouter(ServiceBase, table=True):
             return HttpsRouterSection
         return HttpRouterSection
 
-    @pydantic.computed_field
+
+    def get_uwsgi_config(self,
+                         zmq_monitor=None,
+                         tuntap_router=False,
+                ):
+        section = self.uwsgi_config_section_class(self)
+        
+        """
+        ; we need it as the vassal have no way to know it is jailed
+        ; without it post_jail plugin hook would be never executed
+        jailed = true
+        ; create uwsgi0 tun interface and force it to connect to the Emperor exposed unix socket
+        tuntap-device = uwsgi0 ../run/tuntap.socket
+        """
+
+        #tuntap_router_socket_address
+        if tuntap_router:
+
+            section._set("jailed", "true")
+
+            # http_router_cma30m5zj0002ljj1hh1hqsm4
+            network_device_name = f"psq-router-{self.service_id.split('_')[-1][:5]}"
+
+            router = RouterTunTap().device_connect(
+                device_name=network_device_name,
+                socket="/tmp/tuntap.socket",
+            ).device_add_rule(
+                direction="in",
+                action="route",
+                src="192.168.0.1",
+                dst="192.168.0.2",
+                target="10.20.30.40:5060",
+            )
+            section.routing.use_router(router)
+
+            #; bring up loopback
+            #exec-as-root = ifconfig lo up
+            section.main_process.run_command_on_event(
+                command="ifconfig lo up",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+            # bring up interface uwsgi0
+            #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
+            section.main_process.run_command_on_event(
+                command=f"ifconfig {network_device_name} 192.168.0.1 netmask 255.255.255.0 up",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+            # and set the default gateway
+            #exec-as-root = route add default gw 192.168.0.1
+            section.main_process.run_command_on_event(
+                command="route add default gw 192.168.0.1",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+
+            section.main_process.run_command_on_event(
+                command="",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+            # ping something to register
+            #exec-as-root = ping -c 1 192.168.0.1
+
+
+
+        return super().get_uwsgi_config(zmq_monitor=zmq_monitor, tuntap_router=tuntap_router)
+
     @property
     def service_config(self) -> Path | None:
         if self.enable_dir_monitor:
             service_config_dir = ensure_system_path(Path(self.config_dir) / "projects")
             return service_config_dir / f"{self.service_id}.ini"
+
 
     # @pydantic.computed_field
     # def resubscribe_to(self) -> Path:

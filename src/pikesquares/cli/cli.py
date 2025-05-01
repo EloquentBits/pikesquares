@@ -62,7 +62,7 @@ from pikesquares.domain.process_compose import (
 )
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.device import create_device
-from pikesquares.service_layer.handlers.routers import create_http_router
+from pikesquares.service_layer.handlers.routers import create_http_router, create_tuntap_gateway
 from pikesquares.service_layer.handlers.project import create_project
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
@@ -1239,6 +1239,12 @@ async def main(
                 device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
                     uow, device=device
                 )
+
+                device.tuntap_gateways = await uow.tuntap_gateways.get_by_device_id(device.id)
+                if not device.tuntap_gateways:
+                    tuntap_gateway =  await create_tuntap_gateway(context, uow)
+                    logger.debug(f"CREATED TUNTAP GW {tuntap_gateway}")
+
                 # if not uwsgi_options:
                 for uwsgi_option in device.get_uwsgi_options():
                     await uow.uwsgi_options.add(uwsgi_option)
@@ -1264,6 +1270,8 @@ async def main(
         except Exception as exc:
             logger.exception(exc)
             await uow.rollback()
+        else:
+            await uow.commit()
 
     await register_device_process(context)
     await register_api_process(context)

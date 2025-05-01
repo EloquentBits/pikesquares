@@ -1,10 +1,11 @@
 import structlog
 from cuid import cuid
+from aiopath import AsyncPath
 
 from pikesquares import get_first_available_port
 from pikesquares import services
 from pikesquares.domain.device import Device
-from pikesquares.domain.router import BaseRouter
+from pikesquares.domain.router import BaseRouter, TuntapGateway, TuntapDevice
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
@@ -49,3 +50,40 @@ async def create_http_router(
     #    else:
 
     return http_router
+
+
+async def create_tuntap_gateway(
+    context: dict,
+    uow: UnitOfWork,
+    name: str | None = None,
+) -> BaseRouter:
+
+    device = context.get("device")
+    name = f"tuntap-gateway-{cuid()}"
+    ip = "192.168.0.1"
+    netmask = "255.255.255.0"
+    tuntap_gateway = TuntapGateway(
+        name=name,
+        socket=str(AsyncPath(device.run_dir) / f"{name}.sock"),
+        ip=ip,
+        netmask=netmask,
+        device=device,
+    )
+    try:
+        logger.debug(f"adding {tuntap_gateway} to {device}")
+        await uow.tuntap_gateways.add(tuntap_gateway)
+        logger.debug(f"Created {tuntap_gateway=}")
+
+    except Exception as exc:
+        logger.exception(exc)
+        raise exc
+
+    # if device.enable_dir_monitor:
+    #    try:
+    #        uwsgi_config = http_router.write_uwsgi_config()
+    #    except PermissionError:
+    #        logger.error("permission denied writing router uwsgi config to disk")
+    #        logger.debug(f"wrote config to file: {uwsgi_config}")
+    #    else:
+
+    return tuntap_gateway

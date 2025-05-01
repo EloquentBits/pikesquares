@@ -11,7 +11,6 @@ from datetime import (
 from pathlib import Path
 
 # from typing import Any
-
 import pydantic
 import structlog
 from aiopath import AsyncPath
@@ -22,17 +21,16 @@ from sqlalchemy import (
 )
 from sqlmodel import (
     # select,
-    INTEGER,
-    Column,
+    #INTEGER,
+    #Column,
     Field,
-    Enum,
+    #Enum,
     # Integer,
     # String,
     # ForeignKey,
-    Relationship,
+    #Relationship,
     SQLModel,
 )
-
 
 from pikesquares import __app_name__, __version__
 from pikesquares.exceptions import (
@@ -176,7 +174,11 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def write_uwsgi_config(self) -> Path:
         return self.uwsgi_config_section_class(self).as_configuration().tofile(self.service_config)
 
-    def get_uwsgi_config(self, zmq_monitor=None) -> str:
+    def get_uwsgi_config(
+            self,
+            zmq_monitor=None,
+            tuntap_router=False,
+    ) -> str:
         section = self.uwsgi_config_section_class(self)
 
         if zmq_monitor:

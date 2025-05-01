@@ -167,7 +167,7 @@ def ensure_system_path(
     is_root: bool = os.getuid() == 0
 
     if not is_root and not Path(new_path).exists():
-        raise AppConfigError(f"unable locate user: {owner_username}") from None
+        raise AppConfigError(f"{new_path} does not exist.") from None
 
     local_path: local.LocalPath = local.path(Path(new_path))
     if not local_path.exists():

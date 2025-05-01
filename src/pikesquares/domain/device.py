@@ -16,6 +16,8 @@ from sqlmodel import (
     SQLModel,
 )
 
+from sqlalchemy import event
+
 from pikesquares.exceptions import StatsReadError
 from pikesquares.presets.device import DeviceSection
 from pikesquares import services
@@ -23,6 +25,8 @@ from pikesquares.services.data import DeviceStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
 
 from .base import ServiceBase, TimeStampedBase
+
+from uwsgiconf.options.routing_routers import RouterTunTap
 
 
 logger = structlog.getLogger()
@@ -37,6 +41,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     routers: list["BaseRouter"] = Relationship(back_populates="device")
     projects: list["Project"] = Relationship(back_populates="device")
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="device", sa_relationship_kwargs={"uselist": False})
+    tuntap_gateways: list["TuntapGateway"] = Relationship(back_populates="device")
 
     enable_dir_monitor: bool = False
     enable_tuntap_router: bool = False
@@ -65,6 +70,55 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
         """uWSGI Stats Server socket address"""
         return Path(self.run_dir) / f"{self.service_id}-tuntap-stats.sock"
+
+
+    def get_uwsgi_config(self,
+                         zmq_monitor=None,
+                         tuntap_router=False,
+                ):
+
+        section = self.uwsgi_config_section_class(self)
+
+        if tuntap_router:
+
+            network_device_name = "psq0"
+            router = RouterTunTap(
+                on=str(self.tuntap_router_socket_address),
+                device=network_device_name,
+                stats_server=str(self.tuntap_router_stats_address),
+            )
+            router.add_firewall_rule(direction="out", action="allow", src="192.168.0.0/24", dst="192.168.0.1")
+            router.add_firewall_rule(direction="out", action="deny", src="192.168.0.0/24", dst="192.168.0.0/24")
+            router.add_firewall_rule(direction="out", action="allow", src="192.168.0.0/24", dst="0.0.0.0")
+            router.add_firewall_rule(direction="out", action="deny")
+            router.add_firewall_rule(direction="in", action="allow", src="192.168.0.1", dst="192.168.0.0/24")
+            router.add_firewall_rule(direction="in", action="deny", src="192.168.0.0/24", dst="192.168.0.0/24")
+            router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst="192.168.0.0/24")
+            router.add_firewall_rule(direction="in", action="deny")
+            section.routing.use_router(router)
+
+            # give it an ip address
+            section.main_process.run_command_on_event(
+                command=f"ifconfig {network_device_name} 192.168.0.1 netmask 255.255.255.0 up",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+            # setup nat
+            section.main_process.run_command_on_event(
+                command="iptables -t nat -F", phase=section.main_process.phases.PRIV_DROP_PRE
+            )
+            section.main_process.run_command_on_event(
+                command="iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+            # enable linux ip forwarding
+            section.main_process.run_command_on_event(
+                command="echo 1 >/proc/sys/net/ipv4/ip_forward",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+            # force vassals to be created in a new network namespace
+            section._set("emperor-use-clone", "net")
+        return super().get_uwsgi_config(zmq_monitor=zmq_monitor)
+
 
     @property
     def tuntap_router_socket_address(self) -> Path:
@@ -254,7 +308,7 @@ def register_device(
 
 async def ping_device_stats(device_stats: DeviceStats):
     if device_stats:
-        logger.debug(f"{device_stats.emperor=}")
+        logger.debug(f"{device_stats=}")
         return True
     else:
         return False
@@ -279,3 +333,36 @@ async def register_device_stats(
         ping=ping_device_stats,
         # ping=lambda svc: svc.ping()
     )
+
+
+@event.listens_for(Device, "after_insert")
+def handle_device_created(
+    mapper,
+    connection,
+    target,
+) -> Device:
+    device = target
+    logger.info(f"DEVICE DEVICE DEVICE {device=}")
+    """
+    device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
+        uow, device=device
+    )
+    # if not uwsgi_options:
+    for uwsgi_option in device.get_uwsgi_options():
+        await uow.uwsgi_options.add(uwsgi_option)
+    """
+
+    """
+        existing_options = await uow.uwsgi_options.list(device_id=device.id)
+        for uwsgi_option in device.build_uwsgi_options():
+            #existing_options
+            #if uwsgi_option.option_key
+            #not in existing_options:
+            #    await uow.uwsgi_options.add(uwsgi_option)
+        """
+
+
+    return device
+
+
+
