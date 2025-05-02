@@ -1,11 +1,14 @@
 import structlog
 from aiopath import AsyncPath
+import zmq
+import zmq.asyncio
 
 from pikesquares.domain.device import Device
 from pikesquares.domain.monitors import ZMQMonitor
 
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.domain.wsgi_app import WsgiApp
 
 logger = structlog.getLogger()
 
@@ -50,3 +53,26 @@ async def create_zmq_monitor(
     #    logger.debug(f"wrote config to file: {uwsgi_config}")
 
     return zmq_monitor
+
+
+async def create_or_restart_instance(zmq_monitor: ZMQMonitor, name: str, uwsgi_config: str) -> None:
+
+    ctx = zmq.asyncio.Context()
+    sock = ctx.socket(zmq.PUSH)
+    if zmq_monitor.zmq_address:
+        #logger.debug(f"Launching {model.__class__.__name__} {model.service_id} in ZMQ Monitor @ {zmq_monitor.zmq_address}")
+
+        logger.debug(uwsgi_config)
+        sock.connect(zmq_monitor.zmq_address)
+        await sock.send_multipart([b"touch", name.encode(), uwsgi_config.format(do_print=True).encode()])
+    else:
+        logger.info(f"no zmq socket found @ {zmq_monitor.zmq_address}")
+
+async def destroy_instance(zmq_monitor: ZMQMonitor, name: str, model: Device | Project) -> None:
+    ctx = zmq.asyncio.Context()
+    sock = ctx.socket(zmq.PUSH)
+    if zmq_monitor.zmq_address:
+        sock.connect(zmq_monitor.zmq_address)
+        logger.debug(f"Stopping {model.__class__.__name__} {model.service_id} in ZMQ Monitor @ {zmq_monitor.zmq_address}")
+        await sock.send_multipart([b"destroy", name.encode()])
+

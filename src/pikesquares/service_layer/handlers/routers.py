@@ -56,7 +56,7 @@ async def create_tuntap_gateway(
     context: dict,
     uow: UnitOfWork,
     name: str | None = None,
-) -> BaseRouter:
+) -> TuntapGateway:
 
     device = context.get("device")
     name = f"tuntap-gateway-{cuid()}"
@@ -87,3 +87,40 @@ async def create_tuntap_gateway(
     #    else:
 
     return tuntap_gateway
+
+async def create_tuntap_device(
+    context: dict,
+    tuntap_gateway: TuntapGateway,
+    uow: UnitOfWork,
+    ip: str,
+    netmask: str,
+    name: str,
+) -> TuntapDevice:
+
+    device = context.get("device")
+    tuntap_device = TuntapDevice(
+        name=name,
+        socket=str(AsyncPath(device.run_dir) / f"{name}.sock"),
+        ip=ip,
+        netmask=netmask,
+        tuntap_gateway_id=tuntap_gateway.id,
+        tuntap_gateway=tuntap_gateway,
+    )
+    try:
+        logger.debug(f"adding {tuntap_device} to {tuntap_gateway}")
+        await uow.tuntap_devices.add(tuntap_device)
+        logger.debug(f"Created {tuntap_device}")
+
+    except Exception as exc:
+        logger.exception(exc)
+        raise exc
+
+    # if device.enable_dir_monitor:
+    #    try:
+    #        uwsgi_config = http_router.write_uwsgi_config()
+    #    except PermissionError:
+    #        logger.error("permission denied writing router uwsgi config to disk")
+    #        logger.debug(f"wrote config to file: {uwsgi_config}")
+    #    else:
+
+    return tuntap_device

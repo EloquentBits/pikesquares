@@ -13,7 +13,7 @@ from typing import Annotated, Optional
 
 import anyio
 from aiopath import AsyncPath
-from sqlalchemy.sql import text
+#from sqlalchemy.sql import text
 import questionary
 import randomname
 import sentry_sdk
@@ -50,6 +50,7 @@ from pikesquares.conf import (
 # from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import register_device_stats
+from pikesquares.domain.router import RouterTunTap
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ServiceUnavailableError,
@@ -62,9 +63,9 @@ from pikesquares.domain.process_compose import (
 )
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.device import create_device
-from pikesquares.service_layer.handlers.routers import create_http_router, create_tuntap_gateway
+from pikesquares.service_layer.handlers.routers import create_http_router, create_tuntap_gateway, create_tuntap_device
 from pikesquares.service_layer.handlers.project import create_project
-from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
+from pikesquares.service_layer.handlers.monitors import create_zmq_monitor, create_or_restart_instance
 from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.django import PythonRuntimeDjango, DjangoSettings
@@ -80,9 +81,10 @@ from pikesquares.services.apps.exceptions import (
     UvPipListError,
     UvSyncError,
 )
-
 # from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
+from pikesquares.presets.project import ProjectSection
+from pikesquares.presets.routers import HttpRouterSection
 
 from .console import console
 
@@ -540,11 +542,77 @@ async def up(
         device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
         for project in await uow.projects.list():
             project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-            await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project, project_zmq_monitor)
+            section = ProjectSection(project)
+            #uwsgi_config = project.get_uwsgi_config()
+            section.empire.set_emperor_params(
+                vassals_home=project_zmq_monitor.uwsgi_zmq_address,
+                name=f"{project.service_id}",
+                stats_address=project.stats_address,
+                spawn_asap=True,
+                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+            )
+            await create_or_restart_instance(
+                device_zmq_monitor,
+                f"{project.service_id}.ini",
+                section.as_configuration(),
+            )
             console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
         for router in await uow.routers.list():
-            await device_zmq_monitor.create_or_restart_instance(f"{router.service_id}.ini", router)
+            #uwsgi_config = router.get_uwsgi_config()
+            section = HttpRouterSection(router)
+            section._set("jailed", "true")
+            tuntap_gateway = context.get("tuntap-gateway")
+            if tuntap_gateway:
+                http_router_tuntap_device = context.get("http-router-tuntap-device") 
+                #http_router = context.get("http-router")
+                router_tuntap_name_suffix = "123" # http_router.service_id.split('_')[-1][:5]
+
+                #f"http-router-{router_tuntap_name_suffix}"
+
+                router_tuntap = RouterTunTap().device_connect(
+                    device_name=http_router_tuntap_device.name,
+                    socket=tuntap_gateway.socket,
+                ).device_add_rule(
+                    direction="in",
+                    action="route",
+                    src="192.168.0.1",
+                    dst="192.168.0.2",
+                    target="10.20.30.40:5060",
+                )
+                section.routing.use_router(router_tuntap)
+
+                #; bring up loopback
+                #exec-as-root = ifconfig lo up
+                section.main_process.run_command_on_event(
+                    command="ifconfig lo up",
+                    phase=section.main_process.phases.PRIV_DROP_PRE,
+                )
+                # bring up interface uwsgi0
+                #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
+                section.main_process.run_command_on_event(
+                    command=f"ifconfig {http_router_tuntap_device.name} {http_router_tuntap_device.ip} netmask {http_router_tuntap_device.netmask} up",
+                    phase=section.main_process.phases.PRIV_DROP_PRE,
+                )
+                # and set the default gateway
+                #exec-as-root = route add default gw 192.168.0.1
+                section.main_process.run_command_on_event(
+                    command=f"route add default gw {tuntap_gateway.ip}",
+                    phase=section.main_process.phases.PRIV_DROP_PRE,
+                )
+
+                section.main_process.run_command_on_event(
+                    command="",
+                    phase=section.main_process.phases.PRIV_DROP_PRE,
+                )
+                # ping something to register
+                #exec-as-root = ping -c 1 192.168.0.1
+
+            await create_or_restart_instance(
+                device_zmq_monitor,
+                f"{router.service_id}.ini",
+                section.as_configuration(),
+            )
             console.success(":heavy_check_mark:     Launching http router.. Done!")
             console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
@@ -1236,17 +1304,21 @@ async def main(
                 )
                 context["device"] = device
 
-                device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
-                    uow, device=device
-                )
+            device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
+                uow, device=device
+            )
 
-                device.tuntap_gateways = await uow.tuntap_gateways.get_by_device_id(device.id)
-                if not device.tuntap_gateways:
-                    tuntap_gateway =  await create_tuntap_gateway(context, uow)
-                    logger.debug(f"CREATED TUNTAP GW {tuntap_gateway}")
+            logger.debug(f"gettings tuntap_gatweways for device {device.id=}")
+            tuntap_gateways = await uow.tuntap_gateways.get_by_device_id(device.id)
+            if tuntap_gateways:
+                tuntap_gateway = tuntap_gateways[0]
+            else:
+                tuntap_gateway =  await create_tuntap_gateway(context, uow)
 
-                # if not uwsgi_options:
-                for uwsgi_option in device.get_uwsgi_options():
+            context["tuntap-gateway"] = tuntap_gateway
+            uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
+            if not uwsgi_options:
+                for uwsgi_option in device.get_uwsgi_options(tuntap_gateway):
                     await uow.uwsgi_options.add(uwsgi_option)
                     """
                     existing_options = await uow.uwsgi_options.list(device_id=device.id)
@@ -1257,16 +1329,31 @@ async def main(
                         #    await uow.uwsgi_options.add(uwsgi_option)
                     """
             context["device"] = device
-            project = await uow.projects.get_by_name("default-project") or await create_project("default-project", context, uow)
-            project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or await create_zmq_monitor(
-                uow, project=project
-            )
-            context["default-project"] = project
+            project = await uow.projects.get_by_name("default-project") or \
+                await create_project("default-project", context, uow)
+            if project:
+                project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or await create_zmq_monitor(
+                    uow, project=project
+                )
+                context["default-project"] = project
 
-            http_router = await uow.routers.get_by_name("default-http-router") or await create_http_router(
-                "default-http-router", context, uow
-            )
+            http_router = await uow.routers.get_by_name("default-http-router") or await create_http_router("default-http-router", context, uow)
             context["default-http-router"] = http_router
+
+            http_router_tuntap_device = await uow.tuntap_devices.get_by_tuntap_gateway_id(tuntap_gateway.id)
+            if not http_router_tuntap_device:
+                name = f"tuntap-device-{cuid()}"
+                ip = "192.168.0.1"
+                netmask = "255.255.255.0"
+                tuntap_device = await create_tuntap_device(
+                    context,
+                    tuntap_gateway,
+                    uow,
+                    name=name,
+                    ip=ip,
+                    netmask=netmask,
+                )
+            context["http-router-tuntap-device"] = http_router_tuntap_device
         except Exception as exc:
             logger.exception(exc)
             await uow.rollback()

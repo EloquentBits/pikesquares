@@ -174,22 +174,8 @@ class ServiceBase(TimeStampedBase, SQLModel):
     def write_uwsgi_config(self) -> Path:
         return self.uwsgi_config_section_class(self).as_configuration().tofile(self.service_config)
 
-    def get_uwsgi_config(
-            self,
-            zmq_monitor=None,
-            tuntap_router=False,
-    ) -> str:
+    def get_uwsgi_config(self) -> str:
         section = self.uwsgi_config_section_class(self)
-
-        if zmq_monitor:
-            section.empire.set_emperor_params(
-                vassals_home=zmq_monitor.uwsgi_zmq_address,
-                name=f"{self.service_id}",
-                stats_address=self.stats_address,
-                spawn_asap=True,
-                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
-            )
-
         return section.as_configuration()
 
     @classmethod
