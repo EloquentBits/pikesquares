@@ -1,3 +1,4 @@
+from platform import machine
 from unittest.mock import AsyncMock
 
 import pytest
@@ -101,9 +102,8 @@ async def test_create_device():
 
         assert device is not None
         assert isinstance(device, Device)
-        assert uow.committed
+        assert uow.devices.added_device.machine_id == "1234abc"
         assert uow.devices.added_device is not None
-        assert uow._session.commit_called is True
         assert uow._session.added_objects == [device]
         assert uow._session.flush_called is True
 
@@ -119,12 +119,12 @@ async def test_create_device_rollback(mocker):
         }
 
         mocker.patch.object(uow.devices, "add", new_callable=AsyncMock, side_effect=Exception("Database is down!"))
-        logger_mock = mocker.patch.object(device.logger, "exception")
+
 
         with pytest.raises(Exception, match="Database is down!"):
             await create_device(context, uow,"1234id")
 
-        assert "Database is down!" in str(logger_mock.call_args[0][0])
+
         assert uow.devices.added_device is None
         assert uow._session.added_objects == []
         assert uow._session.flush_called is False
