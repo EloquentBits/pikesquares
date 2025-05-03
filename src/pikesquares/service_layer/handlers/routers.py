@@ -1,10 +1,7 @@
 import structlog
-from cuid import cuid
+import cuid
 from aiopath import AsyncPath
 
-from pikesquares import get_first_available_port
-from pikesquares import services
-from pikesquares.domain.device import Device
 from pikesquares.domain.router import BaseRouter, TuntapGateway, TuntapDevice
 from pikesquares.service_layer.uow import UnitOfWork
 
@@ -15,17 +12,19 @@ async def create_http_router(
     name: str,
     context: dict,
     uow: UnitOfWork,
+    ip: str,
+    port: int,
+    subscription_server_address: str,
 ) -> BaseRouter:
 
+    uwsgi_plugins = ["tuntap"]
     device = context.get("device")
-    http_router_port = get_first_available_port(port=8034)
-    http_router_address = f"0.0.0.0:{http_router_port}"
-    subscription_server_address = f"127.0.0.1:{get_first_available_port(port=5700)}"
     http_router = BaseRouter(
-        service_id=f"http_router_{cuid()}",
+        service_id=f"http_router_{cuid.cuid()}",
         name=name,
         device=device,
-        address=http_router_address,
+        uwsgi_plugins=", ".join(uwsgi_plugins),
+        address=f"{ip}:{port}" ,
         subscription_server_address=subscription_server_address,
         data_dir=str(device.data_dir),
         config_dir=str(device.config_dir),
@@ -33,12 +32,8 @@ async def create_http_router(
         run_dir=str(device.run_dir),
     )
     try:
-        logger.debug(f"adding {http_router} to {device}")
         await uow.routers.add(http_router)
-        logger.debug(f"Created {http_router=}")
-
     except Exception as exc:
-        logger.exception(exc)
         raise exc
 
     # if device.enable_dir_monitor:
@@ -55,27 +50,23 @@ async def create_http_router(
 async def create_tuntap_gateway(
     context: dict,
     uow: UnitOfWork,
+    ip: str,
+    netmask: str,
     name: str | None = None,
 ) -> TuntapGateway:
 
     device = context.get("device")
-    name = f"tuntap-gateway-{cuid()}"
-    ip = "192.168.0.1"
-    netmask = "255.255.255.0"
+    name = f"psq{cuid.slug()}"
     tuntap_gateway = TuntapGateway(
         name=name,
-        socket=str(AsyncPath(device.run_dir) / f"{name}.sock"),
+        socket=str(AsyncPath(device.run_dir) / f"tuntap-{name}.sock"),
         ip=ip,
         netmask=netmask,
         device=device,
     )
     try:
-        logger.debug(f"adding {tuntap_gateway} to {device}")
         await uow.tuntap_gateways.add(tuntap_gateway)
-        logger.debug(f"Created {tuntap_gateway=}")
-
     except Exception as exc:
-        logger.exception(exc)
         raise exc
 
     # if device.enable_dir_monitor:
@@ -94,10 +85,11 @@ async def create_tuntap_device(
     uow: UnitOfWork,
     ip: str,
     netmask: str,
-    name: str,
+    name: str | None = None,
 ) -> TuntapDevice:
 
     device = context.get("device")
+    name = name or f"tuntap-device-{cuid.slug()}"
     tuntap_device = TuntapDevice(
         name=name,
         socket=str(AsyncPath(device.run_dir) / f"{name}.sock"),
@@ -107,12 +99,8 @@ async def create_tuntap_device(
         tuntap_gateway=tuntap_gateway,
     )
     try:
-        logger.debug(f"adding {tuntap_device} to {tuntap_gateway}")
         await uow.tuntap_devices.add(tuntap_device)
-        logger.debug(f"Created {tuntap_device}")
-
     except Exception as exc:
-        logger.exception(exc)
         raise exc
 
     # if device.enable_dir_monitor:

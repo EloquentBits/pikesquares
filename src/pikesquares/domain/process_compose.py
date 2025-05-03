@@ -443,7 +443,7 @@ async def register_dnsmasq_process(
             raise AppConfigError(f"unable locate dnsmasq binary @ {conf.DNSMASQ_BIN}") from None
 
         cmd = f"{conf.DNSMASQ_BIN} --keep-in-foreground --port {port} --listen-address {listen_address} --no-resolv"
-        for addr in addresses or ["/pikesquares.local/192.168.0.1"]:
+        for addr in addresses or ["/pikesquares.local/192.168.34.1"]:
             cmd = cmd + f" --address {addr}"
 
         process_messages = ProcessMessages(

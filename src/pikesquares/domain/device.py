@@ -71,10 +71,6 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
         """uWSGI Stats Server socket address"""
         return Path(self.run_dir) / f"{self.service_id}-tuntap-stats.sock"
 
-    @property
-    def tuntap_router_socket_address(self) -> Path:
-        return Path(self.run_dir) / f"{self.service_id}-tuntap.sock"
-
     def stats(self) -> DeviceStats | None:
 
         if not self.stats_address.exists():
@@ -109,17 +105,17 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
             stats_address=str(self.stats_address),
         )
         router = RouterTunTap(
-            on=str(self.tuntap_router_socket_address),
+            on=tuntap_gateway.socket,
             device=tuntap_gateway.name,
-            stats_server=str(Path(self.run_dir) / f"{self.service_id}-tuntap-stats.sock"),
+            stats_server=str(Path(self.run_dir) / f"tuntap-{tuntap_gateway.name}-stats.sock"),
         )
-        router.add_firewall_rule(direction="out", action="allow", src="192.168.0.0/24", dst=tuntap_gateway.ip)
-        router.add_firewall_rule(direction="out", action="deny", src="192.168.0.0/24", dst="192.168.0.0/24")
-        router.add_firewall_rule(direction="out", action="allow", src="192.168.0.0/24", dst="0.0.0.0")
+        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst=tuntap_gateway.ip)
+        router.add_firewall_rule(direction="out", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
+        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst="0.0.0.0")
         router.add_firewall_rule(direction="out", action="deny")
-        router.add_firewall_rule(direction="in", action="allow", src=tuntap_gateway.ip, dst="192.168.0.0/24")
-        router.add_firewall_rule(direction="in", action="deny", src="192.168.0.0/24", dst="192.168.0.0/24")
-        router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst="192.168.0.0/24")
+        router.add_firewall_rule(direction="in", action="allow", src=tuntap_gateway.ip, dst="192.168.34.0/24")
+        router.add_firewall_rule(direction="in", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
+        router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst="192.168.34.0/24")
         router.add_firewall_rule(direction="in", action="deny")
         section.routing.use_router(router)
 

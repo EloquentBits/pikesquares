@@ -31,7 +31,7 @@ from rich.progress import (
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from pikesquares import __app_name__, __version__, services
+from pikesquares import __app_name__, __version__, services, get_first_available_port
 from pikesquares.adapters.database import DatabaseSessionManager
 from pikesquares.cli.console import (
     HeaderDjangoChecks,
@@ -46,7 +46,6 @@ from pikesquares.conf import (
     AppConfigError,
     register_app_conf,
 )
-
 # from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import register_device_stats
@@ -538,8 +537,9 @@ async def up(
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
-    async with uow:
-        device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+
+    if await AsyncPath(device_zmq_monitor.socket).exists():
         for project in await uow.projects.list():
             project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
             section = ProjectSection(project)
@@ -551,70 +551,80 @@ async def up(
                 spawn_asap=True,
                 # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
             )
+            print(section.as_configuration().format())
             await create_or_restart_instance(
-                device_zmq_monitor,
+                device_zmq_monitor.zmq_address,
                 f"{project.service_id}.ini",
-                section.as_configuration(),
+                section.as_configuration().format(do_print=True),
             )
             console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
-        for router in await uow.routers.list():
-            #uwsgi_config = router.get_uwsgi_config()
-            section = HttpRouterSection(router)
-            section._set("jailed", "true")
-            tuntap_gateway = context.get("tuntap-gateway")
-            if tuntap_gateway:
-                http_router_tuntap_device = context.get("http-router-tuntap-device") 
-                #http_router = context.get("http-router")
-                router_tuntap_name_suffix = "123" # http_router.service_id.split('_')[-1][:5]
 
-                #f"http-router-{router_tuntap_name_suffix}"
+        tuntap_gateway = context.get("tuntap-gateway")
+        if not tuntap_gateway:
+            console.warning("tuntap gateway is not available")
+        elif not await AsyncPath(tuntap_gateway.socket).exists():
+            console.warning(f"tuntap gateway socket is not available @ {tuntap_gateway.socket}")
+        else:
+            for router in await uow.routers.list():
+                #uwsgi_config = router.get_uwsgi_config()
+                section = HttpRouterSection(router)
+                section._set("jailed", "true")
+                http_router_tuntap_device = context.get("http-router-tuntap-device")
+                if tuntap_gateway and http_router_tuntap_device:
+                    #http_router = context.get("http-router")
+                    router_tuntap_name_suffix = "123" # http_router.service_id.split('_')[-1][:5]
+                    #f"http-router-{router_tuntap_name_suffix}"
+                    router_tuntap = RouterTunTap().device_connect(
+                        device_name=http_router_tuntap_device.name,
+                        socket=tuntap_gateway.socket,
+                    )
+                    #.device_add_rule(
+                    #    direction="in",
+                    #    action="route",
+                    #    src=tuntap_gateway.ip,
+                    #    dst=http_router_tuntap_device.ip,
+                    #    target="10.20.30.40:5060",
+                    #)
+                    section.routing.use_router(router_tuntap)
 
-                router_tuntap = RouterTunTap().device_connect(
-                    device_name=http_router_tuntap_device.name,
-                    socket=tuntap_gateway.socket,
-                ).device_add_rule(
-                    direction="in",
-                    action="route",
-                    src="192.168.0.1",
-                    dst="192.168.0.2",
-                    target="10.20.30.40:5060",
-                )
-                section.routing.use_router(router_tuntap)
+                    #; bring up loopback
+                    #exec-as-root = ifconfig lo up
+                    section.main_process.run_command_on_event(
+                        command="ifconfig lo up",
+                        phase=section.main_process.phases.PRIV_DROP_PRE,
+                    )
+                    # bring up interface uwsgi0
+                    #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
+                    section.main_process.run_command_on_event(
+                        command=f"ifconfig {http_router_tuntap_device.name} {http_router_tuntap_device.ip} netmask {http_router_tuntap_device.netmask} up",
+                        phase=section.main_process.phases.PRIV_DROP_PRE,
+                    )
+                    # and set the default gateway
+                    #exec-as-root = route add default gw 192.168.0.1
+                    section.main_process.run_command_on_event(
+                        command=f"route add default gw {tuntap_gateway.ip}",
+                        phase=section.main_process.phases.PRIV_DROP_PRE
+                    )
+                    section.main_process.run_command_on_event(
+                        command=f"ping -c 1 {tuntap_gateway.ip}",
+                        phase=section.main_process.phases.PRIV_DROP_PRE,
+                    )
+                    # ping something to register
+                    #exec-as-root = ping -c 1 192.168.0.1
+                    print(section.as_configuration().format())
 
-                #; bring up loopback
-                #exec-as-root = ifconfig lo up
-                section.main_process.run_command_on_event(
-                    command="ifconfig lo up",
-                    phase=section.main_process.phases.PRIV_DROP_PRE,
-                )
-                # bring up interface uwsgi0
-                #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
-                section.main_process.run_command_on_event(
-                    command=f"ifconfig {http_router_tuntap_device.name} {http_router_tuntap_device.ip} netmask {http_router_tuntap_device.netmask} up",
-                    phase=section.main_process.phases.PRIV_DROP_PRE,
-                )
-                # and set the default gateway
-                #exec-as-root = route add default gw 192.168.0.1
-                section.main_process.run_command_on_event(
-                    command=f"route add default gw {tuntap_gateway.ip}",
-                    phase=section.main_process.phases.PRIV_DROP_PRE,
-                )
+                    await create_or_restart_instance(
+                        device_zmq_monitor.zmq_address,
+                        f"{router.service_id}.ini",
+                        section.as_configuration().format(do_print=True),
+                    )
+                    console.success(":heavy_check_mark:     Launching http router.. Done!")
+                    console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
-                section.main_process.run_command_on_event(
-                    command="",
-                    phase=section.main_process.phases.PRIV_DROP_PRE,
-                )
-                # ping something to register
-                #exec-as-root = ping -c 1 192.168.0.1
-
-            await create_or_restart_instance(
-                device_zmq_monitor,
-                f"{router.service_id}.ini",
-                section.as_configuration(),
-            )
-            console.success(":heavy_check_mark:     Launching http router.. Done!")
-            console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+    else:
+        console.warning(f"Device ZMQ Monitor is not available @ {device_zmq_monitor.zmq_address}")
+        console.warning("skipping projects and routers")
 
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")
@@ -1313,7 +1323,9 @@ async def main(
             if tuntap_gateways:
                 tuntap_gateway = tuntap_gateways[0]
             else:
-                tuntap_gateway =  await create_tuntap_gateway(context, uow)
+                ip = "192.168.34.1"
+                netmask = "255.255.255.0"
+                tuntap_gateway =  await create_tuntap_gateway(context, uow, ip, netmask)
 
             context["tuntap-gateway"] = tuntap_gateway
             uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
@@ -1337,23 +1349,30 @@ async def main(
                 )
                 context["default-project"] = project
 
-            http_router = await uow.routers.get_by_name("default-http-router") or await create_http_router("default-http-router", context, uow)
-            context["default-http-router"] = http_router
+            http_router_ip = "192.168.34.2"
+            http_router_port = get_first_available_port(port=8034)
+            subscription_server_address = \
+                f"{http_router_ip}:{get_first_available_port(port=5700)}"
 
-            http_router_tuntap_device = await uow.tuntap_devices.get_by_tuntap_gateway_id(tuntap_gateway.id)
-            if not http_router_tuntap_device:
-                name = f"tuntap-device-{cuid()}"
-                ip = "192.168.0.1"
-                netmask = "255.255.255.0"
-                tuntap_device = await create_tuntap_device(
+            context["default-http-router"] = await uow.routers.\
+                get_by_name("default-http-router") or await create_http_router(
+                    "default-http-router",
+                    context,
+                    uow,
+                    http_router_ip,
+                    http_router_port,
+                    subscription_server_address,
+                )
+            context["http-router-tuntap-device"] = await uow.tuntap_devices.\
+                get_by_tuntap_gateway_id(tuntap_gateway.id) or \
+                await create_tuntap_device(
                     context,
                     tuntap_gateway,
                     uow,
-                    name=name,
-                    ip=ip,
-                    netmask=netmask,
+                    http_router_ip,
+                    "255.255.255.0"
                 )
-            context["http-router-tuntap-device"] = http_router_tuntap_device
+
         except Exception as exc:
             logger.exception(exc)
             await uow.rollback()

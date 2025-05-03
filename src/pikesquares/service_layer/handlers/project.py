@@ -30,9 +30,7 @@ async def create_project(
     )
     try:
         await uow.projects.add(project)
-        await uow.commit()
     except Exception as exc:
-        logger.exception(exc)
         raise exc
 
     # if project.enable_dir_monitor:
