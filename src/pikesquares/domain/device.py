@@ -38,10 +38,10 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
     machine_id: str = Field(default=None, unique=True, max_length=32)
     uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
-    routers: list["BaseRouter"] = Relationship(back_populates="device")
+    routers: list["HttpRouter"] = Relationship(back_populates="device")
     projects: list["Project"] = Relationship(back_populates="device")
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="device", sa_relationship_kwargs={"uselist": False})
-    tuntap_gateways: list["TuntapGateway"] = Relationship(back_populates="device")
+    tuntap_routers: list["TuntapRouter"] = Relationship(back_populates="device")
 
     enable_dir_monitor: bool = False
     enable_tuntap_router: bool = False
@@ -95,7 +95,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     # config["uwsgi"]["plugin"] = "emperor_zeromq"
     # self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
-    def get_uwsgi_options(self, tuntap_gateway) -> list["DeviceUWSGIOptions"]:
+    def get_uwsgi_options(self, tuntap_router) -> list["DeviceUWSGIOptions"]:
         uwsgi_options: list[DeviceUWSGIOptions] = []
         section = DeviceSection(self)
         section.empire.set_emperor_params(
@@ -105,15 +105,15 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
             stats_address=str(self.stats_address),
         )
         router = RouterTunTap(
-            on=tuntap_gateway.socket,
-            device=tuntap_gateway.name,
-            stats_server=str(Path(self.run_dir) / f"tuntap-{tuntap_gateway.name}-stats.sock"),
+            on=tuntap_router.socket,
+            device=tuntap_router.name,
+            stats_server=str(Path(self.run_dir) / f"tuntap-{tuntap_router.name}-stats.sock"),
         )
-        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst=tuntap_gateway.ip)
+        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst=tuntap_router.ip)
         router.add_firewall_rule(direction="out", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
         router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst="0.0.0.0")
         router.add_firewall_rule(direction="out", action="deny")
-        router.add_firewall_rule(direction="in", action="allow", src=tuntap_gateway.ip, dst="192.168.34.0/24")
+        router.add_firewall_rule(direction="in", action="allow", src=tuntap_router.ip, dst="192.168.34.0/24")
         router.add_firewall_rule(direction="in", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
         router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst="192.168.34.0/24")
         router.add_firewall_rule(direction="in", action="deny")
@@ -121,7 +121,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
         # give it an ip address
         section.main_process.run_command_on_event(
-            command=f"ifconfig {tuntap_gateway.name} {tuntap_gateway.ip} netmask {tuntap_gateway.netmask} up",
+            command=f"ifconfig {tuntap_router.name} {tuntap_router.ip} netmask {tuntap_router.netmask} up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         # setup nat
@@ -139,6 +139,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
         )
         # force vassals to be created in a new network namespace
         section._set("emperor-use-clone", "net")
+        section._set("show-config", "true")
 
         for key, value in section._get_options():
             uwsgi_option = DeviceUWSGIOptions(

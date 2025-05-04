@@ -11,8 +11,8 @@ from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import Device, DeviceUWSGIOptions
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import (
-    BaseRouter,
-    TuntapGateway,
+    HttpRouter,
+    TuntapRouter,
     TuntapDevice,
     # HttpRouter,
     # HttpsRouter,
@@ -243,27 +243,27 @@ class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
             return results.all()
 
 
-class RouterRepositoryBase(GenericRepository[BaseRouter], ABC):
+class RouterRepositoryBase(GenericRepository[HttpRouter], ABC):
     """Router repository."""
 
     @abstractmethod
-    async def get_by_name(self, name: str) -> BaseRouter | None:
+    async def get_by_name(self, name: str) -> HttpRouter | None:
         raise NotImplementedError()
 
 
-class RouterRepository(GenericSqlRepository[BaseRouter], RouterRepositoryBase):
+class RouterRepository(GenericSqlRepository[HttpRouter], RouterRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session, BaseRouter)
+        super().__init__(session, HttpRouter)
 
-    async def get_by_name(self, name: str) -> BaseRouter | None:
-        stmt = select(BaseRouter).where(BaseRouter.name == name)
+    async def get_by_name(self, name: str) -> HttpRouter | None:
+        stmt = select(HttpRouter).where(HttpRouter.name == name)
         results = await self._session.exec(stmt)
         if results:
             obj = results.first()
             return obj
 
-    async def get_by_device_id(self, device_id: str) -> list[BaseRouter] | None:
-        stmt = select(BaseRouter).where(BaseRouter.device_id == device_id)
+    async def get_by_device_id(self, device_id: str) -> list[HttpRouter] | None:
+        stmt = select(HttpRouter).where(HttpRouter.device_id == device_id)
         results = await self._session.exec(stmt)
         if results:
             return results.all()
@@ -336,32 +336,32 @@ class ZMQMonitorRepository(GenericSqlRepository[ZMQMonitor], ZMQMonitorRepositor
 
 
 
-class TuntapGatewayRepositoryBase(GenericRepository[TuntapGateway], ABC):
-    """TuntapGateway repository."""
+class TuntapRouterRepositoryBase(GenericRepository[TuntapRouter], ABC):
+    """TuntapRouter repository."""
 
     @abstractmethod
-    async def get_by_name(self, name: str) -> TuntapGateway | None:
+    async def get_by_name(self, name: str) -> TuntapRouter | None:
         raise NotImplementedError()
 
 
-    async def get_by_device_id(self, device_id: str) -> Sequence[TuntapGateway] | None:
+    async def get_by_device_id(self, device_id: str) -> Sequence[TuntapRouter] | None:
         raise NotImplementedError()
 
-class TuntapGatewayRepository(GenericSqlRepository[TuntapGateway], TuntapGatewayRepositoryBase):
+class TuntapRouterRepository(GenericSqlRepository[TuntapRouter], TuntapRouterRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session, TuntapGateway)
+        super().__init__(session, TuntapRouter)
 
-    async def get_by_name(self, name: str) -> TuntapGateway | None:
-        stmt = select(TuntapGateway).where(TuntapGateway.name == name)
+    async def get_by_name(self, name: str) -> TuntapRouter | None:
+        stmt = select(TuntapRouter).where(TuntapRouter.name == name)
         results = await self._session.exec(stmt)
         if results:
             obj = results.first()
             return obj
 
-    async def get_by_device_id(self, device_id: str) -> Sequence[TuntapGateway] | None:
+    async def get_by_device_id(self, device_id: str) -> Sequence[TuntapRouter] | None:
         stmt = (
-            select(TuntapGateway)
-            .where(TuntapGateway.device_id == device_id)
+            select(TuntapRouter)
+            .where(TuntapRouter.device_id == device_id)
         )
         results = await self._session.exec(stmt)
         if results:
@@ -372,11 +372,11 @@ class TuntapDeviceRepositoryBase(GenericRepository[TuntapDevice], ABC):
     """TuntapDevice repository."""
 
     @abstractmethod
-    async def get_by_name(self, name: str) -> TuntapGateway | None:
+    async def get_by_name(self, name: str) -> TuntapRouter | None:
         raise NotImplementedError()
 
     @abstractmethod
-    async def get_by_tuntap_gateway_id(self, tuntap_gateway_id: str) -> TuntapDevice | None:
+    async def get_by_tuntap_router_id(self, tuntap_router_id: str) -> TuntapDevice | None:
         raise NotImplementedError()
 
 
@@ -392,8 +392,8 @@ class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRep
             obj = results.first()
             return obj
 
-    async def get_by_tuntap_gateway_id(self, tuntap_gateway_id: str) -> TuntapDevice | None:
-        stmt = select(ZMQMonitor).where(TuntapDevice.tuntap_gateway_id == tuntap_gateway_id)
+    async def get_by_tuntap_router_id(self, tuntap_router_id: str) -> TuntapDevice | None:
+        stmt = select(ZMQMonitor).where(TuntapDevice.tuntap_router_id == tuntap_router_id)
         results = await self._session.exec(stmt)
         if results:
             obj = results.first()

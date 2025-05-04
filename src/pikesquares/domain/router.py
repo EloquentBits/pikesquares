@@ -17,25 +17,19 @@ from uwsgiconf.options.routing_routers import RouterTunTap
 logger = structlog.getLogger()
 
 
-class TuntapGateway(TimeStampedBase, table=True):
+class TuntapRouter(ServiceBase, table=True):
     """tuntap router"""
 
-    __tablename__ = "tuntap_gateways"
+    __tablename__ = "tuntap_routers"
 
-
-    id: str = Field(
-        primary_key=True,
-        default_factory=lambda: str(uuid.uuid4()),
-        max_length=36,
-    )
     name: str = Field(default="device0", max_length=32)
     socket: str | None = Field(max_length=150, default=None)
     ip: str | None = Field(max_length=25, default=None)
     netmask: str | None = Field(max_length=25, default=None)
     device_id: str | None = Field(default=None, foreign_key="devices.id")
-    device: Device = Relationship(back_populates="tuntap_gateways")
+    device: Device = Relationship(back_populates="tuntap_routers")
 
-    tuntap_devices: list["TuntapDevice"] = Relationship(back_populates="tuntap_gateway")
+    tuntap_devices: list["TuntapDevice"] = Relationship(back_populates="tuntap_router")
 
 
 class TuntapDevice(TimeStampedBase, table=True):
@@ -53,16 +47,16 @@ class TuntapDevice(TimeStampedBase, table=True):
     ip: str | None = Field(max_length=25, default=None)
     netmask: str | None = Field(max_length=25, default=None)
 
-    tuntap_gateway_id: int | None = Field(foreign_key="tuntap_gateways.id", unique=True)
-    tuntap_gateway: TuntapGateway | None = Relationship(back_populates="tuntap_devices")
+    tuntap_router_id: int | None = Field(foreign_key="tuntap_routers.id", unique=True)
+    tuntap_router: TuntapRouter | None = Relationship(back_populates="tuntap_devices")
 
 
 
-class BaseRouter(ServiceBase, table=True):
+class HttpRouter(ServiceBase, table=True):
 
-    __tablename__ = "routers"
+    __tablename__ = "http_routers"
 
-    name: str = Field(default="HTTP Router", max_length=32)
+    name: str = Field(default="http-router0", max_length=32)
 
     address: str | None = Field(default=None, max_length=100)
     subscription_server_address: str | None = Field(default=None, max_length=100)
@@ -77,10 +71,7 @@ class BaseRouter(ServiceBase, table=True):
         return HttpRouterSection
 
 
-    def get_uwsgi_config(self,
-                         zmq_monitor=None,
-                         tuntap_router=False,
-                ):
+    def get_uwsgi_config(self):
         section = self.uwsgi_config_section_class(self)
         
         """
@@ -92,8 +83,7 @@ class BaseRouter(ServiceBase, table=True):
         """
 
         #tuntap_router_socket_address
-        if tuntap_router:
-
+        if 0:
             section._set("jailed", "true")
 
             # http_router_cma30m5zj0002ljj1hh1hqsm4

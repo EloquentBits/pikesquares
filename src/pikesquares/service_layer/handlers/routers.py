@@ -2,7 +2,7 @@ import structlog
 import cuid
 from aiopath import AsyncPath
 
-from pikesquares.domain.router import BaseRouter, TuntapGateway, TuntapDevice
+from pikesquares.domain.router import HttpRouter, TuntapRouter, TuntapDevice
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
@@ -15,11 +15,11 @@ async def create_http_router(
     ip: str,
     port: int,
     subscription_server_address: str,
-) -> BaseRouter:
+) -> HttpRouter:
 
     uwsgi_plugins = ["tuntap"]
     device = context.get("device")
-    http_router = BaseRouter(
+    http_router = HttpRouter(
         service_id=f"http_router_{cuid.cuid()}",
         name=name,
         device=device,
@@ -47,25 +47,32 @@ async def create_http_router(
     return http_router
 
 
-async def create_tuntap_gateway(
+async def create_tuntap_router(
     context: dict,
     uow: UnitOfWork,
     ip: str,
     netmask: str,
     name: str | None = None,
-) -> TuntapGateway:
+) -> TuntapRouter:
 
+    uwsgi_plugins = ["tuntap"]
     device = context.get("device")
-    name = f"psq{cuid.slug()}"
-    tuntap_gateway = TuntapGateway(
+    name = f"psq-{cuid.slug()}"
+    tuntap_router = TuntapRouter(
+        service_id=f"tuntap_router_{cuid.cuid()}",
         name=name,
+        device=device,
+        uwsgi_plugins=", ".join(uwsgi_plugins),
         socket=str(AsyncPath(device.run_dir) / f"tuntap-{name}.sock"),
         ip=ip,
         netmask=netmask,
-        device=device,
+        data_dir=str(device.data_dir),
+        config_dir=str(device.config_dir),
+        log_dir=str(device.log_dir),
+        run_dir=str(device.run_dir),
     )
     try:
-        await uow.tuntap_gateways.add(tuntap_gateway)
+        await uow.tuntap_routers.add(tuntap_router)
     except Exception as exc:
         raise exc
 
@@ -77,11 +84,11 @@ async def create_tuntap_gateway(
     #        logger.debug(f"wrote config to file: {uwsgi_config}")
     #    else:
 
-    return tuntap_gateway
+    return tuntap_router
 
 async def create_tuntap_device(
     context: dict,
-    tuntap_gateway: TuntapGateway,
+    tuntap_router: TuntapRouter,
     uow: UnitOfWork,
     ip: str,
     netmask: str,
@@ -95,8 +102,8 @@ async def create_tuntap_device(
         socket=str(AsyncPath(device.run_dir) / f"{name}.sock"),
         ip=ip,
         netmask=netmask,
-        tuntap_gateway_id=tuntap_gateway.id,
-        tuntap_gateway=tuntap_gateway,
+        tuntap_router_id=tuntap_router.id,
+        tuntap_router=tuntap_router,
     )
     try:
         await uow.tuntap_devices.add(tuntap_device)
