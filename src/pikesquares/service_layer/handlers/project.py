@@ -16,7 +16,7 @@ async def create_project(
 
     device = context.get("device")
 
-    uwsgi_plugins = ["emperor_zeromq"]
+    uwsgi_plugins = ["emperor_zeromq", "tuntap"]
 
     project = Project(
         service_id=f"project_{cuid()}",

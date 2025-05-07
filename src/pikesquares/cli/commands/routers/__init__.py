@@ -68,6 +68,22 @@ async def list_(
     uow = await services.aget(context, UnitOfWork)
     device = context.get("device")
 
+    tuntap_routers = await uow.tuntap_routers.list()
+    if not len(tuntap_routers):
+        console.warning("No Routers were initialized, nothing to show!")
+        raise typer.Exit()
+
+    routers_out = []
+    for router in tuntap_routers:
+        routers_out.append(
+            {
+                "name": router.name,
+                "status": "status",  # router.get_service_status( Path(conf.run_dir) / router.get('service_id') + "-stats.sock",) or "Unknown",
+                "id": router.service_id,
+            }
+        )
+    console.print_response(routers_out, title=f"TunTap Routers count: {len(tuntap_routers)}", show_id=show_id)
+    """
     routers = await uow.routers.list()
     if not len(routers):
         console.warning("No Routers were initialized, nothing to show!")
@@ -83,6 +99,7 @@ async def list_(
             }
         )
     console.print_response(routers_out, title=f"Routers count: {len(routers)}", show_id=show_id)
+    """
 
 
 @app.command(short_help="Create a new router.\nAliases:[i] new")

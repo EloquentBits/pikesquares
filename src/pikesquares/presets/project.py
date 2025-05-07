@@ -66,6 +66,9 @@ class ProjectSection(Section):
                 # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
             )
 
+        # force vassals to be created in a new network namespace
+        self._set("emperor-use-clone", "net")
+
         # self.run_fastrouter()
         # self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(self.logging.loggers.file(filepath=str(self.project.log_file)))

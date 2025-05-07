@@ -1,7 +1,7 @@
-import atexit
-import logging
-import grp
 import asyncio
+import atexit
+import grp
+import logging
 import os
 import shutil
 
@@ -12,14 +12,15 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import anyio
-from aiopath import AsyncPath
+import cuid
+
 #from sqlalchemy.sql import text
 import questionary
 import randomname
 import sentry_sdk
 import structlog
 import typer
-from cuid import cuid
+from aiopath import AsyncPath
 from dotenv import load_dotenv
 from plumbum import ProcessExecutionError
 from rich.layout import Layout
@@ -31,7 +32,7 @@ from rich.progress import (
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from pikesquares import __app_name__, __version__, services, get_first_available_port
+from pikesquares import __app_name__, __version__, get_first_available_port, services
 from pikesquares.adapters.database import DatabaseSessionManager
 from pikesquares.cli.console import (
     HeaderDjangoChecks,
@@ -46,27 +47,31 @@ from pikesquares.conf import (
     AppConfigError,
     register_app_conf,
 )
+
 # from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import register_device_stats
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
-    ServiceUnavailableError,
     ProcessCompose,
-    register_process_compose,
-    register_device_process,
-    register_dnsmasq_process,
+    ServiceUnavailableError,
     register_api_process,
     register_caddy_process,
+    register_device_process,
+    register_dnsmasq_process,
+    register_process_compose,
 )
 from pikesquares.exceptions import StatsReadError
+from pikesquares.presets.project import ProjectSection
+from pikesquares.presets.routers import HttpRouterSection, TunTapRouterSection
+from pikesquares.presets.wsgi_app import WsgiAppSection
 from pikesquares.service_layer.handlers.device import create_device
-from pikesquares.service_layer.handlers.routers import create_http_router, create_tuntap_router, create_tuntap_device
+from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor
 from pikesquares.service_layer.handlers.project import create_project
-from pikesquares.service_layer.handlers.monitors import create_zmq_monitor, create_or_restart_instance
+from pikesquares.service_layer.handlers.routers import create_http_router, create_tuntap_device, create_tuntap_router
 from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.services.apps.django import PythonRuntimeDjango, DjangoSettings
+from pikesquares.services.apps.django import DjangoSettings, PythonRuntimeDjango
 from pikesquares.services.apps.exceptions import (
     # PythonRuntimeCheckError,
     # PythonRuntimeDjangoCheckError,
@@ -79,13 +84,9 @@ from pikesquares.services.apps.exceptions import (
     UvPipListError,
     UvSyncError,
 )
+
 # from pikesquares.services.apps import RubyRuntime, PHPRuntime
 from pikesquares.services.apps.python import PythonRuntime
-from pikesquares.presets.project import ProjectSection
-from pikesquares.presets.routers import HttpRouterSection, TunTapRouterSection
-from pikesquares.presets.wsgi_app import WsgiAppSection
-
-
 
 from .console import console
 
@@ -325,7 +326,16 @@ async def launch(
                 await uow.commit()
 
     device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-    await project.up(project_zmq_monitor, device_zmq_monitor)
+
+    device_stats = device.stats()
+    if not device_stats:
+        console.warning("unable to lookup device stats")
+        raise typer.Exit(0)
+    try:
+        vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
+        print(vassal_stats)
+    except StopIteration:
+        await project.up(project_zmq_monitor, device_zmq_monitor)
 
     #if not project_zmq_monitor or not await AsyncPath(project_zmq_monitor.zmq_address).exists():
     #    logger.error(f"unable to set up project zmq monitor [{project_zmq_monitor}]")
@@ -350,7 +360,7 @@ async def launch(
 
         service_type = "WSGI-App"
         service_type_prefix = service_type.replace("-", "_").lower()
-        service_id = f"{service_type_prefix}_{cuid()}"
+        service_id = f"{service_type_prefix}_{cuid.cuid()}"
         # proj_type = "Python"
         pyvenv_dir = conf.pyvenvs_dir / service_id
         wsgi_file = None
@@ -429,16 +439,18 @@ async def launch(
         raise typer.Exit(1)
 
     wsgi_app_ip = "192.168.34.2"
-    async with uow:
-        try:
-            wsgi_app_device = await uow.tuntap_devices.get_by_ip(wsgi_app_ip) or \
-                await create_tuntap_device(context, tuntap_router, uow, wsgi_app_ip, "255.255.255.0")
-        except Exception as exc:
-            logger.exception(exc)
-            await uow.rollback()
-            raise typer.Exit(1) from None
-        else:
-            await uow.commit()
+    wsgi_app_device = await uow.tuntap_devices.get_by_ip(wsgi_app_ip)
+    if not wsgi_app_device:
+        wsgi_app_device_name = f"tuntap-device-{cuid.slug()}"
+        async with uow:
+            try:
+                wsgi_app_device = await create_tuntap_device(context, tuntap_router, uow, wsgi_app_ip, "255.255.255.0", name=wsgi_app_device_name)
+            except Exception as exc:
+                logger.exception(exc)
+                await uow.rollback()
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
 
     section = WsgiAppSection(wsgi_app)
     section._set("jailed", "true")
@@ -659,20 +671,20 @@ async def up(
             )
             console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
-        tuntap_router = context.get("tuntap-router")
-        if not tuntap_router:
-            console.error("tuntap router is not available")
-            raise typer.Exit(1)
+            tuntap_router = context.get("tuntap-router")
+            if not tuntap_router:
+                console.error("tuntap router is not available")
+                raise typer.Exit(1)
 
-        section = TunTapRouterSection(tuntap_router)
-        print(section.as_configuration().format())
-        await create_or_restart_instance(
-            device_zmq_monitor.zmq_address,
-            f"{tuntap_router.service_id}.ini",
-            section.as_configuration().format(do_print=True),
-        )
-        section._set("show-config", "true")
-        console.success(":heavy_check_mark:     Launching tuntap router.. Done!")
+            section = TunTapRouterSection(tuntap_router)
+            print(section.as_configuration().format())
+            await create_or_restart_instance(
+                project_zmq_monitor.zmq_address,
+                f"{tuntap_router.service_id}.ini",
+                section.as_configuration().format(do_print=True),
+            )
+            section._set("show-config", "true")
+            console.success(":heavy_check_mark:     Launching tuntap router.. Done!")
 
         #if not await AsyncPath(tuntap_router.socket).exists():
         #    console.error"tuntap router socket is not available @ {tuntap_router.socket}")
@@ -881,7 +893,7 @@ async def init(
     runtime_base = PythonRuntime
     service_type = "WSGI-App"
     service_type_prefix = service_type.replace("-", "_").lower()
-    service_id = f"{service_type_prefix}_{cuid()}"
+    service_id = f"{service_type_prefix}_{cuid.cuid()}"
     # proj_type = "Python"
     pyvenv_dir = conf.pyvenvs_dir / service_id
     """
@@ -1245,7 +1257,7 @@ def tail_service_log(
     #     console.info(line)
 
 
-from .commands import apps, devices, managed_services, routers, projects
+from .commands import apps, devices, managed_services, projects, routers
 
 app.add_typer(apps.app, name="apps")
 app.add_typer(routers.app, name="routers")
