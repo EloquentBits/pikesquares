@@ -27,11 +27,6 @@ async def create_wsgi_app(
     # routers: list[Router],
 ) -> WsgiApp:
 
-    #if uwsgi_plugins is not None:
-    #    uwsgi_plugins = ",".join(uwsgi_plugins)
-    #else:
-    #    uwsgi_plugins = []
-
     wsgi_app = WsgiApp(
         service_id=service_id,
         name=name,
@@ -42,13 +37,9 @@ async def create_wsgi_app(
         wsgi_module=wsgi_module,
         pyvenv_dir=str(pyvenv_dir),
     )
-
     try:
         await uow.wsgi_apps.add(wsgi_app)
-        await uow.commit()
-        logger.debug(f"Created {wsgi_app}")
     except Exception as exc:
-        logger.exception(exc)
         raise exc
 
     return wsgi_app

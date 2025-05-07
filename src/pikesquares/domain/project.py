@@ -5,10 +5,10 @@ import pydantic
 import structlog
 from sqlmodel import Field, Relationship
 
+from .base import ServiceBase
 from pikesquares.conf import ensure_system_path
 from pikesquares.presets.project import ProjectSection
 
-from .base import ServiceBase
 
 logger = structlog.getLogger()
 
@@ -42,6 +42,25 @@ class Project(ServiceBase, table=True):
     @property
     def apps_dir(self) -> Path:
         return Path(self.config_dir) / f"{self.service_id}" / "apps"
+
+    async def up(self, project_zmq_monitor, device_zmq_monitor):
+        from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
+        #device_zmq_monitor
+        #project_zmq_monitor = project.zmq_monitor
+        section = ProjectSection(self)
+        section.empire.set_emperor_params(
+            vassals_home=project_zmq_monitor.uwsgi_zmq_address,
+            name=f"{self.service_id}",
+            stats_address=self.stats_address,
+            spawn_asap=True,
+            # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
+        )
+        print(section.as_configuration().format())
+        await create_or_restart_instance(
+            device_zmq_monitor.zmq_address,
+            f"{self.service_id}.ini",
+            section.as_configuration().format(do_print=True),
+        )
 
     def ping(self) -> None:
         print("== Project.ping ==")

@@ -385,7 +385,7 @@ class AppConfig(BaseSettings):
     #    )
 
 
-def register_app_conf(
+async def register_app_conf(
     context: dict,
     override_settings: dict,
 ):

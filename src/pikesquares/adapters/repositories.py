@@ -223,6 +223,8 @@ class ProjectReposityBase(GenericRepository[Project], ABC):
     async def get_by_name(self, name: str) -> Project | None:
         raise NotImplementedError()
 
+    async def get_by_device_id(self, device_id: str) -> Sequence[Project] | None:
+        raise NotImplementedError()
 
 class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
     def __init__(self, session: AsyncSession) -> None:

@@ -178,9 +178,10 @@ class WsgiAppSection(BaseWsgiAppSection):
         self.master_process.set_basic_params(enable=True, no_orphans=True, fifo_file=str(self.wsgi_app.fifo_file))
 
         self.set_plugins_params(
-            plugins=self.wsgi_app.uwsgi_plugins,
+            plugins="tuntap", #self.wsgi_app.uwsgi_plugins,
             search_dirs=self.wsgi_app.plugins_dir,
         )
+        self.print_plugins()
 
         # if app.wsgi_module and callable(app.wsgi_module):
         #    wsgi_callable = wsgi_module.__name__
@@ -231,6 +232,8 @@ class WsgiAppSection(BaseWsgiAppSection):
         self.monitoring.set_stats_params(address=str(self.wsgi_app.stats_address))
         # self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(self.logging.loggers.file(filepath=str(self.wsgi_app.log_file)))
+
+        self._set("show-config", "true")
 
         # self.setup_virtual_hosts(virtual_hosts, socket_addr=socket_addr)
 

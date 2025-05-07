@@ -122,14 +122,13 @@ async def list_(ctx: typer.Context, show_id: bool = False):
         console.warning("unable to lookup device")
         raise typer.Exit(0)
 
-    device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    #device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    #zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
 
     projects = await uow.projects.list()
     if not len(projects):
         console.warning("No projects were initialized, nothing to show!")
         raise typer.Exit()
-
-    zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
 
     projects_out = []
     device_stats = device.stats()

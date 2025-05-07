@@ -31,8 +31,6 @@ from rich.progress import (
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from uwsgiconf.options.routing_routers import RouterTunTap as RouterTunTapSection
-
 from pikesquares import __app_name__, __version__, services, get_first_available_port
 from pikesquares.adapters.database import DatabaseSessionManager
 from pikesquares.cli.console import (
@@ -51,7 +49,6 @@ from pikesquares.conf import (
 # from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.device import register_device_stats
-from pikesquares.domain.router import RouterTunTap
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ServiceUnavailableError,
@@ -302,21 +299,37 @@ async def launch(
     app_name = "bugsink"
     project_name = "bugsink"
 
-    project = await uow.projects.get_by_name(project_name) or \
-        await create_project(project_name, context, uow)
 
+    project = await uow.projects.get_by_name(project_name)
     if not project:
-        logger.error(f"unable to set up project [{project}]")
-        raise typer.Exit(code=1) from None
+        async with uow:
+            try:
+                project = await create_project(project_name, context, uow)
+            except Exception as exc:
+                logger.exception(exc)
+                await uow.rollback()
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
 
-    project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or \
-        await create_zmq_monitor(
-            uow, project=project
-        )
+    project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+    if not project_zmq_monitor:
+        async with uow:
+            try:
+                project_zmq_monitor = await create_zmq_monitor(uow, project=project)
+            except Exception as exc:
+                logger.exception(exc)
+                await uow.rollback()
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
 
-    if not project_zmq_monitor or not await AsyncPath(project_zmq_monitor.zmq_address).exists():
-        logger.error(f"unable to set up project zmq monitor [{project_zmq_monitor}]")
-        raise typer.Exit(code=1) from None
+    device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    await project.up(project_zmq_monitor, device_zmq_monitor)
+
+    #if not project_zmq_monitor or not await AsyncPath(project_zmq_monitor.zmq_address).exists():
+    #    logger.error(f"unable to set up project zmq monitor [{project_zmq_monitor}]")
+    #    raise typer.Exit(code=1) from None
 
     app_root_dir = AsyncPath("/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/bugsink")
 
@@ -374,19 +387,27 @@ async def launch(
             logger.info("unable to detect all the wsgi required settings.")
             raise typer.Exit(0)
 
-        uwsgi_plugins = ["logfile",]
+        uwsgi_plugins = ["tuntap"]
+        async with uow:
+            try:
+                wsgi_app = await create_wsgi_app(
+                    uow,
+                    runtime,
+                    service_id,
+                    app_name,
+                    wsgi_file,
+                    wsgi_module,
+                    project,
+                    pyvenv_dir,
+                    uwsgi_plugins=uwsgi_plugins,
+                )
+            except Exception as exc:
+                logger.exception(exc)
+                await uow.rollback()
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
 
-        wsgi_app = await create_wsgi_app(
-            uow,
-            runtime,
-            service_id,
-            app_name,
-            wsgi_file,
-            wsgi_module,
-            project,
-            pyvenv_dir,
-            uwsgi_plugins=uwsgi_plugins,
-        )
     else:
         logger.info(f"launching existing app {wsgi_app.name} [{wsgi_app.service_id}]")
 
@@ -411,13 +432,7 @@ async def launch(
     async with uow:
         try:
             wsgi_app_device = await uow.tuntap_devices.get_by_ip(wsgi_app_ip) or \
-                await create_tuntap_device(
-                    context,
-                    tuntap_router,
-                    uow,
-                    wsgi_app_ip,
-                    "255.255.255.0"
-                )
+                await create_tuntap_device(context, tuntap_router, uow, wsgi_app_ip, "255.255.255.0")
         except Exception as exc:
             logger.exception(exc)
             await uow.rollback()
@@ -426,6 +441,7 @@ async def launch(
             await uow.commit()
 
     section = WsgiAppSection(wsgi_app)
+    section._set("jailed", "true")
     router_tuntap = section.routing.routers.tuntap().device_connect(
         device_name=wsgi_app_device.name,
         socket=tuntap_router.socket,
@@ -463,6 +479,8 @@ async def launch(
     )
     print(section)
     #import ipdb;ipdb.set_trace()
+
+    print(section.as_configuration().format())
 
     await create_or_restart_instance(
         project_zmq_monitor.zmq_address,
@@ -620,7 +638,9 @@ async def up(
     device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
 
     if await AsyncPath(device_zmq_monitor.socket).exists():
-        for project in await uow.projects.list():
+        projects = await uow.projects.get_by_device_id(device.id)
+        for project in projects:
+            print(f"UP {project=}")
             project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
             section = ProjectSection(project)
             #uwsgi_config = project.get_uwsgi_config()
@@ -1343,7 +1363,7 @@ async def main(
 
     override_settings = {}
     try:
-        register_app_conf(context, override_settings)
+        await register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:
         logger.error(app_conf_error)
         console.error("invalid config. giving up.")
