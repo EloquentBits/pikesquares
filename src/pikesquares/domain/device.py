@@ -26,8 +26,6 @@ from pikesquares.services.mixins.pki import DevicePKIMixin
 
 from .base import ServiceBase, TimeStampedBase
 
-from uwsgiconf.options.routing_routers import RouterTunTap
-
 
 logger = structlog.getLogger()
 
@@ -104,42 +102,6 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
             spawn_asap=True,
             stats_address=str(self.stats_address),
         )
-        router = RouterTunTap(
-            on=tuntap_router.socket,
-            device=tuntap_router.name,
-            stats_server=str(Path(self.run_dir) / f"tuntap-{tuntap_router.name}-stats.sock"),
-        )
-        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst=tuntap_router.ip)
-        router.add_firewall_rule(direction="out", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
-        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst="0.0.0.0")
-        router.add_firewall_rule(direction="out", action="deny")
-        router.add_firewall_rule(direction="in", action="allow", src=tuntap_router.ip, dst="192.168.34.0/24")
-        router.add_firewall_rule(direction="in", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
-        router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst="192.168.34.0/24")
-        router.add_firewall_rule(direction="in", action="deny")
-        section.routing.use_router(router)
-
-        # give it an ip address
-        section.main_process.run_command_on_event(
-            command=f"ifconfig {tuntap_router.name} {tuntap_router.ip} netmask {tuntap_router.netmask} up",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-        # setup nat
-        section.main_process.run_command_on_event(
-            command="iptables -t nat -F", phase=section.main_process.phases.PRIV_DROP_PRE
-        )
-        section.main_process.run_command_on_event(
-            command="iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-        # enable linux ip forwarding
-        section.main_process.run_command_on_event(
-            command="echo 1 >/proc/sys/net/ipv4/ip_forward",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-        # force vassals to be created in a new network namespace
-        section._set("emperor-use-clone", "net")
-        section._set("show-config", "true")
 
         for key, value in section._get_options():
             uwsgi_option = DeviceUWSGIOptions(

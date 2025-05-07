@@ -2,6 +2,7 @@ import structlog
 import cuid
 from aiopath import AsyncPath
 
+from pikesquares.domain.device import Device
 from pikesquares.domain.router import HttpRouter, TuntapRouter, TuntapDevice
 from pikesquares.service_layer.uow import UnitOfWork
 
@@ -48,7 +49,7 @@ async def create_http_router(
 
 
 async def create_tuntap_router(
-    context: dict,
+    device: Device,
     uow: UnitOfWork,
     ip: str,
     netmask: str,
@@ -56,14 +57,14 @@ async def create_tuntap_router(
 ) -> TuntapRouter:
 
     uwsgi_plugins = ["tuntap"]
-    device = context.get("device")
     name = f"psq-{cuid.slug()}"
+    service_id = f"tuntap_router_{cuid.cuid()}"
     tuntap_router = TuntapRouter(
-        service_id=f"tuntap_router_{cuid.cuid()}",
+        service_id=service_id,
         name=name,
         device=device,
         uwsgi_plugins=", ".join(uwsgi_plugins),
-        socket=str(AsyncPath(device.run_dir) / f"tuntap-{name}.sock"),
+        socket=str(AsyncPath(device.run_dir) / f"{service_id}.sock"),
         ip=ip,
         netmask=netmask,
         data_dir=str(device.data_dir),
@@ -99,7 +100,7 @@ async def create_tuntap_device(
     name = name or f"tuntap-device-{cuid.slug()}"
     tuntap_device = TuntapDevice(
         name=name,
-        socket=str(AsyncPath(device.run_dir) / f"{name}.sock"),
+        socket=tuntap_router.socket,
         ip=ip,
         netmask=netmask,
         tuntap_router_id=tuntap_router.id,

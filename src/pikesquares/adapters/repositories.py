@@ -1,6 +1,6 @@
 # import logging
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, Sequence
+from typing import NewType, Generic, TypeVar, Sequence
 
 import structlog
 from sqlmodel import and_, select
@@ -27,7 +27,6 @@ logger = structlog.get_logger()
 
 
 T = TypeVar("T", bound=ServiceBase)
-
 
 class GenericRepository(Generic[T], ABC):
     """Generic base repository."""
@@ -347,6 +346,9 @@ class TuntapRouterRepositoryBase(GenericRepository[TuntapRouter], ABC):
     async def get_by_device_id(self, device_id: str) -> Sequence[TuntapRouter] | None:
         raise NotImplementedError()
 
+    async def get_by_device_ip(self, ip: str) -> Sequence[TuntapRouter] | None:
+        raise NotImplementedError()
+
 class TuntapRouterRepository(GenericSqlRepository[TuntapRouter], TuntapRouterRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, TuntapRouter)
@@ -367,6 +369,13 @@ class TuntapRouterRepository(GenericSqlRepository[TuntapRouter], TuntapRouterRep
         if results:
             return results.all()
 
+    async def get_by_ip(self, ip: str) -> TuntapRouter | None:
+        stmt = select(TuntapRouter).where(TuntapRouter.ip == ip)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
+
 
 class TuntapDeviceRepositoryBase(GenericRepository[TuntapDevice], ABC):
     """TuntapDevice repository."""
@@ -379,13 +388,16 @@ class TuntapDeviceRepositoryBase(GenericRepository[TuntapDevice], ABC):
     async def get_by_tuntap_router_id(self, tuntap_router_id: str) -> TuntapDevice | None:
         raise NotImplementedError()
 
+    async def get_by_ip(self, ip: str) -> TuntapDevice | None:
+        raise NotImplementedError()
+
 
 class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, TuntapDevice)
 
 
-    async def get_by_name(self, name: str) -> Project | None:
+    async def get_by_name(self, name: str) -> TuntapDevice | None:
         stmt = select(TuntapDevice).where(TuntapDevice.name == name)
         results = await self._session.exec(stmt)
         if results:
@@ -393,8 +405,19 @@ class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRep
             return obj
 
     async def get_by_tuntap_router_id(self, tuntap_router_id: str) -> TuntapDevice | None:
-        stmt = select(ZMQMonitor).where(TuntapDevice.tuntap_router_id == tuntap_router_id)
+        stmt = select(TuntapDevice).where(TuntapDevice.tuntap_router_id == tuntap_router_id)
         results = await self._session.exec(stmt)
         if results:
             obj = results.first()
             return obj
+
+    async def get_by_ip(self, ip: str) -> TuntapDevice | None:
+        stmt = select(TuntapDevice).where(TuntapDevice.ip == ip)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
+
+#ZMQMonitorRepository = NewType("ZMQMonitorRepository", ZMQMonitorRepositoryBase)
+
+

@@ -157,6 +157,7 @@ class DeviceSection(Section):
         # )
 
         self.logging.add_logger(self.logging.loggers.stdio())
+        self._set("show-config", "true")
 
         # self.logging.add_logger(
         #    self.logging.loggers.file(filepath=str(device.log_file))

@@ -69,6 +69,7 @@ class ProjectSection(Section):
         # self.run_fastrouter()
         # self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(self.logging.loggers.file(filepath=str(self.project.log_file)))
+        self._set("show-config", "true")
 
     def as_string(self):
         return self.as_configuration().print_ini()

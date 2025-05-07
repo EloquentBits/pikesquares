@@ -23,6 +23,10 @@ class Project(ServiceBase, table=True):
     wsgi_apps: list["WsgiApp"] = Relationship(back_populates="project")
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="project", sa_relationship_kwargs={"uselist": False})
 
+
+    def __repr__(self):
+        return f'<{self.handler_name} name="{self.name}" id="{self.id}" service_id="{self.service_id}">'
+
     @property
     def uwsgi_config_section_class(self) -> ProjectSection:
         return ProjectSection

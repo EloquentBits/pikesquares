@@ -1,5 +1,7 @@
 import structlog
 
+from aiopath import AsyncPath
+
 from uwsgiconf.options.routing_routers import RouterHttp as _RouterHttp
 from uwsgiconf.utils import filter_locals, KeyValue
 
@@ -272,6 +274,7 @@ class HttpRouterSection(Section):
         # self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
         self.logging.add_logger(self.logging.loggers.file(filepath=str(router.log_file)))
         self.routing.use_router(self.router)
+        self._set("show-config", "true")
 
 
 """
@@ -361,7 +364,7 @@ class FastRouterSection(Section):
 
 
 class TunTapRouterSection(Section):
-    router_name = "[[ PikeSquares App / tun-tap Router ]]"
+    router_name = "[[ PikeSquares App / TunTtap Router ]]"
 
     # def __init__(
     #    self,
@@ -420,30 +423,47 @@ class TunTapRouterSection(Section):
         #    )
         router_cls = self.routing.routers.tuntap
         self.router = router_cls(
-            on=router.address,
-            forward_to=router_cls.forwarders.subscription_server(
-                address=str(router.subscription_server_address),
-            ),
+            on=router.socket,
+            device=router.name,
+            stats_server=str(AsyncPath(self.router.run_dir) / f"tuntap-{router.name}-stats.sock"),
         )
 
-        self.router.set_basic_params(
-            stats_server=str(router.stats_address),
-            cheap_mode=True,
-            quiet=False,
-            keepalive=5,
-            # resubscribe_addresses=resubscribe_to
+        self.router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst=router.ip)
+        self.router.add_firewall_rule(direction="out", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
+        self.router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst="0.0.0.0")
+        self.router.add_firewall_rule(direction="out", action="deny")
+        self.router.add_firewall_rule(direction="in", action="allow", src=router.ip, dst="192.168.34.0/24")
+        self.router.add_firewall_rule(direction="in", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
+        self.router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst="192.168.34.0/24")
+        self.router.add_firewall_rule(direction="in", action="deny")
+        self.routing.use_router(self.router)
+
+        # give it an ip address
+        self.main_process.run_command_on_event(
+            command=f"ifconfig {router.name} {router.ip} netmask {router.netmask} up",
+            phase=self.main_process.phases.PRIV_DROP_PRE,
         )
-        self.router.set_connections_params(
-            timeout_socket=500,
-            timeout_headers=10,
-            timeout_backend=60,
+        # setup nat
+        self.main_process.run_command_on_event(
+            command="iptables -t nat -F", phase=self.main_process.phases.PRIV_DROP_PRE
         )
-        self.router.set_manage_params(chunked_input=True, rtsp=True, source_method=True)
+        self.main_process.run_command_on_event(
+            command="iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
+            phase=self.main_process.phases.PRIV_DROP_PRE,
+        )
+        # enable linux ip forwarding
+        self.main_process.run_command_on_event(
+            command="echo 1 >/proc/sys/net/ipv4/ip_forward",
+            phase=self.main_process.phases.PRIV_DROP_PRE,
+        )
+        # force vassals to be created in a new network namespace
+        #section._set("emperor-use-clone", "net")
 
         self.logging.set_file_params(owner="true")
         # self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)
         self.logging.add_logger(self.logging.loggers.file(filepath=str(router.log_file)))
-        self.routing.use_router(self.router)
+
+        self._set("show-config", "true")
 
 
 """
