@@ -17,14 +17,11 @@ async def create_device(
 
     device_cuid = f"device_{cuid()}"
     uwsgi_plugins = []
-    if create_kwargs.get("enable_tuntap_router"):
-        uwsgi_plugins.append("tuntap")
-
     uwsgi_plugins.append("emperor_zeromq")
 
     device = Device(
         service_id=device_cuid,
-        uwsgi_plugins=", ".join(uwsgi_plugins),
+        uwsgi_plugins=",".join(uwsgi_plugins),
         machine_id=machine_id,
         **create_kwargs,
     )

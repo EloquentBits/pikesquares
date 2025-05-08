@@ -77,6 +77,7 @@ class WsgiApp(ServiceBase, table=True):
     workers: int = Field(default=1)
     threads: int = Field(default=1)
 
+    @pydantic.computed_field
     # routers: list["BaseRouter"] = Relationship(back_populates="device")
 
     # app_options: WsgiAppOptions
@@ -102,6 +103,10 @@ class WsgiApp(ServiceBase, table=True):
     @property
     def apps_dir(self) -> Path:
         return Path(self.config_dir) / f"{self.service_id}" / "apps"
+
+    @property
+    def subscription_notify_socket(self) -> Path:
+        return Path(self.run_dir) / f"{self.service_id}-subscription-notify.sock"
 
     def ping(self) -> None:
         logger.debug("== WsgiApp.ping ==")

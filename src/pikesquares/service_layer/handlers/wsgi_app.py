@@ -30,6 +30,8 @@ async def create_wsgi_app(
     wsgi_app = WsgiApp(
         service_id=service_id,
         name=name,
+        run_as_uid="pikesquares",
+        run_as_gid="pikesquares",
         project=project,
         uwsgi_plugins=",".join(uwsgi_plugins) if uwsgi_plugins else "",
         root_dir=str(runtime.app_root_dir),

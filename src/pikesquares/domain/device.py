@@ -93,7 +93,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     # config["uwsgi"]["plugin"] = "emperor_zeromq"
     # self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
-    def get_uwsgi_options(self, tuntap_router) -> list["DeviceUWSGIOptions"]:
+    def get_uwsgi_options(self) -> list["DeviceUWSGIOptions"]:
         uwsgi_options: list[DeviceUWSGIOptions] = []
         section = DeviceSection(self)
         section.empire.set_emperor_params(

@@ -4,6 +4,7 @@ from pathlib import Path
 import pydantic
 import structlog
 from sqlmodel import Field, Relationship
+from aiopath import AsyncPath
 
 from .base import ServiceBase
 from pikesquares.conf import ensure_system_path
@@ -43,7 +44,7 @@ class Project(ServiceBase, table=True):
     def apps_dir(self) -> Path:
         return Path(self.config_dir) / f"{self.service_id}" / "apps"
 
-    async def up(self, project_zmq_monitor, device_zmq_monitor):
+    async def up(self, project_zmq_monitor, device_zmq_monitor, tuntap_router):
         from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
         #device_zmq_monitor
         #project_zmq_monitor = project.zmq_monitor
@@ -55,6 +56,45 @@ class Project(ServiceBase, table=True):
             spawn_asap=True,
             # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
         )
+
+        router_cls = section.routing.routers.tuntap
+        router = router_cls(
+            on=tuntap_router.socket,
+            device=tuntap_router.name,
+            stats_server=str(AsyncPath(
+                tuntap_router.run_dir) / f"tuntap-{tuntap_router.name}-stats.sock"
+            ),
+        )
+        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst=tuntap_router.ip)
+        router.add_firewall_rule(direction="out", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
+        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst="0.0.0.0")
+        router.add_firewall_rule(direction="out", action="deny")
+        router.add_firewall_rule(direction="in", action="allow", src=tuntap_router.ip, dst="192.168.34.0/24")
+        router.add_firewall_rule(direction="in", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
+        router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst="192.168.34.0/24")
+        router.add_firewall_rule(direction="in", action="deny")
+        section.routing.use_router(router)
+
+        # give it an ip address
+        section.main_process.run_command_on_event(
+            command=f"ifconfig {tuntap_router.name} {tuntap_router.ip} netmask {tuntap_router.netmask} up",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        # setup nat
+        section.main_process.run_command_on_event(
+            command="iptables -t nat -F", phase=section.main_process.phases.PRIV_DROP_PRE
+        )
+        section.main_process.run_command_on_event(
+            command="iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        # enable linux ip forwarding
+        section.main_process.run_command_on_event(
+            command="echo 1 >/proc/sys/net/ipv4/ip_forward",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        section._set("emperor-use-clone", "net")
+
         print(section.as_configuration().format())
         await create_or_restart_instance(
             device_zmq_monitor.zmq_address,

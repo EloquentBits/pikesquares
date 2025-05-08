@@ -297,6 +297,11 @@ async def launch(
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
+    http_router = context.get("default-http-router")
+    if not http_router:
+        console.error("unable to locate http router in app context")
+        raise typer.Exit(code=0) from None
+
     app_name = "bugsink"
     project_name = "bugsink"
 
@@ -308,6 +313,7 @@ async def launch(
                 project = await create_project(project_name, context, uow)
             except Exception as exc:
                 logger.exception(exc)
+                console.error(f"unable to create project {project_name}.")
                 await uow.rollback()
                 raise typer.Exit(1) from None
             else:
@@ -320,12 +326,32 @@ async def launch(
                 project_zmq_monitor = await create_zmq_monitor(uow, project=project)
             except Exception as exc:
                 logger.exception(exc)
+                console.error(f"unable to create zmq monitor for project {project.name}.")
                 await uow.rollback()
                 raise typer.Exit(1) from None
             else:
                 await uow.commit()
 
-    device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    #tuntap_router = context.get("tuntap-router")
+    ip = "192.168.34.1"
+    netmask = "255.255.255.0"
+    tuntap_router = await uow.tuntap_routers.get_by_ip(ip)
+    if not tuntap_router:
+        async with uow:
+            try:
+                tuntap_router = await create_tuntap_router(device, uow, ip, netmask)
+            except Exception as exc:
+                logger.exception(exc)
+                console.error("unable to create tuntap router.")
+                await uow.rollback()
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
+
+    #context["tuntap-router"] = tuntap_router
+    if not tuntap_router:
+        console.warning("tuntap router is not available")
+        raise typer.Exit(1)
 
     device_stats = device.stats()
     if not device_stats:
@@ -335,7 +361,8 @@ async def launch(
         vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
         print(vassal_stats)
     except StopIteration:
-        await project.up(project_zmq_monitor, device_zmq_monitor)
+        device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+        await project.up(project_zmq_monitor, device_zmq_monitor, tuntap_router)
 
     #if not project_zmq_monitor or not await AsyncPath(project_zmq_monitor.zmq_address).exists():
     #    logger.error(f"unable to set up project zmq monitor [{project_zmq_monitor}]")
@@ -432,16 +459,10 @@ async def launch(
 
     logger.debug(f"Launching {wsgi_app.name} [{wsgi_app.service_id}]")
 
-
-    tuntap_router = context.get("tuntap-router")
-    if not tuntap_router:
-        console.warning("tuntap router is not available")
-        raise typer.Exit(1)
-
     wsgi_app_ip = "192.168.34.2"
     wsgi_app_device = await uow.tuntap_devices.get_by_ip(wsgi_app_ip)
     if not wsgi_app_device:
-        wsgi_app_device_name = f"tuntap-device-{cuid.slug()}"
+        wsgi_app_device_name = f"psq-{cuid.slug()}"
         async with uow:
             try:
                 wsgi_app_device = await create_tuntap_device(context, tuntap_router, uow, wsgi_app_ip, "255.255.255.0", name=wsgi_app_device_name)
@@ -489,8 +510,17 @@ async def launch(
         command=f"ping -c 1 {tuntap_router.ip}",
         phase=section.main_process.phases.PRIV_DROP_PRE,
     )
-    print(section)
-    #import ipdb;ipdb.set_trace()
+
+    section.subscriptions.subscribe(
+        server=http_router.subscription_server_address,
+        address=str(wsgi_app.socket_address),  # address and port of wsgi app
+        key=f"{app_name}.pikesquares.dev" ,
+    )
+    section.subscriptions.set_server_params(
+        client_notify_address=wsgi_app.subscription_notify_socket,
+    )
+    http_router = context["default-http-router"]
+
 
     print(section.as_configuration().format())
 
@@ -654,37 +684,29 @@ async def up(
         for project in projects:
             print(f"UP {project=}")
             project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-            section = ProjectSection(project)
-            #uwsgi_config = project.get_uwsgi_config()
-            section.empire.set_emperor_params(
-                vassals_home=project_zmq_monitor.uwsgi_zmq_address,
-                name=f"{project.service_id}",
-                stats_address=project.stats_address,
-                spawn_asap=True,
-                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
-            )
-            print(section.as_configuration().format())
-            await create_or_restart_instance(
-                device_zmq_monitor.zmq_address,
-                f"{project.service_id}.ini",
-                section.as_configuration().format(do_print=True),
-            )
-            console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
-            tuntap_router = context.get("tuntap-router")
+            #tuntap_router = context.get("tuntap-router")
+            ip = "192.168.34.1"
+            netmask = "255.255.255.0"
+            tuntap_router = await uow.tuntap_routers.get_by_ip(ip) 
+            #or await create_tuntap_router(device, uow, ip, netmask)
             if not tuntap_router:
                 console.error("tuntap router is not available")
                 raise typer.Exit(1)
 
-            section = TunTapRouterSection(tuntap_router)
-            print(section.as_configuration().format())
-            await create_or_restart_instance(
-                project_zmq_monitor.zmq_address,
-                f"{tuntap_router.service_id}.ini",
-                section.as_configuration().format(do_print=True),
-            )
-            section._set("show-config", "true")
-            console.success(":heavy_check_mark:     Launching tuntap router.. Done!")
+            await project.up(project_zmq_monitor, device_zmq_monitor, tuntap_router)
+
+            console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
+
+            #section = TunTapRouterSection(tuntap_router)
+            #print(section.as_configuration().format())
+            #await create_or_restart_instance(
+            #    project_zmq_monitor.zmq_address,
+            #    f"{tuntap_router.service_id}.ini",
+            #    section.as_configuration().format(do_print=True),
+            #)
+            #section._set("show-config", "true")
+            #console.success(":heavy_check_mark:     Launching tuntap router.. Done!")
 
         #if not await AsyncPath(tuntap_router.socket).exists():
         #    console.error"tuntap router socket is not available @ {tuntap_router.socket}")
@@ -1454,15 +1476,9 @@ async def main(
                 uow, device=device
             )
 
-            ip = "192.168.34.1"
-            netmask = "255.255.255.0"
-            tuntap_router = await uow.tuntap_routers.get_by_ip(ip) or \
-                await create_tuntap_router(device, uow, ip, netmask)
-
-            context["tuntap-router"] = tuntap_router
             uwsgi_options = await uow.uwsgi_options.get_by_device_id(device.id)
             if not uwsgi_options:
-                for uwsgi_option in device.get_uwsgi_options(tuntap_router):
+                for uwsgi_option in device.get_uwsgi_options():
                     await uow.uwsgi_options.add(uwsgi_option)
                     """
                     existing_options = await uow.uwsgi_options.list(device_id=device.id)

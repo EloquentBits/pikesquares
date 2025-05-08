@@ -22,7 +22,7 @@ async def create_project(
         service_id=f"project_{cuid()}",
         name=name,
         device=device,
-        uwsgi_plugins=", ".join(uwsgi_plugins),
+        uwsgi_plugins=",".join(uwsgi_plugins),
         data_dir=str(device.data_dir),
         config_dir=str(device.config_dir),
         log_dir=str(device.log_dir),

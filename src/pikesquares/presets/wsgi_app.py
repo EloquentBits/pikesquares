@@ -18,7 +18,7 @@ class BaseWsgiAppSection(Section):
         *,
         touch_reload: Strlist = None,
         workers: int = 1,
-        threads: Union[int, bool] = None,
+        threads: int | bool = True,
         mules: int = 0,
         owner: str = None,
         log_into: str = "",
@@ -178,7 +178,7 @@ class WsgiAppSection(BaseWsgiAppSection):
         self.master_process.set_basic_params(enable=True, no_orphans=True, fifo_file=str(self.wsgi_app.fifo_file))
 
         self.set_plugins_params(
-            plugins="tuntap", #self.wsgi_app.uwsgi_plugins,
+            plugins="tuntap,python312", #self.wsgi_app.uwsgi_plugins,
             search_dirs=self.wsgi_app.plugins_dir,
         )
         self.print_plugins()
