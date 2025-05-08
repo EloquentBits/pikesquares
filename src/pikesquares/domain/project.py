@@ -44,13 +44,13 @@ class Project(ServiceBase, table=True):
     def apps_dir(self) -> Path:
         return Path(self.config_dir) / f"{self.service_id}" / "apps"
 
-    async def up(self, project_zmq_monitor, device_zmq_monitor, tuntap_router):
+    async def up(self, device_zmq_monitor, tuntap_router):
         from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
         #device_zmq_monitor
         #project_zmq_monitor = project.zmq_monitor
         section = ProjectSection(self)
         section.empire.set_emperor_params(
-            vassals_home=project_zmq_monitor.uwsgi_zmq_address,
+            vassals_home=self.zmq_monitor.uwsgi_zmq_address,
             name=f"{self.service_id}",
             stats_address=self.stats_address,
             spawn_asap=True,

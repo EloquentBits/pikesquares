@@ -47,7 +47,7 @@ class TuntapDevice(TimeStampedBase, table=True):
     ip: str | None = Field(max_length=25, default=None)
     netmask: str | None = Field(max_length=25, default=None)
 
-    tuntap_router_id: int | None = Field(foreign_key="tuntap_routers.id", unique=True)
+    tuntap_router_id: int | None = Field(foreign_key="tuntap_routers.id")
     tuntap_router: TuntapRouter | None = Relationship(back_populates="tuntap_devices")
 
 
@@ -69,6 +69,56 @@ class HttpRouter(ServiceBase, table=True):
         if int(self.port) >= 8443:
             return HttpsRouterSection
         return HttpRouterSection
+
+    async def up(self, tuntap_router, router_tuntap_device, device_zmq_monitor):
+
+        from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
+
+        section = HttpRouterSection(self)
+        section._set("jailed", "true")
+        router_tuntap = section.routing.routers.tuntap().device_connect(
+            device_name=router_tuntap_device.name,
+            socket=tuntap_router.socket,
+        )
+        #.device_add_rule(
+        #    direction="in",
+        #    action="route",
+        #    src=tuntap_router.ip,
+        #    dst=http_router_tuntap_device.ip,
+        #    target="10.20.30.40:5060",
+        #)
+        section.routing.use_router(router_tuntap)
+
+        #; bring up loopback
+        #exec-as-root = ifconfig lo up
+        section.main_process.run_command_on_event(
+            command="ifconfig lo up",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        # bring up interface uwsgi0
+        #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
+        section.main_process.run_command_on_event(
+            command=f"ifconfig {router_tuntap_device.name} {router_tuntap_device.ip} netmask {router_tuntap_device.netmask} up",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        # and set the default gateway
+        #exec-as-root = route add default gw 192.168.0.1
+        section.main_process.run_command_on_event(
+            command=f"route add default gw {tuntap_router.ip}",
+            phase=section.main_process.phases.PRIV_DROP_PRE
+        )
+        section.main_process.run_command_on_event(
+            command=f"ping -c 1 {tuntap_router.ip}",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+
+        print(section.as_configuration().format())
+
+        await create_or_restart_instance(
+            device_zmq_monitor.zmq_address,
+            f"{self.service_id}.ini",
+            section.as_configuration().format(do_print=True),
+        )
 
 
     def get_uwsgi_config(self):
@@ -126,10 +176,9 @@ class HttpRouter(ServiceBase, table=True):
             )
             # ping something to register
             #exec-as-root = ping -c 1 192.168.0.1
-
-
-
         return super().get_uwsgi_config(zmq_monitor=zmq_monitor, tuntap_router=tuntap_router)
+
+
 
     @property
     def service_config(self) -> Path | None:

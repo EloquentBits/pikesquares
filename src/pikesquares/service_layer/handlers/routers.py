@@ -23,6 +23,8 @@ async def create_http_router(
     http_router = HttpRouter(
         service_id=f"http_router_{cuid.cuid()}",
         name=name,
+        run_as_uid="pikesquares",
+        run_as_gid="pikesquares",
         device=device,
         uwsgi_plugins=", ".join(uwsgi_plugins),
         address=f"{ip}:{port}" ,
@@ -73,6 +75,9 @@ async def create_tuntap_router(
         run_dir=str(device.run_dir),
     )
     try:
+        #import ipdb;ipdb.set_trace()
+        uow._session.expunge_all()
+
         await uow.tuntap_routers.add(tuntap_router)
     except Exception as exc:
         raise exc
