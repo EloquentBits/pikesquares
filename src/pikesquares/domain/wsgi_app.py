@@ -89,7 +89,7 @@ class WsgiApp(ServiceBase, table=True):
     def uwsgi_config_section_class(self) -> WsgiAppSection:
         return WsgiAppSection
 
-    async def up(self, wsgi_app_device, http_router, tuntap_router, project_zmq_monitor):
+    async def up(self, wsgi_app_device, subscription_server_address, tuntap_router, project_zmq_monitor):
         from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 
         section = WsgiAppSection(self)
@@ -131,7 +131,7 @@ class WsgiApp(ServiceBase, table=True):
         )
 
         section.subscriptions.subscribe(
-            server=http_router.subscription_server_address,
+            server=subscription_server_address,
             address=str(self.socket_address),  # address and port of wsgi app
             key=f"{self.name}.pikesquares.dev" ,
         )

@@ -475,8 +475,9 @@ async def launch(
                 raise typer.Exit(1) from None
             else:
                 await uow.commit()
-
-    await wsgi_app.up(wsgi_app_device, http_router, tuntap_router, project_zmq_monitor)
+    #http_router.subscription_server_address
+    subscription_server_address = "192.168.34.3:5700"
+    await wsgi_app.up(wsgi_app_device, subscription_server_address, tuntap_router, project_zmq_monitor)
     console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
 
 
