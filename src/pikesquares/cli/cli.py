@@ -297,10 +297,10 @@ async def launch(
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
-    http_router = context.get("default-http-router")
-    if not http_router:
-        console.error("unable to locate http router in app context")
-        raise typer.Exit(code=0) from None
+    #http_router = context.get("default-http-router")
+    #if not http_router:
+    #    console.error("unable to locate http router in app context")
+    #    raise typer.Exit(code=0) from None
 
     app_name = "bugsink"
     project_name = "bugsink"
@@ -362,7 +362,7 @@ async def launch(
         print(vassal_stats)
     except StopIteration:
         device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-        await project.up(project_zmq_monitor, device_zmq_monitor, tuntap_router)
+        await project.up(device_zmq_monitor, tuntap_router)
 
     #if not project_zmq_monitor or not await AsyncPath(project_zmq_monitor.zmq_address).exists():
     #    logger.error(f"unable to set up project zmq monitor [{project_zmq_monitor}]")
@@ -641,37 +641,49 @@ async def up(
                 await uow.commit()
 
     #if await AsyncPath(device_zmq_monitor.socket).exists():
-        projects = await uow.projects.get_by_device_id(device.id) or []
-        for project in projects:
-            print(f"UP {project=}")
-            #project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-            #project_zmq_monitor = project.zmq_monitor
-            await project.up(device_zmq_monitor, tuntap_router)
-            console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
+    projects = await uow.projects.get_by_device_id(device.id) or []
+    for project in projects:
+        print(f"UP {project=}")
+        #project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+        #project_zmq_monitor = project.zmq_monitor
+        await project.up(device_zmq_monitor, tuntap_router)
+        console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
-        for router in await uow.routers.list():
-            router_ip = "192.168.34.3"
-            router_tuntap_device = await uow.tuntap_devices.get_by_ip(router_ip)
-            if not router_tuntap_device:
-                router_tuntap_device_name = f"psq-{cuid.slug()}"
-                async with uow:
-                    try:
-                        router_tuntap_device = await create_tuntap_device(
-                            context,
-                            tuntap_router,
-                            uow,
-                            router_ip,
-                            "255.255.255.0",
-                            name=router_tuntap_device_name,
-                        )
-                    except Exception as exc:
-                        logger.exception(exc)
-                        await uow.rollback()
-                        raise typer.Exit(1) from None
-                    else:
-                        await uow.commit()
 
-            await router.up(tuntap_router, router_tuntap_device, device_zmq_monitor)
+    routers = await uow.routers.list()
+    if not routers:
+        http_router_ip = "192.168.34.3"
+        http_router_port = get_first_available_port(port=8034)
+        subscription_server_address = \
+            f"{http_router_ip}:{get_first_available_port(port=5700)}"
+            #AsyncPath(device.run_dir) / "subscriptions" / "http"
+        try:
+            async with uow:
+                http_router = await create_http_router(
+                        "default-http-router",
+                        context,
+                        uow,
+                        http_router_ip,
+                        http_router_port,
+                        subscription_server_address,
+                    )
+                router_tuntap_device  = await create_tuntap_device(
+                    context,
+                    tuntap_router,
+                    uow,
+                    http_router_ip,
+                    "255.255.255.0",
+                    name=f"psq-{cuid.slug()}" ,
+                )
+        except Exception as exc:
+            logger.exception(exc)
+            await uow.rollback()
+            raise typer.Exit(1) from None
+        else:
+            await uow.commit()
+
+        if len(projects):
+            await http_router.up(tuntap_router, router_tuntap_device, device_zmq_monitor)
             console.success(":heavy_check_mark:     Launching http router.. Done!")
             console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
     #else:
@@ -1391,21 +1403,6 @@ async def main(
             #    )
             #    context["default-project"] = project
 
-            http_router_ip = "192.168.34.3"
-            http_router_port = get_first_available_port(port=8034)
-            subscription_server_address = \
-                f"{http_router_ip}:{get_first_available_port(port=5700)}"
-                #AsyncPath(device.run_dir) / "subscriptions" / "http"
-
-            context["default-http-router"] = await uow.routers.\
-                get_by_name("default-http-router") or await create_http_router(
-                    "default-http-router",
-                    context,
-                    uow,
-                    http_router_ip,
-                    http_router_port,
-                    subscription_server_address,
-                )
         except Exception as exc:
             logger.exception(exc)
             await uow.rollback()
@@ -1415,7 +1412,7 @@ async def main(
     await register_device_process(context)
     await register_api_process(context)
     await register_dnsmasq_process(context)
-    await register_caddy_process(context)
+    await register_caddy_process(context, http_router_port=8034)
 
     await register_device_stats(context)
 

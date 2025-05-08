@@ -267,10 +267,6 @@ async def register_process_compose(context: dict) -> None:
         if not device:
             raise AppConfigError("no device found in context")
 
-        http_router = context.get("default-http-router")
-        if not http_router:
-            raise AppConfigError("no http router found in context")
-
         if conf.UV_BIN and not await AsyncPath(conf.UV_BIN).exists():
             raise AppConfigError(f"unable locate uv binary @ {conf.UV_BIN}") from None
 

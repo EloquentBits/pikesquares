@@ -35,6 +35,7 @@ async def create_http_router(
         run_dir=str(device.run_dir),
     )
     try:
+        uow._session.expunge_all()
         await uow.routers.add(http_router)
     except Exception as exc:
         raise exc
