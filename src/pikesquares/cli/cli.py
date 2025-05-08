@@ -305,6 +305,10 @@ async def launch(
     app_name = "bugsink"
     project_name = "bugsink"
 
+    device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    if not device_zmq_monitor:
+        console.error(f"unable to locate device zmq monitor {device.service_id}.")
+        raise typer.Exit(1) from None
 
     project = await uow.projects.get_by_name(project_name)
     if not project:
@@ -361,8 +365,7 @@ async def launch(
         vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
         print(vassal_stats)
     except StopIteration:
-        device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-        await project.up(device_zmq_monitor, tuntap_router)
+        await project.up(device_zmq_monitor.uwsgi_zmq_address, tuntap_router)
 
     #if not project_zmq_monitor or not await AsyncPath(project_zmq_monitor.zmq_address).exists():
     #    logger.error(f"unable to set up project zmq monitor [{project_zmq_monitor}]")
@@ -646,7 +649,7 @@ async def up(
         print(f"UP {project=}")
         #project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
         #project_zmq_monitor = project.zmq_monitor
-        await project.up(device_zmq_monitor, tuntap_router)
+        await project.up(device_zmq_monitor.zmq_address, tuntap_router)
         console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
 
