@@ -53,7 +53,7 @@ class DeviceSection(Section):
         self.master_process.set_basic_params(
             enable=True,
             no_orphans=True,
-            fifo_file=str(device.fifo_file),
+            fifo_file=str(device.master_fifo_file),
         )  # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,

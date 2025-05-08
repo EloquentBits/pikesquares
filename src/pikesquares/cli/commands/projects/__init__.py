@@ -4,9 +4,7 @@ from typing import Optional
 import randomname
 import structlog
 
-# import shutil
 import typer
-from cuid import cuid
 
 # from pikesquares import (
 #    get_service_status,

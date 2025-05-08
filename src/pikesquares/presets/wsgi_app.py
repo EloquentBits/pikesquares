@@ -89,10 +89,10 @@ class BaseWsgiAppSection(Section):
         # self.main_process.set_basic_params(show_config=True)
 
         self.main_process.set_basic_params(vacuum=True)
-        self.main_process.set_naming_params(
-            autonaming=False,
-            prefix=f"{process_prefix} " if process_prefix else "",
-        )
+        #self.main_process.set_naming_params(
+        #    autonaming=False,
+        #    prefix=f"{process_prefix} " if process_prefix else "",
+        #)
         self.master_process.set_basic_params(
             enable=True,
         )
@@ -175,10 +175,20 @@ class WsgiAppSection(BaseWsgiAppSection):
         self.main_process.change_dir(to=self.wsgi_app.root_dir)
         self.main_process.set_pid_file(str(self.wsgi_app.pid_file))
 
-        self.master_process.set_basic_params(enable=True, no_orphans=True, fifo_file=str(self.wsgi_app.fifo_file))
+        self.master_process.set_basic_params(
+            enable=True, no_orphans=True, fifo_file=str(self.wsgi_app.master_fifo_file)
+        )
+
+        self.main_process.set_naming_params(
+            prefix="[[ WSGI App ]] ",
+            suffix=f" [{self.wsgi_app.service_id}]",
+            name=f"{self.wsgi_app.name} ",
+            autonaming=False,
+        )
+
 
         self.set_plugins_params(
-            plugins="tuntap,python312", #self.wsgi_app.uwsgi_plugins,
+            plugins=self.wsgi_app.uwsgi_plugins,
             search_dirs=self.wsgi_app.plugins_dir,
         )
         self.print_plugins()

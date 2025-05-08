@@ -89,6 +89,65 @@ class WsgiApp(ServiceBase, table=True):
     def uwsgi_config_section_class(self) -> WsgiAppSection:
         return WsgiAppSection
 
+    async def up(self, wsgi_app_device, http_router, tuntap_router, project_zmq_monitor):
+        from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
+
+        section = WsgiAppSection(self)
+        section._set("jailed", "true")
+        router_tuntap = section.routing.routers.tuntap().device_connect(
+            device_name=wsgi_app_device.name,
+            socket=tuntap_router.socket,
+        )
+        #.device_add_rule(
+        #    direction="in",
+        #    action="route",
+        #    src=tuntap_router.ip,
+        #    dst=http_router_tuntap_device.ip,
+        #    target="10.20.30.40:5060",
+        #)
+        section.routing.use_router(router_tuntap)
+
+        #; bring up loopback
+        #exec-as-root = ifconfig lo up
+        section.main_process.run_command_on_event(
+            command="ifconfig lo up",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        # bring up interface uwsgi0
+        #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
+        section.main_process.run_command_on_event(
+            command=f"ifconfig {wsgi_app_device.name} {wsgi_app_device.ip} netmask {wsgi_app_device.netmask} up",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        # and set the default gateway
+        #exec-as-root = route add default gw 192.168.0.1
+        section.main_process.run_command_on_event(
+            command=f"route add default gw {tuntap_router.ip}",
+            phase=section.main_process.phases.PRIV_DROP_PRE
+        )
+        section.main_process.run_command_on_event(
+            command=f"ping -c 1 {tuntap_router.ip}",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+
+        section.subscriptions.subscribe(
+            server=http_router.subscription_server_address,
+            address=str(self.socket_address),  # address and port of wsgi app
+            key=f"{self.name}.pikesquares.dev" ,
+        )
+        section.subscriptions.set_server_params(
+            client_notify_address=self.subscription_notify_socket,
+        )
+
+        print(section.as_configuration().format())
+
+        await create_or_restart_instance(
+            project_zmq_monitor.zmq_address,
+            f"{self.service_id}.ini",
+            section.as_configuration().format(do_print=True),
+        )
+        #await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
+
     @pydantic.computed_field
     @property
     def service_config(self) -> Path | None:

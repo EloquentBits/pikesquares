@@ -110,7 +110,7 @@ class HttpsRouterSection(Section):
         self.master_process.set_basic_params(
             no_orphans=True,
             enable=True,
-            fifo_file=str(self.router.fifo_file),
+            fifo_file=str(self.router.master_fifo_file),
         )
         self.master_process.set_exit_events(reload=True)
         # self.main_process.set_basic_params(

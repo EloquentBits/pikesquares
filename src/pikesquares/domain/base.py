@@ -138,7 +138,7 @@ class ServiceBase(TimeStampedBase, SQLModel):
 
     @pydantic.computed_field
     @property
-    def fifo_file(self) -> Path:
+    def master_fifo_file(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-master-fifo"
 
     @pydantic.computed_field
@@ -258,14 +258,14 @@ class ServiceBase(TimeStampedBase, SQLModel):
 
         if not all(
             [
-                self.fifo_file,
-                self.fifo_file.exists(),
+                self.master_fifo_file,
+                self.master_fifo_file.exists(),
             ]
         ):
-            logger.warning(f"invalid fifo file @ {self.fifo_file}")
+            logger.warning(f"invalid fifo file @ {self.master_fifo_file}")
             return
 
-        with open(str(self.fifo_file), "w") as master_fifo:
+        with open(str(self.master_fifo_file), "w") as master_fifo:
             master_fifo.write(command)
             logger.info(f"[pikesquares-services] : sent command [{command}] to master fifo")
 
