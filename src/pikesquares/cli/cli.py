@@ -363,8 +363,10 @@ async def launch(
                     http_router_ip = "192.168.34.3"
                     http_router_port = get_first_available_port(port=8034)
                     http_router_netmask = "255.255.255.0"
-                    subscription_server_address = \
-                        f"{http_router_ip}:{get_first_available_port(port=5700)}"
+
+                    subscription_server_address = str(AsyncPath(project.run_dir) / f"{http_router_name}-subscriptions.sock")
+                    #subscription_server_address = \
+                    #    f"{http_router_ip}:{get_first_available_port(port=5700)}"
                         #AsyncPath(device.run_dir) / "subscriptions" / "http"
                     http_router = await create_http_router(
                             http_router_name,
