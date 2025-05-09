@@ -178,15 +178,12 @@ class WsgiAppSection(BaseWsgiAppSection):
         self.master_process.set_basic_params(
             enable=True, no_orphans=True, fifo_file=str(self.wsgi_app.master_fifo_file)
         )
-
         self.main_process.set_naming_params(
             prefix="[[ WSGI App ]] ",
             suffix=f" [{self.wsgi_app.service_id}]",
             name=f"{self.wsgi_app.name} ",
             autonaming=False,
         )
-
-
         self.set_plugins_params(
             plugins=self.wsgi_app.uwsgi_plugins,
             search_dirs=self.wsgi_app.plugins_dir,

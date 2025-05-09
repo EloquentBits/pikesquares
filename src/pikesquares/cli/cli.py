@@ -365,7 +365,7 @@ async def launch(
         vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
         print(vassal_stats)
     except StopIteration:
-        await project.up(device_zmq_monitor.uwsgi_zmq_address, tuntap_router)
+        await project.up(device_zmq_monitor, tuntap_router)
 
     #if not project_zmq_monitor or not await AsyncPath(project_zmq_monitor.zmq_address).exists():
     #    logger.error(f"unable to set up project zmq monitor [{project_zmq_monitor}]")
@@ -477,6 +477,12 @@ async def launch(
                 await uow.commit()
     #http_router.subscription_server_address
     subscription_server_address = "192.168.34.3:5700"
+
+    print(f"wsgi_app.up {project_zmq_monitor.uwsgi_zmq_address=}")
+    if not AsyncPath(project_zmq_monitor.socket).exists():
+        logger.error("unable to locate project zmq monitor socket")
+        raise typer.Exit(1) from None
+
     await wsgi_app.up(wsgi_app_device, subscription_server_address, tuntap_router, project_zmq_monitor)
     console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
 
@@ -648,9 +654,12 @@ async def up(
     projects = await uow.projects.get_by_device_id(device.id) or []
     for project in projects:
         print(f"UP {project=}")
-        #project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-        #project_zmq_monitor = project.zmq_monitor
-        await project.up(device_zmq_monitor.zmq_address, tuntap_router)
+        project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+        await project.up(
+            device_zmq_monitor,
+            project_zmq_monitor,
+            tuntap_router,
+        )
         console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
 
 
@@ -1145,6 +1154,7 @@ async def init(
         """
         uow = await services.aget(context, UnitOfWork)
 
+        uwsgi_plugins = ["tuntap"]
         async with uow:
             wsgi_app = await create_wsgi_app(
                 uow,
@@ -1153,6 +1163,7 @@ async def init(
                 service_id,
                 default_project,
                 pyvenv_dir,
+                uwsgi_plugins,
             )
         if default_project:
             # proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"

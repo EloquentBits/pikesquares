@@ -26,7 +26,7 @@ async def create_http_router(
         run_as_uid="pikesquares",
         run_as_gid="pikesquares",
         device=device,
-        uwsgi_plugins=", ".join(uwsgi_plugins),
+        uwsgi_plugins=",".join(uwsgi_plugins),
         address=f"{ip}:{port}" ,
         subscription_server_address=subscription_server_address,
         data_dir=str(device.data_dir),

@@ -140,6 +140,7 @@ class WsgiApp(ServiceBase, table=True):
         )
 
         print(section.as_configuration().format())
+        print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
 
         await create_or_restart_instance(
             project_zmq_monitor.zmq_address,
