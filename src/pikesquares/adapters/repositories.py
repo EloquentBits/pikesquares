@@ -240,15 +240,22 @@ class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
             return results.all()
 
 
-class RouterRepositoryBase(GenericRepository[HttpRouter], ABC):
+class HttpRouterRepositoryBase(GenericRepository[HttpRouter], ABC):
     """Router repository."""
 
     @abstractmethod
     async def get_by_name(self, name: str) -> HttpRouter | None:
         raise NotImplementedError()
 
+    async def get_by_project_id(self, project_id: str) -> Sequence[HttpRouter] | None:
+        raise NotImplementedError()
+        
 
-class RouterRepository(GenericSqlRepository[HttpRouter], RouterRepositoryBase):
+    async def get_by_address(self, address: str) -> HttpRouter | None:
+        raise NotImplementedError()
+
+
+class HttpRouterRepository(GenericSqlRepository[HttpRouter], HttpRouterRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, HttpRouter)
 
@@ -259,11 +266,19 @@ class RouterRepository(GenericSqlRepository[HttpRouter], RouterRepositoryBase):
             obj = results.first()
             return obj
 
-    async def get_by_device_id(self, device_id: str) -> list[HttpRouter] | None:
-        stmt = select(HttpRouter).where(HttpRouter.device_id == device_id)
+    async def get_by_project_id(self, project_id: str) -> Sequence[HttpRouter] | None:
+        stmt = select(HttpRouter).where(HttpRouter.project_id == project_id)
         results = await self._session.exec(stmt)
         if results:
             return results.all()
+
+    async def get_by_address(self, address: str) -> HttpRouter | None:
+        stmt = select(HttpRouter).where(HttpRouter.address == address)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
+
 
 
 class WsgiAppReposityBase(GenericRepository[WsgiApp], ABC):
@@ -285,7 +300,7 @@ class WsgiAppRepository(GenericSqlRepository[WsgiApp], WsgiAppReposityBase):
             obj = results.first()
             return obj
 
-    async def get_by_project_id(self, project_id: str) -> WsgiApp | None:
+    async def get_by_project_id(self, project_id: str) -> Sequence[WsgiApp] | None:
         stmt = select(WsgiApp).where(WsgiApp.project_id == project_id)
         results = await self._session.exec(stmt)
         if results:

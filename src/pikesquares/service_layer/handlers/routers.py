@@ -3,6 +3,7 @@ import cuid
 from aiopath import AsyncPath
 
 from pikesquares.domain.device import Device
+from pikesquares.domain.project import Project
 from pikesquares.domain.router import HttpRouter, TuntapRouter, TuntapDevice
 from pikesquares.service_layer.uow import UnitOfWork
 
@@ -11,7 +12,7 @@ logger = structlog.getLogger()
 
 async def create_http_router(
     name: str,
-    device: Device,
+    project: Project,
     uow: UnitOfWork,
     ip: str,
     port: int,
@@ -24,17 +25,17 @@ async def create_http_router(
         name=name,
         run_as_uid="pikesquares",
         run_as_gid="pikesquares",
-        device=device,
+        project=project,
         uwsgi_plugins=",".join(uwsgi_plugins),
         address=f"{ip}:{port}" ,
         subscription_server_address=subscription_server_address,
-        data_dir=str(device.data_dir),
-        config_dir=str(device.config_dir),
-        log_dir=str(device.log_dir),
-        run_dir=str(device.run_dir),
+        data_dir=str(project.data_dir),
+        config_dir=str(project.config_dir),
+        log_dir=str(project.log_dir),
+        run_dir=str(project.run_dir),
     )
     try:
-        await uow.routers.add(http_router)
+        await uow.http_routers.add(http_router)
     except Exception as exc:
         raise exc
 
@@ -42,7 +43,7 @@ async def create_http_router(
 
 
 async def create_tuntap_router(
-    device: Device,
+    project: Project,
     uow: UnitOfWork,
     ip: str,
     netmask: str,
@@ -56,15 +57,15 @@ async def create_tuntap_router(
         tuntap_router = TuntapRouter(
             service_id=service_id,
             name=name,
-            device=device,
+            project=project,
             uwsgi_plugins=", ".join(uwsgi_plugins),
-            socket=str(AsyncPath(device.run_dir) / f"{service_id}.sock"),
+            socket=str(AsyncPath(project.run_dir) / f"{service_id}.sock"),
             ip=ip,
             netmask=netmask,
-            data_dir=str(device.data_dir),
-            config_dir=str(device.config_dir),
-            log_dir=str(device.log_dir),
-            run_dir=str(device.run_dir),
+            data_dir=str(project.data_dir),
+            config_dir=str(project.config_dir),
+            log_dir=str(project.log_dir),
+            run_dir=str(project.run_dir),
         )
         await uow.tuntap_routers.add(tuntap_router)
     except Exception as exc:

@@ -36,10 +36,11 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
     machine_id: str = Field(default=None, unique=True, max_length=32)
     uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
-    routers: list["HttpRouter"] = Relationship(back_populates="device")
     projects: list["Project"] = Relationship(back_populates="device")
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="device", sa_relationship_kwargs={"uselist": False})
-    tuntap_routers: list["TuntapRouter"] = Relationship(back_populates="device")
+
+    #routers: list["HttpRouter"] = Relationship(back_populates="device")
+    #tuntap_routers: list["TuntapRouter"] = Relationship(back_populates="device")
 
     # def model_post_init(self, __context: Any) -> None:
     #    super().model_post_init(__context)

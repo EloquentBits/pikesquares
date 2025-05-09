@@ -22,7 +22,9 @@ class Project(ServiceBase, table=True):
     device_id: str | None = Field(default=None, foreign_key="devices.id")
     device: "Device" = Relationship(back_populates="projects")
     wsgi_apps: list["WsgiApp"] = Relationship(back_populates="project")
+    http_routers: list["HttpRouter"] = Relationship(back_populates="project")
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="project", sa_relationship_kwargs={"uselist": False})
+    tuntap_routers: list["TuntapRouter"] = Relationship(back_populates="project")
 
 
     def __repr__(self):

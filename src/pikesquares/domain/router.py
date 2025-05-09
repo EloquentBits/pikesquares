@@ -7,11 +7,10 @@ from cuid import cuid
 from sqlmodel import Field, Relationship, SQLModel
 
 # from pikesquares import get_first_available_port
-from pikesquares.conf import ensure_system_path
 from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
 
 from .base import ServiceBase, TimeStampedBase
-from .device import Device
+from .project import Project
 from uwsgiconf.options.routing_routers import RouterTunTap
 
 logger = structlog.getLogger()
@@ -20,14 +19,14 @@ logger = structlog.getLogger()
 class TuntapRouter(ServiceBase, table=True):
     """tuntap router"""
 
-    __tablename__ = "tuntap_routers"
+    __tablename__ = "project_tuntap_routers"
 
     name: str = Field(default="device0", max_length=32)
     socket: str | None = Field(max_length=150, default=None)
     ip: str | None = Field(max_length=25, default=None)
     netmask: str | None = Field(max_length=25, default=None)
-    device_id: str | None = Field(default=None, foreign_key="devices.id")
-    device: Device = Relationship(back_populates="tuntap_routers")
+    project_id: str | None = Field(default=None, foreign_key="projects.id")
+    project: Project = Relationship(back_populates="tuntap_routers")
 
     tuntap_devices: list["TuntapDevice"] = Relationship(back_populates="tuntap_router")
 
@@ -47,22 +46,22 @@ class TuntapDevice(TimeStampedBase, table=True):
     ip: str | None = Field(max_length=25, default=None)
     netmask: str | None = Field(max_length=25, default=None)
 
-    tuntap_router_id: int | None = Field(foreign_key="tuntap_routers.id")
+    tuntap_router_id: int | None = Field(foreign_key="project_tuntap_routers.id")
     tuntap_router: TuntapRouter | None = Relationship(back_populates="tuntap_devices")
 
 
 
 class HttpRouter(ServiceBase, table=True):
 
-    __tablename__ = "http_routers"
+    __tablename__ = "project_http_routers"
 
     name: str = Field(default="http-router0", max_length=32)
 
     address: str | None = Field(default=None, max_length=100)
     subscription_server_address: str | None = Field(default=None, max_length=100)
 
-    device_id: str | None = Field(default=None, foreign_key="devices.id")
-    device: Device = Relationship(back_populates="routers")
+    project_id: str | None = Field(default=None, foreign_key="projects.id")
+    project: Project = Relationship(back_populates="http_routers")
 
     @property
     def uwsgi_config_section_class(self) -> HttpRouterSection | HttpsRouterSection:

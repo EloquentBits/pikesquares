@@ -10,8 +10,8 @@ from pikesquares.adapters.repositories import (
     DeviceUWSGIOptionsReposityBase,
     ProjectRepository,
     ProjectReposityBase,
-    RouterRepository,
-    RouterRepositoryBase,
+    HttpRouterRepository,
+    HttpRouterRepositoryBase,
     WsgiAppRepository,
     WsgiAppReposityBase,
     ZMQMonitorRepository,
@@ -35,7 +35,7 @@ class UnitOfWorkBase(ABC):
     devices: DeviceReposityBase
     uwsgi_options: DeviceUWSGIOptionsReposityBase
     projects: ProjectReposityBase
-    routers: RouterRepositoryBase
+    http_routers: HttpRouterRepositoryBase
     wsgi_apps: WsgiAppReposityBase
     zmq_monitors: ZMQMonitorRepositoryBase
     tuntap_routers: TuntapRouterRepositoryBase
@@ -72,7 +72,7 @@ class UnitOfWork(UnitOfWorkBase):
         self.devices = DeviceRepository(self._session)
         self.uwsgi_options = DeviceUWSGIOptionsRepository(self._session)
         self.projects = ProjectRepository(self._session)
-        self.routers = RouterRepository(self._session)
+        self.http_routers = HttpRouterRepository(self._session)
         self.wsgi_apps = WsgiAppRepository(self._session)
         self.zmq_monitors = ZMQMonitorRepository(self._session)
         self.tuntap_routers = TuntapRouterRepository(self._session)
