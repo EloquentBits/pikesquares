@@ -149,21 +149,6 @@ class WsgiApp(ServiceBase, table=True):
         )
         #await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
 
-    @pydantic.computed_field
-    @property
-    def service_config(self) -> Path | None:
-        if self.project.enable_dir_monitor:
-            # service_config_dir = self.ensure_system_dir(
-            #    Path(self.config_dir) / "projects"
-            # )
-            # return service_config_dir / f"{self.service_id}.ini"
-            return Path(self.config_dir) / f"{self.project_id}" / "apps" / f"{self.service_id}.ini"
-
-    @pydantic.computed_field
-    @property
-    def apps_dir(self) -> Path:
-        return Path(self.config_dir) / f"{self.service_id}" / "apps"
-
     @property
     def subscription_notify_socket(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-subscription-notify.sock"

@@ -88,10 +88,9 @@ class DeviceSection(Section):
         # if device.daemonize:
         #    self.main_process.daemonize(log_into=str(device.log_file))
 
-        if device.enable_dir_monitor:
-            self.main_process.set_basic_params(
-                touch_reload=str(device.touch_reload_file),
-            )
+        #self.main_process.set_basic_params(
+        #    touch_reload=str(device.touch_reload_file),
+        #)
 
         self.main_process.change_dir(to=device.data_dir)
 
@@ -101,35 +100,6 @@ class DeviceSection(Section):
         # )
 
         self.networking.register_socket(self.networking.sockets.default(str(device.socket_address)))
-        # routers_dir = Path(self.conf.CONFIG_DIR) / "routers"
-        # routers_dir.mkdir(parents=True, exist_ok=True)
-        # empjs["uwsgi"]["emperor"] = str(routers_dir.resolve())
-
-        if device.enable_dir_monitor:
-            self.empire.set_emperor_params(
-                vassals_home=str(device.apps_dir),
-                # vassals_home = f"zmq://tcp://{device.EMPEROR_ZMQ_ADDRESS}",
-                spawn_asap=True,
-                name="PikeSquares Server",
-                stats_address=str(device.stats_address),
-                # str(Path(self._runtime_dir) / f"{device.service_id}-stats.sock"),
-                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
-            )
-        if 0:  # device.zmq_monitor:
-            self.empire.set_emperor_params(
-                vassals_home=device.zmq_monitor.socket,
-                # vassals_home = f"zmq://tcp://{device.EMPEROR_ZMQ_ADDRESS}",
-                name="PikeSquares Server",
-                spawn_asap=True,
-                stats_address=str(device.stats_address),
-                # str(Path(self._runtime_dir) / f"{device.service_id}-stats.sock"),
-                # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
-            )
-
-        # "--emperor=zmq://tcp://127.0.0.1:5250",
-        # self.empire.set_emperor_params(
-        #    stats_address=str(Path(self._runtime_dir) / f"{self.service_id}-stats.sock")
-        # )
 
         # uwsgiconf.options.spooler.Spooler
         if 0:

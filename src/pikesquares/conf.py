@@ -259,8 +259,6 @@ class AppConfig(BaseSettings):
 
     SENTRY_DSN: pydantic.HttpUrl | None = None
     daemonize: bool = False
-    ENABLE_TUNTAP_ROUTER: bool = False
-    ENABLE_DIR_MONITOR: bool = False
 
     # to override api_settings:
     # export my_prefix_api_settings='{"foo": "x", "apple": 1}'

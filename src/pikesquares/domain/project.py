@@ -32,28 +32,11 @@ class Project(ServiceBase, table=True):
     def uwsgi_config_section_class(self) -> ProjectSection:
         return ProjectSection
 
-    @pydantic.computed_field
-    @property
-    def service_config(self) -> Path | None:
-        if self.enable_dir_monitor:
-            service_config_dir = ensure_system_path(Path(self.config_dir) / "projects")
-            return service_config_dir / f"{self.service_id}.ini"
-
-    @pydantic.computed_field
-    @property
-    def apps_dir(self) -> Path:
-        return Path(self.config_dir) / f"{self.service_id}" / "apps"
-
-    async def up(self, 
-                 device_zmq_monitor, 
-                 project_zmq_monitor, 
-                 tuntap_router):
+    async def up(self, device_zmq_monitor, vassals_home, tuntap_router):
         from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
-        #device_zmq_monitor
-        #project_zmq_monitor = project.zmq_monitor
         section = ProjectSection(self)
         section.empire.set_emperor_params(
-            vassals_home=project_zmq_monitor.uwsgi_zmq_address,
+            vassals_home=vassals_home,
             name=f"{self.service_id}",
             stats_address=self.stats_address,
             spawn_asap=True,

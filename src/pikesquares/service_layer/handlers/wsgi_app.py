@@ -27,19 +27,19 @@ async def create_wsgi_app(
     # routers: list[Router],
 ) -> WsgiApp:
 
-    wsgi_app = WsgiApp(
-        service_id=service_id,
-        name=name,
-        run_as_uid="pikesquares",
-        run_as_gid="pikesquares",
-        project=project,
-        uwsgi_plugins=",".join(uwsgi_plugins) if uwsgi_plugins else "",
-        root_dir=str(runtime.app_root_dir),
-        wsgi_file=str(wsgi_file),
-        wsgi_module=wsgi_module,
-        pyvenv_dir=str(pyvenv_dir),
-    )
     try:
+        wsgi_app = WsgiApp(
+            service_id=service_id,
+            name=name,
+            run_as_uid="pikesquares",
+            run_as_gid="pikesquares",
+            project=project,
+            uwsgi_plugins=",".join(uwsgi_plugins) if uwsgi_plugins else "",
+            root_dir=str(runtime.app_root_dir),
+            wsgi_file=str(wsgi_file),
+            wsgi_module=wsgi_module,
+            pyvenv_dir=str(pyvenv_dir),
+        )
         await uow.wsgi_apps.add(wsgi_app)
     except Exception as exc:
         raise exc

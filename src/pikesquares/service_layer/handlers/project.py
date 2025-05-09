@@ -14,21 +14,19 @@ async def create_project(
     uow: UnitOfWork,
 ) -> Project | None:
 
-    device = context.get("device")
-
-    uwsgi_plugins = ["emperor_zeromq", "tuntap"]
-
-    project = Project(
-        service_id=f"project_{cuid()}",
-        name=name,
-        device=device,
-        uwsgi_plugins=",".join(uwsgi_plugins),
-        data_dir=str(device.data_dir),
-        config_dir=str(device.config_dir),
-        log_dir=str(device.log_dir),
-        run_dir=str(device.run_dir),
-    )
     try:
+        device = context.get("device")
+        uwsgi_plugins = ["emperor_zeromq", "tuntap"]
+        project = Project(
+            service_id=f"project_{cuid()}",
+            name=name,
+            device=device,
+            uwsgi_plugins=",".join(uwsgi_plugins),
+            data_dir=str(device.data_dir),
+            config_dir=str(device.config_dir),
+            log_dir=str(device.log_dir),
+            run_dir=str(device.run_dir),
+        )
         await uow.projects.add(project)
     except Exception as exc:
         raise exc

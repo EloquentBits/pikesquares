@@ -70,14 +70,14 @@ class HttpRouter(ServiceBase, table=True):
             return HttpsRouterSection
         return HttpRouterSection
 
-    async def up(self, tuntap_router, router_tuntap_device, device_zmq_monitor):
+    async def up(self, tuntap_router, http_router_tuntap_device, zmq_monitor):
 
         from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 
         section = HttpRouterSection(self)
         section._set("jailed", "true")
         router_tuntap = section.routing.routers.tuntap().device_connect(
-            device_name=router_tuntap_device.name,
+            device_name=http_router_tuntap_device.name,
             socket=tuntap_router.socket,
         )
         #.device_add_rule(
@@ -98,7 +98,7 @@ class HttpRouter(ServiceBase, table=True):
         # bring up interface uwsgi0
         #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
         section.main_process.run_command_on_event(
-            command=f"ifconfig {router_tuntap_device.name} {router_tuntap_device.ip} netmask {router_tuntap_device.netmask} up",
+            command=f"ifconfig {http_router_tuntap_device.name} {http_router_tuntap_device.ip} netmask {http_router_tuntap_device.netmask} up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         # and set the default gateway
@@ -115,7 +115,7 @@ class HttpRouter(ServiceBase, table=True):
         print(section.as_configuration().format())
 
         await create_or_restart_instance(
-            device_zmq_monitor.zmq_address,
+            zmq_monitor.zmq_address,
             f"{self.service_id}.ini",
             section.as_configuration().format(do_print=True),
         )
@@ -178,15 +178,6 @@ class HttpRouter(ServiceBase, table=True):
             #exec-as-root = ping -c 1 192.168.0.1
         return super().get_uwsgi_config(zmq_monitor=zmq_monitor, tuntap_router=tuntap_router)
 
-
-
-    @property
-    def service_config(self) -> Path | None:
-        if self.enable_dir_monitor:
-            service_config_dir = ensure_system_path(Path(self.config_dir) / "projects")
-            return service_config_dir / f"{self.service_id}.ini"
-
-
     # @pydantic.computed_field
     # def resubscribe_to(self) -> Path:
     # resubscribe_to: str = None,
@@ -200,11 +191,6 @@ class HttpRouter(ServiceBase, table=True):
                 return self.address.split(":")[-1]
             except IndexError:
                 pass
-
-    @pydantic.computed_field
-    @property
-    def enable_dir_monitor(self) -> bool:
-        return False  # self.device.enable_dir_monitor
 
     """
     https_router = await uow.routers.get_by_name("default-https-router")

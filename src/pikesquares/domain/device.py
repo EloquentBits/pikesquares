@@ -41,23 +41,8 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="device", sa_relationship_kwargs={"uselist": False})
     tuntap_routers: list["TuntapRouter"] = Relationship(back_populates="device")
 
-    enable_dir_monitor: bool = False
-    enable_tuntap_router: bool = False
-
     # def model_post_init(self, __context: Any) -> None:
     #    super().model_post_init(__context)
-
-    @pydantic.computed_field
-    @property
-    def apps_dir(self) -> Path | None:
-        if self.enable_dir_monitor:
-            return Path(self.config_dir) / "projects"
-
-    @pydantic.computed_field
-    @property
-    def service_config(self) -> Path | None:
-        if self.enable_dir_monitor:
-            return Path(self.config_dir) / f"{self.service_id}.ini"
 
     # async def delete_config_from_filesystem(self) -> None:
     #   await AsyncPath(self.service_config).unlink()

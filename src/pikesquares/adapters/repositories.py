@@ -119,10 +119,7 @@ class GenericSqlRepository(GenericRepository[T], ABC):
 
     async def get_by_id(self, id: str) -> T | None:
         stmt = self._construct_get_stmt(id)
-        logger.debug(f"{str(stmt)=}")
-        logger.debug(f"{id=}")
         results = await self._session.exec(stmt)
-        logger.debug(f"{results=}")
         # import ipdb;ipdb.set_trace()
         if results:
             obj = await results.first()
@@ -152,7 +149,6 @@ class GenericSqlRepository(GenericRepository[T], ABC):
 
     async def list(self, **filters) -> list[T]:
         stmt = self._construct_list_stmt(**filters)
-        logger.debug(f"LIST SQL -> {str(stmt)}")
         results = await self._session.exec(stmt)
         return results.all()
 
