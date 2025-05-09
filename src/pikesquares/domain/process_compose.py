@@ -479,7 +479,8 @@ async def caddy_ping(caddy_data: tuple[CaddyProcess, ProcessMessages]):
 
 async def register_caddy_process(
     context: dict,
-    http_router_port=int,
+    http_router_ip: str,
+    http_router_port: int,
 ) -> None:
     """register caddy"""
 
@@ -503,10 +504,10 @@ async def register_caddy_process(
             handles = routes[0].get("handle")
             upstreams = handles[0].get("upstreams")
             upstream_address = upstreams[0].get("dial")
-            if upstream_address != f"127.0.0.1:{http_router_port}":
+            if upstream_address != f"{http_router_ip}:{http_router_port}":
                 data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0][
                     "dial"
-                ] = f"127.0.0.1:{http_router_port}"
+                ] = f"{http_router_ip}:{http_router_port}"
                 caddy_config.seek(0)
                 json.dump(data, caddy_config)
                 caddy_config.truncate()

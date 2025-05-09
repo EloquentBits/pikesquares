@@ -1403,8 +1403,8 @@ async def main(
 
     await register_device_process(context)
     await register_api_process(context)
-    await register_dnsmasq_process(context)
-    await register_caddy_process(context, http_router_port=8034)
+    await register_dnsmasq_process(context, addresses=["/pikesquares.local/192.168.34.3"])
+    await register_caddy_process(context, "192.168.34.3", 8034)
 
     await register_device_stats(context)
 

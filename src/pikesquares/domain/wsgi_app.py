@@ -29,7 +29,7 @@ class Router(pydantic.BaseModel):
     def subscription_server_key(self) -> str:
         # return f"{self.app_name}.pikesquares.dev:{self.subscription_server_port}"
         logger.debug("subscription_server_key")
-        return f"{self.app_name}.pikesquares.dev"
+        return f"{self.app_name}.pikesquares.local"
 
     @pydantic.computed_field
     def subscription_server_protocol(self) -> str:
@@ -133,7 +133,7 @@ class WsgiApp(ServiceBase, table=True):
         section.subscriptions.subscribe(
             server=subscription_server_address,
             address=str(self.socket_address),  # address and port of wsgi app
-            key=f"{self.name}.pikesquares.dev" ,
+            key=f"{self.name}.pikesquares.local" ,
         )
         section.subscriptions.set_server_params(
             client_notify_address=self.subscription_notify_socket,
