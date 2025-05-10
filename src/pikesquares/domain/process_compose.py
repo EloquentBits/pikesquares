@@ -444,8 +444,8 @@ async def register_dnsmasq_process(
             "--bind-interfaces " \
             "--conf-file=/dev/null " \
             "--keep-in-foreground " \
-            "--port {port} " \
-            "--listen-address {listen_address} " \
+            f"--port {port} " \
+            f"--listen-address {listen_address} " \
             "--no-resolv " \
             "-u pikesquares -g pikesquares" 
 
