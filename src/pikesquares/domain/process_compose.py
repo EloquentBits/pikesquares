@@ -425,7 +425,7 @@ async def dnsmasq_ping(dnsmasq_data: tuple[DNSMASQProcess, ProcessMessages]):
 async def register_dnsmasq_process(
     context: dict,
     port: int = 5353,
-    addresses: list[str] | None = None,
+    addresses: list[str] = ["/pikesquares.local/192.168.34.3"],
     listen_address: str = "127.0.0.34",
 ) -> None:
     """register device"""
@@ -438,8 +438,20 @@ async def register_dnsmasq_process(
         if conf.DNSMASQ_BIN and not await AsyncPath(conf.DNSMASQ_BIN).exists():
             raise AppConfigError(f"unable locate dnsmasq binary @ {conf.DNSMASQ_BIN}") from None
 
-        cmd = f"{conf.DNSMASQ_BIN} --keep-in-foreground --port {port} --listen-address {listen_address} --no-resolv"
-        for addr in addresses or ["/pikesquares.local/192.168.34.1"]:
+        #--interface=incusbr0
+
+        cmd = f"{conf.DNSMASQ_BIN} " \
+            "--bind-interfaces " \
+            "--conf-file=/dev/null " \
+            "--keep-in-foreground " \
+            "--port {port} " \
+            "--listen-address {listen_address} " \
+            "--no-resolv " \
+            "-u pikesquares -g pikesquares" 
+
+
+
+        for addr in addresses:
             cmd = cmd + f" --address {addr}"
 
         process_messages = ProcessMessages(
@@ -479,8 +491,8 @@ async def caddy_ping(caddy_data: tuple[CaddyProcess, ProcessMessages]):
 
 async def register_caddy_process(
     context: dict,
-    http_router_ip: str,
-    http_router_port: int,
+    http_router_ip: str = "192.168.34.3",
+    http_router_port: int = 8034,
 ) -> None:
     """register caddy"""
 

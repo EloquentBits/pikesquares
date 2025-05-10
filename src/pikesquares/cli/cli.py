@@ -1286,7 +1286,7 @@ async def main(
             except IndexError:
                 # TODO
                 # create pikesquares user and group
-                # sudo useradd -u 777 pikesquares -d /var/lib/pikesquarees
+                # sudo useradd pikesquares --user-group --home-dir /var/lib/pikesquares
                 console.error("could not locate `pikesquares` group. Please create one to continue.")
                 raise typer.Abort() from None
                 # os.setgid(grp.getgrnam("pikesquares")[2])
@@ -1403,9 +1403,8 @@ async def main(
 
     await register_device_process(context)
     await register_api_process(context)
-    await register_dnsmasq_process(context, addresses=["/pikesquares.local/192.168.34.3"])
-    await register_caddy_process(context, "192.168.34.3", 8034)
-
+    await register_dnsmasq_process(context)
+    await register_caddy_process(context)
     await register_device_stats(context)
 
     # pc = services.get(context, ProcessCompose)
