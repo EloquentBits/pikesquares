@@ -11,12 +11,11 @@ from pikesquares.domain.project import Project
 from pikesquares.domain.router import HttpRouter
 from pikesquares.services.apps.exceptions import DjangoSettingsError
 from pikesquares.services.apps.python import PythonRuntime
-from pikesquares.services.apps.django import PythonRuntimeDjango, DjangoSettings 
+from pikesquares.services.apps.django import PythonRuntimeDjango, DjangoSettings
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
-from pikesquares.service_layer.handlers.routers import (
-    create_http_router,
-    create_tuntap_device,
-)
+from pikesquares.service_layer.handlers.routers import create_tuntap_device
+
+from pikesquares.presets.wsgi_app import WsgiAppSection
 
 
 logger = structlog.getLogger()
@@ -104,7 +103,7 @@ async def provision_wsgi_app(
         tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
         if tuntap_routers:
             ip = tuntap_routers[0].ipv4_interface + 2
-            await create_tuntap_device(uow, tuntap_routers[0], ip)
+            await create_tuntap_device(uow, tuntap_routers[0], ip, wsgi_app.service_id)
 
     except Exception as exc:
         raise exc
@@ -120,20 +119,21 @@ async def up(
     #wsgi_app_device, subscription_server_address, tuntap_router, project_zmq_monitor
 
     project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-    tuntap_router = await uow.tuntap_routers.get_by_project_id(project.id)
-    #wsgi_app_device = await uow.tuntap_devices.get_by_ip(wsgi_app_ip)
+    tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
+    if not tuntap_routers:
+        raise Exception(f"could not locate tuntap routers for project {project.name} [{project.id}]")
+    tuntap_router  = tuntap_routers[0]
+    wsgi_app_device = await uow.tuntap_devices.get_by_linked_service_id(wsgi_app.service_id)
 
     if not await AsyncPath(project_zmq_monitor.socket).exists():
         logger.error("unable to locate project zmq monitor socket")
-        raise typer.Exit(1) from None
-
-
+        raise Exception("unable to locate project zmq monitor socket")
 
     section = WsgiAppSection(wsgi_app)
     section._set("jailed", "true")
     router_tuntap = section.routing.routers.tuntap().device_connect(
         device_name=wsgi_app_device.name,
-        socket=tuntap_router.socket,
+        socket=tuntap_router.socket_address,
     )
     #.device_add_rule(
     #    direction="in",

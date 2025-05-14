@@ -8,17 +8,15 @@ from pikesquares.presets.project import ProjectSection
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.routers import (
-    create_http_router,
-    create_tuntap_device,
+    provision_http_router,
     create_tuntap_router,
-    get_tuntap_router_networks,
 )
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 
 logger = structlog.getLogger()
 
 
-async def create_project(
+async def provision_project(
     name: str,
     context: dict,
     uow: UnitOfWork,
@@ -40,7 +38,7 @@ async def create_project(
         project = await uow.projects.add(project)
         project_zmq_monitor = await create_zmq_monitor(uow, project=project)
         tuntap_router = await create_tuntap_router(uow, project)
-        http_router = await create_http_router(uow, project, tuntap_router)
+        http_router = await provision_http_router(uow, project, tuntap_router)
 
     except Exception as exc:
         raise exc
@@ -56,7 +54,11 @@ async def create_project(
 async def up(uow, project, device_zmq_monitor):
 
     zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-    tuntap_router = await uow.tuntap_routers.get_by_project_id(project.id)
+    tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
+    if not tuntap_routers:
+        raise Exception(f"could not locate tuntap routers for project {project.name} [{project.id}]")
+
+    tuntap_router  = tuntap_routers[0]
 
     section = ProjectSection(project)
     section.empire.set_emperor_params(
@@ -68,7 +70,7 @@ async def up(uow, project, device_zmq_monitor):
     )
     router_cls = section.routing.routers.tuntap
     router = router_cls(
-        on=tuntap_router.socket_address,
+        on=str(tuntap_router.socket_address),
         device=tuntap_router.name,
         stats_server=str(AsyncPath(
             tuntap_router.run_dir) / f"tuntap-{tuntap_router.name}-stats.sock"

@@ -11,7 +11,7 @@ import typer
 # )
 from pikesquares import services
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers.project import create_project
+from pikesquares.service_layer.handlers.project import provision_project
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
@@ -54,7 +54,7 @@ async def create(
         default=randomname.get_name(),
         validators=[ServiceNameValidator],
     )
-    project = await create_project(name, context, uow)
+    project = await provision_project(name, context, uow)
     if project:
         console.success(f":heavy_check_mark:     Project '{project.name}' was successfully created!")
         device = context.get("device")

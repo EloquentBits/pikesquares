@@ -51,6 +51,7 @@ class TuntapDevice(TimeStampedBase, table=True):
         max_length=36,
     )
     name: str = Field(default="device0", max_length=32)
+    linked_service_id: str = Field(default=None, unique=True)
     ip: str | None = Field(max_length=25, default=None)
     netmask: str | None = Field(max_length=25, default=None)
 
@@ -81,7 +82,6 @@ class HttpRouter(ServiceBase, table=True):
         #subscription_server_address = \
         #    f"{http_router_ip}:{get_first_available_port(port=5700)}"
             #AsyncPath(device.run_dir) / "subscriptions" / "http"
-
 
     @property
     def uwsgi_config_section_class(self) -> HttpRouterSection | HttpsRouterSection:

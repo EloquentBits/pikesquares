@@ -67,7 +67,7 @@ from pikesquares.domain.process_compose import (
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.device import create_device
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
-from pikesquares.service_layer.handlers.project import create_project, up as project_up
+from pikesquares.service_layer.handlers.project import provision_project, up as project_up
 from pikesquares.service_layer.handlers.routers import http_router_up
 from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, up as wsgi_app_up
 from pikesquares.service_layer.uow import UnitOfWork
@@ -339,10 +339,6 @@ async def launch(
     repo_url = "https://github.com/bugsink/bugsink.git"
     giturl = giturlparse.parse(repo_url)
     app_name = giturl.name
-    # proj_type = "Python"
-    wsgi_file = None
-    wsgi_module = None
-
     app_root_dir = AsyncPath(conf.pyapps_dir) / app_name
     await app_root_dir.mkdir(exist_ok=True)
 
@@ -361,7 +357,7 @@ async def launch(
     if not project:
         async with uow:
             try:
-                project = await create_project(project_name, context, uow)
+                project = await provision_project(project_name, context, uow)
             except Exception as exc:
                 logger.exception(exc)
                 console.error(f"unable to create project {project_name}.")
@@ -396,6 +392,8 @@ async def launch(
         logger.error("unable to locate http router")
         raise typer.Exit(1) from None
 
+    await project_up(uow, project, device_zmq_monitor)
+
     await http_router_up(
         uow,
         project,
@@ -404,9 +402,6 @@ async def launch(
     console.success(":heavy_check_mark:     Launching http router.. Done!")
     console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
-    #tuntap_router_ip = "192.168.34.1"
-    #tuntap_router = await uow.tuntap_routers.get_by_ip(tuntap_router_ip)
-    await project_up(uow, project, device_zmq_monitor)
 
     await wsgi_app_up(uow, wsgi_app, project, http_routers[0])
 
@@ -569,19 +564,10 @@ async def up(
 
     projects = await uow.projects.get_by_device_id(device.id) or []
     for project in projects:
-        project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-        vassals_home = project_zmq_monitor.uwsgi_zmq_address
-        tuntap_router_ip = "192.168.34.1"
-        tuntap_router = await uow.tuntap_routers.get_by_ip(tuntap_router_ip)
-        await project.up(device_zmq_monitor, vassals_home, tuntap_router)
+        await project_up(uow, project, device_zmq_monitor)
         console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
-
-        project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-        #http_router = await uow.http_routers.get_by_project_id(project.id)
-        #http_router_ip = "192.168.34.3"
         for http_router in  await uow.http_routers.list():
-            http_router_tuntap_device  = await uow.tuntap_devices.get_by_tuntap_router_id(tuntap_router.id)
-            await http_router.up(tuntap_router, http_router_tuntap_device, project_zmq_monitor)
+            await http_router_up(uow, project, http_router)
             console.success(":heavy_check_mark:     Launching http router.. Done!")
             console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
     #else:

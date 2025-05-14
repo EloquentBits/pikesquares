@@ -405,6 +405,8 @@ class TuntapDeviceRepositoryBase(GenericRepository[TuntapDevice], ABC):
     async def get_by_ip(self, ip: str) -> TuntapDevice | None:
         raise NotImplementedError()
 
+    async def get_by_linked_service_id(self, linked_service_id: str) -> TuntapDevice | None:
+        raise NotImplementedError()
 
 class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
@@ -429,6 +431,13 @@ class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRep
 
     async def get_by_ip(self, ip: str) -> TuntapDevice | None:
         stmt = select(TuntapDevice).where(TuntapDevice.ip == ip)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.first()
+            return obj
+
+    async def get_by_linked_service_id(self, linked_service_id: str) -> TuntapDevice | None:
+        stmt = select(TuntapDevice).where(TuntapDevice.linked_service_id == linked_service_id)
         results = await self._session.exec(stmt)
         if results:
             obj = results.first()

@@ -15,7 +15,7 @@ from pikesquares.service_layer.handlers.monitors import create_or_restart_instan
 logger = structlog.getLogger()
 
 
-async def create_http_router(uow: UnitOfWork, project: Project, tuntap_router: TuntapRouter) -> HttpRouter:
+async def provision_http_router(uow: UnitOfWork, project: Project, tuntap_router: TuntapRouter) -> HttpRouter:
 
     try:
         http_router_ip = tuntap_router.ipv4_interface + 1
@@ -36,7 +36,8 @@ async def create_http_router(uow: UnitOfWork, project: Project, tuntap_router: T
         http_router_tuntap_device = await create_tuntap_device(
             uow,
             tuntap_router,
-            ip=http_router_ip,
+            http_router_ip,
+            http_router.service_id,
         )
     except Exception as exc:
         raise exc
@@ -97,6 +98,7 @@ async def create_tuntap_device(
     uow: UnitOfWork,
     tuntap_router: TuntapRouter,
     ip: IPv4Interface,
+    linked_service_id: str,
 ) -> TuntapDevice:
     try:
         tuntap_device = TuntapDevice(
@@ -104,6 +106,7 @@ async def create_tuntap_device(
             ip=str(ip.ip),
             netmask=str(ip.netmask),
             tuntap_router=tuntap_router,
+            linked_service_id=linked_service_id,
         )
         await uow.tuntap_devices.add(tuntap_device)
     except Exception as exc:
