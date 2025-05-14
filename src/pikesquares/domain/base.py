@@ -105,68 +105,59 @@ class ServiceBase(TimeStampedBase, SQLModel):
     # def uwsgi_zmq_monitor_address(self) -> str:
     #    return f"zmq://ipc://{self.zmq_monitor_socket} "
 
-    @pydantic.computed_field
     @property
     def stats_address(self) -> Path:
         """uWSGI Stats Server socket address"""
         return Path(self.run_dir) / f"{self.service_id}-stats.sock"
 
-    @pydantic.computed_field
     @property
     def socket_address(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}.sock"
 
-    @pydantic.computed_field
+    @property
+    def zmq_monitor_socket(self) -> Path:
+        return Path(self.run_dir) / f"{self.service_id}-zmq-monitor.sock"
+
     @property
     def notify_socket(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-notify.sock"
 
-    @pydantic.computed_field
     @property
     def touch_reload_file(self) -> Path:
         return self.service_config
 
-    @pydantic.computed_field
     @property
     def pid_file(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}.pid"
 
-    @pydantic.computed_field
     @property
     def log_file(self) -> Path:
         return Path(self.log_dir) / f"{self.service_id}.log"
 
-    @pydantic.computed_field
     @property
     def master_fifo_file(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-master-fifo"
 
-    @pydantic.computed_field
     @property
     def pki_dir(self) -> Path:
         return Path(self.data_dir) / "pki"
 
-    @pydantic.computed_field
     @property
     def plugins_dir(self) -> Path:
         return Path(self.data_dir) / "plugins"
 
-    @pydantic.computed_field(repr=False)
     @property
     def certificate(self) -> Path:
         return Path(self.pki_dir) / "issued" / f"{self.cert_name}.crt"
 
-    @pydantic.computed_field(repr=False)
     @property
     def certificate_key(self) -> Path:
         return Path(self.pki_dir) / "private" / f"{self.cert_name}.key"
 
-    @pydantic.computed_field(repr=False)
     @property
     def certificate_ca(self) -> Path:
         return Path(self.pki_dir) / "ca.crt"
 
-    @pydantic.computed_field
     @property
     def spooler_dir(self) -> Path:
         return Path(self.data_dir) / "spooler"

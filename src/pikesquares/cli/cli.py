@@ -7,6 +7,7 @@ import shutil
 
 # import pwd
 import tempfile
+from ipaddress import IPv4Network, IPv4Interface
 from functools import wraps
 from pathlib import Path
 from typing import Annotated, Optional
@@ -16,6 +17,8 @@ import cuid
 
 #from sqlalchemy.sql import text
 import questionary
+import git
+import giturlparse
 import randomname
 import sentry_sdk
 import structlog
@@ -64,11 +67,11 @@ from pikesquares.domain.process_compose import (
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.device import create_device
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
-from pikesquares.service_layer.handlers.project import create_project
-from pikesquares.service_layer.handlers.routers import create_http_router, create_tuntap_device, create_tuntap_router
-from pikesquares.service_layer.handlers.wsgi_app import create_wsgi_app
+from pikesquares.service_layer.handlers.project import create_project, up as project_up
+from pikesquares.service_layer.handlers.routers import http_router_up
+from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, up as wsgi_app_up
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.services.apps.django import DjangoSettings, PythonRuntimeDjango
+from pikesquares.services.apps.django import PythonRuntimeDjango
 from pikesquares.services.apps.exceptions import (
     # PythonRuntimeCheckError,
     # PythonRuntimeDjangoCheckError,
@@ -76,7 +79,7 @@ from pikesquares.services.apps.exceptions import (
     # PythonRuntimeInitError,
     DjangoCheckError,
     DjangoDiffSettingsError,
-    DjangoSettingsError,
+    #DjangoSettingsError,
     UvPipInstallError,
     UvPipListError,
     UvSyncError,
@@ -280,12 +283,13 @@ def attach(
     pc = services.get(context, ProcessCompose)
     pc.attach()
 
-@app.command(rich_help_panel="Control", short_help="Launch a Service")
+@app.command(rich_help_panel="Control", short_help="Launch a preconfigured app")
 @run_async
 async def launch(
     ctx: typer.Context,
 ):
-    """Launch a Service """
+    """Launch a preconfigured app """
+
     context = ctx.ensure_object(dict)
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
@@ -310,7 +314,6 @@ async def launch(
         raise typer.Exit(1)
     """
 
-    app_name = "bugsink"
     #device_stats = device.stats()
     #if not device_stats:
     #    console.warning("unable to lookup device stats")
@@ -327,173 +330,56 @@ async def launch(
     #    logger.error(f"unable to set up project zmq monitor [{project_zmq_monitor}]")
     #    raise typer.Exit(code=1) from None
 
-    app_root_dir = AsyncPath("/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/bugsink")
+    class CloneProgress(git.RemoteProgress):
+        def update(self, op_code, cur_count, max_count=None, message=""):
+            # console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
+            if message:
+                console.info(f"Completed git clone {message}")
+
+    repo_url = "https://github.com/bugsink/bugsink.git"
+    giturl = giturlparse.parse(repo_url)
+    app_name = giturl.name
+    # proj_type = "Python"
+    wsgi_file = None
+    wsgi_module = None
+
+    app_root_dir = AsyncPath(conf.pyapps_dir) / app_name
+    await app_root_dir.mkdir(exist_ok=True)
+
+    clone_into_dir = app_root_dir / app_name
+    if not await clone_into_dir.exists():
+        await clone_into_dir.mkdir()
+        if not any(Path(clone_into_dir).iterdir()):
+            try:
+                repo = git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
+            except git.GitCommandError as exc:
+            # if "already exists and is not an empty directory" in exc.stderr:
+                pass
+
+    project_name = app_name
+    project = await uow.projects.get_by_name(project_name)
+    if not project:
+        async with uow:
+            try:
+                project = await create_project(project_name, context, uow)
+            except Exception as exc:
+                logger.exception(exc)
+                console.error(f"unable to create project {project_name}.")
+                await uow.rollback()
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
 
     wsgi_app = await uow.wsgi_apps.get_by_name(app_name)
-    runtime_base = PythonRuntime
-    py_kwargs = {
-        "app_root_dir": app_root_dir,
-        "uv_bin": conf.UV_BIN,
-        # "rich_live": live,
-    }
-    # console.info(py_kwargs)
-    if PythonRuntime.is_django(app_root_dir):
-        runtime = PythonRuntimeDjango(**py_kwargs)
-    else:
-        runtime = runtime_base(**py_kwargs)
-
-    project_name = "bugsink"
-
     if not wsgi_app:
-
-        tuntap_router_ip = "192.168.34.1"
-        tuntap_router_netmask = "255.255.255.0"
-
-        project = await uow.projects.get_by_name(project_name)
-        if not project:
-            async with uow:
-                try:
-                    project = await create_project(project_name, context, uow)
-                    project_zmq_monitor = await create_zmq_monitor(uow, project=project)
-
-                    tuntap_router = await create_tuntap_router(project, uow, tuntap_router_ip, tuntap_router_netmask)
-                    context["tuntap-router"] = tuntap_router
-
-                    http_router_name = "http-router"
-                    http_router_ip = "192.168.34.3"
-                    http_router_port = get_first_available_port(port=8034)
-                    http_router_netmask = "255.255.255.0"
-
-                    subscription_server_address = str(AsyncPath(project.run_dir) / f"{http_router_name}-subscriptions.sock")
-                    #subscription_server_address = \
-                    #    f"{http_router_ip}:{get_first_available_port(port=5700)}"
-                        #AsyncPath(device.run_dir) / "subscriptions" / "http"
-                    http_router = await create_http_router(
-                            http_router_name,
-                            project,
-                            uow,
-                            http_router_ip,
-                            http_router_port,
-                            subscription_server_address,
-                        )
-                    http_router_tuntap_device = await create_tuntap_device(
-                            tuntap_router,
-                            uow,
-                            http_router_ip,
-                            http_router_netmask,
-                            name=f"psq-{cuid.slug()}" ,
-                        )
-                    #project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-                    await project.up(device_zmq_monitor, project_zmq_monitor.uwsgi_zmq_address , tuntap_router)
-                except Exception as exc:
-                    logger.exception(exc)
-                    console.error(f"unable to create project {project_name}.")
-                    await uow.rollback()
-                    raise typer.Exit(1) from None
-                else:
-                    await uow.commit()
-        else:
-            project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-            tuntap_router_ip = "192.168.34.1"
-            tuntap_router = await uow.tuntap_routers.get_by_ip(tuntap_router_ip)
-            await project.up(
-                device_zmq_monitor,
-                project_zmq_monitor.uwsgi_zmq_address,
-                tuntap_router,
-            )
-
-        service_type = "WSGI-App"
-        service_type_prefix = service_type.replace("-", "_").lower()
-        service_id = f"{service_type_prefix}_{cuid.cuid()}"
-        # proj_type = "Python"
-        pyvenv_dir = conf.pyvenvs_dir / service_id
-        wsgi_file = None
-        wsgi_module = None
-
-        if not await AsyncPath(app_root_dir).exists():
-            console.warning(f"Project root directory does not exist: {str(app_root_dir)}")
-            raise typer.Exit(code=1)
-        logger.info(f"{app_root_dir=}")
-
-        if isinstance(runtime, PythonRuntimeDjango):
-            django_settings = DjangoSettings(
-                settings_module ="bugsink_conf",
-                root_urlconf = "bugsink.urls",
-                wsgi_application = "bugsink.wsgi.application",
-            )
-            django_settings = django_settings or runtime.collected_project_metadata.get("django_settings")
-            if not django_settings:
-                raise DjangoSettingsError("unable to detect django settings")
-
-            logger.debug(django_settings.model_dump())
-            if 0:
-                django_check_messages = runtime.collected_project_metadata.get("django_check_messages", [])
-
-                for msg in django_check_messages.messages:
-                    logger.debug(f"{msg.id=}")
-                    logger.debug(f"{msg.message=}")
-
-            wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
-            wsgi_file = AsyncPath(runtime.app_root_dir) / AsyncPath("/".join(wsgi_parts) + ".py")
-            wsgi_module = django_settings.wsgi_application.split(".")[-1]
-
-        if not all([wsgi_file, wsgi_module]):
-            logger.info("unable to detect all the wsgi required settings.")
-            raise typer.Exit(0)
-
-        uwsgi_plugins = ["tuntap", "logfile"]
         async with uow:
             try:
-                wsgi_app = await create_wsgi_app(
-                    uow,
-                    runtime,
-                    service_id,
+                wsgi_app = await provision_wsgi_app(
                     app_name,
-                    wsgi_file,
-                    wsgi_module,
-                    project,
-                    pyvenv_dir,
-                    uwsgi_plugins=uwsgi_plugins,
-                )
-            except Exception as exc:
-                logger.exception(exc)
-                await uow.rollback()
-                raise typer.Exit(1) from None
-            else:
-                await uow.commit()
-
-    else:
-        logger.info(f"launching existing app {wsgi_app.name} [{wsgi_app.service_id}]")
-
-    if not await AsyncPath(wsgi_app.pyvenv_dir).exists():
-        logger.info(f"installing dependencies into venv @ {wsgi_app.pyvenv_dir}")
-        cmd_env = {
-            # "UV_CACHE_DIR": str(conf.pv_cache_dir),
-            "UV_PROJECT_ENVIRONMENT": wsgi_app.pyvenv_dir,
-        }
-        runtime.create_venv(Path(wsgi_app.pyvenv_dir), cmd_env=cmd_env)
-        runtime.install_dependencies()
-
-    logger.debug(f"Launching {wsgi_app.name} [{wsgi_app.service_id}]")
-
-
-    project = await uow.projects.get_by_name(project_name)
-    project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-    tuntap_router_ip = "192.168.34.1"
-    tuntap_router = await uow.tuntap_routers.get_by_ip(tuntap_router_ip)
-
-    wsgi_app_ip = "192.168.34.2"
-    wsgi_app_device = await uow.tuntap_devices.get_by_ip(wsgi_app_ip)
-    if not wsgi_app_device:
-        wsgi_app_device_name = f"psq-{cuid.slug()}"
-        async with uow:
-            try:
-                wsgi_app_device = await create_tuntap_device(
-                    tuntap_router,
+                    app_root_dir,
+                    conf.UV_BIN,
                     uow,
-                    wsgi_app_ip,
-                    "255.255.255.0",
-                    name=wsgi_app_device_name
+                    project,
                 )
             except Exception as exc:
                 logger.exception(exc)
@@ -502,32 +388,28 @@ async def launch(
             else:
                 await uow.commit()
 
-    if not await AsyncPath(project_zmq_monitor.socket).exists():
-        logger.error("unable to locate project zmq monitor socket")
-        raise typer.Exit(1) from None
-
-    http_router_ip = "192.168.34.3"
-    http_router_port = "8034"
-    http_router = await uow.http_routers.get_by_address(f"{http_router_ip}:{http_router_port}")
-    if not http_router:
+    #http_router_ip = "192.168.34.3"
+    #http_router_port = "8034"
+    #http_router = await uow.http_routers.get_by_address(f"{http_router_ip}:{http_router_port}")
+    http_routers = await uow.http_routers.get_by_project_id(project.id)
+    if not http_routers:
         logger.error("unable to locate http router")
         raise typer.Exit(1) from None
 
-    #http_router_tuntap_device  = await uow.tuntap_devices.get_by_ip(http_router_ip)
-    #await http_router.up(
-    #    tuntap_router,
-    #    http_router_tuntap_device,
-    #    project_zmq_monitor,
-    #)
-    #console.success(":heavy_check_mark:     Launching http router.. Done!")
-    #console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-
-    await wsgi_app.up(
-        wsgi_app_device,
-        http_router.subscription_server_address,
-        tuntap_router,
-        project_zmq_monitor,
+    await http_router_up(
+        uow,
+        project,
+        http_routers[0],
     )
+    console.success(":heavy_check_mark:     Launching http router.. Done!")
+    console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+
+    #tuntap_router_ip = "192.168.34.1"
+    #tuntap_router = await uow.tuntap_routers.get_by_ip(tuntap_router_ip)
+    await project_up(uow, project, device_zmq_monitor)
+
+    await wsgi_app_up(uow, wsgi_app, project, http_routers[0])
+
     console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
 
 
@@ -632,8 +514,8 @@ async def up(
     await register_process_compose(context)
     process_compose = await services.aget(context, ProcessCompose)
 
-    if conf and conf.pyvenvs_dir.exists():
-        logger.debug(f"python venvs directory @ {conf.pyvenvs_dir} is available")
+    if conf and conf.pyapps_dir.exists():
+        logger.debug(f"python apps directory @ {conf.pyapps_dir} is available")
 
     up_result = await process_compose.up()
     if not up_result:
@@ -813,7 +695,7 @@ async def init(
     runtime_base = PythonRuntime
     service_type = "WSGI-App"
     service_type_prefix = service_type.replace("-", "_").lower()
-    service_id = f"{service_type_prefix}_{cuid.cuid()}"
+    service_id = f"{service_type_prefix}-{cuid.slug()}"
     # proj_type = "Python"
     pyvenv_dir = conf.pyvenvs_dir / service_id
     """
@@ -1135,7 +1017,7 @@ async def init(
 
         uwsgi_plugins = ["tuntap"]
         async with uow:
-            wsgi_app = await create_wsgi_app(
+            wsgi_app = await provision_wsgi_app(
                 uow,
                 runtime,
                 app_name,

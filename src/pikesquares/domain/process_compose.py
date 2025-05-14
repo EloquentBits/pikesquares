@@ -444,6 +444,7 @@ async def register_dnsmasq_process(
             "--bind-interfaces " \
             "--conf-file=/dev/null " \
             "--keep-in-foreground " \
+            "--log-queries " \
             f"--port {port} " \
             f"--listen-address {listen_address} " \
             "--no-resolv " \

@@ -301,22 +301,18 @@ class AppConfig(BaseSettings):
     def pki_dir(self) -> Path:
         return ensure_system_path(self.data_dir / "pki")
 
-    @pydantic.computed_field
     @property
     def uv_cache_dir(self) -> Path:
         return ensure_system_path(self.data_dir / "uv-cache")
 
-    @pydantic.computed_field
     @property
-    def pyvenvs_dir(self) -> Path:
-        return ensure_system_path(self.data_dir / "pyvenvs")
+    def pyapps_dir(self) -> Path:
+        return ensure_system_path(self.data_dir / "pyapps")
 
-    @pydantic.computed_field
     @property
     def plugins_dir(self) -> Path:
         return ensure_system_path(self.data_dir / "plugins")
 
-    @pydantic.computed_field
     @property
     def lift_file(self) -> Path | None:
         if self.SCIE_LIFT_FILE:

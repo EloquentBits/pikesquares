@@ -1,13 +1,8 @@
-# import shutil
-from pathlib import Path
-
-import pydantic
 import structlog
 from sqlmodel import Field, Relationship
 from aiopath import AsyncPath
 
 from .base import ServiceBase
-from pikesquares.conf import ensure_system_path
 from pikesquares.presets.project import ProjectSection
 
 
@@ -44,10 +39,9 @@ class Project(ServiceBase, table=True):
             spawn_asap=True,
             # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
         )
-
         router_cls = section.routing.routers.tuntap
         router = router_cls(
-            on=tuntap_router.socket,
+            on=tuntap_router.socket_address,
             device=tuntap_router.name,
             stats_server=str(AsyncPath(
                 tuntap_router.run_dir) / f"tuntap-{tuntap_router.name}-stats.sock"

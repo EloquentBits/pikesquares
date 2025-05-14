@@ -20,31 +20,29 @@ async def create_zmq_monitor(
 ) -> ZMQMonitor | None:
     zmq_monitor = None
 
-    if device:
-        zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-    elif project:
-        zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+    #if device:
+    #    zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    #elif project:
+    #    zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
 
-    if not zmq_monitor:
+    #if not zmq_monitor:
+    try:
         create_kwargs: dict[str, str | Project | Device] = {
             "transport": "ipc",
         }
         if device:
             create_kwargs["device"] = device
-            create_kwargs["socket"] = str(AsyncPath(device.run_dir) / f"{device.service_id}-zmq-monitor.sock")
+            create_kwargs["socket"] = str(device.zmq_monitor_socket)
 
         if project:
             create_kwargs["project"] = project
-            create_kwargs["socket"] = str(AsyncPath(project.run_dir) / f"{project.service_id}-zmq-monitor.sock")
+            create_kwargs["socket"] = str(project.zmq_monitor_socket)
 
         zmq_monitor = ZMQMonitor(**create_kwargs)
-        try:
-            await uow.zmq_monitors.add(zmq_monitor)
-            logger.debug(f"Created {zmq_monitor} ")
-        except Exception as exc:
-            raise exc
-    else:
-        logger.debug(f"Using existing zmq_monitor {zmq_monitor}")
+        await uow.zmq_monitors.add(zmq_monitor)
+        logger.debug(f"Created {zmq_monitor} ")
+    except Exception as exc:
+        raise exc
 
     # if project.enable_dir_monitor:
     #    if not await AsyncPath(project.apps_dir).exists():

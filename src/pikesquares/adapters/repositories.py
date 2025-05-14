@@ -362,6 +362,7 @@ class TuntapRouterRepositoryBase(GenericRepository[TuntapRouter], ABC):
     async def get_by_device_ip(self, ip: str) -> Sequence[TuntapRouter] | None:
         raise NotImplementedError()
 
+
 class TuntapRouterRepository(GenericSqlRepository[TuntapRouter], TuntapRouterRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, TuntapRouter)
@@ -373,10 +374,10 @@ class TuntapRouterRepository(GenericSqlRepository[TuntapRouter], TuntapRouterRep
             obj = results.first()
             return obj
 
-    async def get_by_device_id(self, device_id: str) -> Sequence[TuntapRouter] | None:
+    async def get_by_project_id(self, project_id: str) -> Sequence[TuntapRouter] | None:
         stmt = (
             select(TuntapRouter)
-            .where(TuntapRouter.device_id == device_id)
+            .where(TuntapRouter.project_id == project_id)
         )
         results = await self._session.exec(stmt)
         if results:
@@ -398,7 +399,7 @@ class TuntapDeviceRepositoryBase(GenericRepository[TuntapDevice], ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def get_by_tuntap_router_id(self, tuntap_router_id: str) -> TuntapDevice | None:
+    async def get_by_tuntap_router_id(self, tuntap_router_id: str) -> Sequence[TuntapDevice] | None:
         raise NotImplementedError()
 
     async def get_by_ip(self, ip: str) -> TuntapDevice | None:
@@ -417,12 +418,14 @@ class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRep
             obj = results.first()
             return obj
 
-    async def get_by_tuntap_router_id(self, tuntap_router_id: str) -> TuntapDevice | None:
-        stmt = select(TuntapDevice).where(TuntapDevice.tuntap_router_id == tuntap_router_id)
+    async def get_by_tuntap_router_id(self, tuntap_router_id: str) -> Sequence[TuntapDevice] | None:
+        stmt = (
+            select(TuntapDevice)
+            .where(TuntapDevice.tuntap_router_id == tuntap_router_id)
+        )
         results = await self._session.exec(stmt)
         if results:
-            obj = results.first()
-            return obj
+            return results.all()
 
     async def get_by_ip(self, ip: str) -> TuntapDevice | None:
         stmt = select(TuntapDevice).where(TuntapDevice.ip == ip)

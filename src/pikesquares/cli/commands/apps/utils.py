@@ -4,18 +4,13 @@ import traceback
 import sys
 import subprocess
 from pathlib import Path
-from enum import Enum
-from typing_extensions import Annotated
-from typing import Optional
-from glob import glob
 
 import typer
 import git
 import questionary
 import giturlparse
-import randomname
 from cuid import cuid
-from tinydb import TinyDB, where, Query
+#from tinydb import TinyDB, where, Query
 import structlog
 
 
@@ -256,7 +251,7 @@ def provision_base_dir(custom_style):
         console.warning("invalid app source")
         raise typer.Exit()
 
-
+"""
 def get_project(
         db: TinyDB,
         conf: AppConfig,
@@ -380,4 +375,4 @@ def get_router(
 # print(questionary.text("What's your name?",
 #    validate=lambda text: len(text) > 0).ask())
 
-
+"""

@@ -1,3 +1,4 @@
+from ipaddress import IPv4Network, IPv4Interface
 import uuid
 from pathlib import Path
 
@@ -22,13 +23,20 @@ class TuntapRouter(ServiceBase, table=True):
     __tablename__ = "project_tuntap_routers"
 
     name: str = Field(default="device0", max_length=32)
-    socket: str | None = Field(max_length=150, default=None)
     ip: str | None = Field(max_length=25, default=None)
     netmask: str | None = Field(max_length=25, default=None)
     project_id: str | None = Field(default=None, foreign_key="projects.id")
     project: Project = Relationship(back_populates="tuntap_routers")
 
     tuntap_devices: list["TuntapDevice"] = Relationship(back_populates="tuntap_router")
+
+    @property
+    def ipv4_interface(self) -> IPv4Interface:
+        return IPv4Interface(f"{self.ip}/{self.netmask}")
+
+    @property
+    def ipv4_network(self) -> IPv4Network:
+        return self.ipv4_interface.network
 
 
 class TuntapDevice(TimeStampedBase, table=True):
@@ -49,19 +57,31 @@ class TuntapDevice(TimeStampedBase, table=True):
     tuntap_router_id: int | None = Field(foreign_key="project_tuntap_routers.id")
     tuntap_router: TuntapRouter | None = Relationship(back_populates="tuntap_devices")
 
+    @property
+    def ipv4_interface(self) -> IPv4Interface:
+        return IPv4Interface(f"{self.ip}/{self.netmask}")
+
+    @property
+    def ipv4_network(self) -> IPv4Network:
+        return self.ipv4_interface.network
 
 
 class HttpRouter(ServiceBase, table=True):
 
     __tablename__ = "project_http_routers"
 
-    name: str = Field(default="http-router0", max_length=32)
-
     address: str | None = Field(default=None, max_length=100)
-    subscription_server_address: str | None = Field(default=None, max_length=100)
-
     project_id: str | None = Field(default=None, foreign_key="projects.id")
     project: Project = Relationship(back_populates="http_routers")
+
+    @property
+    def subscription_server_address(self) -> Path:
+        return Path(self.run_dir) / f"{self.service_id}-subscriptions.sock"
+
+        #subscription_server_address = \
+        #    f"{http_router_ip}:{get_first_available_port(port=5700)}"
+            #AsyncPath(device.run_dir) / "subscriptions" / "http"
+
 
     @property
     def uwsgi_config_section_class(self) -> HttpRouterSection | HttpsRouterSection:

@@ -423,7 +423,7 @@ class TunTapRouterSection(Section):
         #    )
         router_cls = self.routing.routers.tuntap
         self.router = router_cls(
-            on=router.socket,
+            on=router.socket_address,
             device=router.name,
             stats_server=str(AsyncPath(self.router.run_dir) / f"tuntap-{router.name}-stats.sock"),
         )
