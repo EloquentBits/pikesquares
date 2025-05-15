@@ -330,26 +330,35 @@ async def launch(
     #    logger.error(f"unable to set up project zmq monitor [{project_zmq_monitor}]")
     #    raise typer.Exit(code=1) from None
 
-    class CloneProgress(git.RemoteProgress):
-        def update(self, op_code, cur_count, max_count=None, message=""):
-            # console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
-            if message:
-                console.info(f"Completed git clone {message}")
+    def git_clone(repo_url: str, clone_into_dir: Path):
+        class CloneProgress(git.RemoteProgress):
+            def update(self, op_code, cur_count, max_count=None, message=""):
+                # console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
+                if message:
+                    console.info(f"Completed git clone {message}")
+
+        clone_into_dir.mkdir(exist_ok=True)
+        if not any(clone_into_dir.iterdir()):
+            try:
+                return git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
+            except git.GitCommandError as exc:
+                logger.exception(exc)
+            # if "already exists and is not an empty directory" in exc.stderr:
+                pass
 
     repo_url = "https://github.com/bugsink/bugsink.git"
     giturl = giturlparse.parse(repo_url)
     app_name = giturl.name
-    app_root_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
+    app_root_dir = AsyncPath(conf.pyapps_dir) / app_name
     await app_root_dir.mkdir(exist_ok=True)
-
-    if not await app_root_dir.exists():
-        await app_root_dir.mkdir()
-        if not any(Path(app_root_dir).iterdir()):
-            try:
-                repo = git.Repo.clone_from(repo_url, app_root_dir,  progress=CloneProgress())
-            except git.GitCommandError as exc:
-            # if "already exists and is not an empty directory" in exc.stderr:
-                pass
+    app_repo_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
+    app_pyvenv_dir = app_repo_dir / ".venv"
+    try:
+        repo = git_clone(repo_url, Path(app_repo_dir))
+    except Exception as exc:
+        logger.exception(exc)
+        console.error(f"unable to clone {app_name} repo from {repo_url}")
+        raise typer.Exit(1) from None
 
     project_name = app_name
     project = await uow.projects.get_by_name(project_name)
@@ -369,9 +378,12 @@ async def launch(
     if not wsgi_app:
         async with uow:
             try:
+                #await pyvenv_dir.mkdir(exist_ok=True)
                 wsgi_app = await provision_wsgi_app(
                     app_name,
                     app_root_dir,
+                    app_repo_dir,
+                    app_pyvenv_dir,
                     conf.UV_BIN,
                     uow,
                     project,

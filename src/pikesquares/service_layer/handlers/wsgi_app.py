@@ -24,6 +24,8 @@ logger = structlog.getLogger()
 async def provision_wsgi_app(
     name: str,
     app_root_dir: AsyncPath,
+    app_repo_dir: AsyncPath,
+    app_pyvenv_dir: AsyncPath,
     uv_bin: Path,
     uow: UnitOfWork,
     project: Project,
@@ -31,17 +33,60 @@ async def provision_wsgi_app(
 ) -> WsgiApp | None:
 
     try:
+
+        wsgi_app = await uow.wsgi_apps.get_by_name(name)
+
         runtime_base = PythonRuntime
         py_kwargs = {
             "app_root_dir": app_root_dir,
+            "app_repo_dir": app_repo_dir,
+            "app_pyvenv_dir": app_pyvenv_dir,
             "uv_bin": uv_bin,
             # "rich_live": live,
         }
         # console.info(py_kwargs)
-        if PythonRuntime.is_django(app_root_dir):
+        if PythonRuntime.is_django(app_repo_dir):
             runtime = PythonRuntimeDjango(**py_kwargs)
         else:
             runtime = runtime_base(**py_kwargs)
+
+        cmd_env = {
+            # "UV_CACHE_DIR": str(conf.pv_cache_dir),
+            "UV_PROJECT_ENVIRONMENT": runtime.app_pyvenv_dir,
+        }
+        #try:
+        #    runtime.create_venv(Path(runtime.app_pyvenv_dir), cmd_env=cmd_env)
+        #except Exception as exc:
+        #    logger.exception("unable to create venv")
+        #    raise exc
+        #
+        if not runtime.app_pyvenv_dir.exists():
+            try:
+                runtime.install_dependencies(venv=runtime.app_pyvenv_dir)
+            except Exception as exc:
+                logger.exception("unable to install dependencies")
+                raise exc
+
+        if name == "bugsink":
+            # uv run bugsink-show-version
+            cmd_create_conf = [
+                "bugsink-create-conf",
+                "--template=singleserver",
+                "--host=bugsink.pikesquares.local",
+                f"--base-dir={app_root_dir}",
+            ]
+            cmd_db_migrate = [
+                "bugsink-manage",
+                "migrate",
+            ]
+            for cmd_args in (cmd_create_conf, cmd_db_migrate):
+                try:
+                    retcode, stdout, stderr = runtime.run_app_init_command(cmd_args)
+                    if stdout:
+                        print(stdout)
+                except Exception as exc:
+                    logger.exception("unable to run app init command")
+                    raise exc
 
         if isinstance(runtime, PythonRuntimeDjango):
             django_settings = DjangoSettings(
@@ -62,48 +107,33 @@ async def provision_wsgi_app(
                     logger.debug(f"{msg.message=}")
 
             wsgi_parts = django_settings.wsgi_application.split(".")[:-1]
-            wsgi_file = AsyncPath(runtime.app_root_dir) / AsyncPath("/".join(wsgi_parts) + ".py")
+            wsgi_file = AsyncPath(runtime.app_repo_dir) / AsyncPath("/".join(wsgi_parts) + ".py")
             wsgi_module = django_settings.wsgi_application.split(".")[-1]
 
         if not all([wsgi_file, wsgi_module]):
             logger.info("unable to detect all the wsgi required settings.")
             return
 
-        uwsgi_plugins = ["tuntap", "logfile"]
-        service_type = "WSGI-App"
-        wsgi_app = WsgiApp(
-            service_id=f"{service_type.lower() }-{cuid.slug()}",
-            name=name,
-            run_as_uid="pikesquares",
-            run_as_gid="pikesquares",
-            project=project,
-            uwsgi_plugins=",".join(uwsgi_plugins) if uwsgi_plugins else "",
-            root_dir=str(runtime.app_root_dir),
-            wsgi_file=str(wsgi_file),
-            wsgi_module=wsgi_module,
-        )
-        await uow.wsgi_apps.add(wsgi_app)
+        if not wsgi_app:
+            uwsgi_plugins = ["tuntap", "logfile"]
+            service_type = "WSGI-App"
+            wsgi_app = WsgiApp(
+                service_id=f"{service_type.lower() }-{cuid.slug()}",
+                name=name,
+                run_as_uid="pikesquares",
+                run_as_gid="pikesquares",
+                project=project,
+                uwsgi_plugins=",".join(uwsgi_plugins) if uwsgi_plugins else "",
+                root_dir=str(runtime.app_repo_dir),
+                wsgi_file=str(wsgi_file),
+                wsgi_module=wsgi_module,
+            )
+            await uow.wsgi_apps.add(wsgi_app)
 
-        pyvenv_dir = app_root_dir / "../.venv"
-        await pyvenv_dir.mkdir(exist_ok=True)
-
-        logger.info(f"installing dependencies into venv @ {pyvenv_dir}")
-        cmd_env = {
-            # "UV_CACHE_DIR": str(conf.pv_cache_dir),
-            "UV_PROJECT_ENVIRONMENT": pyvenv_dir,
-        }
-        try:
-            runtime.create_venv(Path(pyvenv_dir), cmd_env=cmd_env)
-        except Exception:
-            logger.exception("unable to create venv")
-        else:
-            runtime.install_dependencies()
-
-        #wsgi_app_ip = "192.168.34.2"
-        tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
-        if tuntap_routers:
-            ip = tuntap_routers[0].ipv4_interface + 2
-            await create_tuntap_device(uow, tuntap_routers[0], ip, wsgi_app.service_id)
+            tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
+            if tuntap_routers:
+                ip = tuntap_routers[0].ipv4_interface + 2
+                await create_tuntap_device(uow, tuntap_routers[0], ip, wsgi_app.service_id)
 
     except Exception as exc:
         raise exc
@@ -132,7 +162,7 @@ async def up(
     section._set("jailed", "true")
     router_tuntap = section.routing.routers.tuntap().device_connect(
         device_name=wsgi_app_device.name,
-        socket=tuntap_router.socket,
+        socket=tuntap_router.socket_address,
     )
     #.device_add_rule(
     #    direction="in",

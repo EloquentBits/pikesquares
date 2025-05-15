@@ -30,6 +30,8 @@ class BaseLanguageRuntime(pydantic.BaseModel, ABC):
 
     MATCH_FILES: set[str]
     app_root_dir: Path
+    app_repo_dir: Path
+    app_pyvenv_dir: Path
     collected_project_metadata: dict = {}
 
     model_config = pydantic.ConfigDict(extra="allow")
@@ -59,7 +61,7 @@ class BaseLanguageRuntime(pydantic.BaseModel, ABC):
         all_files: set[Path] = set()
         for ext in self.MATCH_FILES:
             try:
-                all_files.add(next(Path(self.app_root_dir).glob(ext)))
+                all_files.add(next(Path(self.app_repo_dir).glob(ext)))
             except StopIteration:
                 continue
         return all_files

@@ -22,6 +22,8 @@ class PythonRuntimeDjangoCheckError(Exception):
 class PythonRuntimeInitError(Exception):
     pass
 
+class PythonRuntimeDepsInstallError(Exception):
+    pass
 
 class DjangoCheckError(Exception):
     pass

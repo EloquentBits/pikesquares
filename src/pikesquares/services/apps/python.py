@@ -57,7 +57,7 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
     @pydantic.computed_field
     async def version(self) -> str:
         try:
-            version_file = AsyncPath(self.app_root_dir) / ".python-version"
+            version_file = AsyncPath(self.app_repo_dir) / ".python-version"
             _ver = await version_file.read_text()
             return _ver.strip()
         except FileNotFoundError:
@@ -100,11 +100,11 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
         # copy project to tmp dir at $TMPDIR
         logger.debug("[pikesquares] PythonRuntime.check")
         logger.info(
-            f"Inspecting Python project @ {str(self.app_root_dir)}",
+            f"Inspecting Python project @ {str(self.app_repo_dir)}",
             # log_locals=True,
         )
         shutil.copytree(
-            self.app_root_dir,
+            self.app_repo_dir,
             app_tmp_dir,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns(*list(self.PY_IGNORE_PATTERNS)),
@@ -124,7 +124,7 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
         return True
 
     @classmethod
-    def is_django(cls, app_root_dir: Path) -> bool:
+    def is_django(cls, app_repo_dir: Path) -> bool:
         py_django_files: set[str] = set(
             {
                 "urls.py",
@@ -135,7 +135,7 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
         )
         all_files = []
         for filename in py_django_files:
-            all_django_files = Path(app_root_dir).glob(f"**/{filename}")
+            all_django_files = Path(app_repo_dir).glob(f"**/{filename}")
             all_files.extend(list(filter(lambda f: ".venv" not in Path(f).parts, all_django_files)))
         # for f in all_files:
         #    print(f)
