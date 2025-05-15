@@ -84,7 +84,7 @@ async def provision_wsgi_app(
         )
         await uow.wsgi_apps.add(wsgi_app)
 
-        pyvenv_dir = app_root_dir / ".venv"
+        pyvenv_dir = app_root_dir / "../.venv"
         await pyvenv_dir.mkdir(exist_ok=True)
 
         logger.info(f"installing dependencies into venv @ {pyvenv_dir}")
@@ -116,10 +116,9 @@ async def up(
         project: Project,
         http_router: HttpRouter,
     ):
-    #wsgi_app_device, subscription_server_address, tuntap_router, project_zmq_monitor
-
     project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
     tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
+
     if not tuntap_routers:
         raise Exception(f"could not locate tuntap routers for project {project.name} [{project.id}]")
     tuntap_router  = tuntap_routers[0]
@@ -133,7 +132,7 @@ async def up(
     section._set("jailed", "true")
     router_tuntap = section.routing.routers.tuntap().device_connect(
         device_name=wsgi_app_device.name,
-        socket=tuntap_router.socket_address,
+        socket=tuntap_router.socket,
     )
     #.device_add_rule(
     #    direction="in",

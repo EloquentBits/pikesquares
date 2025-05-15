@@ -29,61 +29,6 @@ class Project(ServiceBase, table=True):
     def uwsgi_config_section_class(self) -> ProjectSection:
         return ProjectSection
 
-    async def up(self, device_zmq_monitor, vassals_home, tuntap_router):
-        from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
-        section = ProjectSection(self)
-        section.empire.set_emperor_params(
-            vassals_home=vassals_home,
-            name=f"{self.service_id}",
-            stats_address=self.stats_address,
-            spawn_asap=True,
-            # pid_file=str((Path(conf.RUN_DIR) / f"{self.service_id}.pid").resolve()),
-        )
-        router_cls = section.routing.routers.tuntap
-        router = router_cls(
-            on=tuntap_router.socket_address,
-            device=tuntap_router.name,
-            stats_server=str(AsyncPath(
-                tuntap_router.run_dir) / f"tuntap-{tuntap_router.name}-stats.sock"
-            ),
-        )
-        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst=tuntap_router.ip)
-        router.add_firewall_rule(direction="out", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
-        router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst="0.0.0.0")
-        router.add_firewall_rule(direction="out", action="deny")
-        router.add_firewall_rule(direction="in", action="allow", src=tuntap_router.ip, dst="192.168.34.0/24")
-        router.add_firewall_rule(direction="in", action="deny", src="192.168.34.0/24", dst="192.168.34.0/24")
-        router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst="192.168.34.0/24")
-        router.add_firewall_rule(direction="in", action="deny")
-        section.routing.use_router(router)
-
-        # give it an ip address
-        section.main_process.run_command_on_event(
-            command=f"ifconfig {tuntap_router.name} {tuntap_router.ip} netmask {tuntap_router.netmask} up",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-        # setup nat
-        section.main_process.run_command_on_event(
-            command="iptables -t nat -F", phase=section.main_process.phases.PRIV_DROP_PRE
-        )
-        section.main_process.run_command_on_event(
-            command="iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-        # enable linux ip forwarding
-        section.main_process.run_command_on_event(
-            command="echo 1 >/proc/sys/net/ipv4/ip_forward",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-        section._set("emperor-use-clone", "net")
-
-        print(section.as_configuration().format())
-        await create_or_restart_instance(
-            device_zmq_monitor.zmq_address,
-            f"{self.service_id}.ini",
-            section.as_configuration().format(do_print=True),
-        )
-
     def ping(self) -> None:
         print("== Project.ping ==")
 

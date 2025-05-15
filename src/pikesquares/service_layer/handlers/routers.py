@@ -104,7 +104,7 @@ async def create_tuntap_device(
         tuntap_device = TuntapDevice(
             name=f"psq-{cuid.slug()}" ,
             ip=str(ip.ip),
-            netmask=str(ip.netmask),
+            netmask=str(tuntap_router.netmask),
             tuntap_router=tuntap_router,
             linked_service_id=linked_service_id,
         )

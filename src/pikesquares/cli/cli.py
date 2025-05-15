@@ -339,15 +339,14 @@ async def launch(
     repo_url = "https://github.com/bugsink/bugsink.git"
     giturl = giturlparse.parse(repo_url)
     app_name = giturl.name
-    app_root_dir = AsyncPath(conf.pyapps_dir) / app_name
+    app_root_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
     await app_root_dir.mkdir(exist_ok=True)
 
-    clone_into_dir = app_root_dir / app_name
-    if not await clone_into_dir.exists():
-        await clone_into_dir.mkdir()
-        if not any(Path(clone_into_dir).iterdir()):
+    if not await app_root_dir.exists():
+        await app_root_dir.mkdir()
+        if not any(Path(app_root_dir).iterdir()):
             try:
-                repo = git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
+                repo = git.Repo.clone_from(repo_url, app_root_dir,  progress=CloneProgress())
             except git.GitCommandError as exc:
             # if "already exists and is not an empty directory" in exc.stderr:
                 pass
