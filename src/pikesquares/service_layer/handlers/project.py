@@ -4,6 +4,7 @@ import cuid
 
 from pikesquares import get_first_available_port
 from pikesquares.domain.project import Project
+from pikesquares.exceptions import StatsReadError
 from pikesquares.presets.project import ProjectSection
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
@@ -107,9 +108,15 @@ async def up(uow, project, device_zmq_monitor):
     section._set("emperor-use-clone", "net")
 
     print(section.as_configuration().format())
-    await create_or_restart_instance(
-        device_zmq_monitor.zmq_address,
-        f"{project.service_id}.ini",
-        section.as_configuration().format(do_print=True),
-    )
+
+
+    try:
+        stats_project = Project.read_stats(project.stats_address)
+    except StatsReadError:
+        await create_or_restart_instance(
+            device_zmq_monitor.zmq_address,
+      f"{project.service_id}.ini",
+            section.as_configuration().format(do_print=True),
+            )
+
 

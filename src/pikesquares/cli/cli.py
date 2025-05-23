@@ -652,6 +652,7 @@ async def init(
     custom_style = context.get("cli-style")
     conf = services.get(context, AppConfig)
     default_project = context.get("default-project")
+    uow = await services.aget(context, UnitOfWork)
     # db = services.get(context, TinyDB)
 
     # uv init djangotutorial
@@ -694,7 +695,14 @@ async def init(
     service_type_prefix = service_type.replace("-", "_").lower()
     service_id = f"{service_type_prefix}-{cuid.slug()}"
     # proj_type = "Python"
-    pyvenv_dir = conf.pyvenvs_dir / service_id
+    app_path = "/home/jvved/dev/pikesquares-app-templates/django/bugsink"
+    app_name = randomname.get_name().lower()
+    project_name = "bugsink"
+    project = await uow.projects.get_by_name(project_name)
+    app_repo_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
+    # pyvenv_dir = conf.pyvenvs_dir / service_id
+    app_pyvenv_dir = app_repo_dir / ".venv"
+
     """
         jobs
             1) detect runtime
@@ -706,6 +714,8 @@ async def init(
     py_kwargs = {
         "app_root_dir": app_root_dir,
         "uv_bin": conf.UV_BIN,
+        "app_repo_dir": app_repo_dir,
+        "app_pyvenv_dir": app_pyvenv_dir,
         # "rich_live": live,
     }
     # console.info(py_kwargs)
@@ -992,7 +1002,7 @@ async def init(
         #    validate=NameValidator,
         # ).ask()
         # console_status.update(status="[magenta]Provisioning Python app", spinner="earth")
-        app_name = randomname.get_name().lower()
+
         # app_project = services.get(context, SandboxProject)
         """
         try:
@@ -1010,18 +1020,18 @@ async def init(
             logger.error("[pikesquares] -- DjangoSettingsError --")
             raise typer.Exit() from None
         """
-        uow = await services.aget(context, UnitOfWork)
+
 
         uwsgi_plugins = ["tuntap"]
         async with uow:
             wsgi_app = await provision_wsgi_app(
-                uow,
-                runtime,
                 app_name,
-                service_id,
-                default_project,
-                pyvenv_dir,
-                uwsgi_plugins=uwsgi_plugins,
+                app_root_dir,
+                app_repo_dir,
+                app_pyvenv_dir,
+                conf.UV_BIN,
+                uow,
+                project,
             )
         if default_project:
             # proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"
