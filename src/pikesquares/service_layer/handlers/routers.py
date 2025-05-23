@@ -6,6 +6,7 @@ from aiopath import AsyncPath
 from pikesquares import get_first_available_port
 #from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
+from pikesquares.exceptions import StatsReadError
 #from pikesquares.domain.monitors import ZMQMonitor
 from pikesquares.presets.routers import HttpRouterSection
 from pikesquares.domain.router import HttpRouter, TuntapRouter, TuntapDevice
@@ -171,10 +172,14 @@ async def http_router_up(
 
     print(section.as_configuration().format())
 
-    await create_or_restart_instance(
-        zmq_monitor.zmq_address,
-        f"{http_router.service_id}.ini",
-        section.as_configuration().format(do_print=True),
-    )
+
+    try:
+        stats_router = HttpRouter.read_stats(http_router.stats_address)
+    except StatsReadError:
+        await create_or_restart_instance(
+            zmq_monitor.zmq_address,
+     f"{http_router.service_id}.ini",
+            section.as_configuration().format(do_print=True),
+        )
 
 

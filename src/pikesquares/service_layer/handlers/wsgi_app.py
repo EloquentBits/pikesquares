@@ -1,37 +1,35 @@
 from pathlib import Path
 
-
 import structlog
 import cuid
 from aiopath import AsyncPath
 
 from pikesquares.domain.wsgi_app import WsgiApp
+from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import HttpRouter
 from pikesquares.services.apps.exceptions import DjangoSettingsError
 from pikesquares.services.apps.python import PythonRuntime
 from pikesquares.services.apps.django import PythonRuntimeDjango, DjangoSettings
-from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
+from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, destroy_instance
 from pikesquares.service_layer.handlers.routers import create_tuntap_device
 
 from pikesquares.presets.wsgi_app import WsgiAppSection
-
 
 logger = structlog.getLogger()
 
 
 async def provision_wsgi_app(
-    name: str,
-    app_root_dir: AsyncPath,
-    app_repo_dir: AsyncPath,
-    app_pyvenv_dir: AsyncPath,
-    uv_bin: Path,
-    uow: UnitOfWork,
-    project: Project,
-    # routers: list[Router],
+        name: str,
+        app_root_dir: AsyncPath,
+        app_repo_dir: AsyncPath,
+        app_pyvenv_dir: AsyncPath,
+        uv_bin: Path,
+        uow: UnitOfWork,
+        project: Project,
+        # routers: list[Router],
 ) -> WsgiApp | None:
-
     try:
 
         wsgi_app = await uow.wsgi_apps.get_by_name(name)
@@ -90,9 +88,9 @@ async def provision_wsgi_app(
 
         if isinstance(runtime, PythonRuntimeDjango):
             django_settings = DjangoSettings(
-                settings_module ="bugsink_conf",
-                root_urlconf = "bugsink.urls",
-                wsgi_application = "bugsink.wsgi.application",
+                settings_module="bugsink_conf",
+                root_urlconf="bugsink.urls",
+                wsgi_application="bugsink.wsgi.application",
             )
             django_settings = django_settings or runtime.collected_project_metadata.get("django_settings")
             if not django_settings:
@@ -118,7 +116,7 @@ async def provision_wsgi_app(
             uwsgi_plugins = ["tuntap", "logfile"]
             service_type = "WSGI-App"
             wsgi_app = WsgiApp(
-                service_id=f"{service_type.lower() }-{cuid.slug()}",
+                service_id=f"{service_type.lower()}-{cuid.slug()}",
                 name=name,
                 run_as_uid="pikesquares",
                 run_as_gid="pikesquares",
@@ -140,18 +138,19 @@ async def provision_wsgi_app(
 
     return wsgi_app
 
+
 async def up(
         uow: UnitOfWork,
         wsgi_app: WsgiApp,
         project: Project,
         http_router: HttpRouter,
-    ):
+):
     project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
     tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
 
     if not tuntap_routers:
         raise Exception(f"could not locate tuntap routers for project {project.name} [{project.id}]")
-    tuntap_router  = tuntap_routers[0]
+    tuntap_router = tuntap_routers[0]
     wsgi_app_device = await uow.tuntap_devices.get_by_linked_service_id(wsgi_app.service_id)
 
     if not await AsyncPath(project_zmq_monitor.socket).exists():
@@ -199,7 +198,7 @@ async def up(
     section.subscriptions.subscribe(
         server=http_router.subscription_server_address,
         address=str(wsgi_app.socket_address),  # address and port of wsgi app
-        key=f"{wsgi_app.name}.pikesquares.local" ,
+        key=f"{wsgi_app.name}.pikesquares.local",
     )
     section.subscriptions.set_server_params(
         client_notify_address=wsgi_app.subscription_notify_socket,
@@ -208,9 +207,16 @@ async def up(
     print(section.as_configuration().format())
     print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
 
-    await create_or_restart_instance(
-        project_zmq_monitor.zmq_address,
-        f"{wsgi_app.service_id}.ini",
-        section.as_configuration().format(do_print=True),
-    )
+    try:
+        _ = WsgiApp.read_stats(wsgi_app.stats_address)
+    except StatsReadError:
+        await create_or_restart_instance(
+            project_zmq_monitor.zmq_address,
+            f"{wsgi_app.service_id}.ini",
+            section.as_configuration().format(do_print=True),
+        )
+
+
+
+
     #await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
