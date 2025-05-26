@@ -70,7 +70,10 @@ from pikesquares.service_layer.handlers.device import create_device
 #from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.project import provision_project, project_up
 from pikesquares.service_layer.handlers.routers import http_router_up
-from pikesquares.service_layer.handlers.attached_daemon import provision_attached_daemon
+from pikesquares.service_layer.handlers.attached_daemon import (
+    provision_attached_daemon,
+    attached_daemon_up,
+)
 from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, up as wsgi_app_up
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -348,7 +351,8 @@ async def launch(
                 console.error(f"unable to launch {project.name}")
                 raise typer.Exit(1)
 
-            await provision_attached_daemon("redis", project, uow)
+            attached_daemon = await provision_attached_daemon("redis", project, uow)
+            await attached_daemon_up(uow, attached_daemon)
 
             if 0:
                 wsgi_app = await provision_wsgi_app(

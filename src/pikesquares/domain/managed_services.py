@@ -38,25 +38,14 @@ class AttachedDaemon(ServiceBase, table=True):
     project_id: str | None = Field(default=None, foreign_key="projects.id")
     project: "Project" = Relationship(back_populates="attached_daemons")
 
-    #attached_daemons_dir
-
-    #for_legion=False,
-    #broken_counter=3,
-    #pidfile=pidfile,
-    #control=False,
-    #daemonize=True,
-    #touch_reload="/etc/pikesquares/redis.conf",
-    #signal_stop=15,
-    #signal_reload=15,
-    #honour_stdin=0,
-    #uid="pikesquares",
-    #gid="pikesquares",
-    #new_pid_ns="false",
-    #change_dir="/var/lib/pikesquares/redis",
 
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
+
+    @property
+    def attached_daemons_dir(self) -> Path:
+        return Path(self.data_dir) / "attached-daemons" / self.service_id
 
 
 class ManagedServiceBase(pydantic.BaseModel):

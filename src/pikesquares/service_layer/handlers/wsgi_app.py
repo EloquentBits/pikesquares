@@ -183,10 +183,12 @@ async def up(
         http_router: HttpRouter,
         console,
     ):
-    tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
-
+    project = await http_router.awaitable_attrs.project
+    tuntap_routers = await project.awaitable_attrs.tuntap_routers
+    #tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
     if not tuntap_routers:
         raise Exception(f"could not locate tuntap routers for project {project.name} [{project.id}]")
+
     tuntap_router  = tuntap_routers[0]
     wsgi_app_device = await uow.tuntap_devices.get_by_linked_service_id(wsgi_app.service_id)
 
@@ -245,13 +247,10 @@ async def up(
         command=f"ping -c 1 {tuntap_router.ip}",
         phase=section.main_process.phases.PRIV_DROP_PRE,
     )
-
-
     section.main_process.run_command_on_event(
         command="route -n",
         phase=section.main_process.phases.PRIV_DROP_PRE,
     )
-
     section.main_process.run_command_on_event(
         command="ping -c 1 8.8.8.8",
         phase=section.main_process.phases.PRIV_DROP_PRE,

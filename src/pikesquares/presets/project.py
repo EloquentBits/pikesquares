@@ -23,7 +23,8 @@ class ProjectSection(Section):
                 plugins=plugin,
                 search_dirs=[str(self.project.plugins_dir)],
             )
-        self.print_plugins()
+        if 0:
+            self.print_plugins()
 
         self.master_process.set_basic_params(
             enable=True,

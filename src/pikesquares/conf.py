@@ -307,10 +307,6 @@ class AppConfig(BaseSettings):
         return ensure_system_path(self.data_dir / "pyapps")
 
     @property
-    def attached_daemons_dir(self) -> Path:
-        return ensure_system_path(self.data_dir / "attached-daemons")
-
-    @property
     def plugins_dir(self) -> Path:
         return ensure_system_path(self.data_dir / "plugins")
 

@@ -48,7 +48,8 @@ class DeviceSection(Section):
                 # autoload=True,
                 # required=True,
             )
-        self.print_plugins()
+        if 0:
+            self.print_plugins()
 
         self.master_process.set_basic_params(
             enable=True,
