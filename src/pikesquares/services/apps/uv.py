@@ -7,9 +7,11 @@ from plumbum import ProcessExecutionError
 import structlog
 
 from pikesquares.cli.console import console
+
 from .exceptions import (
     UvCommandExecutionError,
     PythonRuntimeDepsInstallError,
+
     UvSyncError,
     UvPipInstallError,
     UvPipListError,

@@ -1,5 +1,6 @@
 #import enum
 import uuid
+from typing import Optional
 
 import structlog
 
@@ -18,9 +19,10 @@ from sqlmodel import (
 )
 
 from .base import TimeStampedBase  # , enum_values
-from .device import Device
-from .project import Project
-from .wsgi_app import WsgiApp
+
+#from .device import Device
+#from .project import Project
+#from .wsgi_app import WsgiApp
 
 logger = structlog.getLogger()
 
@@ -70,10 +72,10 @@ class ZMQMonitor(AppMonitorBase, table=True):
     socket: str | None = Field(max_length=150, default=None)
 
     device_id: int | None = Field(foreign_key="devices.id", unique=True)
-    device: Device | None = Relationship(back_populates="zmq_monitor")
+    device: Optional["Device"] = Relationship(back_populates="zmq_monitor")
 
     project_id: int | None = Field(foreign_key="projects.id", unique=True)
-    project: Project | None = Relationship(back_populates="zmq_monitor")
+    project: Optional["Project"] = Relationship(back_populates="zmq_monitor")
 
     # transport: ZMQ_TRANSPORTS = Field(sa_type=Column(ChoiceType(ZMQ_TRANSPORTS)))
 
@@ -98,7 +100,7 @@ class ZMQMonitor(AppMonitorBase, table=True):
     def uwsgi_zmq_address(self) -> str | None:
         return f"zmq://{self.zmq_address}"
 
-    async def create_or_restart_instance(self, name: str, model: Device | Project | WsgiApp) -> None:
+    async def create_or_restart_instance(self, name: str, model) -> None:
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
         if self.zmq_address:
@@ -110,7 +112,7 @@ class ZMQMonitor(AppMonitorBase, table=True):
         else:
             logger.info(f"{model.__class__.__name__} no zmq socket found @ {self.zmq_address}")
 
-    async def destroy_instance(self, name: str, model: Device | Project) -> None:
+    async def destroy_instance(self, name: str, model) -> None:
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
         if self.zmq_address:

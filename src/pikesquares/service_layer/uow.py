@@ -20,6 +20,8 @@ from pikesquares.adapters.repositories import (
     TuntapRouterRepository,
     TuntapDeviceRepositoryBase,
     TuntapDeviceRepository,
+    AttachedDaemonRepositoryBase,
+    AttachedDaemonRepository,
 )
 
 # logger = logging.getLogger("uvicorn.error")
@@ -40,6 +42,7 @@ class UnitOfWorkBase(ABC):
     zmq_monitors: ZMQMonitorRepositoryBase
     tuntap_routers: TuntapRouterRepositoryBase
     tuntap_devices: TuntapDeviceRepositoryBase
+    attached_daemons: AttachedDaemonRepositoryBase
 
     async def __aenter__(self):
         return self
@@ -77,6 +80,7 @@ class UnitOfWork(UnitOfWorkBase):
         self.zmq_monitors = ZMQMonitorRepository(self._session)
         self.tuntap_routers = TuntapRouterRepository(self._session)
         self.tuntap_devices = TuntapDeviceRepository(self._session)
+        self.attached_daemons = AttachedDaemonRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args):

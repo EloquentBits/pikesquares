@@ -1,7 +1,3 @@
-import pwd
-import grp
-import os
-
 from pathlib import Path
 from typing import Annotated
 
@@ -10,7 +6,57 @@ import structlog
 from plumbum import ProcessExecutionError
 from plumbum import local as pl_local
 
+#from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlmodel import (
+    Field,
+    Relationship,
+)
+
+from pikesquares.domain.base import ServiceBase
+
 logger = structlog.get_logger()
+
+
+class AttachedDaemon(ServiceBase, table=True):
+    """uWSGI Attached Daemons model class."""
+
+    __tablename__ = "attached_daemons"
+
+    name: str = Field(max_length=32)
+    for_legion: bool = Field(default=False)
+    broken_counter: int = Field(default=3)
+    #pidfile: str | None = Field(max_length=255)
+    control: bool = Field(default=False)
+    daemonize: bool = Field(default=True)
+    #touch_reload: str | None = Field(max_length=255)
+    signal_stop: int = Field(default=15)
+    signal_reload: int = Field(default=15)
+    honour_stdin: int = Field(default=0)
+    new_pid_ns: str = Field(default="false")
+    #change_dir: str = Field(max_length=255)
+
+    project_id: str | None = Field(default=None, foreign_key="projects.id")
+    project: "Project" = Relationship(back_populates="attached_daemons")
+
+    #attached_daemons_dir
+
+    #for_legion=False,
+    #broken_counter=3,
+    #pidfile=pidfile,
+    #control=False,
+    #daemonize=True,
+    #touch_reload="/etc/pikesquares/redis.conf",
+    #signal_stop=15,
+    #signal_reload=15,
+    #honour_stdin=0,
+    #uid="pikesquares",
+    #gid="pikesquares",
+    #new_pid_ns="false",
+    #change_dir="/var/lib/pikesquares/redis",
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
 
 
 class ManagedServiceBase(pydantic.BaseModel):
@@ -71,3 +117,10 @@ class ManagedServiceBase(pydantic.BaseModel):
             # raise UvCommandExecutionError(
             #        f"uv cmd [{' '.join(cmd_args)}] failed.\n{exc.stderr}"
             # )
+
+class Redis(ManagedServiceBase):
+
+
+    cmd_args: list[str] = []
+    cmd_env: dict[str, str] = {}
+

@@ -1,35 +1,33 @@
+import cuid
 import structlog
 from aiopath import AsyncPath
-import cuid
 
-from pikesquares import get_first_available_port
+from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
+from pikesquares.exceptions import StatsReadError
 from pikesquares.presets.project import ProjectSection
-from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
+from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor
 from pikesquares.service_layer.handlers.routers import (
-    provision_http_router,
     create_tuntap_router,
+    provision_http_router,
 )
-from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
+from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
 
 
 async def provision_project(
     name: str,
-    context: dict,
+    device: Device,
     uow: UnitOfWork,
 ) -> Project | None:
 
     try:
-        device = context.get("device")
-        uwsgi_plugins = ["emperor_zeromq", "tuntap"]
         project = Project(
             service_id=f"proj-{cuid.slug()}",
             name=name,
             device=device,
-            uwsgi_plugins=",".join(uwsgi_plugins),
+            uwsgi_plugins="emperor_zeromq;tuntap",
             data_dir=str(device.data_dir),
             config_dir=str(device.config_dir),
             log_dir=str(device.log_dir),
@@ -51,65 +49,127 @@ async def provision_project(
 
     return project
 
-async def up(uow, project, device_zmq_monitor):
+async def project_up(project)  -> bool:
+    try:
+        tuntap_routers = await project.awaitable_attrs.tuntap_routers
+        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        project_zmq_monitor_address  = project_zmq_monitor.zmq_address
+        section = ProjectSection(project)
+        section.empire.set_emperor_params(
+            vassals_home=project_zmq_monitor_address,
+            name=f"{project.service_id}",
+            stats_address=project.stats_address,
+            spawn_asap=True,
+            # pid_file=str((Path(conf.RUN_DIR) / f"{project.service_id}.pid").resolve()),
+        )
+        for tuntap_router in tuntap_routers:
+            router_cls = section.routing.routers.tuntap
+            router = router_cls(
+                on=str(tuntap_router.socket_address),
+                device=tuntap_router.name,
+                stats_server=str(AsyncPath(
+                    tuntap_router.run_dir) / f"{tuntap_router.service_id}-stats.sock"
+                ),
+            )
+            router.add_firewall_rule(direction="out", action="allow", src=str(tuntap_router.ipv4_network), dst=tuntap_router.ip)
+            router.add_firewall_rule(direction="out", action="deny", src=str(tuntap_router.ipv4_network), dst=str(tuntap_router.ipv4_network))
+            router.add_firewall_rule(direction="out", action="allow", src=str(tuntap_router.ipv4_network), dst="0.0.0.0")
+            router.add_firewall_rule(direction="out", action="deny")
+            router.add_firewall_rule(direction="in", action="allow", src=tuntap_router.ip, dst=str(tuntap_router.ipv4_network))
+            router.add_firewall_rule(direction="in", action="deny", src=str(tuntap_router.ipv4_network), dst=str(tuntap_router.ipv4_network))
+            router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst=str(tuntap_router.ipv4_network))
+            router.add_firewall_rule(direction="in", action="deny")
+            section.routing.use_router(router)
 
-    zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-    tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
-    if not tuntap_routers:
-        raise Exception(f"could not locate tuntap routers for project {project.name} [{project.id}]")
+            # give it an ip address
+            section.main_process.run_command_on_event(
+                command=f"ifconfig {tuntap_router.name} {tuntap_router.ip} netmask {tuntap_router.netmask} up",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+            # setup nat
+            section.main_process.run_command_on_event(
+                command="iptables -t nat -F", phase=section.main_process.phases.PRIV_DROP_PRE
+            )
+            nat_interface = "wlp0s20f3"
+            section.main_process.run_command_on_event(
+                command=f"iptables -t nat -A POSTROUTING -o {nat_interface} -j MASQUERADE",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+        # enable linux ip forwarding
+        section.main_process.run_command_on_event(
+            command="echo 1 >/proc/sys/net/ipv4/ip_forward",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        # fs,pid,ipc,uts,net
+        section._set("emperor-use-clone", "net")
 
-    tuntap_router  = tuntap_routers[0]
+        if 0:
+            redis_tuntap_device = section.routing.routers.tuntap().\
+                device_connect(
+                    device_name="redis1",
+                    socket="/var/run/pikesquares/psq-661z17r.sock",
+                )
+            section.routing.use_router(redis_tuntap_device)
 
-    section = ProjectSection(project)
-    section.empire.set_emperor_params(
-        vassals_home=zmq_monitor.uwsgi_zmq_address,
-        name=f"{project.service_id}",
-        stats_address=project.stats_address,
-        spawn_asap=True,
-        # pid_file=str((Path(conf.RUN_DIR) / f"{project.service_id}.pid").resolve()),
-    )
-    router_cls = section.routing.routers.tuntap
-    router = router_cls(
-        on=str(tuntap_router.socket_address),
-        device=tuntap_router.name,
-        stats_server=str(AsyncPath(
-            tuntap_router.run_dir) / f"tuntap-{tuntap_router.name}-stats.sock"
-        ),
-    )
-    router.add_firewall_rule(direction="out", action="allow", src=str(tuntap_router.ipv4_network), dst=tuntap_router.ip)
-    router.add_firewall_rule(direction="out", action="deny", src=str(tuntap_router.ipv4_network), dst=str(tuntap_router.ipv4_network))
-    router.add_firewall_rule(direction="out", action="allow", src=str(tuntap_router.ipv4_network), dst="0.0.0.0")
-    router.add_firewall_rule(direction="out", action="deny")
-    router.add_firewall_rule(direction="in", action="allow", src=tuntap_router.ip, dst=str(tuntap_router.ipv4_network))
-    router.add_firewall_rule(direction="in", action="deny", src=str(tuntap_router.ipv4_network), dst=str(tuntap_router.ipv4_network))
-    router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst=str(tuntap_router.ipv4_network))
-    router.add_firewall_rule(direction="in", action="deny")
-    section.routing.use_router(router)
+            section.main_process.run_command_on_event(
+                command="ifconfig redis1 192.168.100.5 netmask 255.255.255.0 up",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+            #section.main_process.run_command_on_event(
+            #    command="route add default gw 192.168.100.1",
+            #    phase=section.main_process.phases.PRIV_DROP_PRE
+            #)
+            #section.main_process.run_command_on_event(
+            #    command="ping -c 1 192.168.100.1",
+            #    phase=section.main_process.phases.PRIV_DROP_PRE,
+            #)
+            #section.main_process.run_command_on_event(
+            #    command="route -n",
+            #    phase=section.main_process.phases.PRIV_DROP_PRE,
+            #)
+            #section.main_process.run_command_on_event(
+            #    command="ping -c 1 8.8.8.8",
+            #    phase=section.main_process.phases.PRIV_DROP_PRE,
+            #)
 
-    # give it an ip address
-    section.main_process.run_command_on_event(
-        command=f"ifconfig {tuntap_router.name} {tuntap_router.ip} netmask {tuntap_router.netmask} up",
-        phase=section.main_process.phases.PRIV_DROP_PRE,
-    )
-    # setup nat
-    section.main_process.run_command_on_event(
-        command="iptables -t nat -F", phase=section.main_process.phases.PRIV_DROP_PRE
-    )
-    section.main_process.run_command_on_event(
-        command="iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
-        phase=section.main_process.phases.PRIV_DROP_PRE,
-    )
-    # enable linux ip forwarding
-    section.main_process.run_command_on_event(
-        command="echo 1 >/proc/sys/net/ipv4/ip_forward",
-        phase=section.main_process.phases.PRIV_DROP_PRE,
-    )
-    section._set("emperor-use-clone", "net")
+        if 0:
+            pidfile = "/var/run/pikesquares/redis1.pid"
+            redis_dir = "/var/lib/pikesquares/redis1"
+            redis_cmd = f"/usr/bin/redis-server --pidfile {pidfile} --logfile /var/log/pikesquares/redis1.log --dir {redis_dir} --bind 192.168.100.5 --port 6380 --daemonize no"
+            section.master_process.attach_process(
+                command=redis_cmd, #"/usr/bin/redis-server /etc/pikesquares/redis.conf",
+                for_legion=False,
+                broken_counter=3,
+                pidfile=pidfile,
+                control=False,
+                daemonize=True,
+                touch_reload="/etc/pikesquares/redis.conf",
+                signal_stop=15,
+                signal_reload=15,
+                honour_stdin=0,
+                uid="pikesquares",
+                gid="pikesquares",
+                new_pid_ns="false",
+                change_dir=redis_dir,
+            )
 
-    print(section.as_configuration().format())
-    await create_or_restart_instance(
-        device_zmq_monitor.zmq_address,
-        f"{project.service_id}.ini",
-        section.as_configuration().format(do_print=True),
-    )
+        try:
+            _ = Project.read_stats(project.stats_address)
+            #console.success(f":heavy_check_mark:     {project.name} [{project.service_id}]. is already running.!")
+            return True
+        except StatsReadError:
+            #print(section.as_configuration().format())
 
+            #project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+            device = await project.awaitable_attrs.device
+            device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
+            device_zmq_monitor_address = device_zmq_monitor.zmq_address
+            await create_or_restart_instance(
+                device_zmq_monitor_address,
+                f"{project.service_id}.ini",
+                section.as_configuration().format(do_print=True),
+            )
+            return True
+
+    except Exception as exc:
+        raise

@@ -5,7 +5,6 @@ import structlog
 from sqlmodel import Field, Relationship
 
 from pikesquares.presets.wsgi_app import WsgiAppSection
-#from pikesquares.domain.project import Project
 from pikesquares.services.apps.django import PythonRuntimeDjango
 
 from .base import ServiceBase

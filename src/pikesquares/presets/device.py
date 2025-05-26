@@ -41,13 +41,13 @@ class DeviceSection(Section):
         # main_plugin = python,gevent,psgi,lua,php,rack,jvm,jwsgi,ring,mono,
         # transformation_toupper,coroae,v8,cgi,xslt,webdav,ssi,ldap,gccgo,rados,pypy,zabbix,curl_cron,tornado,
         # tuntap,pty,mongrel2,alarm_curl,router_radius,airbrake,gridfs
-
-        self.set_plugins_params(
-            plugins=device.uwsgi_plugins,
-            search_dirs=[str(device.plugins_dir)],
-            # autoload=True,
-            # required=True,
-        )
+        for plugin in device.uwsgi_plugins.split(";"):
+            self.set_plugins_params(
+                plugins=plugin,
+                search_dirs=[str(device.plugins_dir)],
+                # autoload=True,
+                # required=True,
+            )
         self.print_plugins()
 
         self.master_process.set_basic_params(

@@ -18,10 +18,11 @@ class ProjectSection(Section):
 
         self.set_runtime_dir(str(self.project.run_dir))
 
-        self.set_plugins_params(
-            plugins=self.project.uwsgi_plugins,
-            search_dirs=[str(self.project.plugins_dir)],
-        )
+        for plugin in project.uwsgi_plugins.split(";"):
+            self.set_plugins_params(
+                plugins=plugin,
+                search_dirs=[str(self.project.plugins_dir)],
+            )
         self.print_plugins()
 
         self.master_process.set_basic_params(

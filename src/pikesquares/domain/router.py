@@ -25,8 +25,9 @@ class TuntapRouter(ServiceBase, table=True):
     name: str = Field(default="device0", max_length=32)
     ip: str | None = Field(max_length=25, default=None)
     netmask: str | None = Field(max_length=25, default=None)
+
     project_id: str | None = Field(default=None, foreign_key="projects.id")
-    project: Project = Relationship(back_populates="tuntap_routers")
+    project: "Project" = Relationship(back_populates="tuntap_routers")
 
     tuntap_devices: list["TuntapDevice"] = Relationship(back_populates="tuntap_router")
 
@@ -73,7 +74,7 @@ class HttpRouter(ServiceBase, table=True):
 
     address: str | None = Field(default=None, max_length=100)
     project_id: str | None = Field(default=None, foreign_key="projects.id")
-    project: Project = Relationship(back_populates="http_routers")
+    project: "Project" = Relationship(back_populates="http_routers")
 
     @property
     def subscription_server_address(self) -> Path:

@@ -122,7 +122,7 @@ class APISettings(BaseSettings):
     @property
     def emails_enabled(self) -> bool:
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
-
+    """
     EMAIL_TEST_USER: pydantic.EmailStr = "test@example.com"
     FIRST_SUPERUSER: pydantic.EmailStr = "admin@pikesquares.com"
     FIRST_SUPERUSER_PASSWORD: str = "secret"
@@ -140,10 +140,11 @@ class APISettings(BaseSettings):
     @pydantic.model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
         self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
-        # self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
+        self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
         self._check_default_secret("FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD)
 
         return self
+    """
 
 
 # directory layout
@@ -279,10 +280,6 @@ class AppConfig(BaseSettings):
         return ensure_system_path(self.config_dir / "caddy.json", is_dir=False)
 
     @property
-    def caddy_config_initial(self) -> str:
-        return """{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.local": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.local"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
-
-    @property
     def sqlite_plugin(self) -> Path:
         return self.plugins_dir / "sqlite3_plugin.so"
 
@@ -308,6 +305,10 @@ class AppConfig(BaseSettings):
     @property
     def pyapps_dir(self) -> Path:
         return ensure_system_path(self.data_dir / "pyapps")
+
+    @property
+    def attached_daemons_dir(self) -> Path:
+        return ensure_system_path(self.data_dir / "attached-daemons")
 
     @property
     def plugins_dir(self) -> Path:

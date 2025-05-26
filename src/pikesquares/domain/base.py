@@ -19,6 +19,7 @@ from sqlalchemy import (
     DateTime,
     func,
 )
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlmodel import (
     # select,
     #INTEGER,
@@ -62,7 +63,7 @@ class TimeStampedBase(SQLModel):
     )
 
 
-class ServiceBase(TimeStampedBase, SQLModel):
+class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
     """Base SQL model class."""
 
     id: str = Field(
@@ -124,7 +125,9 @@ class ServiceBase(TimeStampedBase, SQLModel):
 
     @property
     def touch_reload_file(self) -> Path:
-        return self.service_config
+        #return self.service_config
+        return Path("/var/lib/pikesquares/pyapps/bugsink/bugsink/pyproject.toml")
+
 
     @property
     def pid_file(self) -> Path:
