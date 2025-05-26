@@ -348,6 +348,8 @@ async def launch(
                 console.error(f"unable to launch {project.name}")
                 raise typer.Exit(1)
 
+            await provision_attached_daemon("redis", project, uow)
+
             if 0:
                 wsgi_app = await provision_wsgi_app(
                     app_name,

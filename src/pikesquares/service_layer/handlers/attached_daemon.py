@@ -19,7 +19,7 @@ async def provision_attached_daemon(
 ) -> AttachedDaemon | None:
 
     try:
-        daemons = await uow.for_project_by_name(name, project.id)
+        daemons = await uow.attached_daemons.for_project_by_name(name, project.id)
         if not daemons:
             daemon = AttachedDaemon(
                 service_id=f"{name}-{cuid.slug()}",
@@ -36,7 +36,7 @@ async def provision_attached_daemon(
             daemon = await uow.attached_daemons.add(daemon)
             tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
             if tuntap_routers:
-                ip = tuntap_router_next_available_ip(tuntap_routers[0])
+                ip = await tuntap_router_next_available_ip(tuntap_routers[0])
                 await create_tuntap_device(uow, tuntap_routers[0], ip, daemon.service_id)
             return daemon
 
