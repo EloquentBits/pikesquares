@@ -1,7 +1,3 @@
-import pwd
-import grp
-import os
-
 from pathlib import Path
 from typing import Annotated
 
@@ -10,7 +6,50 @@ import structlog
 from plumbum import ProcessExecutionError
 from plumbum import local as pl_local
 
+#from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlmodel import (
+    Field,
+    Relationship,
+)
+
+from pikesquares.domain.base import ServiceBase
+from pikesquares.conf import ensure_system_path
+
 logger = structlog.get_logger()
+
+
+class AttachedDaemon(ServiceBase, table=True):
+    """uWSGI Attached Daemons model class."""
+
+    __tablename__ = "attached_daemons"
+
+    name: str = Field(max_length=32)
+    for_legion: bool = Field(default=False)
+    broken_counter: int = Field(default=3)
+    #pidfile: str | None = Field(max_length=255)
+    control: bool = Field(default=False)
+    daemonize: bool = Field(default=True)
+    #touch_reload: str | None = Field(max_length=255)
+    signal_stop: int = Field(default=15)
+    signal_reload: int = Field(default=15)
+    honour_stdin: int = Field(default=0)
+    new_pid_ns: str = Field(default="false")
+    #change_dir: str = Field(max_length=255)
+
+    project_id: str | None = Field(default=None, foreign_key="projects.id")
+    project: "Project" = Relationship(back_populates="attached_daemons")
+
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+
+    @property
+    def attached_daemons_dir(self) -> Path:
+        daemon_dir = Path(self.data_dir) / "attached-daemons" / self.service_id
+        if not daemon_dir.exists():
+            daemon_dir.mkdir(parents=True, exist_ok=True)
+        return daemon_dir
 
 
 class ManagedServiceBase(pydantic.BaseModel):
@@ -71,3 +110,10 @@ class ManagedServiceBase(pydantic.BaseModel):
             # raise UvCommandExecutionError(
             #        f"uv cmd [{' '.join(cmd_args)}] failed.\n{exc.stderr}"
             # )
+
+class Redis(ManagedServiceBase):
+
+
+    cmd_args: list[str] = []
+    cmd_env: dict[str, str] = {}
+

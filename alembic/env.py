@@ -44,6 +44,7 @@ from pikesquares.domain.device import (
     Device,
     DeviceUWSGIOptions,
 )
+from pikesquares.domain.managed_services import AttachedDaemon
 
 
 target_metadata = SQLModel.metadata

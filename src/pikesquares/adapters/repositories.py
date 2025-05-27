@@ -19,6 +19,7 @@ from pikesquares.domain.router import (
 )
 from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.domain.monitors import ZMQMonitor
+from pikesquares.domain.managed_services import AttachedDaemon
 
 # logger = logging.getLogger("uvicorn.error")
 # logger.setLevel(logging.DEBUG)
@@ -247,10 +248,11 @@ class HttpRouterRepositoryBase(GenericRepository[HttpRouter], ABC):
     async def get_by_name(self, name: str) -> HttpRouter | None:
         raise NotImplementedError()
 
+    @abstractmethod
     async def get_by_project_id(self, project_id: str) -> Sequence[HttpRouter] | None:
         raise NotImplementedError()
-        
 
+    @abstractmethod
     async def get_by_address(self, address: str) -> HttpRouter | None:
         raise NotImplementedError()
 
@@ -355,11 +357,8 @@ class TuntapRouterRepositoryBase(GenericRepository[TuntapRouter], ABC):
     async def get_by_name(self, name: str) -> TuntapRouter | None:
         raise NotImplementedError()
 
-
-    async def get_by_device_id(self, device_id: str) -> Sequence[TuntapRouter] | None:
-        raise NotImplementedError()
-
-    async def get_by_device_ip(self, ip: str) -> Sequence[TuntapRouter] | None:
+    @abstractmethod
+    async def get_by_project_id(self, project_id: str) -> Sequence[TuntapRouter] | None:
         raise NotImplementedError()
 
 
@@ -395,23 +394,25 @@ class TuntapDeviceRepositoryBase(GenericRepository[TuntapDevice], ABC):
     """TuntapDevice repository."""
 
     @abstractmethod
-    async def get_by_name(self, name: str) -> TuntapRouter | None:
+    async def get_by_name(self, name: str) -> TuntapDevice | None:
         raise NotImplementedError()
 
     @abstractmethod
     async def get_by_tuntap_router_id(self, tuntap_router_id: str) -> Sequence[TuntapDevice] | None:
         raise NotImplementedError()
 
+    @abstractmethod
     async def get_by_ip(self, ip: str) -> TuntapDevice | None:
         raise NotImplementedError()
 
+    @abstractmethod
     async def get_by_linked_service_id(self, linked_service_id: str) -> TuntapDevice | None:
         raise NotImplementedError()
 
 class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRepositoryBase):
+
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, TuntapDevice)
-
 
     async def get_by_name(self, name: str) -> TuntapDevice | None:
         stmt = select(TuntapDevice).where(TuntapDevice.name == name)
@@ -446,3 +447,22 @@ class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRep
 #ZMQMonitorRepository = NewType("ZMQMonitorRepository", ZMQMonitorRepositoryBase)
 
 
+class AttachedDaemonRepositoryBase(GenericRepository[AttachedDaemon], ABC):
+    """AttachedDaemon repository."""
+
+    @abstractmethod
+    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
+        raise NotImplementedError()
+
+
+class AttachedDaemonRepository(GenericSqlRepository[AttachedDaemon], AttachedDaemonRepositoryBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, AttachedDaemon)
+
+    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
+        stmt = select(AttachedDaemon).where(
+            AttachedDaemon.name == name,
+            AttachedDaemon.project_id == project_id,
+        )
+        results = await self._session.exec(stmt)
+        return results.all()

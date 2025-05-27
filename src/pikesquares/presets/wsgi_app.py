@@ -163,7 +163,7 @@ class WsgiAppSection(BaseWsgiAppSection):
             name="uwsgi",
             embedded_plugins=embedded_plugins,
             owner=f"{self.wsgi_app.run_as_uid}:{self.wsgi_app.run_as_gid}",
-            # touch_reload=self.wsgi_app.touch_reload_file,
+            touch_reload=str(self.wsgi_app.touch_reload_file),
             # **app_options.model_dump(),
         )
         self.python.set_basic_params(
@@ -184,10 +184,11 @@ class WsgiAppSection(BaseWsgiAppSection):
             name=f"{self.wsgi_app.name} ",
             autonaming=False,
         )
-        self.set_plugins_params(
-            plugins=self.wsgi_app.uwsgi_plugins,
-            search_dirs=self.wsgi_app.plugins_dir,
-        )
+        for plugin in self.wsgi_app.uwsgi_plugins.split(";"):
+            self.set_plugins_params(
+                plugins=plugin,
+                search_dirs=self.wsgi_app.plugins_dir,
+            )
         self.print_plugins()
 
         # if app.wsgi_module and callable(app.wsgi_module):

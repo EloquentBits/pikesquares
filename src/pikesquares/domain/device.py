@@ -6,7 +6,6 @@ import sys
 import uuid
 from pathlib import Path
 
-import pydantic
 import structlog
 
 # from aiopath import AsyncPath
@@ -25,6 +24,8 @@ from pikesquares.services.data import DeviceStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
 
 from .base import ServiceBase, TimeStampedBase
+from .monitors import ZMQMonitor
+#from .project import Project
 
 
 logger = structlog.getLogger()
@@ -36,7 +37,9 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
     machine_id: str = Field(default=None, unique=True, max_length=32)
     uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
+
     projects: list["Project"] = Relationship(back_populates="device")
+
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="device", sa_relationship_kwargs={"uselist": False})
 
     #routers: list["HttpRouter"] = Relationship(back_populates="device")

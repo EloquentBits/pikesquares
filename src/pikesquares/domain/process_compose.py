@@ -13,7 +13,7 @@ from pydantic_yaml import to_yaml_str
 
 from pikesquares import services
 from pikesquares.conf import AppConfig, AppConfigError
-from pikesquares.domain.device import Device
+#from pikesquares.domain.device import Device
 from pikesquares.domain.managed_services import ManagedServiceBase
 
 # from pikesquares.service_layer.uow import UnitOfWork
@@ -31,7 +31,7 @@ class PCAPIUnavailableError(ServiceUnavailableError):
 
 class ProcessStats(pydantic.BaseModel):
 
-    IsRunning: bool
+    is_running: bool
     age: int
     cpu: float
     exit_code: int
@@ -50,8 +50,6 @@ class ProcessStats(pydantic.BaseModel):
 class ProcessRestart(str, Enum):
     """process-compose process restart options"""
 
-    no = "no"  # default
-    yes = "yes"
     on_failure = "on_failure"
     exit_on_failure = ("exit_on_failure",)
     always = "always"
@@ -60,7 +58,7 @@ class ProcessRestart(str, Enum):
 class ProcessAvailability(pydantic.BaseModel):
     """process-compose process availability options"""
 
-    restart: str = ProcessRestart.yes
+    restart: str = ProcessRestart.always
     exit_on_end: str = "no"
     backoff_seconds: int = 2
     max_restarts: int = 5
@@ -245,7 +243,6 @@ class ProcessCompose(ManagedServiceBase):
 
 
 APIProcess = NewType("APIProcess", Process)
-CaddyProcess = NewType("CaddyProcess", Process)
 DeviceProcess = NewType("DeviceProcess", Process)
 # DeviceProcessMessages = NewType("DeviceProcessMessages", ProcessMessages)
 DNSMASQProcess = NewType("DNSMASQProcess", Process)
@@ -260,6 +257,7 @@ async def register_process_compose(context: dict) -> None:
     """process-compose factory"""
 
     async def process_compose_factory(svcs_container) -> ProcessCompose:
+        from pikesquares.domain.caddy import CaddyProcess
 
         # uow = await services.aget(context, UnitOfWork)
         conf = await svcs_container.aget(AppConfig)
@@ -280,16 +278,16 @@ async def register_process_compose(context: dict) -> None:
 
         pc_config = Config(
             processes={
-                "api": api_process,
+                #"api": api_process,
                 "device": device_process,
-                "caddy": caddy_process,
-                "dnsmasq": dnsmasq_process,
+                #"caddy": caddy_process,
+                #"dnsmasq": dnsmasq_process,
             },
             custom_messages={
-                "api": api_messages,
+                #"api": api_messages,
                 "device": device_messages,
-                "caddy": caddy_messages,
-                "dnsmasq": dnsmasq_messages,
+                #"caddy": caddy_messages,
+                #"dnsmasq": dnsmasq_messages,
             },
         )
         pc_kwargs = {
@@ -480,71 +478,3 @@ async def register_dnsmasq_process(
     )
 
 
-def caddy_close():
-    logger.debug("caddy closed")
-
-
-async def caddy_ping(caddy_data: tuple[CaddyProcess, ProcessMessages]):
-    process, msgs = caddy_data
-    # raise ServiceUnavailableError("dnsmasq down")
-    return True
-
-
-async def register_caddy_process(
-    context: dict,
-    http_router_ip: str = "192.168.34.3",
-    http_router_port: int = 8034,
-) -> None:
-    """register caddy"""
-
-    # caddy
-    async def caddy_process_factory(svcs_container) -> tuple[CaddyProcess, ProcessMessages]:
-        """Caddy process-compose process"""
-
-        conf = await svcs_container.aget(AppConfig)
-
-        if conf.CADDY_BIN and not await AsyncPath(conf.CADDY_BIN).exists():
-            raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
-
-        # await AsyncPath(conf.caddy_config_path).write_text(conf.caddy_config_initial)
-
-        with open(conf.caddy_config_path, "r+") as caddy_config:
-            vhost_key = "*.pikesquares.local"
-            # data = json.load(caddy_config)
-            data = json.loads(conf.caddy_config_initial)
-            apps = data.get("apps")
-            routes = apps.get("http").get("servers").get(vhost_key).get("routes")
-            handles = routes[0].get("handle")
-            upstreams = handles[0].get("upstreams")
-            upstream_address = upstreams[0].get("dial")
-            if upstream_address != f"{http_router_ip}:{http_router_port}":
-                data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0][
-                    "dial"
-                ] = f"{http_router_ip}:{http_router_port}"
-                caddy_config.seek(0)
-                json.dump(data, caddy_config)
-                caddy_config.truncate()
-
-        process_messages = ProcessMessages(
-            title_start="!! caddy start title !!",
-            title_stop="!! caddy stop title !!",
-        )
-        process = Process(
-            disabled=not conf.CADDY_ENABLED,
-            description="reverse proxy",
-            command=f"{conf.CADDY_BIN} run --config {conf.caddy_config_path} --pidfile {conf.run_dir / 'caddy.pid'}",
-            working_dir=conf.data_dir,
-            availability=ProcessAvailability(),
-            # readiness_probe=ReadinessProbe(
-            #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
-            # ),
-        )
-        return process, process_messages
-
-    services.register_factory(
-        context,
-        CaddyProcess,
-        caddy_process_factory,
-        ping=caddy_ping,
-        on_registry_close=caddy_close,
-    )

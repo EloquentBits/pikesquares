@@ -101,11 +101,13 @@ class HttpsRouterSection(Section):
 
         self.set_runtime_dir(str(self.router.run_dir))
 
-        self.set_plugins_params(
-            plugins=self.router.uwsgi_plugins,
-            search_dirs=[str(self.router.plugins_dir)],
-        )
-        self.print_plugins()
+        for plugin in self.router.uwsgi_plugins.split(";"):
+            self.set_plugins_params(
+                plugins=plugin,
+                search_dirs=[str(self.router.plugins_dir)],
+            )
+        if 0:
+            self.print_plugins()
 
         self.master_process.set_basic_params(
             no_orphans=True,
@@ -217,11 +219,14 @@ class HttpRouterSection(Section):
 
         self.set_runtime_dir(str(self.router.run_dir))
 
-        self.set_plugins_params(
-            plugins=self.router.uwsgi_plugins,
-            search_dirs=[str(self.router.plugins_dir)],
-        )
-        self.print_plugins()
+        for plugin in self.router.uwsgi_plugins.split(";"):
+            self.set_plugins_params(
+                plugins=plugin,
+                search_dirs=[str(self.router.plugins_dir)],
+            )
+
+        if 0:
+            self.print_plugins()
 
         self.master_process.set_basic_params(enable=True)
         self.master_process.set_exit_events(reload=True)
@@ -395,10 +400,11 @@ class TunTapRouterSection(Section):
 
         self.set_runtime_dir(str(self.router.run_dir))
 
-        self.set_plugins_params(
-            plugins=self.router.uwsgi_plugins,
-            search_dirs=[str(self.router.plugins_dir)],
-        )
+        for plugin in self.router.uwsgi_plugins.split(";"):
+            self.set_plugins_params(
+                plugins=plugin,
+                search_dirs=[str(self.router.plugins_dir)],
+            )
         self.print_plugins()
 
         self.master_process.set_basic_params(enable=True)
