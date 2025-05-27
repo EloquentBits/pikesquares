@@ -126,7 +126,7 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
 
         redis_bin = "/usr/bin/redis-server"
         redis_port = 6379
-        logfile = AsyncPath(attached_daemon.log_dir) / f"{attached_daemon.name}-{attached_daemon.service_id}.log"
+        logfile = AsyncPath(attached_daemon.log_dir) / f"{attached_daemon.name}-server-{attached_daemon.service_id}.log"
         redis_cmd = f"{redis_bin} --pidfile {attached_daemon.pid_file} --logfile {logfile} --dir {attached_daemon.attached_daemons_dir} --bind {attached_daemon_device.ip} --port {redis_port} --daemonize no"
         section.master_process.attach_process(
             command=redis_cmd, #"/usr/bin/redis-server /etc/pikesquares/redis.conf",

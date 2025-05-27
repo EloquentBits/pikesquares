@@ -2,18 +2,19 @@ import time
 from enum import Enum
 from glob import glob
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Annotated
 
 import questionary
 import randomname
 import structlog
 import typer
 from cuid import cuid
-from tinydb import Query, TinyDB, where
-from typing_extensions import Annotated
 
 from pikesquares import services
+from pikesquares.cli.cli import run_async
 from pikesquares.conf import AppConfig
+from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.exceptions import StatsReadError
 from pikesquares.services.app import WsgiApp
 from pikesquares.services.data import Router, WsgiAppOptions
 from pikesquares.services.project import Project, SandboxProject
@@ -306,8 +307,8 @@ def create(
 
 
 @app.command(short_help="Show all apps in specific project.\nAliases:[i] apps, app list")
-@app.command()
-def ls(
+@run_async
+async def ls(
     ctx: typer.Context,
     project: str = typer.Argument("", help="Project name"),
     show_id: bool = False,
@@ -320,6 +321,48 @@ def ls(
     context = ctx.ensure_object(dict)
     # device_handler = obj.get("device-handler")
     custom_style = context.get("cli-style")
+
+    conf = await services.aget(context, AppConfig)
+    uow = await services.aget(context, UnitOfWork)
+    device = context.get("device")
+    if not device:
+        console.error("unable to locate device in app context")
+        raise typer.Exit(code=0) from None
+
+    async with uow:
+        attached_daemons = await uow.attached_daemons.list()
+        for daemon in attached_daemons:
+            try:
+                daemon_stats_available  = bool(daemon.__class__.read_stats(daemon.stats_address))
+            except StatsReadError:
+                daemon_stats_available = False
+
+            console.info(
+                f"""{daemon.name} | \
+{daemon.service_id} | \
+{'Stats Up' if daemon_stats_available else 'Stats Down'} | \
+{Path(daemon.pid_file).read_text()}
+                """
+            )
+
+
+
+@app.command(short_help="Show all apps in specific project.\nAliases:[i] apps, app list")
+@app.command()
+def ls_deprecated(
+    ctx: typer.Context,
+    project: str = typer.Argument("", help="Project name"),
+    show_id: bool = False,
+):
+    """
+    Show all apps in specific project
+
+    Aliases:[i] apps, app list
+    """
+    context = ctx.ensure_object(dict)
+    # device_handler = obj.get("device-handler")
+    custom_style = context.get("cli-style")
+
 
     db = services.get(context, TinyDB)
     # device_handler = services.get(obj, device.DeviceService)
