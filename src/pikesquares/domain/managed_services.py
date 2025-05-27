@@ -13,6 +13,7 @@ from sqlmodel import (
 )
 
 from pikesquares.domain.base import ServiceBase
+from pikesquares.conf import ensure_system_path
 
 logger = structlog.get_logger()
 
@@ -45,7 +46,10 @@ class AttachedDaemon(ServiceBase, table=True):
 
     @property
     def attached_daemons_dir(self) -> Path:
-        return Path(self.data_dir) / "attached-daemons" / self.service_id
+        daemon_dir = Path(self.data_dir) / "attached-daemons" / self.service_id
+        if not daemon_dir.exists():
+            daemon_dir.mkdir(parents=True, exist_ok=True)
+        return daemon_dir
 
 
 class ManagedServiceBase(pydantic.BaseModel):

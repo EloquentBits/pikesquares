@@ -90,7 +90,7 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
 
         router_tuntap = section.routing.routers.tuntap().\
             device_connect(
-                device_name=f"{attached_daemon.name}0",
+                device_name=f"{attached_daemon.name}",
                 socket=tuntap_router.socket_address,
             )
         section.routing.use_router(router_tuntap)
@@ -100,7 +100,7 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         section.main_process.run_command_on_event(
-            command=f"ifconfig {attached_daemon_device.name} {attached_daemon_device.ip} netmask {attached_daemon_device.netmask} up",
+            command=f"ifconfig {attached_daemon.name} {attached_daemon_device.ip} netmask {attached_daemon_device.netmask} up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         # and set the default gateway
@@ -110,7 +110,7 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
             phase=section.main_process.phases.PRIV_DROP_PRE
         )
         section.main_process.run_command_on_event(
-            command="ping -c 1 {tuntap_router.ip}",
+            command=f"ping -c 1 {tuntap_router.ip}",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
 
@@ -146,6 +146,7 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
         )
         try:
             _ = AttachedDaemon.read_stats(attached_daemon.stats_address)
+            logger.info(f"Attached Daemon {attached_daemon.name} is already running")
         except StatsReadError:
             #console.success(f":heavy_check_mark:     Launching {attached_daemon.name}. Done!")
             print(section.as_configuration().format())
@@ -156,9 +157,10 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
             project_zmq_monitor_address = project_zmq_monitor.zmq_address
             #device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
             #device_zmq_monitor_address = device_zmq_monitor.zmq_address
-            logger.info(f"launching attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
+            logger.info(f"launching Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
             try:
-                _ = Project.read_stats(project.stats_address)
+                _ = Project.read_stats(attached_daemon.stats_address)
+                logger.info(f"Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address} is already running")
                 return True
             except StatsReadError:
                 logger.debug(f"project is running. launching attached daemon @ {project_zmq_monitor_address}")

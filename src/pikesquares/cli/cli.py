@@ -354,22 +354,21 @@ async def launch(
             attached_daemon = await provision_attached_daemon("redis", project, uow)
             await attached_daemon_up(uow, attached_daemon)
 
-            if 0:
-                wsgi_app = await provision_wsgi_app(
-                    app_name,
-                    app_root_dir,
-                    app_repo_dir,
-                    app_pyvenv_dir,
-                    conf.UV_BIN,
-                    uow,
-                    project,
-                )
+            wsgi_app = await provision_wsgi_app(
+                app_name,
+                app_root_dir,
+                app_repo_dir,
+                app_pyvenv_dir,
+                conf.UV_BIN,
+                uow,
+                project,
+            )
 
-                http_routers = await project.awaitable_attrs.http_routers
-                for http_router in http_routers:
-                    await http_router_up(uow, http_router)
+            http_routers = await project.awaitable_attrs.http_routers
+            for http_router in http_routers:
+                await http_router_up(uow, http_router)
 
-                await wsgi_app_up(uow, wsgi_app, project, http_routers[0], console)
+            await wsgi_app_up(uow, wsgi_app, project, http_routers[0], console)
 
         except Exception as exc:
             logger.exception(exc)

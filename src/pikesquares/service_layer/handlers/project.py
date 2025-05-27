@@ -53,13 +53,10 @@ async def project_up(project)  -> bool:
     try:
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
         project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
-        project_zmq_monitor_address  = project_zmq_monitor.zmq_address
         section = ProjectSection(project)
 
-        section.set_runtime_dir(str(project.run_dir))
-
         section.empire.set_emperor_params(
-            vassals_home=project_zmq_monitor_address,
+            vassals_home=project_zmq_monitor.uwsgi_zmq_address,
             name=f"{project.service_id}",
             stats_address=project.stats_address,
             spawn_asap=True,
