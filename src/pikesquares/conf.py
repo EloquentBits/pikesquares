@@ -311,6 +311,10 @@ class AppConfig(BaseSettings):
         return ensure_system_path(self.data_dir / "plugins")
 
     @property
+    def attached_daemons_dir(self) -> Path:
+        return ensure_system_path(self.data_dir / "attached-daemons")
+
+    @property
     def lift_file(self) -> Path | None:
         if self.SCIE_LIFT_FILE:
             return self.SCIE_LIFT_FILE

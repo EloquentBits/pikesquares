@@ -1,4 +1,5 @@
 from pathlib import Path
+from string import Template
 from typing import Annotated
 
 import pydantic
@@ -12,8 +13,8 @@ from sqlmodel import (
     Relationship,
 )
 
-from pikesquares.domain.base import ServiceBase
 from pikesquares.conf import ensure_system_path
+from pikesquares.domain.base import ServiceBase
 
 logger = structlog.get_logger()
 
@@ -39,17 +40,53 @@ class AttachedDaemon(ServiceBase, table=True):
     project_id: str | None = Field(default=None, foreign_key="projects.id")
     project: "Project" = Relationship(back_populates="attached_daemons")
 
-
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
 
     @property
-    def attached_daemons_dir(self) -> Path:
+    def daemon_data_dir(self) -> Path:
         daemon_dir = Path(self.data_dir) / "attached-daemons" / self.service_id
         if not daemon_dir.exists():
             daemon_dir.mkdir(parents=True, exist_ok=True)
         return daemon_dir
+
+    @property
+    def touch_reload_file(self) -> Path:
+        return self.daemon_data_dir
+
+    def build_run_command(self, bind_ip: str):
+        cmd_args = {
+            "bin" : "/usr/bin/redis-server",
+            "port": "6379",
+            "ip": bind_ip,
+            "dir": str(self.daemon_data_dir),
+            "logfile": str(Path(self.log_dir) / f"{self.name}-server-{self.service_id}.log"),
+            "pidfile": str(self.pid_file),
+        }
+        return Template(
+            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $ip --port $port --daemonize no"
+        ).substitute(cmd_args)
+
+    def collect_args(self, bind_ip: str):
+        return {
+            "command": self.build_run_command(bind_ip),
+            "for_legion": self.for_legion,
+            "broken_counter": self.broken_counter,
+            "pidfile": self.pid_file,
+            "control": self.control,
+            "daemonize": self.daemonize,
+            "touch_reload": str(self.touch_reload_file),
+            "signal_stop": self.signal_stop,
+            "signal_reload": self.signal_reload,
+            "honour_stdin": bool(self.honour_stdin),
+            "uid": self.run_as_uid,
+            "gid": self.run_as_gid,
+            "new_pid_ns": self.new_pid_ns,
+            "change_dir": str(self.daemon_data_dir),
+        }
+
+
 
 
 class ManagedServiceBase(pydantic.BaseModel):

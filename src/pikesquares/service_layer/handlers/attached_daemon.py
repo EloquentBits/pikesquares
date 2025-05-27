@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import cuid
 import structlog
-from uwsgiconf.config import Section
 from aiopath import AsyncPath
+from uwsgiconf.config import Section
 
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
@@ -48,6 +50,7 @@ async def provision_attached_daemon(
 
 
 async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
+    logger.debug("------------ attached_daemon_up ----------")
     try:
         project = await attached_daemon.awaitable_attrs.project
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
@@ -69,6 +72,9 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
             uid=attached_daemon.run_as_uid,
             gid=attached_daemon.run_as_gid,
         )
+        section.main_process.set_basic_params(
+            touch_reload=str(attached_daemon.touch_reload_file),
+        )
         section._set("jailed", "true")
         section._set("show-config", "true")
         section.set_plugins_params(
@@ -87,14 +93,12 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
         section.logging.add_logger(
             section.logging.loggers.file(filepath=str(attached_daemon.log_file))
         )
-
         router_tuntap = section.routing.routers.tuntap().\
             device_connect(
                 device_name=f"{attached_daemon.name}",
                 socket=tuntap_router.socket_address,
             )
         section.routing.use_router(router_tuntap)
-
         section.main_process.run_command_on_event(
             command="ifconfig lo up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
@@ -103,8 +107,6 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
             command=f"ifconfig {attached_daemon.name} {attached_daemon_device.ip} netmask {attached_daemon_device.netmask} up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
-        # and set the default gateway
-        #exec-as-root = route add default gw 192.168.0.1
         section.main_process.run_command_on_event(
             command=f"route add default gw {tuntap_router.ip}",
             phase=section.main_process.phases.PRIV_DROP_PRE
@@ -113,36 +115,16 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
             command=f"ping -c 1 {tuntap_router.ip}",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
-
         section.main_process.run_command_on_event(
             command="route -n",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
-
         section.main_process.run_command_on_event(
             command="ping -c 1 8.8.8.8",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
-
-        redis_bin = "/usr/bin/redis-server"
-        redis_port = 6379
-        logfile = AsyncPath(attached_daemon.log_dir) / f"{attached_daemon.name}-server-{attached_daemon.service_id}.log"
-        redis_cmd = f"{redis_bin} --pidfile {attached_daemon.pid_file} --logfile {logfile} --dir {attached_daemon.attached_daemons_dir} --bind {attached_daemon_device.ip} --port {redis_port} --daemonize no"
         section.master_process.attach_process(
-            command=redis_cmd, #"/usr/bin/redis-server /etc/pikesquares/redis.conf",
-            for_legion=attached_daemon.for_legion,
-            broken_counter=attached_daemon.broken_counter,
-            pidfile=attached_daemon.pid_file,
-            control=attached_daemon.control,
-            daemonize=attached_daemon.daemonize,
-            touch_reload=str(attached_daemon.touch_reload_file),
-            signal_stop=attached_daemon.signal_stop,
-            signal_reload=attached_daemon.signal_reload,
-            honour_stdin=bool(attached_daemon.honour_stdin),
-            uid=attached_daemon.run_as_uid,
-            gid=attached_daemon.run_as_gid,
-            new_pid_ns=attached_daemon.new_pid_ns,
-            change_dir=str(attached_daemon.attached_daemons_dir),
+            **attached_daemon.collect_args(attached_daemon_device.ip)
         )
         try:
             _ = AttachedDaemon.read_stats(attached_daemon.stats_address)

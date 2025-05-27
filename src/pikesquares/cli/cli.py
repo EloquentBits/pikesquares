@@ -311,6 +311,11 @@ async def launch(
     #    vassals_home = project_zmq_monitor.uwsgi_zmq_address
     #    await project.up(device_zmq_monitor, vassals_home, tuntap_router)
 
+    async with uow:
+        attached_daemons = await uow.attached_daemons.list()
+        for daemon in attached_daemons:
+            logger.info(daemon)
+
     def git_clone(repo_url: str, clone_into_dir: Path):
         class CloneProgress(git.RemoteProgress):
             def update(self, op_code, cur_count, max_count=None, message=""):
@@ -572,8 +577,13 @@ async def up(
     conf = await services.aget(context, AppConfig)
     process_compose = await services.aget(context, ProcessCompose)
 
-    if conf and conf.pyapps_dir.exists():
-        logger.debug(f"python apps directory @ {conf.pyapps_dir} is available")
+    if conf and not conf.pyapps_dir.exists():
+        logger.error(f"python apps directory @ {conf.pyapps_dir} is not available")
+        raise typer.Exit(code=1) from None
+
+    if conf and not conf.attached_daemons_dir.exists():
+        logger.error(f"attached daemons directory @ {conf.attached_daemons_dir} is not available")
+        raise typer.Exit(code=1) from None
 
     up_result = await process_compose.up()
     if not up_result:
