@@ -263,16 +263,18 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
             master_fifo.write(command)
             logger.info(f"[pikesquares-services] : sent command [{command}] to master fifo")
 
-    def ping(self) -> None:
+    def ping_stats(self) -> bool:
         if not self.get_service_status() == "running":
             raise ServiceUnavailableError()
+        return True
 
     def get_service_status(self) -> str | None:
         """
         read stats socket
         """
         if self.stats_address.exists() and self.stats_address.is_socket():
-            return "running" if ServiceBase.read_stats(self.stats_address) else "stopped"
+            return "running" if ServiceBase.\
+                read_stats(self.stats_address) else "stopped"
 
     def startup_log(self, show_config_start_marker: str, show_config_end_marker: str) -> tuple[list, list]:
         """

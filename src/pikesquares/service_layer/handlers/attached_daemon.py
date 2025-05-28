@@ -50,7 +50,6 @@ async def provision_attached_daemon(
 
 
 async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
-    logger.debug("------------ attached_daemon_up ----------")
     try:
         project = await attached_daemon.awaitable_attrs.project
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
@@ -141,7 +140,7 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
             #device_zmq_monitor_address = device_zmq_monitor.zmq_address
             logger.info(f"launching Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
             try:
-                _ = Project.read_stats(attached_daemon.stats_address)
+                _ = AttachedDaemon.read_stats(attached_daemon.stats_address)
                 logger.info(f"Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address} is already running")
                 return True
             except StatsReadError:

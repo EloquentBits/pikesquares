@@ -7,18 +7,17 @@ import shutil
 
 # import pwd
 import tempfile
-from ipaddress import IPv4Network, IPv4Interface
 from functools import wraps
 from pathlib import Path
 from typing import Annotated, Optional
 
 import anyio
 import cuid
+import git
+import giturlparse
 
 #from sqlalchemy.sql import text
 import questionary
-import git
-import giturlparse
 import randomname
 import sentry_sdk
 import structlog
@@ -35,7 +34,7 @@ from rich.progress import (
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from pikesquares import __app_name__, __version__, get_first_available_port, services
+from pikesquares import __app_name__, __version__, services
 from pikesquares.adapters.database import DatabaseSessionManager
 from pikesquares.cli.console import (
     HeaderDjangoChecks,
@@ -53,7 +52,7 @@ from pikesquares.conf import (
 
 # from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain.base import ServiceBase
-from pikesquares.domain.project import Project
+from pikesquares.domain.caddy import register_caddy_process
 from pikesquares.domain.device import register_device_stats
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
@@ -64,17 +63,19 @@ from pikesquares.domain.process_compose import (
     register_dnsmasq_process,
     register_process_compose,
 )
-from pikesquares.domain.caddy import register_caddy_process
+from pikesquares.domain.project import Project
 from pikesquares.exceptions import StatsReadError
-from pikesquares.service_layer.handlers.device import create_device
-#from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
-from pikesquares.service_layer.handlers.project import provision_project, project_up
-from pikesquares.service_layer.handlers.routers import http_router_up
 from pikesquares.service_layer.handlers.attached_daemon import (
-    provision_attached_daemon,
     attached_daemon_up,
+    provision_attached_daemon,
 )
-from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, up as wsgi_app_up
+from pikesquares.service_layer.handlers.device import create_device
+
+#from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
+from pikesquares.service_layer.handlers.project import project_up, provision_project
+from pikesquares.service_layer.handlers.routers import http_router_up
+from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app
+from pikesquares.service_layer.handlers.wsgi_app import up as wsgi_app_up
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.django import PythonRuntimeDjango
 from pikesquares.services.apps.exceptions import (
@@ -299,9 +300,12 @@ async def launch(
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
     device = context.get("device")
+    custom_style = context.get("cli-style")
+
     if not device:
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
+
 
     #try:
     #    vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
@@ -311,10 +315,19 @@ async def launch(
     #    vassals_home = project_zmq_monitor.uwsgi_zmq_address
     #    await project.up(device_zmq_monitor, vassals_home, tuntap_router)
 
-    async with uow:
-        attached_daemons = await uow.attached_daemons.list()
-        for daemon in attached_daemons:
-            logger.info(daemon)
+    if 0:
+        async with uow:
+            attached_daemons = await uow.attached_daemons.list()
+            for daemon in attached_daemons:
+                logger.info(daemon)
+
+            daemon_q = questionary.checkbox(
+                "Select daemon: ",
+                choices=[d.service_id for d in attached_daemons],
+                style=custom_style,
+            )
+            daemon = await daemon_q.ask_async()
+            print(daemon)
 
     def git_clone(repo_url: str, clone_into_dir: Path):
         class CloneProgress(git.RemoteProgress):
@@ -356,8 +369,16 @@ async def launch(
                 console.error(f"unable to launch {project.name}")
                 raise typer.Exit(1)
 
-            attached_daemon = await provision_attached_daemon("redis", project, uow)
+            attached_daemon_name = "redis"
+            attached_daemon = await provision_attached_daemon(attached_daemon_name , project, uow)
             await attached_daemon_up(uow, attached_daemon)
+
+            attached_daemon_device = await uow.tuntap_devices.\
+                get_by_linked_service_id(attached_daemon.service_id)
+            if attached_daemon.ping("/usr/local/bin/redis-cli", attached_daemon_device.ip):
+                console.success(f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!")
+            else:
+                console.error(f"{attached_daemon_name} ping failed.")
 
             wsgi_app = await provision_wsgi_app(
                 app_name,
@@ -383,6 +404,7 @@ async def launch(
             await uow.commit()
     if 0:
         from uwsgiconf.config import Section
+
         from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
         section = Section(
             name="uwsgi",

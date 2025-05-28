@@ -55,6 +55,21 @@ class AttachedDaemon(ServiceBase, table=True):
     def touch_reload_file(self) -> Path:
         return self.daemon_data_dir
 
+    def ping(self, cmd_bin: str, bind_ip: str, bind_port: int = 6379) -> bool:
+        cmd_args = ["-h", bind_ip, "-p", str(bind_port), "--raw", "incr", "ping"]
+        try:
+            with pl_local.cwd(self.daemon_data_dir):
+                retcode, stdout, stderr = pl_local[cmd_bin].run(cmd_args)
+                if int(retcode) != 0:
+                    logger.debug(f"{retcode=}")
+                    logger.debug(f"{stdout=}")
+                    logger.debug(f"{stderr=}")
+                    return False
+                else:
+                    return stdout.strip().isdigit()
+        except ProcessExecutionError:
+            raise
+
     def build_run_command(self, bind_ip: str):
         cmd_args = {
             "bin" : "/usr/bin/redis-server",
@@ -65,7 +80,7 @@ class AttachedDaemon(ServiceBase, table=True):
             "pidfile": str(self.pid_file),
         }
         return Template(
-            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $ip --port $port --daemonize no"
+            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $ip --port $port --daemonize no --protected-mode no"
         ).substitute(cmd_args)
 
     def collect_args(self, bind_ip: str):
