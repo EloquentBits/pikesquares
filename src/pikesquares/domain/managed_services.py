@@ -22,66 +22,61 @@ hook_impl = pluggy.HookimplMarker("managed_daemon" )
 
 class RedisAttachedDaemon:
 
-    def get_daemon_bin(self):
-        return "/usr/bin/redis-server"
-
-    def compose_command(
+    def __init__(
         self,
         daemon_service: "AttachedDaemon",
         bind_ip: str,
-        bind_port: int = 6379,
-    ) -> str:
-        return Template(
-            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
-        ).substitute({
-            "bin" : self.get_daemon_bin(),
-            "bind_port": bind_port,
-            "bind_ip": bind_ip,
-            "dir": str(daemon_service.daemon_data_dir),
-            "logfile": str(Path(daemon_service.log_dir) / f"{daemon_service.name}-server-{daemon_service.service_id}.log"),
-            "pidfile": str(daemon_service.pid_file),
-        })
+        bind_port: int | None = None
+    ):
+        self.daemon_service = daemon_service
+        self.bind_ip = bind_ip
+        self.bind_port = bind_port or 6379
+
+    def get_daemon_bin(self) -> Path:
+        return Path("/usr/bin/redis-server")
 
 
     @hook_impl
-    def collect_command_arguments(
-        self,
-        daemon_service: "AttachedDaemon",
-        bind_ip: str,
-        bind_port: int = 6379,
-    ) -> dict:
+    def collect_command_arguments(self) -> dict:
+        cmd = Template(
+            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
+        ).substitute({
+            "bin" : str(self.get_daemon_bin()),
+            "bind_port": self.bind_port,
+            "bind_ip": self.bind_ip,
+            "dir": str(self.daemon_service.daemon_data_dir),
+            "logfile": str(Path(self.daemon_service.log_dir) / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"),
+            "pidfile": str(self.daemon_service.pid_file),
+        })
+        logger.debug(cmd)
+        import ipdb;ipdb.set_trace()
+
         return {
-            "command": self.compose_command(daemon_service, bind_ip, bind_port=bind_port),
-            "for_legion": daemon_service.for_legion,
-            "broken_counter": daemon_service.broken_counter,
-            "pidfile": daemon_service.pid_file,
-            "control": daemon_service.control,
-            "daemonize": daemon_service.daemonize,
-            "touch_reload": str(daemon_service.touch_reload_file),
-            "signal_stop": daemon_service.signal_stop,
-            "signal_reload": daemon_service.signal_reload,
-            "honour_stdin": bool(daemon_service.honour_stdin),
-            "uid": daemon_service.run_as_uid,
-            "gid": daemon_service.run_as_gid,
-            "new_pid_ns": daemon_service.new_pid_ns,
-            "change_dir": str(daemon_service.daemon_data_dir),
+            "command": cmd,
+            "for_legion": self.daemon_service.for_legion,
+            "broken_counter": self.daemon_service.broken_counter,
+            "pidfile": self.daemon_service.pid_file,
+            "control": self.daemon_service.control,
+            "daemonize": self.daemon_service.daemonize,
+            "touch_reload": str(self.daemon_service.touch_reload_file),
+            "signal_stop": self.daemon_service.signal_stop,
+            "signal_reload": self.daemon_service.signal_reload,
+            "honour_stdin": bool(self.daemon_service.honour_stdin),
+            "uid": self.daemon_service.run_as_uid,
+            "gid": self.daemon_service.run_as_gid,
+            "new_pid_ns": self.daemon_service.new_pid_ns,
+            "change_dir": str(self.daemon_service.daemon_data_dir),
         }
 
     @hook_impl
-    def ping(
-        self,
-        cmd_bin: str,
-        daemon_service: "AttachedDaemon",
-        bind_ip: str,
-        bind_port: str,
-             ) -> bool:
+    def ping(self) -> bool:
         """
             ping redis
         """
-        cmd_args = ["-h", bind_ip, "-p", bind_port, "--raw", "incr", "ping"]
+        cmd_args = ["-h", self.bind_ip, "-p", self.bind_port, "--raw", "incr", "ping"]
         try:
-            with pl_local.cwd(daemon_service.daemon_data_dir):
-                retcode, stdout, stderr = pl_local[cmd_bin].run(cmd_args)
+            with pl_local.cwd(self.daemon_service.daemon_data_dir):
+                retcode, stdout, stderr = pl_local[str(self.get_daemon_bin())].run(cmd_args)
                 if int(retcode) != 0:
                     logger.debug(f"{retcode=}")
                     logger.debug(f"{stdout=}")
@@ -100,23 +95,12 @@ class AttachedDaemonHookSpec:
     """
 
     @hook_spec
-    def collect_command_arguments(
-        self,
-        daemon_service: "AttachedDaemon",
-        bind_ip: str,
-        bind_port: int,
-    ) -> None:
+    def collect_command_arguments(self) -> None:
         ...
 
 
     @hook_spec
-    def ping(
-        self,
-        cmd_bin: str,
-        daemon_service: "AttachedDaemon",
-        bind_ip: str,
-        bind_port: int,
-    ) -> bool:
+    def ping(self) -> bool:
         ...
 
 
@@ -164,14 +148,14 @@ class AttachedDaemon(ServiceBase, table=True):
 
         pm = pluggy.PluginManager("managed_daemon")
         pm.add_hookspecs(AttachedDaemonHookSpec)
-        pm.register(RedisAttachedDaemon())
-
-        cmd_args = pm.hook.collect_command_arguments(
-            daemon_service=self,
-            bind_ip=bind_ip,
-            bind_port=bind_port,
+        pm.register(
+            RedisAttachedDaemon(
+                daemon_service=self,
+                bind_ip=bind_ip,
+                bind_port=bind_port,
+            )
         )
-        logger.debug(f"{self.name} command args=> {cmd_args}")
+        cmd_args = pm.hook.collect_command_arguments()
         # FIXME
         # why is this a list?
         if cmd_args and isinstance(cmd_args, list):
