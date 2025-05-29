@@ -49,8 +49,14 @@ async def provision_attached_daemon(
     return daemons[0]
 
 
-async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
+async def attached_daemon_up(
+    uow,
+    attached_daemon: AttachedDaemon,
+    bind_ip: str | None = None,
+    bind_port: int | None = None,
+):
     try:
+
         project = await attached_daemon.awaitable_attrs.project
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
 
@@ -103,7 +109,7 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         section.main_process.run_command_on_event(
-            command=f"ifconfig {attached_daemon.name} {attached_daemon_device.ip} netmask {attached_daemon_device.netmask} up",
+            command=f"ifconfig {attached_daemon.name} {bind_ip or attached_daemon_device.ip} netmask {attached_daemon_device.netmask} up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         section.main_process.run_command_on_event(
@@ -122,9 +128,21 @@ async def attached_daemon_up(uow, attached_daemon: AttachedDaemon):
             command="ping -c 1 8.8.8.8",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
+        # TODO
+        # health check here?
+        #section.master_process.add_cron_task
+
+        # Attaches a command/daemon to the master process optionally managed by a pidfile.
+        # This will allow the uWSGI master to control/monitor/respawn this process.
+        #section.master_process.attach_process_classic
+
         section.master_process.attach_process(
-            **attached_daemon.collect_args(attached_daemon_device.ip)
+            **attached_daemon.compile_command_args(
+                bind_ip or attached_daemon_device.ip,
+                bind_port=bind_port,
+            )
         )
+
         try:
             _ = AttachedDaemon.read_stats(attached_daemon.stats_address)
             logger.info(f"Attached Daemon {attached_daemon.name} is already running")

@@ -2,21 +2,122 @@ from pathlib import Path
 from string import Template
 from typing import Annotated
 
+import pluggy
 import pydantic
 import structlog
 from plumbum import ProcessExecutionError
 from plumbum import local as pl_local
-
-#from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlmodel import (
     Field,
     Relationship,
 )
 
-from pikesquares.conf import ensure_system_path
 from pikesquares.domain.base import ServiceBase
 
 logger = structlog.get_logger()
+
+hook_spec = pluggy.HookspecMarker("managed_daemon" )
+hook_impl = pluggy.HookimplMarker("managed_daemon" )
+
+
+class RedisAttachedDaemon:
+
+    def get_daemon_bin(self):
+        return "/usr/bin/redis-server"
+
+    def compose_command(
+        self,
+        daemon_service: "AttachedDaemon",
+        bind_ip: str,
+        bind_port: int = 6379,
+    ) -> str:
+        return Template(
+            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
+        ).substitute({
+            "bin" : self.get_daemon_bin(),
+            "bind_port": bind_port,
+            "bind_ip": bind_ip,
+            "dir": str(daemon_service.daemon_data_dir),
+            "logfile": str(Path(daemon_service.log_dir) / f"{daemon_service.name}-server-{daemon_service.service_id}.log"),
+            "pidfile": str(daemon_service.pid_file),
+        })
+
+
+    @hook_impl
+    def collect_command_arguments(
+        self,
+        daemon_service: "AttachedDaemon",
+        bind_ip: str,
+        bind_port: int = 6379,
+    ) -> dict:
+        return {
+            "command": self.compose_command(daemon_service, bind_ip, bind_port=bind_port),
+            "for_legion": daemon_service.for_legion,
+            "broken_counter": daemon_service.broken_counter,
+            "pidfile": daemon_service.pid_file,
+            "control": daemon_service.control,
+            "daemonize": daemon_service.daemonize,
+            "touch_reload": str(daemon_service.touch_reload_file),
+            "signal_stop": daemon_service.signal_stop,
+            "signal_reload": daemon_service.signal_reload,
+            "honour_stdin": bool(daemon_service.honour_stdin),
+            "uid": daemon_service.run_as_uid,
+            "gid": daemon_service.run_as_gid,
+            "new_pid_ns": daemon_service.new_pid_ns,
+            "change_dir": str(daemon_service.daemon_data_dir),
+        }
+
+    @hook_impl
+    def ping(
+        self,
+        cmd_bin: str,
+        daemon_service: "AttachedDaemon",
+        bind_ip: str,
+        bind_port: str,
+             ) -> bool:
+        """
+            ping redis
+        """
+        cmd_args = ["-h", bind_ip, "-p", bind_port, "--raw", "incr", "ping"]
+        try:
+            with pl_local.cwd(daemon_service.daemon_data_dir):
+                retcode, stdout, stderr = pl_local[cmd_bin].run(cmd_args)
+                if int(retcode) != 0:
+                    logger.debug(f"{retcode=}")
+                    logger.debug(f"{stdout=}")
+                    logger.debug(f"{stderr=}")
+                    return False
+                else:
+                    return stdout.strip().isdigit()
+        except ProcessExecutionError:
+            raise
+
+
+
+class AttachedDaemonHookSpec:
+    """
+    Attached Daemon Hook Specification
+    """
+
+    @hook_spec
+    def collect_command_arguments(
+        self,
+        daemon_service: "AttachedDaemon",
+        bind_ip: str,
+        bind_port: int,
+    ) -> None:
+        ...
+
+
+    @hook_spec
+    def ping(
+        self,
+        cmd_bin: str,
+        daemon_service: "AttachedDaemon",
+        bind_ip: str,
+        bind_port: int,
+    ) -> bool:
+        ...
 
 
 class AttachedDaemon(ServiceBase, table=True):
@@ -55,53 +156,27 @@ class AttachedDaemon(ServiceBase, table=True):
     def touch_reload_file(self) -> Path:
         return self.daemon_data_dir
 
-    def ping(self, cmd_bin: str, bind_ip: str, bind_port: int = 6379) -> bool:
-        cmd_args = ["-h", bind_ip, "-p", str(bind_port), "--raw", "incr", "ping"]
-        try:
-            with pl_local.cwd(self.daemon_data_dir):
-                retcode, stdout, stderr = pl_local[cmd_bin].run(cmd_args)
-                if int(retcode) != 0:
-                    logger.debug(f"{retcode=}")
-                    logger.debug(f"{stdout=}")
-                    logger.debug(f"{stderr=}")
-                    return False
-                else:
-                    return stdout.strip().isdigit()
-        except ProcessExecutionError:
-            raise
+    def compile_command_args(
+        self,
+        bind_ip: str,
+        bind_port: int | None = None,
+    ) -> dict:
 
-    def build_run_command(self, bind_ip: str):
-        cmd_args = {
-            "bin" : "/usr/bin/redis-server",
-            "port": "6379",
-            "ip": bind_ip,
-            "dir": str(self.daemon_data_dir),
-            "logfile": str(Path(self.log_dir) / f"{self.name}-server-{self.service_id}.log"),
-            "pidfile": str(self.pid_file),
-        }
-        return Template(
-            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $ip --port $port --daemonize no --protected-mode no"
-        ).substitute(cmd_args)
+        pm = pluggy.PluginManager("managed_daemon")
+        pm.add_hookspecs(AttachedDaemonHookSpec)
+        pm.register(RedisAttachedDaemon())
 
-    def collect_args(self, bind_ip: str):
-        return {
-            "command": self.build_run_command(bind_ip),
-            "for_legion": self.for_legion,
-            "broken_counter": self.broken_counter,
-            "pidfile": self.pid_file,
-            "control": self.control,
-            "daemonize": self.daemonize,
-            "touch_reload": str(self.touch_reload_file),
-            "signal_stop": self.signal_stop,
-            "signal_reload": self.signal_reload,
-            "honour_stdin": bool(self.honour_stdin),
-            "uid": self.run_as_uid,
-            "gid": self.run_as_gid,
-            "new_pid_ns": self.new_pid_ns,
-            "change_dir": str(self.daemon_data_dir),
-        }
-
-
+        cmd_args = pm.hook.collect_command_arguments(
+            daemon_service=self,
+            bind_ip=bind_ip,
+            bind_port=bind_port,
+        )
+        logger.debug(f"{self.name} command args=> {cmd_args}")
+        # FIXME
+        # why is this a list?
+        if cmd_args and isinstance(cmd_args, list):
+            return cmd_args[0]
+        return cmd_args
 
 
 class ManagedServiceBase(pydantic.BaseModel):

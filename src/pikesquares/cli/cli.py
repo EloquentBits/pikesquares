@@ -306,7 +306,6 @@ async def launch(
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
-
     #try:
     #    vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
     #    print(vassal_stats)
@@ -370,15 +369,27 @@ async def launch(
                 raise typer.Exit(1)
 
             attached_daemon_name = "redis"
-            attached_daemon = await provision_attached_daemon(attached_daemon_name , project, uow)
-            await attached_daemon_up(uow, attached_daemon)
+            attached_daemon_bind_port = None
+            attached_daemon_bind_ip = None
 
-            attached_daemon_device = await uow.tuntap_devices.\
-                get_by_linked_service_id(attached_daemon.service_id)
-            if attached_daemon.ping("/usr/local/bin/redis-cli", attached_daemon_device.ip):
-                console.success(f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!")
-            else:
-                console.error(f"{attached_daemon_name} ping failed.")
+            attached_daemon = await provision_attached_daemon(
+                attached_daemon_name, project, uow,
+            )
+            if attached_daemon:
+                attached_daemon_device = await uow.tuntap_devices.\
+                    get_by_linked_service_id(attached_daemon.service_id)
+
+                await attached_daemon_up(
+                    uow,
+                    attached_daemon,
+                    bind_ip=attached_daemon_bind_ip,
+                    bind_port=attached_daemon_bind_port,
+                )
+                if 0:
+                    if attached_daemon.ping("/usr/local/bin/redis-cli", attached_daemon_device.ip):
+                        console.success(f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!")
+                    else:
+                        console.error(f"{attached_daemon_name} ping failed.")
 
             wsgi_app = await provision_wsgi_app(
                 app_name,
@@ -402,99 +413,6 @@ async def launch(
             raise typer.Exit(1) from None
         else:
             await uow.commit()
-    if 0:
-        from uwsgiconf.config import Section
-
-        from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
-        section = Section(
-            name="uwsgi",
-            runtime_dir="/var/run/pikesquares",
-            project_name="redis-proj",
-            strict_config=True,
-            style_prints=True,
-        )
-        section.main_process.set_owner_params(uid="pikesquares", gid="pikesquares")
-        section._set("jailed", "true")
-        section._set("show-config", "true")
-        section.set_plugins_params(
-            plugins="tuntap",
-            search_dirs=["/var/lib/pikesquares/plugins"],
-        )
-        section.monitoring.set_stats_params(
-            address="/var/run/pikesquares/redis0-stats.sock"
-        )
-        section.master_process.set_basic_params(enable=True)
-        section.master_process.set_exit_events(reload=True)
-        section.networking.register_socket(
-            section.networking.sockets.default("/var/run/pikesquares/redis0.sock")
-        )
-        section.logging.set_file_params(owner="true")
-        section.logging.add_logger(
-            section.logging.loggers.file(filepath="/var/log/pikesquares/redis0.log")
-        )
-        section.main_process.run_command_on_event(
-            command="ifconfig lo up",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-        section.main_process.run_command_on_event(
-            command="ifconfig redis0 192.168.100.4 netmask 255.255.255.0 up",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-        # and set the default gateway
-        #exec-as-root = route add default gw 192.168.0.1
-        section.main_process.run_command_on_event(
-            command="route add default gw 192.168.100.1",
-            phase=section.main_process.phases.PRIV_DROP_PRE
-        )
-        section.main_process.run_command_on_event(
-            command="ping -c 1 192.168.100.1",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-
-        section.main_process.run_command_on_event(
-            command="route -n",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-
-        section.main_process.run_command_on_event(
-            command="ping -c 1 8.8.8.8",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-
-        router_tuntap = section.routing.routers.tuntap().\
-            device_connect(
-                device_name="redis0",
-                socket="/var/run/pikesquares/psq-661z17r.sock",
-            )
-        section.routing.use_router(router_tuntap)
-
-        pidfile = "/var/run/pikesquares/redis-server.pid"
-        redis_bin = "/usr/bin/redis-server"
-        redis_port = 6380
-        redis_bind = "192.168.100.4"
-        redis_dir = "/var/lib/pikesquares/redis0"
-        redis_cmd = f"{redis_bin} --pidfile {pidfile} --logfile /var/log/pikesquares/redis-server.log --dir {redis_dir} --bind {redis_bind} --port {redis_port} --daemonize no"
-        section.master_process.attach_process(
-            command=redis_cmd, #"/usr/bin/redis-server /etc/pikesquares/redis.conf",
-            for_legion=False,
-            broken_counter=3,
-            pidfile=pidfile,
-            control=False,
-            daemonize=True,
-            touch_reload="/etc/pikesquares/redis.conf",
-            signal_stop=15,
-            signal_reload=15,
-            honour_stdin=0,
-            uid="pikesquares",
-            gid="pikesquares",
-            new_pid_ns="false",
-            change_dir="/var/lib/pikesquares/redis",
-        )
-        await create_or_restart_instance(
-            "ipc:///var/run/pikesquares/proj-5p0z1rj-zmq-monitor.sock",
-            "redis0.ini",
-            section.as_configuration().format(do_print=True),
-        )
 
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")
