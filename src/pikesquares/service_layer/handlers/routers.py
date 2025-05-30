@@ -97,7 +97,8 @@ def edit_caddy_config(caddy_config_path: Path):
 async def provision_http_router(uow: UnitOfWork, project: Project, tuntap_router: TuntapRouter) -> HttpRouter:
 
     try:
-        http_router_ip = tuntap_router.ipv4_interface + 1
+        #http_router_ip = tuntap_router.ipv4_interface + 1
+        http_router_ip = await tuntap_router_next_available_ip(tuntap_router)
         http_router = HttpRouter(
             service_id=f"http-router-{cuid.slug()}",
             run_as_uid="pikesquares",
@@ -131,8 +132,13 @@ async def get_tuntap_router_networks(uow: UnitOfWork):
 
 async def tuntap_router_next_available_ip(
     tuntap_router: TuntapRouter,
-) -> IPv4Interface | None:
-    max_ip = max([d.ip for d in await tuntap_router.awaitable_attrs.tuntap_devices])
+) -> IPv4Interface:
+
+    device_ips = [d.ip for d in await tuntap_router.awaitable_attrs.tuntap_devices]
+    if device_ips:
+        max_ip = max(device_ips)
+    else:
+        max_ip = tuntap_router.ip
     return IPv4Interface(f"{max_ip}/{tuntap_router.netmask}") + 1
 
 
@@ -208,11 +214,11 @@ async def http_router_up(
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
         #await uow.tuntap_routers.get_by_project_id(project.id)
         tuntap_router = tuntap_routers[0]
-        http_router_iface = tuntap_router.ipv4_interface + 1
-        http_router_ip = str(http_router_iface.ip)
-
-        http_router_tuntap_device  = await uow.tuntap_devices.get_by_ip(http_router_ip)
-        assert http_router_tuntap_device, f"could not locate http router tuntap device [{http_router_ip}]"
+        #http_router_iface = tuntap_router.ipv4_interface + 1
+        #http_router_ip = str(http_router_iface.ip)
+        #http_router_tuntap_device  = await uow.tuntap_devices.get_by_ip(http_router_ip)
+        http_router_tuntap_device  = await uow.tuntap_devices.\
+            get_by_linked_service_id(http_router.service_id)
 
         section = HttpRouterSection(http_router)
         section._set("jailed", "true")

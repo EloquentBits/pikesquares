@@ -71,7 +71,7 @@ from pikesquares.service_layer.handlers.attached_daemon import (
 )
 from pikesquares.service_layer.handlers.device import create_device
 
-#from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
+from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.project import project_up, provision_project
 from pikesquares.service_layer.handlers.routers import http_router_up
 from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app
@@ -375,7 +375,7 @@ async def launch(
             attached_daemon = await provision_attached_daemon(
                 attached_daemon_name, project, uow,
             )
-            if attached_daemon:
+            if 0: #attached_daemon:
                 attached_daemon_device = await uow.tuntap_devices.\
                     get_by_linked_service_id(attached_daemon.service_id)
 
@@ -560,12 +560,12 @@ async def up(
     # emperor zeromq monitors
     uow = await services.aget(context, UnitOfWork)
     device = context.get("device")
+    device = await uow.devices.get_by_machine_id(device.machine_id)
     if not device:
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
     async with uow:
-        device = await uow.devices.get_by_machine_id(device.machine_id)
         projects = await device.awaitable_attrs.projects
         for project in projects:
             try:
@@ -1246,6 +1246,8 @@ async def main(
         try:
             device = await uow.devices.get_by_machine_id(machine_id)
             if not device:
+
+
                 create_kwargs = {
                     "data_dir": str(conf.data_dir),
                     "config_dir": str(conf.config_dir),
@@ -1261,9 +1263,12 @@ async def main(
                 )
                 context["device"] = device
 
+                zmq_monitor = await create_zmq_monitor(uow, device=device)
+                logger.info(f"created device zmq_monitor @ {zmq_monitor.socket}")
+
             uwsgi_options = await device.awaitable_attrs.uwsgi_options
             if not uwsgi_options:
-                for uwsgi_option in device.get_uwsgi_options():
+                for uwsgi_option in await device.get_uwsgi_options():
                     await uow.uwsgi_options.add(uwsgi_option)
                     """
                     existing_options = await uow.uwsgi_options.list(device_id=device.id)

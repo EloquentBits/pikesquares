@@ -166,8 +166,14 @@ async def provision_wsgi_app(
 
             tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
             if tuntap_routers:
-                ip = tuntap_router_next_available_ip(tuntap_routers[0])
-                await create_tuntap_device(uow, tuntap_routers[0], ip, wsgi_app.service_id)
+                ip = await tuntap_router_next_available_ip(tuntap_routers[0])
+                wgsi_app_tuntap_device = await create_tuntap_device(
+                    uow,
+                    tuntap_routers[0],
+                    ip,
+                    wsgi_app.service_id
+                )
+                logger.info(f"created wsgi app tuntap device: {wgsi_app_tuntap_device}")
 
     except Exception as exc:
         raise exc
@@ -255,10 +261,10 @@ async def up(
         phase=section.main_process.phases.PRIV_DROP_PRE,
     )
 
-    if not all([
-        http_router.subscription_server_address.exists(),
-        http_router.subscription_server_address.is_socket()]):
-        raise Exception("http router subscription server is not available")
+    #if not all([
+    #    http_router.subscription_server_address.exists(),
+    #    http_router.subscription_server_address.is_socket()]):
+    #    raise Exception("http router subscription server is not available")
 
     section.subscriptions.subscribe(
         server=http_router.subscription_server_address,

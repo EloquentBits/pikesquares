@@ -82,11 +82,13 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     # config["uwsgi"]["plugin"] = "emperor_zeromq"
     # self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
-    def get_uwsgi_options(self) -> list["DeviceUWSGIOptions"]:
+    async def get_uwsgi_options(self) -> list["DeviceUWSGIOptions"]:
         uwsgi_options: list[DeviceUWSGIOptions] = []
         section = DeviceSection(self)
+        device_zmq_monitor = await self.awaitable_attrs.zmq_monitor
+        device_zmq_monitor_address = device_zmq_monitor.uwsgi_zmq_address
         section.empire.set_emperor_params(
-            vassals_home=self.zmq_monitor.uwsgi_zmq_address,
+            vassals_home=device_zmq_monitor_address,
             name="PikeSquares Server",
             spawn_asap=True,
             stats_address=str(self.stats_address),

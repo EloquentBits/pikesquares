@@ -136,6 +136,15 @@ async def attached_daemon_up(
         # This will allow the uWSGI master to control/monitor/respawn this process.
         #section.master_process.attach_process_classic
 
+        if attached_daemon.name == "postgres":
+            pg_bin_dir = Path("/usr/lib/postgresql/16/bin")
+            pg_data_dir = Path("")
+            section._set("if-not-dir", f"{pg_data_dir}")
+            section.main_process.run_command_on_event(
+                f"{pg_bin_dir / "initdb"} -A md5 -U %U -W -D %(_) -E UTF-8"
+            )
+            section._set("end-if", "")
+
         section.master_process.attach_process(
             **attached_daemon.compile_command_args(
                 bind_ip or attached_daemon_device.ip,

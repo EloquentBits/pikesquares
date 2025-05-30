@@ -1,9 +1,8 @@
+import cuid
 import structlog
-from cuid import cuid
 
 from pikesquares.domain.device import Device
 from pikesquares.service_layer.uow import UnitOfWork
-
 
 logger = structlog.getLogger()
 
@@ -15,12 +14,11 @@ async def create_device(
     create_kwargs: dict = dict(),
 ) -> Device:
 
-    device_cuid = f"device_{cuid()}"
     uwsgi_plugins = []
     uwsgi_plugins.append("emperor_zeromq")
 
     device = Device(
-        service_id=device_cuid,
+        service_id=f"device-{cuid.slug()}",
         uwsgi_plugins=",".join(uwsgi_plugins),
         machine_id=machine_id,
         **create_kwargs,

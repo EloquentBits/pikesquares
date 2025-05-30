@@ -19,8 +19,52 @@ logger = structlog.get_logger()
 hook_spec = pluggy.HookspecMarker("managed_daemon" )
 hook_impl = pluggy.HookimplMarker("managed_daemon" )
 
+"""
+clusterdb
+createuser
+dropuser
+oid2name
+pg_archivecleanup
+pgbench
+pg_config
+pg_ctl
+pg_dumpall
+pg_receivewal
+pg_resetwal
+pg_rewind
+pg_test_timing
+pg_verifybackup
+postgres
+reindexdb
+vacuumlocreatedb
+createdb
+dropdb
+initdb
+pg_amcheck
+pg_basebackup
+pg_checksums
+pg_controldata
+pg_dumpall
+pg_isready
+pg_recvlogical
+pg_restore
+pg_test_fsync
+pg_upgrade
+pg_waldump
+psql
+vacuumdb
+"""
 
-class RedisAttachedDaemon:
+"""
+smart-attach-daemon = %(pg)/postmaster.pid /usr/lib/postgresql/9.6/bin/postgres -D %(pg)
+
+; backup
+env = PGPASSWORD=XXX
+cron = 59 3 -1 -1 -1  pg_dump -U ZZZ YYY | bzip2 -9 > $(HOME)/backup/YYY_`date +"%%d"`.sql.bz2
+"""
+
+
+class PostgresAttachedDaemon:
 
     def __init__(
         self,
@@ -30,10 +74,10 @@ class RedisAttachedDaemon:
     ):
         self.daemon_service = daemon_service
         self.bind_ip = bind_ip
-        self.bind_port = bind_port or 6379
+        self.bind_port = bind_port or 6543
 
     def get_daemon_bin(self) -> Path:
-        return Path("/usr/bin/redis-server")
+        return Path("/usr/lib/postgresql/16/bin/postgres")
 
 
     @hook_impl
@@ -68,6 +112,56 @@ class RedisAttachedDaemon:
             "change_dir": str(self.daemon_service.daemon_data_dir),
         }
 
+
+class RedisAttachedDaemon:
+
+    def __init__(
+        self,
+        daemon_service: "AttachedDaemon",
+        bind_ip: str,
+        bind_port: int | None = None
+    ):
+        self.daemon_service = daemon_service
+        self.bind_ip = bind_ip
+        self.bind_port = bind_port or 6379
+
+    def get_daemon_bin(self) -> Path:
+        return Path("/usr/bin/redis-server")
+
+    def get_daemon_cli_bin(self) -> Path:
+        return Path("/usr/bin/redis-cli")
+
+    @hook_impl
+    def collect_command_arguments(self) -> dict:
+        cmd = Template(
+            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
+        ).substitute({
+            "bin" : str(self.get_daemon_bin()),
+            "bind_port": self.bind_port,
+            "bind_ip": self.bind_ip,
+            "dir": str(self.daemon_service.daemon_data_dir),
+            "logfile": str(Path(self.daemon_service.log_dir) / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"),
+            "pidfile": str(self.daemon_service.pid_file),
+        })
+        logger.debug(cmd)
+
+        return {
+            "command": cmd,
+            "for_legion": self.daemon_service.for_legion,
+            "broken_counter": self.daemon_service.broken_counter,
+            "pidfile": self.daemon_service.pid_file,
+            "control": self.daemon_service.control,
+            "daemonize": self.daemon_service.daemonize,
+            "touch_reload": str(self.daemon_service.touch_reload_file),
+            "signal_stop": self.daemon_service.signal_stop,
+            "signal_reload": self.daemon_service.signal_reload,
+            "honour_stdin": bool(self.daemon_service.honour_stdin),
+            "uid": self.daemon_service.run_as_uid,
+            "gid": self.daemon_service.run_as_gid,
+            "new_pid_ns": self.daemon_service.new_pid_ns,
+            "change_dir": str(self.daemon_service.daemon_data_dir),
+        }
+
     @hook_impl
     def ping(self) -> bool:
         """
@@ -76,7 +170,7 @@ class RedisAttachedDaemon:
         cmd_args = ["-h", self.bind_ip, "-p", self.bind_port, "--raw", "incr", "ping"]
         try:
             with pl_local.cwd(self.daemon_service.daemon_data_dir):
-                retcode, stdout, stderr = pl_local[str(self.get_daemon_bin())].run(cmd_args)
+                retcode, stdout, stderr = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
                 if int(retcode) != 0:
                     logger.debug(f"{retcode=}")
                     logger.debug(f"{stdout=}")

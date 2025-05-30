@@ -152,24 +152,25 @@ async def project_up(project)  -> bool:
                 new_pid_ns="false",
                 change_dir=redis_dir,
             )
+        if 0:
+            try:
+                _ = Project.read_stats(project.stats_address)
+                #console.success(f":heavy_check_mark:     {project.name} [{project.service_id}]. is already running.!")
+                return True
+            except StatsReadError:
+                print(section.as_configuration().format())
 
-        try:
-            _ = Project.read_stats(project.stats_address)
-            #console.success(f":heavy_check_mark:     {project.name} [{project.service_id}]. is already running.!")
-            return True
-        except StatsReadError:
-            #print(section.as_configuration().format())
-
-            #project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
-            device = await project.awaitable_attrs.device
-            device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
-            device_zmq_monitor_address = device_zmq_monitor.zmq_address
-            await create_or_restart_instance(
-                device_zmq_monitor_address,
-                f"{project.service_id}.ini",
-                section.as_configuration().format(do_print=True),
-            )
-            return True
+        #project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        device = await project.awaitable_attrs.device
+        device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
+        device_zmq_monitor_address = device_zmq_monitor.zmq_address
+        print(f"launching project {project.name} {project.service_id} @ {device_zmq_monitor_address}")
+        await create_or_restart_instance(
+            device_zmq_monitor_address,
+            f"{project.service_id}.ini",
+            section.as_configuration().format(do_print=True),
+        )
+        return True
 
     except Exception as exc:
         raise
