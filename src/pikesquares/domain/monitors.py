@@ -69,7 +69,7 @@ class ZMQMonitor(AppMonitorBase, table=True):
     ip: str | None = Field(max_length=25, default=None)
     port: int | None = Field(default=None)
     transport: str | None = Field(max_length=10, default=None)
-    socket: str | None = Field(max_length=150, default=None)
+    socket_address: str | None = Field(max_length=150, default=None)
 
     device_id: int | None = Field(foreign_key="devices.id", unique=True)
     device: Optional["Device"] = Relationship(back_populates="zmq_monitor")
@@ -94,7 +94,7 @@ class ZMQMonitor(AppMonitorBase, table=True):
                 return f"tcp://{self.ip}:{self.port}"
 
         elif self.transport == "ipc":  # ZMQMonitor.ZMQTransport.IPC:
-            return f"ipc://{self.socket}"
+            return f"ipc://{self.socket_address}"
 
     @property
     def uwsgi_zmq_address(self) -> str | None:

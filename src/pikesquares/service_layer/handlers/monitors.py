@@ -14,26 +14,22 @@ async def create_zmq_monitor(
     uow: UnitOfWork,
     device: Device | None = None,
     project: Project | None = None,
-) -> ZMQMonitor | None:
+) -> ZMQMonitor:
     try:
-        create_kwargs: dict = {
-            "transport": "ipc",
-        }
+        create_kwargs: dict[str, str | Project | Device] = {"transport": "ipc"}
         if device:
             create_kwargs["device"] = device
-            create_kwargs["socket"] = str(device.zmq_monitor_socket)
-
+            create_kwargs["socket_address"] = str(device.zmq_monitor_socket)
         if project:
             create_kwargs["project"] = project
-            create_kwargs["socket"] = str(project.zmq_monitor_socket)
-
+            create_kwargs["socket_address"] = str(project.zmq_monitor_socket)
+        logger.info(f"creating zmq monitor @ {create_kwargs.get('socket_address')}")
         zmq_monitor = ZMQMonitor(**create_kwargs)
         await uow.zmq_monitors.add(zmq_monitor)
+        return zmq_monitor
     except Exception as exc:
+        logger.error("unable to create zmq monitor")
         raise exc
-
-    return zmq_monitor
-
 
 async def create_or_restart_instance(zmq_monitor_address: str, name: str, uwsgi_config: str) -> None:
     ctx = zmq.asyncio.Context()

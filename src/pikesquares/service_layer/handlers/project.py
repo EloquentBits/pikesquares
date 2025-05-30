@@ -35,8 +35,11 @@ async def provision_project(
         )
         project = await uow.projects.add(project)
         project_zmq_monitor = await create_zmq_monitor(uow, project=project)
+        logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
         tuntap_router = await create_tuntap_router(uow, project)
+        logger.info(f"created tuntap router @ {tuntap_router.socket_address}")
         http_router = await provision_http_router(uow, project, tuntap_router)
+        logger.info(f"created http router @ {http_router.socket_address}")
 
     except Exception as exc:
         raise exc
@@ -152,13 +155,12 @@ async def project_up(project)  -> bool:
                 new_pid_ns="false",
                 change_dir=redis_dir,
             )
-        if 0:
-            try:
-                _ = Project.read_stats(project.stats_address)
-                #console.success(f":heavy_check_mark:     {project.name} [{project.service_id}]. is already running.!")
-                return True
-            except StatsReadError:
-                print(section.as_configuration().format())
+        try:
+            _ = Project.read_stats(project.stats_address)
+            logger.info(f"{project.name} [{project.service_id}]. is already running!")
+            return True
+        except StatsReadError:
+            print(section.as_configuration().format())
 
         #project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
         device = await project.awaitable_attrs.device

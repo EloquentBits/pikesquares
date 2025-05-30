@@ -99,6 +99,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
                 option_key=key.key,
                 option_value=str(value).strip(),
                 device=self,
+                machine_id=self.machine_id,
             )
             uwsgi_options.append(uwsgi_option)
             uwsgi_option.sort_order_index = uwsgi_options.index(uwsgi_option)
@@ -207,6 +208,7 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
 
     device_id: str | None = Field(default=None, foreign_key="devices.id")
     device: Device | None = Relationship(back_populates="uwsgi_options")
+    machine_id: str = Field(max_length=32)
     sort_order_index: int | None = Field(default=None)
 
     class Config:

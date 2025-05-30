@@ -63,13 +63,12 @@ from pikesquares.domain.process_compose import (
     register_dnsmasq_process,
     register_process_compose,
 )
-from pikesquares.domain.project import Project
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
     provision_attached_daemon,
 )
-from pikesquares.service_layer.handlers.device import create_device
+from pikesquares.service_layer.handlers.device import provision_device
 
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.project import project_up, provision_project
@@ -299,12 +298,7 @@ async def launch(
     context = ctx.ensure_object(dict)
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
-    device = context.get("device")
     custom_style = context.get("cli-style")
-
-    if not device:
-        console.error("unable to locate device in app context")
-        raise typer.Exit(code=0) from None
 
     #try:
     #    vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
@@ -361,6 +355,8 @@ async def launch(
     project_name = app_name
     async with uow:
         try:
+            machine_id = await ServiceBase.read_machine_id()
+            device = await uow.devices.get_by_machine_id(machine_id)
             project = await uow.projects.get_by_name(project_name) or \
                 await provision_project(project_name, device, uow)
             project_up_result = await project_up(project)
@@ -368,14 +364,14 @@ async def launch(
                 console.error(f"unable to launch {project.name}")
                 raise typer.Exit(1)
 
-            attached_daemon_name = "redis"
-            attached_daemon_bind_port = None
-            attached_daemon_bind_ip = None
-
-            attached_daemon = await provision_attached_daemon(
-                attached_daemon_name, project, uow,
-            )
             if 0: #attached_daemon:
+                attached_daemon_name = "redis"
+                attached_daemon_bind_port = None
+                attached_daemon_bind_ip = None
+
+                attached_daemon = await provision_attached_daemon(
+                    attached_daemon_name, project, uow,
+                )
                 attached_daemon_device = await uow.tuntap_devices.\
                     get_by_linked_service_id(attached_daemon.service_id)
 
@@ -422,26 +418,6 @@ async def info(
 ):
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    # console.info(f"data_dir={str(conf.DATA_DIR)}")
-
-    # uow = await services.aget(context, UnitOfWork)
-    # device = await uow.devices.get_by_id(1)
-    # logger.debug(device)
-    #
-    # console.success(":white_check_mark: reverse proxy is running")
-    # console.success(":heavy_check_mark:     reverse proxy is running")
-    #
-    device = context.get("device")
-    if not device:
-        console.error("unable to locate device in app context")
-        raise typer.Exit(code=0) from None
-
-    device_zmq_monitor = context["device-zmq-monitor"]
-    if not device_zmq_monitor:
-        console.error("unable to locate device zmq monitor in app context")
-        raise typer.Exit(code=0) from None
-
     process_compose = await services.aget(context, ProcessCompose)
     processes = [
         ("device", "device manager"),
@@ -449,7 +425,6 @@ async def info(
         ("dnsmasq", "dns server"),
         ("api", "PikeSquares API"),
     ]
-    # for _ in range(1, 5):
     for process in processes:
         try:
             stats = await process_compose.ping_api(process[0])
@@ -472,36 +447,7 @@ async def info(
             await svc.aping()
             #console.success(f":heavy_check_mark:     {svc_name} \[svcs] is running")
         except ServiceUnavailableError:
-            pass
-            #console.warning(f":heavy_exclamation_mark:     {svc_name} \[svcs] is not running.")
-
-    # uow = await services.aget(context, UnitOfWork)
-    # device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-    # for project in await uow.projects.list():
-    # project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
-    # await device_zmq_monitor.create_or_restart_instance(
-    #    f"{project.service_id}.ini", project, project_zmq_monitor
-    # )
-    # console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
-
-    try:
-        if device.stats:
-            pass
-            #console.success(":heavy_check_mark:     Device Stats Server \[uWSGI] is running")
-            # console.success("🚀 Device Stats Server \[uWSGI] is running 🚀")
-    except StatsReadError:
-        #console.warning(":heavy_exclamation_mark:     Device Stats Server \[uWSGI] is not running")
-        pass
-
-    # http_router = services.get(context, DefaultHttpRouter)
-    # stats = http_router.read_stats()
-    # http_router_stats = RouterStats(**stats)
-    # console.info(http_router_stats.model_dump())
-
-    # https_router = services.get(context, DefaultHttpsRouter)
-    # https_router_stats = RouterStats(https_router.read_stats())
-    # console.info(https_router_stats.model_dump())
-    #
+            console.warning(f":heavy_exclamation_mark:     {svc_name} is not running.")
 
 
 @app.command(rich_help_panel="Control", short_help="Launch the PikeSquares Server (if stopped)")
@@ -559,10 +505,10 @@ async def up(
     #######################
     # emperor zeromq monitors
     uow = await services.aget(context, UnitOfWork)
-    device = context.get("device")
-    device = await uow.devices.get_by_machine_id(device.machine_id)
+    machine_id = await ServiceBase.read_machine_id()
+    device = await uow.devices.get_by_machine_id(machine_id)
     if not device:
-        console.error("unable to locate device in app context")
+        console.error(f"unable to locate device by machine id {machine_id}")
         raise typer.Exit(code=0) from None
 
     async with uow:
@@ -575,15 +521,13 @@ async def up(
             except Exception as exc:
                 logger.exception(exc)
                 console.error(f"unable to launch {project.name}")
-                raise typer.Exit(code=1) from None
+                continue
 
-            else:
-                if 0:
-                    for http_router in await project.awaitable_attrs.http_routers:
-                        http_router_up_result = await http_router_up(uow, http_router)
-                        if http_router_up_result:
-                            console.success(":heavy_check_mark:     Launching http router.. Done!")
-                            console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+            for http_router in await project.awaitable_attrs.http_routers:
+                http_router_up_result = await http_router_up(uow, http_router)
+                if http_router_up_result:
+                    console.success(":heavy_check_mark:     Launching http router.. Done!")
+                    console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
 
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")
@@ -1238,62 +1182,39 @@ async def main(
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
 
-    machine_id = await ServiceBase.read_machine_id()
-    if not machine_id:
-        raise AppConfigError("unable to read the machine-id")
-
     async with uow:
         try:
+            machine_id = await ServiceBase.read_machine_id()
             device = await uow.devices.get_by_machine_id(machine_id)
             if not device:
-
-
-                create_kwargs = {
-                    "data_dir": str(conf.data_dir),
-                    "config_dir": str(conf.config_dir),
-                    "log_dir": str(conf.log_dir),
-                    "run_dir": str(conf.run_dir),
-                }
-
-                device = await create_device(
-                    context,
+                device = await provision_device(
                     uow,
-                    machine_id,
-                    create_kwargs=create_kwargs,
+                    create_kwargs={
+                        "data_dir": str(conf.data_dir),
+                        "config_dir": str(conf.config_dir),
+                        "log_dir": str(conf.log_dir),
+                        "run_dir": str(conf.run_dir),
+                    },
                 )
-                context["device"] = device
-
                 zmq_monitor = await create_zmq_monitor(uow, device=device)
-                logger.info(f"created device zmq_monitor @ {zmq_monitor.socket}")
+                if not zmq_monitor.socket_address:
+                    console.error("device zmq monitor socket address was not provisioned")
+                    raise typer.Exit(1)
 
-            uwsgi_options = await device.awaitable_attrs.uwsgi_options
-            if not uwsgi_options:
-                for uwsgi_option in await device.get_uwsgi_options():
-                    await uow.uwsgi_options.add(uwsgi_option)
-                    """
-                    existing_options = await uow.uwsgi_options.list(device_id=device.id)
-                    for uwsgi_option in device.build_uwsgi_options():
-                        #existing_options
-                        #if uwsgi_option.option_key
-                        #not in existing_options:
-                        #    await uow.uwsgi_options.add(uwsgi_option)
-                    """
-            context["device"] = device
-            #project = await uow.projects.get_by_name("default-project") or \
-            #    await create_project("default-project", context, uow)
-            #if project:
-            #    project.zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id) or await create_zmq_monitor(
-            #        uow, project=project
-            #    )
-            #    context["default-project"] = project
-            #
+                logger.info(f"created device zmq_monitor @ {zmq_monitor.socket_address}")
+
+                uwsgi_options = await device.awaitable_attrs.uwsgi_options
+                if not uwsgi_options:
+                    for uwsgi_option in await device.get_uwsgi_options():
+                        await uow.uwsgi_options.add(uwsgi_option)
         except Exception as exc:
             logger.exception(exc)
             await uow.rollback()
+            raise typer.Exit(1)
         else:
             await uow.commit()
 
-    await register_device_process(context)
+    await register_device_process(context, device.machine_id)
     await register_api_process(context)
     await register_dnsmasq_process(context)
     await register_caddy_process(context)

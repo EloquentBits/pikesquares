@@ -261,10 +261,6 @@ async def register_process_compose(context: dict) -> None:
 
         # uow = await services.aget(context, UnitOfWork)
         conf = await svcs_container.aget(AppConfig)
-        device = context.get("device")
-        if not device:
-            raise AppConfigError("no device found in context")
-
         if conf.UV_BIN and not await AsyncPath(conf.UV_BIN).exists():
             raise AppConfigError(f"unable locate uv binary @ {conf.UV_BIN}") from None
 
@@ -322,7 +318,7 @@ async def device_ping(device_data: tuple[DeviceProcess, ProcessMessages]):
     return True
 
 
-async def register_device_process(context: dict) -> None:
+async def register_device_process(context: dict, machine_id: str) -> None:
     """register device"""
 
     async def device_process_factory(svcs_container) -> tuple[Process, ProcessMessages] | None:
@@ -336,26 +332,24 @@ async def register_device_process(context: dict) -> None:
         #        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {sqlite_plugin_path}") from None
         #
         conf = await svcs_container.aget(AppConfig)
-        device = context.get("device")
-        if device:
-            cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
-            sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE device_id=\'{device.id}\' ORDER BY sort_order_index"'
-            process = Process(
-                description="Device Manager",
-                disabled=not conf.DEVICE_ENABLED,
-                command="".join([cmd, sql]),
-                working_dir=conf.data_dir,
-                availability=ProcessAvailability(),
-                # readiness_probe=ReadinessProbe(
-                #    http_get=ReadinessProbeHttpGet()
-                # ),
-            )
-            messages = ProcessMessages(
-                title_start="!! device start title !!",
-                title_stop="!! device stop title !!",
-            )
+        cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
+        sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE machine_id=\'{machine_id}\' ORDER BY sort_order_index"'
+        process = Process(
+            description="Device Manager",
+            disabled=not conf.DEVICE_ENABLED,
+            command="".join([cmd, sql]),
+            working_dir=conf.data_dir,
+            availability=ProcessAvailability(),
+            # readiness_probe=ReadinessProbe(
+            #    http_get=ReadinessProbeHttpGet()
+            # ),
+        )
+        messages = ProcessMessages(
+            title_start="!! device start title !!",
+            title_stop="!! device stop title !!",
+        )
 
-            return process, messages
+        return process, messages
 
     services.register_factory(
         context,
@@ -377,7 +371,7 @@ async def api_ping(api_data: tuple[APIProcess, ProcessMessages]):
 
 
 async def register_api_process(context: dict) -> None:
-    """register device"""
+    """register api"""
 
     async def api_process_factory(svcs_container) -> tuple[APIProcess, ProcessMessages]:
         """FastAPI process-compose process"""
