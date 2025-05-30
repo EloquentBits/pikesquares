@@ -364,6 +364,10 @@ async def launch(
                 console.error(f"unable to launch {project.name}")
                 raise typer.Exit(1)
 
+            http_routers = await project.awaitable_attrs.http_routers
+            for http_router in http_routers:
+                await http_router_up(uow, http_router)
+
             if 0: #attached_daemon:
                 attached_daemon_name = "redis"
                 attached_daemon_bind_port = None
@@ -396,10 +400,6 @@ async def launch(
                 uow,
                 project,
             )
-
-            http_routers = await project.awaitable_attrs.http_routers
-            for http_router in http_routers:
-                await http_router_up(uow, http_router)
 
             await wsgi_app_up(uow, wsgi_app, project, http_routers[0], console)
 
@@ -522,8 +522,8 @@ async def up(
                 logger.exception(exc)
                 console.error(f"unable to launch {project.name}")
                 continue
-
-            for http_router in await project.awaitable_attrs.http_routers:
+            project_http_routers = await project.awaitable_attrs.http_routers
+            for http_router in project_http_routers:
                 http_router_up_result = await http_router_up(uow, http_router)
                 if http_router_up_result:
                     console.success(":heavy_check_mark:     Launching http router.. Done!")
