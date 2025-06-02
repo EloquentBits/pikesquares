@@ -58,13 +58,22 @@ run: format
     dotenv run -- uv run python main.py
 
 psq-up:
-  sudo uv run pikesquares up
+  sudo rm /tmp/uv-* && sudo uv run pikesquares up
+
 
 psq-down:
-  uv run pikesquares up
+  sudo rm /tmp/uv-* && uv run pikesquares down
 
 psq-info:
-  uv run pikesquares up
+  sudo rm /tmp/uv-* && uv run pikesquares info
+
+psq-launch:
+  sudo rm /tmp/uv-* && sudo uv run pikesquares launch
+
+routers-stop:
+   sudo rm /tmp/uv-* && uv run pikesquares routers stop
+
+
 
 uwsgi-up:
   sudo /home/pk/dev/eqb/scie-pikesquares/uwsgi/uwsgi  \
@@ -83,6 +92,7 @@ pc-attach:
 pc-down:	
   sudo process-compose down -u /var/run/pikesquares/process-compose.sock
 
+
 pc-up-sock:
   process-compose --use-uds --unix-socket pc.sock --log-file pc.log 
 
@@ -90,7 +100,7 @@ pc-up-tcp:
   process-compose --log-file pc.log --port 9995
 
 db-migrate:
-  uv run alembic upgrade head
+  sudo rm /tmp/uv-* && uv run alembic upgrade head
 
 db-browse:
   harlequin -a sqlite /var/lib/pikesquares/pikesquares.db
