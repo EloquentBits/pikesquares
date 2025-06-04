@@ -20,6 +20,7 @@ async def provision_project(
     name: str,
     device: Device,
     uow: UnitOfWork,
+    selected_services: list[str] | None,
 ) -> Project | None:
 
     try:
@@ -34,21 +35,33 @@ async def provision_project(
             run_dir=str(device.run_dir),
         )
         project = await uow.projects.add(project)
-        project_zmq_monitor = await create_zmq_monitor(uow, project=project)
-        logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
-        tuntap_router = await create_tuntap_router(uow, project)
-        logger.info(f"created tuntap router @ {tuntap_router.socket_address}")
-        http_router = await provision_http_router(uow, project, tuntap_router)
-        logger.info(f"created http router @ {http_router.socket_address}")
+        logger.info(f"created project {project}")
+
+        if "zmq-monitor" in selected_services:
+            logger.info(f"creating project zmq monitor in project {project.service_id}")
+            project_zmq_monitor = await create_zmq_monitor(uow, project=project)
+            logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
+
+        if "tuntap-router" in selected_services:
+            logger.info(f"creatint tuntap router for project {project.service_id}")
+            tuntap_router = await create_tuntap_router(uow, project)
+            logger.info(f"created tuntap router @ {tuntap_router.socket_address}")
+
+        if "http-router" in selected_services:
+            logger.info(f"creating http router for project {project.service_id}")
+            http_router = await provision_http_router(uow, project, tuntap_router)
+            logger.info(f"created http router @ {http_router.socket_address}")
+
+        # if "dir-monitor" in selected_services:
+        #    if not await AsyncPath(project.apps_dir).exists():
+        #        await AsyncPath(project.apps_dir).mkdir(parents=True, exist_ok=True)
+        #    uwsgi_config = project.write_uwsgi_config()
+        #    logger.debug(f"wrote config to file: {uwsgi_config}")
 
     except Exception as exc:
+        logger.info(f"failed provisioning project {name}")
         raise exc
 
-    # if project.enable_dir_monitor:
-    #    if not await AsyncPath(project.apps_dir).exists():
-    #        await AsyncPath(project.apps_dir).mkdir(parents=True, exist_ok=True)
-    #    uwsgi_config = project.write_uwsgi_config()
-    #    logger.debug(f"wrote config to file: {uwsgi_config}")
 
     return project
 

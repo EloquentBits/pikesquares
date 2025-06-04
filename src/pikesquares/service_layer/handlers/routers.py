@@ -130,6 +130,21 @@ async def get_tuntap_router_networks(uow: UnitOfWork):
         for router in tuntap_routers
     ]
 
+async def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
+    existing_networks = await get_tuntap_router_networks(uow) or []
+    logger.debug(f"looking for available subnet for tuntap router. {len(existing_networks)} subnets exist in project")
+    if existing_networks:
+        #import ipdb;ipdb.set_trace()
+        for i in range(100, 200):
+            n = IPv4Network(f"192.168.{i}.0/24")
+            if not any([not n.compare_networks(en) != 0 for en in existing_networks]):
+                logger.debug(f"found a subnet {n} for new tuntap router")
+                return n
+
+    new_network = "192.168.100.0/24"
+    logger.debug(f"choosing random subnet {new_network} for tuntap router")
+    return IPv4Network(new_network) 
+
 async def tuntap_router_next_available_ip(
     tuntap_router: TuntapRouter,
 ) -> IPv4Interface:
@@ -145,21 +160,16 @@ async def tuntap_router_next_available_ip(
 async def create_tuntap_router(
     uow: UnitOfWork,
     project: Project,
-) -> TuntapRouter | None:
+) -> TuntapRouter:
 
-    new_network = None
-    tuntap_router = None
     try:
-        existing_networks = await get_tuntap_router_networks(uow)
-        for i in range(100, 200):
-            n = IPv4Network(f"192.168.{i}.0/24")
-            if not [n.compare_networks(en) != 0 for en in existing_networks]:
-                new_network = n
-                break
-        if not new_network:
-            raise Exception("unable to locate a free subnet for the tuntap router.")
+        new_network = await tuntap_router_next_available_network(uow)
+        existing_networks = await get_tuntap_router_networks(uow) or []
+        if any([not new_network.compare_networks(en) != 0 for en in existing_networks]):
+            raise Exception(f"subnet {new_network} already taken ")
 
         try:
+            # make tuntap router ip alwasys the first in the subnet
             ip = next(new_network.hosts())
         except StopIteration:
             pass
@@ -178,10 +188,11 @@ async def create_tuntap_router(
                 run_dir=str(project.run_dir),
             )
             tuntap_router = await uow.tuntap_routers.add(tuntap_router)
+            logger.info(f"created tuntap router with ip: {tuntap_router.ip}")
+            return tuntap_router
     except Exception as exc:
+        logger.error(f"unable to create tuntap router for project {project.service_id}")
         raise exc
-
-    return tuntap_router
 
 async def create_tuntap_device(
     uow: UnitOfWork,
@@ -199,6 +210,7 @@ async def create_tuntap_device(
         )
         await uow.tuntap_devices.add(tuntap_device)
     except Exception as exc:
+        logger.error(f"unable to create tuntap device for service {linked_service_id}")
         raise exc
 
     return tuntap_device

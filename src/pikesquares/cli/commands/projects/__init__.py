@@ -5,6 +5,7 @@ import randomname
 import structlog
 
 import typer
+import questionary
 
 # from pikesquares import (
 #    get_service_status,
@@ -13,9 +14,13 @@ from pikesquares import services
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.service_layer.handlers.project import provision_project
 from pikesquares.conf import AppConfig, AppConfigError
+from pikesquares.domain.base import ServiceBase
 from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
 from pikesquares.cli.validators import ServiceNameValidator
+#, NameValidator
+
+
 
 logger = structlog.get_logger()
 
@@ -48,24 +53,91 @@ async def create(
     Aliases: [i] create, new
     """
     context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
     uow = await services.aget(context, UnitOfWork)
-    name = project_name or console.ask(
-        "Please submit a project name or hit the Enter key to proceed with  a random value",
-        default=randomname.get_name(),
-        validators=[ServiceNameValidator],
-    )
-    project = await provision_project(name, context, uow)
-    if project:
-        console.success(f":heavy_check_mark:     Project '{project.name}' was successfully created!")
-        device = context.get("device")
-        if not device:
-            raise AppConfigError("no device found in context")
 
-        device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-        await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
-        console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
-    else:
-        console.warning("Failed to create a Project")
+    machine_id = await ServiceBase.read_machine_id()
+    device = await uow.devices.get_by_machine_id(machine_id)
+
+    project_src = await questionary.select(
+        "Provision project from: ",
+        choices=[
+            "Preconfigured template",
+            "Empty project",
+            #questionary.Separator(),
+            #questionary.Choice("ruby/Rack", disabled="coming soon"),
+            #questionary.Choice("PHP", disabled="coming soon"),
+            #questionary.Choice("perl/PSGI", disabled="coming soon"),
+        ],
+        style=custom_style,
+    ).ask_async()
+    if not project_src:
+        raise typer.Exit(1)
+
+    print(project_src)
+    if project_src == "Empty project":
+        name = await questionary.text(
+            "Choose a name for your project: ",
+            default=randomname.get_name().lower(),
+            style=custom_style,
+            #validate=NameValidator,
+        ).ask_async()
+
+        project_services = [
+            "http-router",
+            "tuntap-router",
+            "forkpty-router",
+            questionary.Separator(),
+            "zmq-monitor",
+            questionary.Choice(
+                "dir-monitor", disabled="coming soon"
+            ),
+        ]
+        selected_services = await questionary.checkbox(
+            "Provision services: ",
+            choices=project_services,
+            style=custom_style,
+        ).ask_async()
+
+        console.info(f"Provisioning project {name}")
+        async with uow:
+            try:
+                project = await provision_project(
+                    name,
+                    device,
+                    uow,
+                    selected_services=selected_services,
+                )
+            except Exception as exc:
+                logger.exception(exc)
+                console.error(f"unable to provision project {name}")
+                await uow.rollback()
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
+
+        if project:
+            console.info(f"Provisioned project {name}")
+
+
+    if 0:
+        name = project_name or console.ask(
+            "Please submit a project name or hit the Enter key to proceed with  a random value",
+            default=randomname.get_name(),
+            validators=[ServiceNameValidator],
+        )
+        project = await provision_project(name, context, uow)
+        if project:
+            console.success(f":heavy_check_mark:     Project '{project.name}' was successfully created!")
+            device = context.get("device")
+            if not device:
+                raise AppConfigError("no device found in context")
+
+            device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+            await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
+            console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
+        else:
+            console.warning("Failed to create a Project")
 
 
 @app.command(short_help="Stop Project Service.\nAliases:[s] stop")
@@ -171,7 +243,7 @@ def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
             project_log_file.read_text(), status_bar_format=f"{project_log_file.resolve()} (status: {status})"
         )
     else:
-        console.error(
+        nonsole.error(
             f"Error:\nLog file {project_log_file} not exists!", hint=f"Check the device log file for possible errors"
         )
 
