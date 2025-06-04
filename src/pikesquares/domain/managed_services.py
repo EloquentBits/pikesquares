@@ -20,42 +20,8 @@ hook_spec = pluggy.HookspecMarker("managed_daemon" )
 hook_impl = pluggy.HookimplMarker("managed_daemon" )
 
 """
-clusterdb
-createuser
-dropuser
-oid2name
-pg_archivecleanup
-pgbench
-pg_config
-pg_ctl
-pg_dumpall
-pg_receivewal
-pg_resetwal
-pg_rewind
-pg_test_timing
-pg_verifybackup
-postgres
-reindexdb
-vacuumlocreatedb
-createdb
-dropdb
-initdb
-pg_amcheck
-pg_basebackup
-pg_checksums
-pg_controldata
-pg_dumpall
-pg_isready
-pg_recvlogical
-pg_restore
-pg_test_fsync
-pg_upgrade
-pg_waldump
-psql
-vacuumdb
-"""
+https://www.postgresql.org/docs/current/reference-server.html
 
-"""
 smart-attach-daemon = %(pg)/postmaster.pid /usr/lib/postgresql/9.6/bin/postgres -D %(pg)
 
 ; backup
@@ -74,7 +40,7 @@ class PostgresAttachedDaemon:
     ):
         self.daemon_service = daemon_service
         self.bind_ip = bind_ip
-        self.bind_port = bind_port or 6543
+        self.bind_port = bind_port or 5432
 
     def get_daemon_bin(self) -> Path:
         return Path("/usr/lib/postgresql/16/bin/postgres")
@@ -83,17 +49,18 @@ class PostgresAttachedDaemon:
     @hook_impl
     def collect_command_arguments(self) -> dict:
         cmd = Template(
-            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
+            "$bin -D $dir -h $bind_ip -p $bind_port -k $rundir"
         ).substitute({
             "bin" : str(self.get_daemon_bin()),
             "bind_port": self.bind_port,
             "bind_ip": self.bind_ip,
             "dir": str(self.daemon_service.daemon_data_dir),
-            "logfile": str(Path(self.daemon_service.log_dir) / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"),
-            "pidfile": str(self.daemon_service.pid_file),
+            "rundir": str(self.daemon_service.run_dir),
+            #"logfile": str(Path(self.daemon_service.log_dir) / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"),
+            #"pidfile": str(self.daemon_service.pid_file),
         })
         logger.debug(cmd)
-        import ipdb;ipdb.set_trace()
+        #import ipdb;ipdb.set_trace()
 
         return {
             "command": cmd,
@@ -242,13 +209,22 @@ class AttachedDaemon(ServiceBase, table=True):
 
         pm = pluggy.PluginManager("managed_daemon")
         pm.add_hookspecs(AttachedDaemonHookSpec)
-        pm.register(
-            RedisAttachedDaemon(
-                daemon_service=self,
-                bind_ip=bind_ip,
-                bind_port=bind_port,
+        if self.name == "redis":
+            pm.register(
+                RedisAttachedDaemon(
+                    daemon_service=self,
+                    bind_ip=bind_ip,
+                    bind_port=bind_port,
+                )
             )
-        )
+        elif self.name == "postgres":
+            pm.register(
+                PostgresAttachedDaemon(
+                    daemon_service=self,
+                    bind_ip=bind_ip,
+                    bind_port=bind_port,
+                )
+            )
         cmd_args = pm.hook.collect_command_arguments()
         # FIXME
         # why is this a list?
