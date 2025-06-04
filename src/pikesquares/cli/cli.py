@@ -368,8 +368,9 @@ async def launch(
             for http_router in http_routers:
                 await http_router_up(uow, http_router)
 
-            if 0: #attached_daemon:
-                attached_daemon_name = "redis"
+            if 1: #attached_daemon:
+                #attached_daemon_name = "redis"
+                attached_daemon_name = "postgres"
                 attached_daemon_bind_port = None
                 attached_daemon_bind_ip = None
 

@@ -138,10 +138,9 @@ async def attached_daemon_up(
 
         if attached_daemon.name == "postgres":
             pg_bin_dir = Path("/usr/lib/postgresql/16/bin")
-            pg_data_dir = Path("")
-            section._set("if-not-dir", f"{pg_data_dir}")
+            section._set("if-not-dir", f"{attached_daemon.daemon_data_dir}")
             section.main_process.run_command_on_event(
-                f"{pg_bin_dir / "initdb"} -A md5 -U %U -W -D %(_) -E UTF-8"
+                f"{pg_bin_dir / "initdb"} --auth trust --username pikesquares --pgdata {attached_daemon.daemon_data_dir} --encoding UTF-8"
             )
             section._set("end-if", "")
 
@@ -156,15 +155,9 @@ async def attached_daemon_up(
             _ = AttachedDaemon.read_stats(attached_daemon.stats_address)
             logger.info(f"Attached Daemon {attached_daemon.name} is already running")
         except StatsReadError:
-            #console.success(f":heavy_check_mark:     Launching {attached_daemon.name}. Done!")
             print(section.as_configuration().format())
-            #project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
-            #device = await project.awaitable_attrs.device
-            project = await attached_daemon.awaitable_attrs.project
             project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
             project_zmq_monitor_address = project_zmq_monitor.zmq_address
-            #device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
-            #device_zmq_monitor_address = device_zmq_monitor.zmq_address
             logger.info(f"launching Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
             try:
                 _ = AttachedDaemon.read_stats(attached_daemon.stats_address)
