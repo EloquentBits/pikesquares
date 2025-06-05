@@ -237,10 +237,10 @@ class ManagedServiceBase(pydantic.BaseModel):
 
     daemon_name: str
     daemon_bin: Annotated[pydantic.FilePath, pydantic.Field()]
-    daemon_log: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
     daemon_config: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
-    daemon_socket: Annotated[pydantic.SocketPath, pydantic.Field()] | None = None
     data_dir: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
+    run_dir: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
+    log_dir: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -250,6 +250,14 @@ class ManagedServiceBase(pydantic.BaseModel):
 
     def __str__(self) -> str:
         return f"{self.daemon_name} @ {self.daemon_bin}"
+
+    @property
+    def daemon_socket(self) -> Path:
+        return Path(self.run_dir) / f"{self.daemon_name}.sock"
+
+    @property
+    def daemon_log(self) -> Path:
+        return Path(self.log_dir) / f"{self.daemon_name}.log"
 
     def cmd(
         self,

@@ -311,9 +311,11 @@ async def register_process_compose(context: dict) -> None:
             "daemon_name": "process-compose",
             "daemon_bin": conf.PROCESS_COMPOSE_BIN,
             "daemon_config": conf.config_dir / "process-compose.yaml",
-            "daemon_log": conf.log_dir / "process-compose.log",
-            "daemon_socket": conf.run_dir / "process-compose.sock",
+            #"daemon_log": conf.log_dir / "process-compose.log",
+            #"daemon_socket": conf.run_dir / "process-compose.sock",
             "data_dir": conf.data_dir,
+            "run_dir": conf.run_dir,
+            "log_dir": conf.log_dir,
             "uv_bin": conf.UV_BIN,
         }
 
