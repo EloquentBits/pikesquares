@@ -67,7 +67,6 @@ async def provision_project(
 
 async def project_up(project)  -> bool:
     try:
-        tuntap_routers = await project.awaitable_attrs.tuntap_routers
         project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
         section = ProjectSection(project)
 
@@ -78,7 +77,7 @@ async def project_up(project)  -> bool:
             spawn_asap=True,
             # pid_file=str((Path(conf.RUN_DIR) / f"{project.service_id}.pid").resolve()),
         )
-        for tuntap_router in tuntap_routers:
+        for tuntap_router in await project.awaitable_attrs.tuntap_routers:
             router_cls = section.routing.routers.tuntap
             router = router_cls(
                 on=str(tuntap_router.socket_address),

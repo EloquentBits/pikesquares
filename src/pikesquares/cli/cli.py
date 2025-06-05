@@ -1158,12 +1158,7 @@ async def main(
         async with sessionmanager.session() as session:
             return session
 
-    services.register_factory(
-        context,
-        AsyncSession,
-        get_session,
-        #ping=lambda session: session.execute(text("SELECT 1")),
-    )
+    services.register_factory(context, AsyncSession, get_session) #ping=lambda session: session.execute(text("SELECT 1")),
     session = await services.aget(context, AsyncSession)
 
     async with sessionmanager.connect() as conn:
@@ -1179,7 +1174,6 @@ async def main(
     async def uow_factory():
         async with UnitOfWork(session=session) as uow:
             yield uow
-
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
 
@@ -1201,9 +1195,7 @@ async def main(
                 if not zmq_monitor.socket_address:
                     console.error("device zmq monitor socket address was not provisioned")
                     raise typer.Exit(1)
-
                 logger.info(f"created device zmq_monitor @ {zmq_monitor.socket_address}")
-
                 uwsgi_options = await device.awaitable_attrs.uwsgi_options
                 if not uwsgi_options:
                     for uwsgi_option in await device.get_uwsgi_options():
