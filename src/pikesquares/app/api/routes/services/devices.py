@@ -36,6 +36,7 @@ async def add_device(
     return device
 
 
+
 @router.get("/{machine_id}", response_model=Device)
 async def read_device(
         machine_id: str,
@@ -52,3 +53,20 @@ async def read_device(
         if not device:
             raise HTTPException(status_code=404, detail="Device not found")
         return device
+
+@router.put("/{machine_id}", response_model=Device)
+async def update_device(
+        machine_id: str,
+        services: DepContainer,
+        title: str
+    ):
+    """
+    Update device by machine_id.
+    """
+    session = await services.aget(AsyncSession)
+
+    async with UnitOfWork(session=session) as uow:
+        device = await uow.devices.get_by_machine_id(machine_id)
+
+
+)

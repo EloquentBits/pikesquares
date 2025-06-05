@@ -58,20 +58,20 @@ run: format
     dotenv run -- uv run python main.py
 
 psq-up:
-  sudo rm /tmp/uv-* && sudo uv run pikesquares up
+  sudo rm /tmp/uv-* || sudo uv run pikesquares up
 
 
 psq-down:
-  sudo rm /tmp/uv-* && uv run pikesquares down
+  sudo rm /tmp/uv-* || uv run pikesquares down
 
 psq-info:
-  sudo rm /tmp/uv-* && uv run pikesquares info
+  sudo rm /tmp/uv-* || uv run pikesquares info
 
 psq-launch:
-  sudo rm /tmp/uv-* && sudo uv run pikesquares launch
+  sudo rm /tmp/uv-* || sudo uv run pikesquares launch
 
 routers-stop:
-   sudo rm /tmp/uv-* && uv run pikesquares routers stop
+   sudo rm /tmp/uv-* || uv run pikesquares routers stop
 
 
 
@@ -100,7 +100,7 @@ pc-up-tcp:
   process-compose --log-file pc.log --port 9995
 
 db-migrate:
-  sudo rm /tmp/uv-* && uv run alembic upgrade head
+  sudo rm /tmp/uv-* || uv run alembic upgrade head
 
 db-browse:
   harlequin -a sqlite /var/lib/pikesquares/pikesquares.db

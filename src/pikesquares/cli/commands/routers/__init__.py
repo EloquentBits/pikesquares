@@ -13,7 +13,13 @@ from typing_extensions import Annotated
 from pikesquares import get_first_available_port, services
 from pikesquares.cli.cli import run_async
 from pikesquares.conf import AppConfig
+from pikesquares.domain import project
+from pikesquares.exceptions import StatsReadError
+from pikesquares.service_layer.handlers.monitors import destroy_instance
 from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.services.router import HttpRouter
+
+# from tests.unit_tests.service_layer_tests.conftest import project
 
 # from pikesquares.services.router import (
 #    https_router_up,
@@ -102,8 +108,74 @@ async def list_(
     """
 
 
-@app.command(short_help="Create a new router.\nAliases:[i] new")
-@app.command("new", hidden=True)
+@app.command("stop", hidden=True)
+@app.command(short_help="Stop router\nAliases:[i] stop")
+@run_async
+async def stop(
+    ctx: typer.Context, router_address: Annotated[str, typer.Option("--router-address", help="router to remove")] = ""
+):
+    """
+    Stop existing https router
+    Aliases:[i] stop
+    """
+
+    context = ctx.ensure_object(dict)
+    conf = await services.aget(context, AppConfig)
+    uow = await services.aget(context, UnitOfWork)
+
+    async with uow:
+        http_routers = await uow.http_routers.list()
+        # for router in http_routers:
+        #     try:
+        #         router_stats_available = bool(router.__class__.read_stats(router.stats_address))
+        #     except StatsReadError:
+        #         router_stats_available = False
+        for router_to_stop in await questionary.checkbox(
+            f"Select the proxy(s) to stop?",
+            choices=[f"{r.service_id} {r.address}" for r in http_routers],
+        ).ask_async():
+            print(router_to_stop)
+            r_addr = router_to_stop.split()[-1]
+            print(r_addr)
+            router = await uow.http_routers.get_by_address(r_addr)
+            if router:
+                project = await router.awaitable_attrs.project
+                project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+                project_zmq_monitor_address = project_zmq_monitor.zmq_address
+                print(project_zmq_monitor_address)
+
+                await destroy_instance(project_zmq_monitor_address, f"{router.service_id}.ini")
+
+            try:
+                router_stats_available = bool(router.__class__.read_stats(router.stats_address))
+            except StatsReadError:
+                router_stats_available = False
+
+        # selected_router_cuid = router(router_to_stop).get("service_id")
+        # console.info(f"selected proxy to stop: {selected_router_cuid=}")
+        # assert selected_router_cuid
+
+        # # rm router configs
+        # # router = routers_db.get(Query().service_id == selected_router_cuid)
+        #
+        # selected_router_config_path = Path(conf.CONFIG_DIR) / "projects" / f"{selected_router_cuid}.json"
+        # console.info(f"{selected_router_config_path=}")
+        #
+        # if Path(selected_router_config_path).exists():
+        #     selected_router_config_path.unlink(missing_ok=True)
+        #     console.info(f"deleted router config @ {selected_router_cuid}")
+        #
+        # # rm router runtimes
+        # # note uwsgi vacuum should remove all of these
+        # # for file in path(conf.run_dir).iterdir():
+        # #    if selected_router_cuid in str(file.resolve()):
+        # #        file.unlink(missing_ok=true)
+        # #        console.info(f"deleted app run files @ {str(file)}")
+        #
+        # http_routers.remove(where('service_id') == selected_router_cuid)
+        # console.success(f"removed ssl proxy '{router_to_delete}' [{selected_router_cuid}]")
+
+
 def create(
     ctx: typer.Context,
     # project_name: Optional[str] = typer.Argument("", help="New project name"),

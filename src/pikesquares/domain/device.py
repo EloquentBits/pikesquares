@@ -6,7 +6,9 @@ import sys
 import uuid
 from pathlib import Path
 
+import randomname
 import structlog
+from jinja2 import Undefined
 
 # from aiopath import AsyncPath
 from sqlmodel import (
@@ -37,7 +39,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
     machine_id: str = Field(default=None, unique=True, max_length=32)
     uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
-
+    title:str = Field()
     projects: list["Project"] = Relationship(back_populates="device")
 
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="device", sa_relationship_kwargs={"uselist": False})

@@ -1191,6 +1191,7 @@ async def main(
                         "run_dir": str(conf.run_dir),
                     },
                 )
+
                 zmq_monitor = await create_zmq_monitor(uow, device=device)
                 if not zmq_monitor.socket_address:
                     console.error("device zmq monitor socket address was not provisioned")
@@ -1202,6 +1203,7 @@ async def main(
                         await uow.uwsgi_options.add(uwsgi_option)
         except Exception as exc:
             logger.exception(exc)
+            console.error("device was not created")
             await uow.rollback()
             raise typer.Exit(1)
         else:
