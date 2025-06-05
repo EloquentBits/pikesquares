@@ -138,19 +138,31 @@ class ProcessCompose(ManagedServiceBase):
         return self.__repr__()
 
     async def write_config_to_disk(self) -> None:
-        if self.daemon_config:  # and await AsyncPath(self.daemon_config).exists():
-            config = AsyncPath(self.daemon_config)
-            await config.write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
+        if self.daemon_config:
+            await AsyncPath(self.daemon_config).\
+            write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
+
+    async def add_tail_log_process(self, name: str, logfile: Path):
+        self.config.processes["-".join([name, "logs"])] = Process(
+                description=f"logfile {name}",
+                disabled=False,
+                command=f"tail -f {logfile}",
+                working_dir=self.data_dir,
+                availability=ProcessAvailability(),
+                # readiness_probe=ReadinessProbe(
+                #    http_get=ReadinessProbeHttpGet()
+                # ),
+        )
+        await self.reload()
 
     async def reload(self):
         """docket-compose project update"""
-        if not self.daemon_socket or not await AsyncPath(self.daemon_socket).exists():
-            raise PCAPIUnavailableError()
-
         await self.write_config_to_disk()
         try:
             self.cmd_args.insert(0, "project")
             self.cmd_args.insert(1, "update")
+            self.cmd_args.insert(2, "--config")
+            self.cmd_args.insert(3, str(self.daemon_config))
             return self.cmd(self.cmd_args, cmd_env=self.cmd_env)
         except ProcessExecutionError as exc:
             logger.error(exc)

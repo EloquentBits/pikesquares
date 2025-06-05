@@ -236,11 +236,10 @@ class AttachedDaemon(ServiceBase, table=True):
 class ManagedServiceBase(pydantic.BaseModel):
 
     daemon_name: str
-    daemon_bin: Annotated[Path, pydantic.Field()]
-    daemon_log: Annotated[Path, pydantic.Field()] | None = None
-    daemon_config: Annotated[Path, pydantic.Field()] | None = None
-    daemon_socket: Annotated[Path, pydantic.Field()] | None = None
-
+    daemon_bin: Annotated[pydantic.FilePath, pydantic.Field()]
+    daemon_log: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
+    daemon_config: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
+    daemon_socket: Annotated[pydantic.SocketPath, pydantic.Field()] | None = None
     data_dir: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
 
     class Config:
@@ -263,11 +262,11 @@ class ManagedServiceBase(pydantic.BaseModel):
         if not cmd_args:
             raise Exception(f"no args provided for e {self.daemon_name} command")
 
+        print(cmd_args)
+
         try:
             if cmd_env:
                 pl_local.env.update(cmd_env)
-                logger.debug(f"{cmd_env=}")
-
             # with pl_local.as_user(run_as_user):
             with pl_local.cwd(chdir or self.data_dir):
                 retcode, stdout, stderr = pl_local[str(self.daemon_bin)].run(cmd_args, **{"env": cmd_env})

@@ -12,9 +12,15 @@ import questionary
 # )
 from pikesquares import services
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers.project import provision_project
+from pikesquares.service_layer.handlers.project import provision_project, project_up
+from pikesquares.service_layer.handlers.routers import http_router_up
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.base import ServiceBase
+from pikesquares.domain.process_compose import (
+    ProcessCompose,
+    Process, 
+    ProcessAvailability,
+)
 from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
 from pikesquares.cli.validators import ServiceNameValidator
@@ -54,27 +60,30 @@ async def create(
     """
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
+    conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
 
     machine_id = await ServiceBase.read_machine_id()
     device = await uow.devices.get_by_machine_id(machine_id)
 
+    #answers = questionary.form(
+    #    first = questionary.confirm("Would you like the next question?", default=True),
+    #    second = questionary.select("Select item", choices=["item1", "item2", "item3"])
+    #).ask()
+
     project_src = await questionary.select(
         "Provision project from: ",
-        choices=[
-            "Preconfigured template",
-            "Empty project",
-            #questionary.Separator(),
-            #questionary.Choice("ruby/Rack", disabled="coming soon"),
-            #questionary.Choice("PHP", disabled="coming soon"),
-            #questionary.Choice("perl/PSGI", disabled="coming soon"),
-        ],
+        choices=["Preconfigured template", "Empty project"],
         style=custom_style,
     ).ask_async()
     if not project_src:
-        raise typer.Exit(1)
+        raise typer.Exit(0)
 
-    print(project_src)
+    #questionary.print(
+    #    "Hello World ",
+        #style="bold italic fg:darkred"
+    #)
+
     if project_src == "Empty project":
         name = await questionary.text(
             "Choose a name for your project: ",
@@ -82,43 +91,56 @@ async def create(
             style=custom_style,
             #validate=NameValidator,
         ).ask_async()
+        if not name:
+            raise typer.Exit(0)
 
-        project_services = [
-            "http-router",
-            "tuntap-router",
-            "forkpty-router",
-            questionary.Separator(),
-            "zmq-monitor",
-            questionary.Choice(
-                "dir-monitor", disabled="coming soon"
-            ),
-        ]
-        selected_services = await questionary.checkbox(
-            "Provision services: ",
-            choices=project_services,
-            style=custom_style,
-        ).ask_async()
+        try:
+            selected_services = await questionary.checkbox(
+                "Provision services: ",
+                choices=[
+                    questionary.Choice("http-router", value="http-router", checked=True),
+                    questionary.Choice("tuntap-router", value="tuntap-router", checked=True),
+                    questionary.Choice("forkpty-router", value="forkpty-router", disabled="coming soone"),
+                    questionary.Separator(),
+                    questionary.Choice("zmq-monitor",  value="zmq-monitor",  checked=True),
+                    questionary.Choice("dir-monitor", value="dir-monitor", disabled="coming soon"),
+                ],
+                style=custom_style,
+            ).unsafe_ask_async()
+        except KeyboardInterrupt:
+            raise typer.Exit(0)
 
-        console.info(f"Provisioning project {name}")
+        questionary.print(f"Provisioning project {name}")
         async with uow:
             try:
-                project = await provision_project(
-                    name,
-                    device,
-                    uow,
-                    selected_services=selected_services,
-                )
+                project = await provision_project(name, device, uow, selected_services=selected_services)
+                #questionary.print(f"Provisioned project {name}")
+                console.success(f":heavy_check_mark:     Provisioned project {name}")
+                if await questionary.confirm("Launch Project?").ask_async():
+                    project_up_result = await project_up(project)
+                    if not project_up_result:
+                        console.error(f"Unable to launch project {project.name}")
+                        raise typer.Exit(1)
+                    console.success(f":heavy_check_mark:     Launched project {name}")
+
+                    process_compose = await services.aget(context, ProcessCompose)
+                    await process_compose.add_tail_log_process(project.name, project.log_file)
+
+                project_http_routers = await project.awaitable_attrs.http_routers
+                for http_router in project_http_routers:
+                    http_router_up_result = await http_router_up(uow, http_router)
+                    if http_router_up_result:
+                        console.success(":heavy_check_mark:     Launching http router.. Done!")
+                        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+                        await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+
             except Exception as exc:
                 logger.exception(exc)
-                console.error(f"unable to provision project {name}")
+                console.error(f"Unable to provision project {name}")
                 await uow.rollback()
                 raise typer.Exit(1) from None
             else:
                 await uow.commit()
-
-        if project:
-            console.info(f"Provisioned project {name}")
-
 
     if 0:
         name = project_name or console.ask(
