@@ -1,4 +1,5 @@
 import grp
+from asyncio import sleep
 import json
 import os
 from enum import Enum
@@ -148,7 +149,11 @@ class ProcessCompose(ManagedServiceBase):
         """
 
         if not logfile.exists():
-            logger.info(f"{logfile} does not exist yet. try again at a later time.")
+            logger.info(f"{logfile} does not exist yet. sleeping")
+            await sleep(5)
+
+        if not logfile.exists():
+            logger.info(f"{logfile} does not exist yet. giving up")
             return
 
         self.config.processes["-".join([name, "logs"])] = Process(
@@ -166,6 +171,7 @@ class ProcessCompose(ManagedServiceBase):
     async def reload(self):
         """docket-compose project update"""
         await self.write_config_to_disk()
+        logger.info(f"new config. reloading process compose")
         try:
             self.cmd_args.insert(0, "project")
             self.cmd_args.insert(1, "update")
@@ -331,7 +337,8 @@ async def register_process_compose(context: dict) -> None:
 
 
 def device_close():
-    logger.debug("device closed")
+    ...
+    #logger.debug("device closed")
 
 
 async def device_ping(device_data: tuple[DeviceProcess, ProcessMessages]):
@@ -383,7 +390,8 @@ async def register_device_process(context: dict, machine_id: str) -> None:
 
 
 def api_close():
-    logger.debug("api closed")
+    ...
+    #logger.debug("api closed")
 
 
 async def api_ping(api_data: tuple[APIProcess, ProcessMessages]):
@@ -427,7 +435,8 @@ async def register_api_process(context: dict) -> None:
 
 
 def dnsmasq_close():
-    logger.debug("dnsmasq closed")
+    ...
+    #logger.debug("dnsmasq closed")
 
 
 async def dnsmasq_ping(dnsmasq_data: tuple[DNSMASQProcess, ProcessMessages]):
