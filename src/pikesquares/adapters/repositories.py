@@ -37,7 +37,19 @@ class GenericRepository(Generic[T], ABC):
         """Get a single record by id.
 
         Args:
-            id (int): Record id.
+            id (str): Record id.
+
+        Returns:
+            T | None: Record or none.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def get_by_service_id(self, service_id: str) -> T | None:
+        """Get a single record by service_id.
+
+        Args:
+            service_id (str): Record service_id.
 
         Returns:
             T | None: Record or none.
@@ -121,9 +133,17 @@ class GenericSqlRepository(GenericRepository[T], ABC):
     async def get_by_id(self, id: str) -> T | None:
         stmt = self._construct_get_stmt(id)
         results = await self._session.exec(stmt)
-        # import ipdb;ipdb.set_trace()
         if results:
-            obj = await results.first()
+            obj = results.one_or_none()
+            return obj
+
+    async def get_by_service_id(self, service_id: str) -> T | None:
+        stmt = select(self._model_cls).\
+            where(self._model_cls.service_id == service_id)
+        results = await self._session.exec(stmt)
+        if results:
+            obj = results.one_or_none()
+            logger.debug(f"sql repo: retrieved by service_id {obj}")
             return obj
 
     def _construct_list_stmt(self, **filters) -> SelectOfScalar:
@@ -166,7 +186,7 @@ class GenericSqlRepository(GenericRepository[T], ABC):
         return record
 
     async def delete(self, id: str) -> None:
-        record: T = self.get_by_id(id)
+        record: T = await self.get_by_id(id)
         if record is not None:
             await self._session.delete(record)
             await self._session.flush()
@@ -213,8 +233,8 @@ class DeviceUWSGIOptionsRepository(GenericSqlRepository[DeviceUWSGIOptions], Dev
             return results.all()
 
 
-class ProjectReposityBase(GenericRepository[Project], ABC):
     """Project repository."""
+class ProjectReposityBase(GenericRepository[Project], ABC):
 
     @abstractmethod
     async def get_by_name(self, name: str) -> Project | None:

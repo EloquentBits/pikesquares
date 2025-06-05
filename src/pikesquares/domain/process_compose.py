@@ -142,7 +142,15 @@ class ProcessCompose(ManagedServiceBase):
             await AsyncPath(self.daemon_config).\
             write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
 
-    async def add_tail_log_process(self, name: str, logfile: Path):
+    async def add_tail_log_process(self, name: str, logfile: Path) -> None:
+        """
+        create a process compose process that tails the service log file
+        """
+
+        if not logfile.exists():
+            logger.info(f"{logfile} does not exist yet. try again at a later time.")
+            return
+
         self.config.processes["-".join([name, "logs"])] = Process(
                 description=f"logfile {name}",
                 disabled=False,
@@ -303,9 +311,11 @@ async def register_process_compose(context: dict) -> None:
             "daemon_name": "process-compose",
             "daemon_bin": conf.PROCESS_COMPOSE_BIN,
             "daemon_config": conf.config_dir / "process-compose.yaml",
-            "daemon_log": conf.log_dir / "process-compose.log",
-            "daemon_socket": conf.run_dir / "process-compose.sock",
+            #"daemon_log": conf.log_dir / "process-compose.log",
+            #"daemon_socket": conf.run_dir / "process-compose.sock",
             "data_dir": conf.data_dir,
+            "run_dir": conf.run_dir,
+            "log_dir": conf.log_dir,
             "uv_bin": conf.UV_BIN,
         }
 

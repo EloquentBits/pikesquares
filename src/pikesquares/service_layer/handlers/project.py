@@ -188,3 +188,24 @@ async def project_up(project)  -> bool:
 
     except Exception as exc:
         raise
+
+async def project_delete(
+    project: Project,
+    uow: UnitOfWork,
+)  -> bool:
+    try:
+        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        for tuntap_router in await project.awaitable_attrs.tuntap_routers:
+            await uow.tuntap_routers.delete(tuntap_router.id)
+            logger.info(f"deleted tuntap router {tuntap_router.service_id}")
+
+        project_http_routers = await project.awaitable_attrs.http_routers
+        for http_router in project_http_routers:
+            await uow.http_routers.delete(http_router.id)
+            logger.info(f"deleted http router {http_router.service_id}")
+
+        await uow.projects.delete(project.id)
+        logger.info(f"deleted project {project.name}")
+
+    except Exception as exc:
+        raise

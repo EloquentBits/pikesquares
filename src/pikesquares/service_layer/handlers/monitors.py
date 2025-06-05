@@ -1,3 +1,4 @@
+from typing import Union
 import structlog
 import zmq
 import zmq.asyncio
@@ -16,7 +17,7 @@ async def create_zmq_monitor(
     project: Project | None = None,
 ) -> ZMQMonitor:
     try:
-        create_kwargs: dict[str, str | Project | Device] = {"transport": "ipc"}
+        create_kwargs: dict[str, Union[str, Project, Device]] = {"transport": "ipc"}
         if device:
             create_kwargs["device"] = device
             create_kwargs["socket_address"] = str(device.zmq_monitor_socket)
