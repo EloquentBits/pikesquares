@@ -4,6 +4,7 @@ from pathlib import Path
 
 import cuid
 import structlog
+from aiopath import AsyncPath
 
 from pikesquares import get_first_available_port
 
@@ -282,6 +283,11 @@ async def http_router_up(
                 return True
             except StatsReadError:
                 print(f"project is running. launching http router on {project_zmq_monitor_address}")
+
+                assert await \
+                    AsyncPath(project_zmq_monitor.socket_address).exists() and \
+                    await AsyncPath(project_zmq_monitor.socket_address).is_socket(), f"{project_zmq_monitor_address} not available"
+
                 await create_or_restart_instance(
                     project_zmq_monitor_address,
                     f"{http_router.service_id}.ini",
