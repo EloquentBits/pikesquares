@@ -12,7 +12,11 @@ import questionary
 # )
 from pikesquares import services
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers.project import provision_project, project_up
+from pikesquares.service_layer.handlers.project import (
+    provision_project,
+    project_up,
+    project_delete,
+)
 from pikesquares.service_layer.handlers.routers import http_router_up
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.base import ServiceBase
@@ -272,7 +276,8 @@ def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
 
 @app.command(short_help="Delete existing project by name or id\nAliases:[i] delete, rm")
 @app.command("rm", hidden=True)
-def delete(
+@run_async
+async def delete(
     ctx: typer.Context,
     project_name: Optional[str] = typer.Argument("", help="Name of project to remove"),
 ):
@@ -281,10 +286,48 @@ def delete(
 
     Aliases:[i] delete, rm
     """
-    obj = ctx.ensure_object(dict)
-    conf = obj.get("conf")
+    context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+    conf = await services.aget(context, AppConfig)
+    uow = await services.aget(context, UnitOfWork)
 
-    # device_db = obj['device']
+    machine_id = await ServiceBase.read_machine_id()
+    device = await uow.devices.get_by_machine_id(machine_id)
+
+    async with uow:
+        try:
+            selected_projects = await questionary.checkbox(
+                "Existing projects: ",
+                choices=[
+                    questionary.Choice(
+                        project.name, value=project.id, checked=True
+                    ) for project in await device.awaitable_attrs.projects 
+                ],
+                style=custom_style,
+            ).unsafe_ask_async()
+        except KeyboardInterrupt:
+            raise typer.Exit(0)
+
+        for project_id in selected_projects:
+            if not project_id:
+                continue
+
+            #project = await uow.projects.get_by_service_id(project_service_id)
+            #project = await uow.projects.get_by_id(project_id)
+
+            for project in filter(
+                    lambda proj: proj.id == project_id, 
+                    await device.awaitable_attrs.projects
+                ):
+                try:
+                    await project_delete(project, uow)
+                except Exception as exc:
+                    logger.exception(exc)
+                    console.error(f"Unable to delete project {project.name}")
+                    await uow.rollback()
+                    raise typer.Exit(1) from None
+                else:
+                    await uow.commit()
 
     # projects_choices = {
     #    k.get('name'): (k.get('cuid'), k.get('path'))
