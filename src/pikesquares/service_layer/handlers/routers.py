@@ -286,7 +286,7 @@ async def http_router_up(
 
                 assert await \
                     AsyncPath(project_zmq_monitor.socket_address).exists() and \
-                    AsyncPath(project_zmq_monitor.socket_address).is_socket(), f"{project_zmq_monitor_address} not available"
+                    await AsyncPath(project_zmq_monitor.socket_address).is_socket(), f"{project_zmq_monitor_address} not available"
 
                 await create_or_restart_instance(
                     project_zmq_monitor_address,

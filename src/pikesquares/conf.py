@@ -280,6 +280,10 @@ class AppConfig(BaseSettings):
         return ensure_system_path(self.config_dir / "caddy.json", is_dir=False)
 
     @property
+    def process_compose_config_path(self) -> Path:
+        return ensure_system_path(self.config_dir / "process-compose.yaml", is_dir=False)
+
+    @property
     def sqlite_plugin(self) -> Path:
         return self.plugins_dir / "sqlite3_plugin.so"
 
