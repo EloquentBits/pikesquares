@@ -294,6 +294,10 @@ async def delete(
     machine_id = await ServiceBase.read_machine_id()
     device = await uow.devices.get_by_machine_id(machine_id)
 
+    if not len(await device.awaitable_attrs.projects):
+        console.success("Appears there have been not projects created.")
+        raise typer.Exit(0)
+
     async with uow:
         try:
             selected_projects = await questionary.checkbox(
