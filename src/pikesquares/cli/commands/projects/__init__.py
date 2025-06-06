@@ -313,7 +313,7 @@ async def delete(
     device = await uow.devices.get_by_machine_id(machine_id)
 
     if not len(await device.awaitable_attrs.projects):
-        console.success("Appears there have been not projects created.")
+        console.success("Appears there have been no projects created yet.")
         raise typer.Exit(0)
 
     async with uow:

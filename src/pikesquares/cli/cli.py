@@ -293,12 +293,15 @@ def attach(
 async def launch(
     ctx: typer.Context,
 ):
-    """Launch a preconfigured app """
+    """Launch a preconfigured app or attached daemon"""
 
     context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
-    custom_style = context.get("cli-style")
+    machine_id = await ServiceBase.read_machine_id()
+    device = await uow.devices.get_by_machine_id(machine_id)
 
     #try:
     #    vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
@@ -307,73 +310,74 @@ async def launch(
     #    project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
     #    vassals_home = project_zmq_monitor.uwsgi_zmq_address
     #    await project.up(device_zmq_monitor, vassals_home, tuntap_router)
+    #
+    launch_service_q = questionary.select(
+        "Select an app or service to launch: ",
+        choices=[
+            questionary.Choice("PostgreSQL", value="postgres"),
+            questionary.Choice("Redis", value="redis"),
+            questionary.Separator(),
+            questionary.Choice("Python/WSGI", value="python-wsgi"),
+            questionary.Separator(),
+            questionary.Choice("ruby/Rack", disabled="coming soon"),
+            questionary.Choice("PHP", disabled="coming soon"),
+            questionary.Choice("perl/PSGI", disabled="coming soon"),
+        ],
+        style=custom_style,
+    )
+    launch_service = await launch_service_q.ask_async()
+    print(launch_service)
 
-    if 0:
-        async with uow:
-            attached_daemons = await uow.attached_daemons.list()
-            for daemon in attached_daemons:
-                logger.info(daemon)
+    if launch_service  in ["postgres", "redis"]:
 
-            daemon_q = questionary.checkbox(
-                "Select daemon: ",
-                choices=[d.service_id for d in attached_daemons],
-                style=custom_style,
-            )
-            daemon = await daemon_q.ask_async()
-            print(daemon)
+        launch_into_q = questionary.select(
+            "Launch into an existing project or standalone: ",
+            choices=[
+                questionary.Choice("Existing Project", value="existing_project"),
+                questionary.Choice("Standalone", value="standalone"),
+            ],
+            style=custom_style,
+        )
+        launch_into = await launch_into_q.ask_async()
+        print(launch_into)
+        project = None
 
-    def git_clone(repo_url: str, clone_into_dir: Path):
-        class CloneProgress(git.RemoteProgress):
-            def update(self, op_code, cur_count, max_count=None, message=""):
-                # console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
-                if message:
-                    console.info(f"Completed git clone {message}")
+        if launch_into == "existing_project":
+            if not len(await device.awaitable_attrs.projects):
+                console.success("Appears there have been no projects created.")
+                raise typer.Exit()
 
-        clone_into_dir.mkdir(exist_ok=True)
-        if not any(clone_into_dir.iterdir()):
             try:
-                return git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
-            except git.GitCommandError as exc:
-                logger.exception(exc)
-            # if "already exists and is not an empty directory" in exc.stderr:
-                pass
+                selected_project_id = await questionary.select(
+                    "Select a project: ",
+                    choices=[
+                        questionary.Choice(
+                            project.name, value=project.id
+                        ) for project in await device.awaitable_attrs.projects 
+                    ],
+                    style=custom_style,
+                ).unsafe_ask_async()
+            except KeyboardInterrupt:
+                raise typer.Exit()
 
-    repo_url = "https://github.com/bugsink/bugsink.git"
-    giturl = giturlparse.parse(repo_url)
-    app_name = giturl.name
-    app_root_dir = AsyncPath(conf.pyapps_dir) / app_name
-    await app_root_dir.mkdir(exist_ok=True)
-    app_repo_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
-    app_pyvenv_dir = app_repo_dir / ".venv"
-    try:
-        repo = git_clone(repo_url, Path(app_repo_dir))
-    except Exception as exc:
-        logger.exception(exc)
-        console.error(f"unable to clone {app_name} repo from {repo_url}")
-        raise typer.Exit(1) from None
+            #project = await uow.projects.get_by_service_id(project_service_id)
+            project = await uow.projects.get_by_id(selected_project_id)
+            print(f"launching into project {project}")
 
-    project_name = app_name
-    async with uow:
-        try:
-            machine_id = await ServiceBase.read_machine_id()
-            device = await uow.devices.get_by_machine_id(machine_id)
-            project = await uow.projects.get_by_name(project_name) or \
-                await provision_project(project_name, device, uow)
-            project_up_result = await project_up(project)
-            if not project_up_result:
-                console.error(f"unable to launch {project.name}")
-                raise typer.Exit(1)
+        attached_daemon_name = launch_service
+        attached_daemon_bind_port = None
+        attached_daemon_bind_ip = None
 
-            http_routers = await project.awaitable_attrs.http_routers
-            for http_router in http_routers:
-                await http_router_up(uow, http_router)
+        if not project:
+            console.warning("no project selected. exiting")
+            raise typer.Exit()
 
-            if 1: #attached_daemon:
-                #attached_daemon_name = "redis"
-                attached_daemon_name = "postgres"
-                attached_daemon_bind_port = None
-                attached_daemon_bind_ip = None
-
+        async with uow:
+            #attached_daemons = await uow.attached_daemons.list()
+            #for daemon in attached_daemons:
+            #    logger.info(daemon)
+            #attached_daemon_choices = [d.service_id for d in attached_daemons]
+            try:
                 attached_daemon = await provision_attached_daemon(
                     attached_daemon_name, project, uow,
                 )
@@ -386,31 +390,82 @@ async def launch(
                     bind_ip=attached_daemon_bind_ip,
                     bind_port=attached_daemon_bind_port,
                 )
-                if 0:
-                    if attached_daemon.ping("/usr/local/bin/redis-cli", attached_daemon_device.ip):
-                        console.success(f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!")
-                    else:
-                        console.error(f"{attached_daemon_name} ping failed.")
+            except Exception as exc:
+                logger.exception(exc)
+                await uow.rollback()
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
 
-            wsgi_app = await provision_wsgi_app(
-                app_name,
-                app_root_dir,
-                app_repo_dir,
-                app_pyvenv_dir,
-                conf.UV_BIN,
-                uow,
-                project,
-            )
+            if 0:
+                if attached_daemon.ping("/usr/local/bin/redis-cli", attached_daemon_device.ip):
+                    console.success(f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!")
+                else:
+                    console.error(f"{attached_daemon_name} ping failed.")
+    else:
 
-            await wsgi_app_up(uow, wsgi_app, project, http_routers[0], console)
+        def git_clone(repo_url: str, clone_into_dir: Path):
+            class CloneProgress(git.RemoteProgress):
+                def update(self, op_code, cur_count, max_count=None, message=""):
+                    # console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
+                    if message:
+                        console.info(f"Completed git clone {message}")
 
+            clone_into_dir.mkdir(exist_ok=True)
+            if not any(clone_into_dir.iterdir()):
+                try:
+                    return git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
+                except git.GitCommandError as exc:
+                    logger.exception(exc)
+                # if "already exists and is not an empty directory" in exc.stderr:
+                    pass
+
+        repo_url = "https://github.com/bugsink/bugsink.git"
+        giturl = giturlparse.parse(repo_url)
+        app_name = giturl.name
+        app_root_dir = AsyncPath(conf.pyapps_dir) / app_name
+        await app_root_dir.mkdir(exist_ok=True)
+        app_repo_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
+        app_pyvenv_dir = app_repo_dir / ".venv"
+        try:
+            repo = git_clone(repo_url, Path(app_repo_dir))
         except Exception as exc:
             logger.exception(exc)
-            await uow.rollback()
+            console.error(f"unable to clone {app_name} repo from {repo_url}")
             raise typer.Exit(1) from None
-        else:
-            await uow.commit()
 
+        project_name = app_name
+        async with uow:
+            try:
+                project = await uow.projects.get_by_name(project_name) or \
+                    await provision_project(project_name, device, uow)
+                project_up_result = await project_up(project)
+                if not project_up_result:
+                    console.error(f"unable to launch {project.name}")
+                    raise typer.Exit(1)
+
+                http_routers = await project.awaitable_attrs.http_routers
+                for http_router in http_routers:
+                    await http_router_up(uow, http_router)
+
+                wsgi_app = await provision_wsgi_app(
+                    app_name,
+                    app_root_dir,
+                    app_repo_dir,
+                    app_pyvenv_dir,
+                    conf.UV_BIN,
+                    uow,
+                    project,
+                )
+
+                await wsgi_app_up(uow, wsgi_app, project, http_routers[0], console)
+
+            except Exception as exc:
+                logger.exception(exc)
+                await uow.rollback()
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")
 @run_async
