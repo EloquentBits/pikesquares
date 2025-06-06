@@ -67,16 +67,17 @@ async def provision_project(
 
 async def project_up(project)  -> bool:
     try:
-        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
         section = ProjectSection(project)
 
-        section.empire.set_emperor_params(
-            vassals_home=project_zmq_monitor.uwsgi_zmq_address,
-            name=f"{project.service_id}",
-            stats_address=project.stats_address,
-            spawn_asap=True,
-            # pid_file=str((Path(conf.RUN_DIR) / f"{project.service_id}.pid").resolve()),
-        )
+        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        if project_zmq_monitor:
+            section.empire.set_emperor_params(
+                vassals_home=project_zmq_monitor.uwsgi_zmq_address,
+                name=f"{project.service_id}",
+                stats_address=project.stats_address,
+                spawn_asap=True,
+                # pid_file=str((Path(conf.RUN_DIR) / f"{project.service_id}.pid").resolve()),
+            )
         for tuntap_router in await project.awaitable_attrs.tuntap_routers:
             router_cls = section.routing.routers.tuntap
             router = router_cls(
@@ -168,13 +169,12 @@ async def project_up(project)  -> bool:
                 change_dir=redis_dir,
             )
         try:
-            _ = Project.read_stats(project.stats_address)
+            _ = await project.read_stats()
             logger.info(f"{project.name} [{project.service_id}]. is already running!")
             return True
         except StatsReadError:
             print(section.as_configuration().format())
 
-        #project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
         device = await project.awaitable_attrs.device
         device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
         device_zmq_monitor_address = device_zmq_monitor.zmq_address
@@ -194,7 +194,7 @@ async def project_delete(
     uow: UnitOfWork,
 )  -> bool:
     try:
-        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        #project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
         for tuntap_router in await project.awaitable_attrs.tuntap_routers:
             await uow.tuntap_routers.delete(tuntap_router.id)
             logger.info(f"deleted tuntap router {tuntap_router.service_id}")

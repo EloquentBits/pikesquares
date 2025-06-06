@@ -152,7 +152,7 @@ async def attached_daemon_up(
         )
 
         try:
-            _ = AttachedDaemon.read_stats(attached_daemon.stats_address)
+            _ = await attached_daemon.read_stats()
             logger.info(f"Attached Daemon {attached_daemon.name} is already running")
         except StatsReadError:
             print(section.as_configuration().format())
@@ -160,7 +160,7 @@ async def attached_daemon_up(
             project_zmq_monitor_address = project_zmq_monitor.zmq_address
             logger.info(f"launching Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
             try:
-                _ = AttachedDaemon.read_stats(attached_daemon.stats_address)
+                _ = await attached_daemon.read_stats()
                 logger.info(f"Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address} is already running")
                 return True
             except StatsReadError:

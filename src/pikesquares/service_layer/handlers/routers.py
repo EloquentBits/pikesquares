@@ -272,24 +272,23 @@ async def http_router_up(
         )
 
         try:
-            _ = HttpRouter.read_stats(http_router.stats_address)
+            _ = await http_router.read_stats()
             return True
         except StatsReadError:
             project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
-            project_zmq_monitor_address = project_zmq_monitor.zmq_address
             print(section.as_configuration().format())
             try:
-                _ = Project.read_stats(project.stats_address)
+                _ = await project.read_stats()
                 return True
             except StatsReadError:
-                print(f"project is running. launching http router on {project_zmq_monitor_address}")
+                print(f"project is running. launching http router on {project_zmq_monitor.socket_address}")
 
                 assert await \
                     AsyncPath(project_zmq_monitor.socket_address).exists() and \
-                    await AsyncPath(project_zmq_monitor.socket_address).is_socket(), f"{project_zmq_monitor_address} not available"
+                    await AsyncPath(project_zmq_monitor.socket_address).is_socket(), f"{project_zmq_monitor.socket_address} not available"
 
                 await create_or_restart_instance(
-                    project_zmq_monitor_address,
+                    project_zmq_monitor.zmq_address,
                     f"{http_router.service_id}.ini",
                     section.as_configuration().format(do_print=True),
                 )

@@ -15,11 +15,8 @@ import structlog
 
 
 from pikesquares.conf import AppConfig
-from pikesquares.services.project import SandboxProject, Project
-from pikesquares.services.router import (
-    HttpRouter,
-    HttpsRouter,
-)
+from pikesquares.domain.project import Project
+from pikesquares.domain.router import HttpRouter
 
 from .validators import (
     RepoAddressValidator,

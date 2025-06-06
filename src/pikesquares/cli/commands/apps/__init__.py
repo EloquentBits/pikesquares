@@ -2,26 +2,22 @@ import time
 from enum import Enum
 from glob import glob
 from pathlib import Path
-from typing import Optional, Annotated
+from typing import Optional
 
 import questionary
 import randomname
 import structlog
 import typer
 from cuid import cuid
+from typing_extensions import Annotated
 
 from pikesquares import services
-from pikesquares.cli.cli import run_async
 from pikesquares.conf import AppConfig
-from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.exceptions import StatsReadError
-from pikesquares.services.app import WsgiApp
+from pikesquares.cli.cli import run_async
+from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.services.data import Router, WsgiAppOptions
-from pikesquares.services.project import Project, SandboxProject
-from pikesquares.services.router import (
-    DefaultHttpRouter,
-    DefaultHttpsRouter,
-)
+from pikesquares.domain.project import Project
+from pikesquares.domain.router import HttpRouter
 
 from ...console import console
 from .utils import (
@@ -57,11 +53,8 @@ def detect(
     """
     context = ctx.ensure_object(dict)
 
-    db = services.get(context, TinyDB)
     conf = services.get(context, AppConfig)
-
     custom_style = context.get("cli-style")
-
     logger.info("Detecting project")
 
 
@@ -131,6 +124,7 @@ def create(
     if not app_name:
         raise typer.Exit()
 
+
     # app_project = get_project(
     #    db,
     #    conf,
@@ -138,7 +132,7 @@ def create(
     #    services.get(context, SandboxProject),
     #    custom_style,
     # )
-    app_project = services.get(context, SandboxProject)
+    #app_project = services.get(context, SandboxProject)
     app_options["project_id"] = app_project.service_id
 
     # Runtime
@@ -433,49 +427,6 @@ def delete(
     """
     obj = ctx.ensure_object(dict)
     custom_style = obj.get("cli-style")
-
-    db = services.get(obj, TinyDB)
-    device = services.get(obj, services.Device)
-
-    selected_app_cuid = None
-    if not app_name:
-        apps_db = db.table("apps")
-        apps_all = apps_db.all()
-        if not len(apps_all):
-            console.info("no apps available.")
-            raise typer.Exit()
-
-        apps_choices = []
-        for app in apps_all:
-            apps_choices.append(
-                questionary.Choice(
-                    f"{app.get('name')} [{app.get('service_id')}",
-                    value=app.get("service_id"),
-                )
-            )
-        prompt_apps_to_delete = questionary.checkbox(
-            "Select the app(s) to be deleted?",
-            choices=apps_choices,
-            style=custom_style,
-        )
-        for selected_app_cuid in prompt_apps_to_delete.ask() or []:
-            console.info(f"selected app to delete: {selected_app_cuid=}")
-
-            # rm app configs
-            app = apps_db.get(Query().service_id == selected_app_cuid)
-            project_id = app.get("project_id")
-            selected_app_config_path = device.config_dir / f"{project_id}" / "apps" / f"{selected_app_cuid}.json"
-
-            if selected_app_config_path.exists():
-                selected_app_config_path.unlink(missing_ok=True)
-                console.info(f"deleted app config @ {selected_app_cuid}")
-            else:
-                console.info(f"{str(selected_app_config_path)} does not exist")
-
-            apps_db.remove(where("service_id") == selected_app_cuid)
-            console.success(f"Removed app [{selected_app_cuid}]")
-
-
 @app.command(short_help="Rebuild configs for an existing app by name or id\nAliases:[i] rebuild-config, rc")
 @app.command()
 def rebuild_config(
@@ -504,7 +455,7 @@ def rebuild_config(
     # "project_id": "project_sandbox",
 
     wsgi_app_handler = services.HandlerFactory.make_handler("WSGI-App")(
-        services.WsgiApp(
+        WsgiApp(
             name=app.get("name"),
             service_id=selected_app_cuid,
             conf=conf,

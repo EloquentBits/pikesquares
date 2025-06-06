@@ -516,21 +516,25 @@ async def up(
         projects = await device.awaitable_attrs.projects
         for project in projects:
             try:
-                project_up_result = await project_up(project)
-                if project_up_result:
-                    console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
-                    await process_compose.add_tail_log_process(project.name, project.log_file)
+                if await project_up(project) or \
+                    not await project.read_stats():
+                    console.success(f":heavy_check_mark:     Launched project [{project.name}]. Done!")
+                    #await process_compose.add_tail_log_process(project.name, project.log_file)
+            except tenacity.RetryError:
+                    console.warning(f"Project {project.name} has not launched. Giving up.")
+                    continue
             except Exception as exc:
                 logger.exception(exc)
-                console.error(f"unable to launch {project.name}")
+                console.warning(f"Project {project.name} has not launched. Giving up.")
                 continue
+
             project_http_routers = await project.awaitable_attrs.http_routers
             for http_router in project_http_routers:
                 http_router_up_result = await http_router_up(uow, http_router)
                 if http_router_up_result:
                     console.success(":heavy_check_mark:     Launching http router.. Done!")
                     console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-                    await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+                    #await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
 
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")
