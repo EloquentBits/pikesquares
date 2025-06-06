@@ -136,15 +136,12 @@ async def create(
                     if not await project_up(project):
                         console.error(f"Unable to launch project {project.name}")
                         raise typer.Exit(1)
-                    try:
-                        stats = await project.read_stats()
-                    except tenacity.RetryError:
-                        console.error(f"Unable to read stats {project.name}")
-                        raise typer.Exit(1)
-
-                except tenacity.RetryError:
-                        console.error(f"RetryError. Unable to launch project {project.name}")
-                        raise typer.Exit(1)
+                    if 0:
+                        try:
+                            stats = await project.read_stats()
+                        except tenacity.RetryError:
+                            console.error(f"Unable to read stats {project.name}")
+                            raise typer.Exit(1)
                 #await process_compose.add_tail_log_process(project.name, project.log_file)
                 except Exception as exc:
                     logger.exception(exc)

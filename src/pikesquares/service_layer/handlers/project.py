@@ -1,6 +1,7 @@
 import cuid
 import structlog
 from aiopath import AsyncPath
+import tenacity
 
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
@@ -168,22 +169,27 @@ async def project_up(project)  -> bool:
                 new_pid_ns="false",
                 change_dir=redis_dir,
             )
-        try:
-            _ = await project.read_stats()
-            logger.info(f"{project.name} [{project.service_id}]. is already running!")
-            return True
-        except StatsReadError:
-            print(section.as_configuration().format())
+        #try:
+        #    _ = await project.read_stats()
+        #    logger.info(f"{project.name} [{project.service_id}]. is already running!")
+        #    return True
+        #except StatsReadError:
+        #    print(section.as_configuration().format())
 
         device = await project.awaitable_attrs.device
         device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
         device_zmq_monitor_address = device_zmq_monitor.zmq_address
-        print(f"launching project {project.name} {project.service_id} @ {device_zmq_monitor_address}")
+        logger.info(f"launching project {project.name} {project.service_id} @ {device_zmq_monitor_address}")
         await create_or_restart_instance(
             device_zmq_monitor_address,
             f"{project.service_id}.ini",
             section.as_configuration().format(do_print=True),
         )
+        try:
+            stats = await project.read_stats()
+        except tenacity.RetryError:
+            logger.error(f"Unable to read stats {project.name}")
+            return False 
         return True
 
     except Exception as exc:

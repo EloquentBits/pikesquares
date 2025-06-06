@@ -271,28 +271,30 @@ async def http_router_up(
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
 
+        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        if not project_zmq_monitor:
+            return False
+        #print(section.as_configuration().format())
+        #try:
+        #    _ = await project.read_stats()
+        #    return True
+        #except tenacity.RetryError:
+        #    logger.info(f"project is running. launching http router on {project_zmq_monitor.socket_address}")
+
+        #assert await \
+        #    AsyncPath(project_zmq_monitor.socket_address).exists() and \
+        #    await AsyncPath(project_zmq_monitor.socket_address).is_socket(), f"{project_zmq_monitor.socket_address} not available"
+
+        await create_or_restart_instance(
+            project_zmq_monitor.zmq_address,
+            f"{http_router.service_id}.ini",
+            section.as_configuration().format(do_print=True),
+        )
         try:
-            _ = await http_router.read_stats()
-            return True
-        except StatsReadError:
-            project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
-            print(section.as_configuration().format())
-            try:
-                _ = await project.read_stats()
-                return True
-            except StatsReadError:
-                print(f"project is running. launching http router on {project_zmq_monitor.socket_address}")
-
-                assert await \
-                    AsyncPath(project_zmq_monitor.socket_address).exists() and \
-                    await AsyncPath(project_zmq_monitor.socket_address).is_socket(), f"{project_zmq_monitor.socket_address} not available"
-
-                await create_or_restart_instance(
-                    project_zmq_monitor.zmq_address,
-                    f"{http_router.service_id}.ini",
-                    section.as_configuration().format(do_print=True),
-                )
-                return True
+            stats = await http_router.read_stats()
+        except tenacity.RetryError:
+            return False
+        return True
 
     except Exception as exc:
         raise

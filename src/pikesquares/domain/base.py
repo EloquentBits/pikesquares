@@ -187,9 +187,9 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
             IOError,
             FileNotFoundError,
         )),
-        wait=tenacity.wait_fixed(1),
+        wait=tenacity.wait_fixed(3),
         stop=tenacity.stop_after_attempt(5),
-        reraise=True,
+        #reraise=True,
     )
     async def read_stats(self):
         """
@@ -207,7 +207,7 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
                 if len(data) < 1:
                     break
                 js += data.decode("utf8", "ignore")
-            logger.debug(s)
+            logger.debug(js)
             try:
                 return json.loads(js)
             except json.JSONDecodeError:
@@ -215,16 +215,19 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
                 logger.info(js)
         except ConnectionRefusedError as e:
             logger.debug("ConnectionRefusedError read_stats")
+            raise e
             #raise StatsReadError(f"Connection refused @ {(self.stats_address)}")
         except FileNotFoundError as e:
             logger.debug("FileNotFoundError read_stats")
             #raise StatsReadError(f"Socket not available @ {(self.stats_address)}")
+            raise e
         except IOError as e:
             logger.debug("IOError read_stats")
             if e.errno != errno.EINTR:
                 # uwsgi.log(f"socket @ {addr} not available")
                 pass
             #raise StatsReadError(f"IOError @ {(self.stats_address)}")
+            raise e
         except Exception as exc:
             logger.exception(exc)
             raise exc
