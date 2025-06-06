@@ -6,8 +6,8 @@ import structlog
 
 from pikesquares.cli.console import console
 from pikesquares import services
-from pikesquares.services.base import StatsReadError
-from pikesquares.services.device import Device
+from pikesquares.domain.base import StatsReadError
+from pikesquares.domain.device import Device
 
 logger = structlog.get_logger()
 

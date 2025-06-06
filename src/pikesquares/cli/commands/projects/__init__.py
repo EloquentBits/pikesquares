@@ -1,11 +1,13 @@
 from pathlib import Path
 from typing import Optional
+import traceback
 
 import randomname
 import structlog
 
 import typer
 import questionary
+import tenacity
 
 # from pikesquares import (
 #    get_service_status,
@@ -114,37 +116,53 @@ async def create(
         except KeyboardInterrupt:
             raise typer.Exit(0)
 
+        process_compose = await services.aget(context, ProcessCompose)
         questionary.print(f"Provisioning project {name}")
         async with uow:
             try:
                 project = await provision_project(name, device, uow, selected_services=selected_services)
                 #questionary.print(f"Provisioned project {name}")
                 console.success(f":heavy_check_mark:     Provisioned project {name}")
-                if await questionary.confirm("Launch Project?").ask_async():
-                    project_up_result = await project_up(project)
-                    if not project_up_result:
-                        console.error(f"Unable to launch project {project.name}")
-                        raise typer.Exit(1)
-                    console.success(f":heavy_check_mark:     Launched project {name}")
-
-                    process_compose = await services.aget(context, ProcessCompose)
-                    await process_compose.add_tail_log_process(project.name, project.log_file)
-
-                project_http_routers = await project.awaitable_attrs.http_routers
-                for http_router in project_http_routers:
-                    http_router_up_result = await http_router_up(uow, http_router)
-                    if http_router_up_result:
-                        console.success(":heavy_check_mark:     Launching http router.. Done!")
-                        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-                        await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
-
             except Exception as exc:
                 logger.exception(exc)
-                console.error(f"Unable to provision project {name}")
+                console.warning(f"Unable to provision project {name}")
                 await uow.rollback()
                 raise typer.Exit(1) from None
             else:
                 await uow.commit()
+
+            if await questionary.confirm("Launch Project?").ask_async():
+                try:
+                    if not await project_up(project):
+                        console.error(f"Unable to launch project {project.name}")
+                        raise typer.Exit(1)
+                    if 0:
+                        try:
+                            stats = await project.read_stats()
+                        except tenacity.RetryError:
+                            console.error(f"Unable to read stats {project.name}")
+                            raise typer.Exit(1)
+                #await process_compose.add_tail_log_process(project.name, project.log_file)
+                except Exception as exc:
+                    logger.exception(exc)
+                    console.print(traceback.format_exc())
+                    console.warning(f"Unable to launch project {name}")
+                    raise typer.Exit(1) from None
+
+                console.success(f":heavy_check_mark:     Launched project {name}")
+
+            project_http_routers = await project.awaitable_attrs.http_routers
+            for http_router in project_http_routers:
+                try:
+                    http_router_up_result = await http_router_up(uow, http_router)
+                    if http_router_up_result:
+                        console.success(":heavy_check_mark:     Launching http router.. Done!")
+                        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+                        #await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+                except Exception as exc:
+                    logger.exception(exc)
+                    console.warning(f"Unable to launch http router {http_router}")
+                    raise typer.Exit(1) from None
 
     if 0:
         name = project_name or console.ask(

@@ -60,19 +60,6 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
         """uWSGI Stats Server socket address"""
         return Path(self.run_dir) / f"{self.service_id}-tuntap-stats.sock"
 
-    def stats(self) -> DeviceStats | None:
-
-        if not self.stats_address.exists():
-            return
-
-        try:
-
-            device_stats = Device.read_stats(self.stats_address)
-            if device_stats:
-                return DeviceStats(**device_stats)
-        except StatsReadError:
-            pass
-
     # def up(self):
     #    self.setup_pki()
 
@@ -256,10 +243,7 @@ async def register_device_stats(
     async def device_stats_factory():
         device = context.get("device")
         if device:
-            try:
-                return Device.read_stats(device.stats_address)
-            except StatsReadError:
-                pass
+            return device.read_stats()
 
     services.register_factory(
         context,
@@ -268,7 +252,6 @@ async def register_device_stats(
         ping=ping_device_stats,
         # ping=lambda svc: svc.ping()
     )
-
 
 @event.listens_for(Device, "after_insert")
 def handle_device_created(

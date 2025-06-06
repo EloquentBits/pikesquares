@@ -104,13 +104,12 @@ class ZMQMonitor(AppMonitorBase, table=True):
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
         if self.zmq_address:
-            logger.debug(f"Launching {model.__class__.__name__} {model.service_id} in ZMQ Monitor @ {self.zmq_address}")
+            logger.info(f"Launching {model.__class__.__name__} {model.service_id} in ZMQ Monitor @ {self.socket_address}")
             uwsgi_config = model.get_uwsgi_config()
-            logger.debug(uwsgi_config)
             sock.connect(self.zmq_address)
             await sock.send_multipart([b"touch", name.encode(), uwsgi_config.format(do_print=True).encode()])
         else:
-            logger.info(f"{model.__class__.__name__} no zmq socket found @ {self.zmq_address}")
+            logger.info(f"{model.__class__.__name__} no zmq socket found @ {self.socket_address}")
 
     async def destroy_instance(self, name: str, model) -> None:
         ctx = zmq.asyncio.Context()

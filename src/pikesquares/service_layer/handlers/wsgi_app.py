@@ -295,7 +295,7 @@ async def up(
         )
 
     try:
-        _ = WsgiApp.read_stats(wsgi_app.stats_address)
+        _ = await wsgi_app.read_stats()
     except StatsReadError:
         console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
 
