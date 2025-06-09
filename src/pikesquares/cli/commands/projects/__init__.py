@@ -161,6 +161,7 @@ async def create(
                         #await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
                 except Exception as exc:
                     logger.exception(exc)
+                    console.print(traceback.format_exc())
                     console.warning(f"Unable to launch http router {http_router}")
                     raise typer.Exit(1) from None
 

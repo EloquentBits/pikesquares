@@ -15,6 +15,7 @@ import anyio
 import cuid
 import git
 import giturlparse
+import tenacity
 
 #from sqlalchemy.sql import text
 import questionary
@@ -527,16 +528,18 @@ async def up(
         logger.error(f"attached daemons directory @ {conf.attached_daemons_dir} is not available")
         raise typer.Exit(code=1) from None
 
-    up_result = await process_compose.up()
-    if not up_result:
-        console.warning(":heavy_exclamation_mark:      PikeSquares Server was unable to launch")
-        raise typer.Exit(code=0) from None
+    try:
+        _ = await process_compose.ping_api("device")
+        logger.info("process-compose is already running. not bringing it up now.")
+    except PCAPIUnavailableError:
+        logger.info("bringing up process-compose")
+        up_result = await process_compose.up()
+        if not up_result:
+            raise typer.Exit(code=0) from None
 
     #######################
     # process-compose processes
-    #
     #    caddy, dnsmasq, device, api
-    #
     try:
         for name, process, messages in zip(
             process_compose.config.processes.keys(),
@@ -554,7 +557,6 @@ async def up(
             except PCAPIUnavailableError:
                 await asyncio.sleep(1)
                 continue
-
     except (StopIteration, IndexError):
         pass
 
@@ -564,7 +566,7 @@ async def up(
     machine_id = await ServiceBase.read_machine_id()
     device = await uow.devices.get_by_machine_id(machine_id)
     if not device:
-        console.error(f"unable to locate device by machine id {machine_id}")
+        console.error(f"cli up: unable to locate device by machine id {machine_id}")
         raise typer.Exit(code=0) from None
 
     async with uow:
@@ -1161,7 +1163,7 @@ async def main(
     Welcome to Pike Squares. Building blocks for your apps.
     """
 
-    logger.info(f"About to execute command: {ctx.invoked_subcommand}")
+    #logger.info(f"About to execute command: {ctx.invoked_subcommand}")
     is_root: bool = os.getuid() == 0
 
     # FIXME make sure to make an exception for --help
@@ -1237,7 +1239,6 @@ async def main(
             yield uow
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
-
     async with uow:
         try:
             machine_id = await ServiceBase.read_machine_id()
@@ -1257,14 +1258,16 @@ async def main(
                     console.error("device zmq monitor socket address was not provisioned")
                     raise typer.Exit(1)
                 logger.info(f"created device zmq_monitor @ {zmq_monitor.socket_address}")
-                uwsgi_options = await device.awaitable_attrs.uwsgi_options
-                if not uwsgi_options:
-                    for uwsgi_option in await device.get_uwsgi_options():
-                        await uow.uwsgi_options.add(uwsgi_option)
+
+            uwsgi_options = await device.awaitable_attrs.uwsgi_options
+            if not uwsgi_options:
+                for uwsgi_option in await device.get_uwsgi_options():
+                    await uow.uwsgi_options.add(uwsgi_option)
+
         except Exception as exc:
             logger.exception(exc)
             await uow.rollback()
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         else:
             await uow.commit()
 
@@ -1279,7 +1282,7 @@ async def main(
 
     @atexit.register
     def cleanup():
-        logger.debug("CLEANUP")
+        #logger.debug("CLEANUP")
         services.close_registry(context)
 
 

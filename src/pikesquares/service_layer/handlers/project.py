@@ -193,7 +193,7 @@ async def project_up(project)  -> bool:
         return True
 
     except Exception as exc:
-        raise
+        raise exc
 
 async def project_delete(
     project: Project,
@@ -214,4 +214,4 @@ async def project_delete(
         logger.info(f"deleted project {project.name}")
 
     except Exception as exc:
-        raise
+        raise exc

@@ -270,7 +270,7 @@ class ManagedServiceBase(pydantic.BaseModel):
         if not cmd_args:
             raise Exception(f"no args provided for e {self.daemon_name} command")
 
-        print(cmd_args)
+        #print(cmd_args)
 
         try:
             if cmd_env:
