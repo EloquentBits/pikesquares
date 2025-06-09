@@ -2,12 +2,11 @@ from pathlib import Path
 
 import cuid
 import structlog
-from aiopath import AsyncPath
+import tenacity
 from uwsgiconf.config import Section
 
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
-from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 from pikesquares.service_layer.handlers.routers import create_tuntap_device, tuntap_router_next_available_ip
 from pikesquares.service_layer.uow import UnitOfWork
@@ -19,6 +18,7 @@ async def provision_attached_daemon(
     name: str,
     project: Project,
     uow: UnitOfWork,
+    create_data_dir: bool = True
 ) -> AttachedDaemon | None:
 
     try:
@@ -35,6 +35,7 @@ async def provision_attached_daemon(
                 config_dir=str(project.config_dir),
                 log_dir=str(project.log_dir),
                 run_dir=str(project.run_dir),
+                create_data_dir=create_data_dir,
             )
             daemon = await uow.attached_daemons.add(daemon)
             tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
@@ -140,7 +141,9 @@ async def attached_daemon_up(
             pg_bin_dir = Path("/usr/lib/postgresql/16/bin")
             section._set("if-not-dir", f"{attached_daemon.daemon_data_dir}")
             section.main_process.run_command_on_event(
-                f"{pg_bin_dir / "initdb"} --auth trust --username pikesquares --pgdata {attached_daemon.daemon_data_dir} --encoding UTF-8"
+                command=f"{pg_bin_dir / "initdb"} --auth trust --username pikesquares --pgdata {attached_daemon.daemon_data_dir} --encoding UTF-8",
+                phase=section.main_process.phases.PRIV_DROP_POST,
+
             )
             section._set("end-if", "")
 
@@ -150,25 +153,18 @@ async def attached_daemon_up(
                 bind_port=bind_port,
             )
         )
-
         try:
             _ = await attached_daemon.read_stats()
             logger.info(f"Attached Daemon {attached_daemon.name} is already running")
-        except StatsReadError:
+        except tenacity.RetryError:
             print(section.as_configuration().format())
             project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
             project_zmq_monitor_address = project_zmq_monitor.zmq_address
             logger.info(f"launching Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
-            try:
-                _ = await attached_daemon.read_stats()
-                logger.info(f"Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address} is already running")
-                return True
-            except StatsReadError:
-                logger.debug(f"project is running. launching attached daemon @ {project_zmq_monitor_address}")
-                await create_or_restart_instance(
-                    project_zmq_monitor_address,
-                    f"{attached_daemon.service_id}.ini",
-                    section.as_configuration().format(do_print=True),
+            await create_or_restart_instance(
+                project_zmq_monitor_address,
+                f"{attached_daemon.service_id}.ini",
+                section.as_configuration().format(do_print=True),
                 )
     except Exception as exc:
-        raise
+        raise exc

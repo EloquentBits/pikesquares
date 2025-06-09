@@ -173,9 +173,9 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
             IOError,
             FileNotFoundError,
         )),
-        wait=tenacity.wait_fixed(3),
-        stop=tenacity.stop_after_attempt(5),
-        #reraise=True,
+        wait=tenacity.wait_fixed(1),
+        stop=tenacity.stop_after_attempt(3),
+        reraise=False,
     )
     async def read_stats(self):
         """

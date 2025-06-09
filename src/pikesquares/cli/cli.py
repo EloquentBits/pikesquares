@@ -378,19 +378,22 @@ async def launch(
             #for daemon in attached_daemons:
             #    logger.info(daemon)
             #attached_daemon_choices = [d.service_id for d in attached_daemons]
+            create_data_dir  = True
+            if attached_daemon_name == "postgres":
+                create_data_dir = False
             try:
                 attached_daemon = await provision_attached_daemon(
-                    attached_daemon_name, project, uow,
+                    attached_daemon_name, project, uow, create_data_dir=create_data_dir,
                 )
                 attached_daemon_device = await uow.tuntap_devices.\
                     get_by_linked_service_id(attached_daemon.service_id)
-
-                await attached_daemon_up(
-                    uow,
-                    attached_daemon,
-                    bind_ip=attached_daemon_bind_ip,
-                    bind_port=attached_daemon_bind_port,
-                )
+                if attached_daemon and attached_daemon_device:
+                    await attached_daemon_up(
+                        uow,
+                        attached_daemon,
+                        bind_ip=attached_daemon_bind_ip,
+                        bind_port=attached_daemon_bind_port,
+                    )
             except Exception as exc:
                 logger.exception(exc)
                 await uow.rollback()
