@@ -101,7 +101,8 @@ class CaddyConfig(pydantic.BaseModel):
 
 
 def caddy_close():
-    logger.debug("caddy closed")
+    pass
+    #logger.debug("caddy closed")
 
 async def caddy_ping(caddy_data: tuple[CaddyProcess, ProcessMessages]):
     process, msgs = caddy_data

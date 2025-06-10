@@ -6,9 +6,7 @@ import sys
 import uuid
 from pathlib import Path
 
-import randomname
 import structlog
-from jinja2 import Undefined
 
 # from aiopath import AsyncPath
 from sqlmodel import (
@@ -38,8 +36,8 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     __tablename__ = "devices"
 
     machine_id: str = Field(default=None, unique=True, max_length=32)
-    uwsgi_options: list["DeviceUWSGIOptions"] = Relationship(back_populates="device")
-    title:str = Field()
+    uwsgi_options: list["DeviceUWSGIOption"] = Relationship(back_populates="device")
+
     projects: list["Project"] = Relationship(back_populates="device")
 
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="device", sa_relationship_kwargs={"uselist": False})
@@ -71,29 +69,31 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     # config["uwsgi"]["plugin"] = "emperor_zeromq"
     # self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
-    async def get_uwsgi_options(self) -> list["DeviceUWSGIOptions"]:
-        uwsgi_options: list[DeviceUWSGIOptions] = []
-        section = DeviceSection(self)
-        device_zmq_monitor = await self.awaitable_attrs.zmq_monitor
-        device_zmq_monitor_address = device_zmq_monitor.uwsgi_zmq_address
-        section.empire.set_emperor_params(
-            vassals_home=device_zmq_monitor_address,
-            name="PikeSquares Server",
-            spawn_asap=True,
-            stats_address=str(self.stats_address),
-        )
-
-        for key, value in section._get_options():
-            uwsgi_option = DeviceUWSGIOptions(
-                option_key=key.key,
-                option_value=str(value).strip(),
-                device=self,
-                machine_id=self.machine_id,
+    async def get_uwsgi_options(self) -> list["DeviceUWSGIOption"]:
+        try:
+            uwsgi_options: list[DeviceUWSGIOption] = []
+            section = DeviceSection(self)
+            device_zmq_monitor = await self.awaitable_attrs.zmq_monitor
+            device_zmq_monitor_address = device_zmq_monitor.uwsgi_zmq_address
+            section.empire.set_emperor_params(
+                vassals_home=device_zmq_monitor_address,
+                name="PikeSquares Server",
+                spawn_asap=True,
+                stats_address=str(self.stats_address),
             )
-            uwsgi_options.append(uwsgi_option)
-            uwsgi_option.sort_order_index = uwsgi_options.index(uwsgi_option)
+            for key, value in section._get_options():
+                uwsgi_option = DeviceUWSGIOption(
+                    option_key=key.key,
+                    option_value=str(value).strip(),
+                    device=self,
+                    machine_id=self.machine_id,
+                )
+                uwsgi_options.append(uwsgi_option)
+                uwsgi_option.sort_order_index = uwsgi_options.index(uwsgi_option)
+            return uwsgi_options
 
-        return uwsgi_options
+        except Exception as exc:
+            raise
 
     def start_pyuwsgi(self) -> bool:
         # we import `pyuwsgi` with `dlopen` flags set to `os.RTLD_GLOBAL` such that
@@ -183,7 +183,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
                     pass
 
 
-class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
+class DeviceUWSGIOption(TimeStampedBase, SQLModel, table=True):
 
     __tablename__ = "uwsgi_options"
 
@@ -205,7 +205,7 @@ class DeviceUWSGIOptions(TimeStampedBase, SQLModel, table=True):
         arbitrary_types_allowed = True
 
     def __repr__(self):
-        return f'<DeviceUWSGIOptions option_key="{self.option_key}" option_value="{self.option_value}">'
+        return f'<DeviceUWSGIOption option_key="{self.option_key}" option_value="{self.option_value}">'
 
     def __str__(self):
         return self.__repr__()
@@ -253,14 +253,13 @@ async def register_device_stats(
         # ping=lambda svc: svc.ping()
     )
 
-@event.listens_for(Device, "after_insert")
-def handle_device_created(
-    mapper,
-    connection,
-    target,
-) -> Device:
-    device = target
-    logger.info(f"DEVICE DEVICE DEVICE {device=}")
+#@event.listens_for(Device, "after_insert")
+#def handle_device_created(
+#    mapper,
+#    connection,
+#    target,
+#) -> Device:
+#    device = target
     """
     device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
         uow, device=device
@@ -278,13 +277,8 @@ def handle_device_created(
             #not in existing_options:
             #    await uow.uwsgi_options.add(uwsgi_option)
         """
-
-
-    return device
-
-
+#    return device
 """
-
             network_device_name = "psq0"
             router = RouterTunTap(
                 on=str(self.tuntap_router_socket_address),

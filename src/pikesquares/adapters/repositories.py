@@ -8,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.sql.expression import SelectOfScalar
 
 from pikesquares.domain.base import ServiceBase
-from pikesquares.domain.device import Device, DeviceUWSGIOptions
+from pikesquares.domain.device import Device, DeviceUWSGIOption
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import (
     HttpRouter,
@@ -212,21 +212,21 @@ class DeviceRepository(GenericSqlRepository[Device], DeviceReposityBase):
             return obj
 
 
-class DeviceUWSGIOptionsReposityBase(GenericRepository[DeviceUWSGIOptions], ABC):
+class DeviceUWSGIOptionsReposityBase(GenericRepository[DeviceUWSGIOption], ABC):
     """uwsgi options repository."""
 
     pass
 
 
-class DeviceUWSGIOptionsRepository(GenericSqlRepository[DeviceUWSGIOptions], DeviceUWSGIOptionsReposityBase):
+class DeviceUWSGIOptionsRepository(GenericSqlRepository[DeviceUWSGIOption], DeviceUWSGIOptionsReposityBase):
     def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session, DeviceUWSGIOptions)
+        super().__init__(session, DeviceUWSGIOption)
 
-    async def get_by_device_id(self, device_id: str) -> list[DeviceUWSGIOptions] | None:
+    async def get_by_device_id(self, device_id: str) -> list[DeviceUWSGIOption] | None:
         stmt = (
-            select(DeviceUWSGIOptions)
-            .where(DeviceUWSGIOptions.device_id == device_id)
-            .order_by(DeviceUWSGIOptions.sort_order_index)
+            select(DeviceUWSGIOption)
+            .where(DeviceUWSGIOption.device_id == device_id)
+            .order_by(DeviceUWSGIOption.sort_order_index)
         )
         results = await self._session.exec(stmt)
         if results:

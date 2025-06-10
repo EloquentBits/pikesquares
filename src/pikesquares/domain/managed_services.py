@@ -186,6 +186,8 @@ class AttachedDaemon(ServiceBase, table=True):
     project_id: str | None = Field(default=None, foreign_key="projects.id")
     project: "Project" = Relationship(back_populates="attached_daemons")
 
+    create_data_dir: bool = Field(default=True)
+
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
@@ -193,7 +195,7 @@ class AttachedDaemon(ServiceBase, table=True):
     @property
     def daemon_data_dir(self) -> Path:
         daemon_dir = Path(self.data_dir) / "attached-daemons" / self.service_id
-        if not daemon_dir.exists():
+        if not daemon_dir.exists() and self.create_data_dir:
             daemon_dir.mkdir(parents=True, exist_ok=True)
         return daemon_dir
 
@@ -270,7 +272,7 @@ class ManagedServiceBase(pydantic.BaseModel):
         if not cmd_args:
             raise Exception(f"no args provided for e {self.daemon_name} command")
 
-        print(cmd_args)
+        #print(cmd_args)
 
         try:
             if cmd_env:

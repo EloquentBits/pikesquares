@@ -2,7 +2,6 @@ import enum
 import asyncio
 import errno
 import json
-import socket
 import traceback
 import uuid
 from datetime import (
@@ -17,25 +16,12 @@ import tenacity
 import structlog
 from aiopath import AsyncPath
 from sqlalchemy import (
-    # JSON,
     DateTime,
     func,
 )
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlmodel import (
-    # select,
-    #INTEGER,
-    #Column,
-    Field,
-    #Enum,
-    # Integer,
-    # String,
-    # ForeignKey,
-    #Relationship,
-    SQLModel,
-)
+from sqlmodel import Field, SQLModel
 
-from pikesquares import __app_name__, __version__
 from pikesquares.exceptions import (
     ServiceUnavailableError,
     StatsReadError,
@@ -187,9 +173,9 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
             IOError,
             FileNotFoundError,
         )),
-        wait=tenacity.wait_fixed(3),
-        stop=tenacity.stop_after_attempt(5),
-        #reraise=True,
+        wait=tenacity.wait_fixed(1),
+        stop=tenacity.stop_after_attempt(3),
+        reraise=False,
     )
     async def read_stats(self):
         """
@@ -235,55 +221,6 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
             if writer:
                 writer.close()
                 await writer.wait_closed()
-
-
-    @tenacity.retry(
-        retry=tenacity.retry_if_exception_type(StatsReadError),
-        wait=tenacity.wait_fixed(1),
-        stop=tenacity.stop_after_attempt(5),
-        reraise=True,
-    )
-    def read_stats_sync(self):
-        """
-        read from uWSGI Stats Server socket
-        """
-        if not all([self.stats_address.exists(), self.stats_address.is_socket()]):
-            raise StatsReadError(f"unable to read stats from {(self.stats_address)}")
-
-        def unix_addr(arg):
-            sfamily = socket.AF_UNIX
-            addr = arg
-            return sfamily, addr, socket.gethostname()
-
-        js = ""
-        sfamily, addr, _ = unix_addr(self.stats_address)
-        try:
-            s = None
-            s = socket.socket(sfamily, socket.SOCK_STREAM)
-            s.connect(str(addr))
-            while True:
-                data = s.recv(4096)
-                if len(data) < 1:
-                    break
-                js += data.decode("utf8", "ignore")
-            if s:
-                s.close()
-        except ConnectionRefusedError as e:
-            raise StatsReadError(f"Connection refused @ {(self.stats_address)}")
-        except FileNotFoundError as e:
-            raise StatsReadError(f"Socket not available @ {(self.stats_address)}")
-        except IOError as e:
-            if e.errno != errno.EINTR:
-                # uwsgi.log(f"socket @ {addr} not available")
-                pass
-        except Exception:
-            logger.error(traceback.format_exc())
-        else:
-            try:
-                return json.loads(js)
-            except json.JSONDecodeError:
-                logger.error(traceback.format_exc())
-                logger.info(js)
 
     def write_master_fifo(self, command: str) -> None:
         """
@@ -340,7 +277,7 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
         if self.stats_address.exists() and self.stats_address.is_socket():
             try:
                 if self.read_stats():
-                    return "running" 
+                    return "running"
             except StatsReadError:
                 return "stopped"
 
@@ -357,14 +294,77 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
             latest_startup_log = log_lines[end_index + 1 :]
         return latest_running_config, latest_startup_log
 
-    # @pydantic.computed_field
-    # def caddy(self) -> Path | None:
-    #    try:
-    #        return self.caddy_dir / "caddy"
-    #    except TypeError:
-    #        pass
 
-    # @pydantic.computed_field
-    # def caddy_dir(self) -> Path | None:
-    #    if self.CADDY_DIR and Path(self.CADDY_DIR).exists():
-    #        return Path(self.CADDY_DIR)
+async def main():
+
+    class StatsTest(pydantic.BaseModel):
+
+        stats_address: Path
+
+        @tenacity.retry(
+            retry=tenacity.retry_if_exception_type((
+                StatsReadError,
+                ConnectionRefusedError,
+                IOError,
+                FileNotFoundError,
+            )),
+            wait=tenacity.wait_fixed(1),
+            stop=tenacity.stop_after_attempt(3),
+            reraise=False,
+        )
+        async def read_stats(self):
+            """
+            read from uWSGI Stats Server socket
+            """
+            writer = None
+            logger.debug(f"reading stats from {self.stats_address}")
+            try:
+                js = ""
+                reader, writer = await asyncio.open_unix_connection(
+                    path=AsyncPath(self.stats_address),
+                )
+                while True:
+                    data = await reader.read(4096)
+                    if len(data) < 1:
+                        break
+                    js += data.decode("utf8", "ignore")
+                logger.debug(js)
+                try:
+                    return json.loads(js)
+                except json.JSONDecodeError:
+                    logger.error(traceback.format_exc())
+                    logger.info(js)
+            except ConnectionRefusedError as e:
+                logger.debug("ConnectionRefusedError read_stats")
+                raise e
+                #raise StatsReadError(f"Connection refused @ {(self.stats_address)}")
+            except FileNotFoundError as e:
+                logger.debug("FileNotFoundError read_stats")
+                #raise StatsReadError(f"Socket not available @ {(self.stats_address)}")
+                raise e
+            except IOError as e:
+                logger.debug("IOError read_stats")
+                if e.errno != errno.EINTR:
+                    # uwsgi.log(f"socket @ {addr} not available")
+                    pass
+                #raise StatsReadError(f"IOError @ {(self.stats_address)}")
+                raise e
+            except Exception as exc:
+                logger.exception(exc)
+                raise exc
+            finally:
+                if writer:
+                    writer.close()
+                    await writer.wait_closed()
+
+    stats_address = Path("/var/run/pikesquares/device-j40c1k7-stats.sock")
+    stats = StatsTest(stats_address=stats_address)
+    try:
+        stats = await stats.read_stats()
+        print(stats)
+    except tenacity.RetryError:
+        print("giving up reading stats.")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
