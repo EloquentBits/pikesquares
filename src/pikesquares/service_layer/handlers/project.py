@@ -2,6 +2,7 @@ import cuid
 import structlog
 from aiopath import AsyncPath
 import tenacity
+import netifaces
 
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
@@ -66,6 +67,40 @@ async def provision_project(
 
     return project
 
+async def get_nat_interfaces() -> list[str]:
+
+    PHYSICAL_PREFIXES = ('en', 'wl', 'et', 'ww') # https://www.freedesktop.org/software/systemd/man/latest/systemd.net-naming-scheme.html
+    AF_LINK = 17  # MAC
+    AF_INET = 2   # IPv4
+
+    def is_physical(name: str) -> bool:
+        return name.startswith(PHYSICAL_PREFIXES)
+
+    nat_interfaces = []
+
+    for iface in netifaces.interfaces():
+        if not is_physical(iface):
+            continue
+
+        try:
+            addr_info = netifaces.ifaddresses(iface)
+
+            has_ipv4 = AF_INET in addr_info and any(
+                'addr' in entry for entry in addr_info[AF_INET]
+            )
+
+            has_mac = AF_LINK in addr_info and any(
+                'addr' in entry for entry in addr_info[AF_LINK]
+            )
+
+            if has_ipv4 and has_mac:
+                nat_interfaces.append(iface)
+
+        except Exception as e:
+            print(f"Error processing interface {iface}: {e}")
+
+    return nat_interfaces
+
 async def project_up(project)  -> bool:
     try:
         section = ProjectSection(project)
@@ -107,11 +142,12 @@ async def project_up(project)  -> bool:
             section.main_process.run_command_on_event(
                 command="iptables -t nat -F", phase=section.main_process.phases.PRIV_DROP_PRE
             )
-            nat_interface = "wlp0s20f3"
-            section.main_process.run_command_on_event(
-                command=f"iptables -t nat -A POSTROUTING -o {nat_interface} -j MASQUERADE",
-                phase=section.main_process.phases.PRIV_DROP_PRE,
-            )
+            nat_interfaces = await get_nat_interfaces()
+            for nat_interface in nat_interfaces:
+                section.main_process.run_command_on_event(
+                    command=f"iptables -t nat -A POSTROUTING -o {nat_interface} -j MASQUERADE",
+                    phase=section.main_process.phases.PRIV_DROP_PRE,
+                )
         # enable linux ip forwarding
         section.main_process.run_command_on_event(
             command="echo 1 >/proc/sys/net/ipv4/ip_forward",

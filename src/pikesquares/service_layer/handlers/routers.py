@@ -132,18 +132,20 @@ async def get_tuntap_router_networks(uow: UnitOfWork):
         for router in tuntap_routers
     ]
 
+
+
 async def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
     existing_networks = await get_tuntap_router_networks(uow) or []
     logger.debug(f"looking for available subnet for tuntap router. {len(existing_networks)} subnets exist in project")
     if existing_networks:
         #import ipdb;ipdb.set_trace()
-        for i in range(100, 200):
+        for i in range(200, 300):
             n = IPv4Network(f"192.168.{i}.0/24")
             if not any([not n.compare_networks(en) != 0 for en in existing_networks]):
                 logger.debug(f"found a subnet {n} for new tuntap router")
                 return n
 
-    new_network = "192.168.100.0/24"
+    new_network = "192.168.200.0/24"
     logger.debug(f"choosing random subnet {new_network} for tuntap router")
     return IPv4Network(new_network) 
 
