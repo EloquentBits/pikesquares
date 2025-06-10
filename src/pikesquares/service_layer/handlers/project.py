@@ -97,7 +97,7 @@ async def get_nat_interfaces() -> list[str]:
                 nat_interfaces.append(iface)
 
         except Exception as e:
-            print(f"Error processing interface {iface}: {e}")
+            logger.error(f"Error processing interface {iface}: {e}")
 
     return nat_interfaces
 
