@@ -6,12 +6,7 @@ import tenacity
 from pluggy import PluginManager
 from uwsgiconf.config import Section
 
-from pikesquares.domain.managed_services import (
-    AttachedDaemon,
-    SimpleSocketAttachedDaemon,
-    RedisAttachedDaemon,
-    PostgresAttachedDaemon,
-)
+from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 from pikesquares.service_layer.handlers.routers import create_tuntap_device
@@ -25,7 +20,9 @@ async def provision_attached_daemon(
     name: str,
     project: Project,
     uow: UnitOfWork,
-    create_data_dir: bool = True
+    create_data_dir: bool = True,
+    run_as_uid: str = "pikesquares",
+    run_as_gid: str = "pikesquares",
 ) -> AttachedDaemon | None:
 
     try:
@@ -34,8 +31,8 @@ async def provision_attached_daemon(
             daemon = AttachedDaemon(
                 service_id=f"{name}-{cuid.slug()}",
                 name=name,
-                run_as_uid="pikesquares",
-                run_as_gid="pikesquares",
+                run_as_uid=run_as_uid,
+                run_as_gid=run_as_gid,
                 project=project,
                 uwsgi_plugins="tuntap",
                 data_dir=str(project.data_dir),
@@ -58,7 +55,8 @@ async def provision_attached_daemon(
 
 
 async def attached_daemon_up(
-    uow,
+    uow: "UnitOfWork",
+    conf: "AppConfig",
     attached_daemon: AttachedDaemon,
     plugin_manager: PluginManager,
 ):
@@ -72,23 +70,18 @@ async def attached_daemon_up(
 
         tuntap_router  = tuntap_routers[0]
         attached_daemon_device = await uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
-        plugin_kwargs = {
-            "daemon_service": attached_daemon,
-            "bind_ip": str(attached_daemon_device.ip),
-        }
-        plugin_class = None
-        if attached_daemon.name == "redis":
-            plugin_class = RedisAttachedDaemon
-        elif attached_daemon.name  == "postgres":
-            plugin_class = PostgresAttachedDaemon
-        elif attached_daemon.name  == "simple-socket":
-            plugin_class = SimpleSocketAttachedDaemon
+        if not attached_daemon_device:
+            raise Exception(f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}")
 
+        plugin_class = conf.attached_daemon_plugins.get(attached_daemon.name)
         if not plugin_class:
-            raise Exception(f"unable to lookup plugin {attached_daemon.name}")
+            raise Exception(f"unable to lookup attached daemon plugin {attached_daemon.name}")
 
         plugin_manager.register(
-            plugin_class(**plugin_kwargs)
+            plugin_class(
+                daemon_service=attached_daemon,
+                bind_ip=str(attached_daemon_device.ip),
+            )
         )
         #cmd_args = attached_daemon.compile_command_args(
         #    bind_ip or attached_daemon_device.ip,

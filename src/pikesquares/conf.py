@@ -28,6 +28,12 @@ import structlog
 from pikesquares.services import register_factory
 from pikesquares.cli.console import console
 
+from pikesquares.domain.managed_services import (
+    SimpleSocketAttachedDaemon,
+    RedisAttachedDaemon,
+    PostgresAttachedDaemon,
+)
+
 logger = structlog.get_logger()
 
 
@@ -332,6 +338,14 @@ class AppConfig(BaseSettings):
         path = Path(v)
         ensure_system_path(path)
         return path
+
+    @property
+    def attached_daemon_plugins(self):
+         return {
+            "redis": RedisAttachedDaemon,
+            "postgres": PostgresAttachedDaemon,
+            "simple-socket": SimpleSocketAttachedDaemon,
+        }
 
     """
     @pydantic.field_validator('temp_dir', mode="after")

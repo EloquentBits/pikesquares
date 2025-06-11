@@ -391,11 +391,11 @@ async def launch(
                     create_data_dir=create_data_dir,
                 )
                 if attached_daemon:
-                    plugin_manager = await services.aget(context, PluginManager)
                     await attached_daemon_up(
                         uow,
+                        conf,
                         attached_daemon,
-                        plugin_manager,
+                        await services.aget(context, PluginManager),
                     )
             except Exception as exc:
                 logger.exception(exc)
