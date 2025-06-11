@@ -14,7 +14,8 @@ from pikesquares.domain.managed_services import (
 )
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
-from pikesquares.service_layer.handlers.routers import create_tuntap_device, tuntap_router_next_available_ip
+from pikesquares.service_layer.handlers.routers import create_tuntap_device
+from pikesquares.service_layer.ipaddress_utils import tuntap_router_next_available_ip
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()

@@ -9,7 +9,7 @@ from pikesquares.domain.project import Project
 from pikesquares.presets.project import ProjectSection
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor
 from pikesquares.service_layer.handlers.routers import (
-    create_tuntap_router,
+    provision_tuntap_router,
     provision_http_router,
 )
 from pikesquares.service_layer.uow import UnitOfWork
@@ -44,7 +44,7 @@ async def provision_project(
         logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
 
         logger.info(f"creating tuntap router for project {project.service_id}")
-        tuntap_router = await create_tuntap_router(uow, project)
+        tuntap_router = await provision_tuntap_router(uow, project)
         logger.info(f"created tuntap router @ {tuntap_router.socket_address}")
 
         if "http-router" in selected_services:

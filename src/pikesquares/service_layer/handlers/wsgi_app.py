@@ -3,20 +3,18 @@ from pathlib import Path
 import structlog
 import cuid
 from aiopath import AsyncPath
+import tenacity
 
 from pikesquares.domain.wsgi_app import WsgiApp
-from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import HttpRouter
 from pikesquares.services.apps.exceptions import DjangoSettingsError
-from pikesquares.exceptions import StatsReadError
 from pikesquares.services.apps.python import PythonRuntime
 from pikesquares.services.apps.django import PythonRuntimeDjango, DjangoSettings
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, destroy_instance
 from pikesquares.service_layer.handlers.routers import create_tuntap_device
-from pikesquares.service_layer.handlers.routers import tuntap_router_next_available_ip
-
+from pikesquares.service_layer.ipaddress_utils import tuntap_router_next_available_ip
 from pikesquares.presets.wsgi_app import WsgiAppSection
 
 logger = structlog.getLogger()
@@ -296,16 +294,18 @@ async def up(
 
     try:
         _ = await wsgi_app.read_stats()
-    except StatsReadError:
-        console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
+    except tenacity.RetryError:
+        return False
 
-        #print(section.as_configuration().format())
-        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
-        project_zmq_monitor_address  = project_zmq_monitor.zmq_address
-        #print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
-        await create_or_restart_instance(
-            project_zmq_monitor_address,
-            f"{wsgi_app.service_id}.ini",
-            section.as_configuration().format(do_print=True),
-        )
-        #await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
+    console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
+
+    #print(section.as_configuration().format())
+    project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+    project_zmq_monitor_address  = project_zmq_monitor.zmq_address
+    #print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
+    await create_or_restart_instance(
+        project_zmq_monitor_address,
+        f"{wsgi_app.service_id}.ini",
+        section.as_configuration().format(do_print=True),
+    )
+    #await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
