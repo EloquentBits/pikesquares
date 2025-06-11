@@ -3,9 +3,15 @@ from pathlib import Path
 import cuid
 import structlog
 import tenacity
+from pluggy import PluginManager
 from uwsgiconf.config import Section
 
-from pikesquares.domain.managed_services import AttachedDaemon
+from pikesquares.domain.managed_services import (
+    AttachedDaemon,
+    SimpleSocketAttachedDaemon,
+    RedisAttachedDaemon,
+    PostgresAttachedDaemon,
+)
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 from pikesquares.service_layer.handlers.routers import create_tuntap_device, tuntap_router_next_available_ip
@@ -53,8 +59,7 @@ async def provision_attached_daemon(
 async def attached_daemon_up(
     uow,
     attached_daemon: AttachedDaemon,
-    bind_ip: str | None = None,
-    bind_port: int | None = None,
+    plugin_manager: PluginManager,
 ):
     try:
 
@@ -66,6 +71,33 @@ async def attached_daemon_up(
 
         tuntap_router  = tuntap_routers[0]
         attached_daemon_device = await uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
+        plugin_kwargs = {
+            "daemon_service": attached_daemon,
+            "bind_ip": str(attached_daemon_device.ip),
+        }
+        plugin_class = None
+        if attached_daemon.name == "redis":
+            plugin_class = RedisAttachedDaemon
+        elif attached_daemon.name  == "postgres":
+            plugin_class = PostgresAttachedDaemon
+        elif attached_daemon.name  == "simple-socket":
+            plugin_class = SimpleSocketAttachedDaemon
+
+        if not plugin_class:
+            raise Exception(f"unable to lookup plugin {attached_daemon.name}")
+
+        plugin_manager.register(
+            plugin_class(**plugin_kwargs)
+        )
+        #cmd_args = attached_daemon.compile_command_args(
+        #    bind_ip or attached_daemon_device.ip,
+        #    bind_port=bind_port,
+        #)
+        cmd_args = plugin_manager.hook.collect_command_arguments()
+        # FIXME
+        # why is this a list?
+        if cmd_args and isinstance(cmd_args, list):
+            cmd_args = cmd_args[0]
 
         section = Section(
             name="uwsgi",
@@ -78,9 +110,10 @@ async def attached_daemon_up(
             uid=attached_daemon.run_as_uid,
             gid=attached_daemon.run_as_gid,
         )
-        section.main_process.set_basic_params(
-            touch_reload=str(attached_daemon.touch_reload_file),
-        )
+        if 0:
+            section.main_process.set_basic_params(
+                touch_reload=str(attached_daemon.touch_reload_file),
+            )
         section._set("jailed", "true")
         section._set("show-config", "true")
         section.set_plugins_params(
@@ -110,7 +143,7 @@ async def attached_daemon_up(
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         section.main_process.run_command_on_event(
-            command=f"ifconfig {attached_daemon.name} {bind_ip or attached_daemon_device.ip} netmask {attached_daemon_device.netmask} up",
+            command=f"ifconfig {attached_daemon.name} {attached_daemon_device.ip} netmask {attached_daemon_device.netmask} up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         section.main_process.run_command_on_event(
@@ -139,20 +172,15 @@ async def attached_daemon_up(
 
         if attached_daemon.name == "postgres":
             pg_bin_dir = Path("/usr/lib/postgresql/16/bin")
+            pg_auth = "md5"
             section._set("if-not-dir", f"{attached_daemon.daemon_data_dir}")
             section.main_process.run_command_on_event(
-                command=f"{pg_bin_dir / "initdb"} --auth trust --username pikesquares --pgdata {attached_daemon.daemon_data_dir} --encoding UTF-8",
+                command=f"{pg_bin_dir / 'initdb'} --auth {pg_auth} --username pikesquares --pgdata {attached_daemon.daemon_data_dir} --encoding UTF-8",
                 phase=section.main_process.phases.PRIV_DROP_POST,
-
             )
             section._set("end-if", "")
 
-        section.master_process.attach_process(
-            **attached_daemon.compile_command_args(
-                bind_ip or attached_daemon_device.ip,
-                bind_port=bind_port,
-            )
-        )
+        section.master_process.attach_process(**cmd_args)
         try:
             _ = await attached_daemon.read_stats()
             logger.info(f"Attached Daemon {attached_daemon.name} is already running")

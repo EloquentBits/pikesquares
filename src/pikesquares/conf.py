@@ -249,6 +249,8 @@ class AppConfig(BaseSettings):
     CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
     PROCESS_COMPOSE_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    POSTGRES_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    REDIS_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
 
     CADDY_ENABLED: bool = True
     DNSMASQ_ENABLED: bool = True

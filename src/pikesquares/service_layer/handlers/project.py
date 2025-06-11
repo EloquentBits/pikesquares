@@ -2,10 +2,10 @@ import cuid
 import structlog
 from aiopath import AsyncPath
 import tenacity
+import netifaces
 
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
-from pikesquares.exceptions import StatsReadError
 from pikesquares.presets.project import ProjectSection
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor
 from pikesquares.service_layer.handlers.routers import (
@@ -66,6 +66,40 @@ async def provision_project(
 
     return project
 
+async def get_nat_interfaces() -> list[str]:
+
+    PHYSICAL_PREFIXES = ('en', 'wl', 'et', 'ww') # https://www.freedesktop.org/software/systemd/man/latest/systemd.net-naming-scheme.html
+    AF_LINK = 17  # MAC
+    AF_INET = 2   # IPv4
+
+    def is_physical(name: str) -> bool:
+        return name.startswith(PHYSICAL_PREFIXES)
+
+    nat_interfaces = []
+
+    for iface in netifaces.interfaces():
+        if not is_physical(iface):
+            continue
+
+        try:
+            addr_info = netifaces.ifaddresses(iface)
+
+            has_ipv4 = AF_INET in addr_info and any(
+                'addr' in entry for entry in addr_info[AF_INET]
+            )
+
+            has_mac = AF_LINK in addr_info and any(
+                'addr' in entry for entry in addr_info[AF_LINK]
+            )
+
+            if has_ipv4 and has_mac:
+                nat_interfaces.append(iface)
+
+        except Exception as e:
+            logger.error(f"Error processing interface {iface}: {e}")
+
+    return nat_interfaces
+
 async def project_up(project)  -> bool:
     try:
         section = ProjectSection(project)
@@ -107,11 +141,12 @@ async def project_up(project)  -> bool:
             section.main_process.run_command_on_event(
                 command="iptables -t nat -F", phase=section.main_process.phases.PRIV_DROP_PRE
             )
-            nat_interface = "wlp0s20f3"
-            section.main_process.run_command_on_event(
-                command=f"iptables -t nat -A POSTROUTING -o {nat_interface} -j MASQUERADE",
-                phase=section.main_process.phases.PRIV_DROP_PRE,
-            )
+            nat_interfaces = await get_nat_interfaces()
+            for nat_interface in nat_interfaces:
+                section.main_process.run_command_on_event(
+                    command=f"iptables -t nat -A POSTROUTING -o {nat_interface} -j MASQUERADE",
+                    phase=section.main_process.phases.PRIV_DROP_PRE,
+                )
         # enable linux ip forwarding
         section.main_process.run_command_on_event(
             command="echo 1 >/proc/sys/net/ipv4/ip_forward",
@@ -210,8 +245,15 @@ async def project_delete(
             await uow.http_routers.delete(http_router.id)
             logger.info(f"deleted http router {http_router.service_id}")
 
+        project_attached_daemons = await project.awaitable_attrs.attached_daemons
+        for attached_daemon in project_attached_daemons:
+            await uow.attached_daemons.delete(attached_daemon.id)
+            logger.info(f"deleted attached daemon {attached_daemon.name} {attached_daemon.service_id}")
+
         await uow.projects.delete(project.id)
         logger.info(f"deleted project {project.name}")
 
     except Exception as exc:
         raise exc
+
+    return True
