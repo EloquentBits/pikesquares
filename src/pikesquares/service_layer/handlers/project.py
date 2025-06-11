@@ -7,7 +7,7 @@ import netifaces
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
 from pikesquares.presets.project import ProjectSection
-from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor
+from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor, destroy_instance
 from pikesquares.service_layer.handlers.routers import (
     provision_tuntap_router,
     provision_http_router,
@@ -256,3 +256,33 @@ async def project_delete(
         raise exc
 
     return True
+
+
+async def project_down(project: "Project", uow: "UnitOfWork") -> bool:
+    try:
+
+        try:
+            _ = await project.read_stats()
+        except tenacity.RetryError:
+            logger.info(f"Project {project.name} is not running")
+            return False
+
+
+        machine_id = await project.__class__.read_machine_id()
+        device = await uow.devices.get_by_machine_id(machine_id)
+        if not device:
+            logger.error(f"unable to locate device by machine id {machine_id}")
+            raise Exception(f"unable to locate device by machine id {machine_id}")
+
+        device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
+        device_zmq_monitor_address = device_zmq_monitor.zmq_address
+        logger.info(f"stopping project {project.name} @ {device_zmq_monitor_address}")
+        await destroy_instance(device_zmq_monitor_address, f"{project.service_id}.ini")
+        logger.info(f"stopped project {project.name} @ {device_zmq_monitor_address}")
+
+        return True
+
+    except Exception as exc:
+        raise exc
+
+#/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/pikesquares/attached-daemons/postgres-ne021zr stop

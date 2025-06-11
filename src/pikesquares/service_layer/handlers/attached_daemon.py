@@ -8,7 +8,7 @@ from uwsgiconf.config import Section
 
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
-from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
+from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, destroy_instance
 from pikesquares.service_layer.handlers.routers import create_tuntap_device
 from pikesquares.service_layer.ipaddress_utils import tuntap_router_next_available_ip
 from pikesquares.service_layer.uow import UnitOfWork
@@ -20,7 +20,7 @@ async def provision_attached_daemon(
     name: str,
     project: Project,
     uow: UnitOfWork,
-    create_data_dir: bool = True,
+    create_data_dir: bool = False,
     run_as_uid: str = "pikesquares",
     run_as_gid: str = "pikesquares",
 ) -> AttachedDaemon | None:
@@ -61,7 +61,6 @@ async def attached_daemon_up(
     plugin_manager: PluginManager,
 ):
     try:
-
         project = await attached_daemon.awaitable_attrs.project
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
 
@@ -83,10 +82,6 @@ async def attached_daemon_up(
                 bind_ip=str(attached_daemon_device.ip),
             )
         )
-        #cmd_args = attached_daemon.compile_command_args(
-        #    bind_ip or attached_daemon_device.ip,
-        #    bind_port=bind_port,
-        #)
         cmd_args = plugin_manager.hook.collect_command_arguments()
         # FIXME
         # why is this a list?
@@ -174,6 +169,14 @@ async def attached_daemon_up(
             )
             section._set("end-if", "")
 
+        if attached_daemon.create_data_dir:
+            section._set("if-not-dir", f"{attached_daemon.daemon_data_dir}")
+            section.main_process.run_command_on_event(
+                command=f"mkdir {attached_daemon.daemon_data_dir}",
+                phase=section.main_process.phases.PRIV_DROP_POST,
+            )
+            section._set("end-if", "")
+
         section.master_process.attach_process(**cmd_args)
         try:
             _ = await attached_daemon.read_stats()
@@ -190,3 +193,44 @@ async def attached_daemon_up(
                 )
     except Exception as exc:
         raise exc
+
+async def attached_daemon_down(
+    project: "Project",
+    attached_daemon: AttachedDaemon,
+    plugin_manager: PluginManager,
+    uow: "UnitOfWork",
+    conf: "AppConfig",
+) -> bool:
+    try:
+
+        try:
+            _ = await attached_daemon.read_stats()
+        except tenacity.RetryError:
+            logger.info(f"Managed service {attached_daemon.name} is not running")
+            return False
+
+        attached_daemon_device = await uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
+        if not attached_daemon_device:
+            raise Exception(f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}")
+
+        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        project_zmq_monitor_address = project_zmq_monitor.zmq_address
+        logger.info(f"stopping attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
+        await destroy_instance(project_zmq_monitor_address, f"{attached_daemon.service_id}.ini")
+        logger.info(f"stopped attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
+
+        plugin_class = conf.attached_daemon_plugins.get(attached_daemon.name)
+        if not plugin_class:
+            raise Exception(f"unable to lookup attached daemon plugin {attached_daemon.name}")
+        plugin_manager.register(
+            plugin_class(
+                daemon_service=attached_daemon,
+                bind_ip=str(attached_daemon_device.ip),
+            )
+        )
+        return plugin_manager.hook.stop()
+
+    except Exception as exc:
+        raise exc
+
+#/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/pikesquares/attached-daemons/postgres-ne021zr stop

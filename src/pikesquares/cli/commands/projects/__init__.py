@@ -18,15 +18,12 @@ from pikesquares.service_layer.handlers.project import (
     provision_project,
     project_up,
     project_delete,
+    project_down,
 )
 from pikesquares.service_layer.handlers.routers import http_router_up
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.base import ServiceBase
-from pikesquares.domain.process_compose import (
-    ProcessCompose,
-    Process, 
-    ProcessAvailability,
-)
+from pikesquares.domain.process_compose import ProcessCompose
 from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
 from pikesquares.cli.validators import ServiceNameValidator
@@ -205,19 +202,44 @@ async def stop(
     Aliases: [s] stop
     """
     context = ctx.ensure_object(dict)
-    project = await get_or_create_project(name, context)
-    if project:
-        console.info(f"Stopping Project [{project.name}]")
-        uow = await services.aget(context, UnitOfWork)
-        device = context.get("device")
-        if not device:
-            raise AppConfigError("no device found in context")
+    custom_style = context.get("cli-style")
+    uow = await services.aget(context, UnitOfWork)
 
-        device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-        await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
-        console.success(f":heavy_check_mark:     Stopped [{project.name}]")
-    else:
-        console.warning("Failed to stop a Project")
+    machine_id = await ServiceBase.read_machine_id()
+    device = await uow.devices.get_by_machine_id(machine_id)
+
+    if not len(await device.awaitable_attrs.projects):
+        console.success("Appears there have been no projects created yet.")
+        raise typer.Exit(0)
+
+    async with uow:
+        try:
+            selected_projects = await questionary.checkbox(
+                "Select a project to stop: ",
+                choices=[
+                    questionary.Choice(
+                        project.name, value=project.id, checked=True
+                    ) for project in await device.awaitable_attrs.projects 
+                ],
+                style=custom_style,
+            ).unsafe_ask_async()
+        except KeyboardInterrupt:
+            raise typer.Exit(0) from None
+
+        for project_id in selected_projects:
+            if not project_id:
+                continue
+
+            for project in filter(
+                    lambda proj: proj.id == project_id,
+                    await device.awaitable_attrs.projects
+                ):
+
+                if await project_down(project, uow):
+                    console.info(f"stopped project {project.name}")
+                else:
+                    console.warning(f"unable to stop project {project.name}")
+                    continue
 
 
 @app.command(
@@ -252,9 +274,6 @@ async def list_(ctx: typer.Context, show_id: bool = False):
 
     projects_out = []
     device_stats = device.stats()
-    # import ipdb
-
-    # ipdb.set_trace()
     if not device_stats:
         console.warning("unable to lookup project stats")
         raise typer.Exit(0)
@@ -312,7 +331,6 @@ async def delete(
     """
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
-    conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
 
     machine_id = await ServiceBase.read_machine_id()
@@ -340,20 +358,24 @@ async def delete(
             if not project_id:
                 continue
 
-            #project = await uow.projects.get_by_service_id(project_service_id)
-            #project = await uow.projects.get_by_id(project_id)
-
             for project in filter(
-                    lambda proj: proj.id == project_id, 
+                    lambda proj: proj.id == project_id,
                     await device.awaitable_attrs.projects
                 ):
+
+                if await project_down(project, uow):
+                    console.info(f"stopped project {project.name}")
+                else:
+                    console.warning(f"unable to stop project {project.name}")
+                    continue
+
                 try:
                     await project_delete(project, uow)
                 except Exception as exc:
                     logger.exception(exc)
                     console.error(f"Unable to delete project {project.name}")
                     await uow.rollback()
-                    raise typer.Exit(1) from None
+                    continue
                 else:
                     await uow.commit()
 

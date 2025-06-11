@@ -80,6 +80,13 @@ class PostgresAttachedDaemon:
             "change_dir": str(self.daemon_service.daemon_data_dir),
         }
 
+    @hook_impl
+    def stop(self) -> bool:
+        """
+           stop postgres
+        """
+        ...
+
 
 class RedisAttachedDaemon:
 
@@ -98,6 +105,9 @@ class RedisAttachedDaemon:
 
     def get_daemon_cli_bin(self) -> Path:
         return Path("/usr/bin/redis-cli")
+
+    # get data dir
+    #   redis-cli config get dir
 
     @hook_impl
     def collect_command_arguments(self) -> dict:
@@ -148,6 +158,13 @@ class RedisAttachedDaemon:
                     return stdout.strip().isdigit()
         except ProcessExecutionError:
             raise
+
+    @hook_impl
+    def stop(self) -> bool:
+        """
+           stop redis
+        """
+        return True
 
 
 class SimpleSocketAttachedDaemon:
@@ -217,6 +234,13 @@ class SimpleSocketAttachedDaemon:
                     return stdout.strip().isdigit()
         except ProcessExecutionError:
             raise
+
+    @hook_impl
+    def stop(self) -> bool:
+        """
+           stop socket server
+        """
+        ...
 
 
 

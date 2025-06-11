@@ -380,15 +380,15 @@ async def launch(
             #for daemon in attached_daemons:
             #    logger.info(daemon)
             #attached_daemon_choices = [d.service_id for d in attached_daemons]
-            create_data_dir  = True
-            if attached_daemon_name == "postgres":
-                create_data_dir = False
+            #create_data_dir  = True
+            #if attached_daemon_name == "postgres":
+            #    create_data_dir = False
             try:
                 attached_daemon = await provision_attached_daemon(
                     attached_daemon_name,
                     project,
                     uow,
-                    create_data_dir=create_data_dir,
+                    #create_data_dir=create_data_dir,
                 )
                 if attached_daemon:
                     await attached_daemon_up(
@@ -1088,7 +1088,7 @@ app.add_typer(apps.app, name="apps")
 app.add_typer(routers.app, name="routers")
 app.add_typer(projects.app, name="projects")
 app.add_typer(devices.app, name="devices")
-# app.add_typer(managed_services.app, name="services")
+app.add_typer(managed_services.app, name="services")
 
 
 def _version_callback(value: bool) -> None:
