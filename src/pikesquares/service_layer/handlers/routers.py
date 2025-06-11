@@ -146,7 +146,7 @@ async def range_free_ip(existing_networks: list[IPv4Network]) -> int:
                 ip = addr["addr"]
                 netmask = addr.get("netmask", "255.255.255.0")
                 network = IPv4Network(f"{ip}/{netmask}", strict=False)
-                if str(network).startswith("192.168."):
+                if str(network).startswith("172.28."):
                     used_subnets.add(network)
         except Exception as exc:
             logger.exception(exc)
@@ -157,14 +157,14 @@ async def range_free_ip(existing_networks: list[IPv4Network]) -> int:
         collision = False
         end = 100 if start == 1 else 200 if start == 100 else 256
         for i in range(start, end):
-            n = IPv4Network(f"192.168.{i}.0/24")
+            n = IPv4Network(f"172.28.{i}.0/24")
             if any(n.overlaps(used) for used in used_subnets):
                 collision = True
                 break
         if not collision:
             return start
 
-    raise RuntimeError("No available subnet range found (checked 192.168.1-255)")
+    raise RuntimeError("No available subnet range found (checked 172.28.1-255)")
 
 async def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
     existing_networks = await get_tuntap_router_networks(uow) or []
@@ -172,10 +172,9 @@ async def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
                  f"{len(existing_networks)} existing subnets")
 
     start = await range_free_ip(existing_networks)
-
-    end = min(start + 100, 256)
+    end = min(start + 1, 256)
     for i in range(start, end):
-        n = IPv4Network(f"192.168.{i}.0/24")
+        n = IPv4Network(f"172.28.{i}.0/24")
 
         #if not any([not n.compare_networks(en) != 0 for en in existing_networks]):
         #    logger.debug(f"found a subnet {n} for new tuntap router")
