@@ -20,6 +20,7 @@ import tenacity
 #from sqlalchemy.sql import text
 import questionary
 import randomname
+from pluggy import PluginManager
 import sentry_sdk
 import structlog
 import typer
@@ -55,6 +56,10 @@ from pikesquares.conf import (
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.caddy import register_caddy_process
 from pikesquares.domain.device import register_device_stats
+from pikesquares.domain.managed_services import (
+    #register_plugin_manager,
+    AttachedDaemonHookSpec
+)
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ProcessCompose,
@@ -366,9 +371,6 @@ async def launch(
             print(f"launching into project {project}")
 
         attached_daemon_name = launch_service
-        attached_daemon_bind_port = None
-        attached_daemon_bind_ip = None
-
         if not project:
             console.warning("no project selected. exiting")
             raise typer.Exit()
@@ -383,19 +385,21 @@ async def launch(
                 create_data_dir = False
             try:
                 attached_daemon = await provision_attached_daemon(
-                    attached_daemon_name, project, uow, create_data_dir=create_data_dir,
+                    attached_daemon_name,
+                    project,
+                    uow,
+                    create_data_dir=create_data_dir,
                 )
-                attached_daemon_device = await uow.tuntap_devices.\
-                    get_by_linked_service_id(attached_daemon.service_id)
-                if attached_daemon and attached_daemon_device:
+                if attached_daemon:
+                    plugin_manager = await services.aget(context, PluginManager)
                     await attached_daemon_up(
                         uow,
                         attached_daemon,
-                        bind_ip=attached_daemon_bind_ip,
-                        bind_port=attached_daemon_bind_port,
+                        plugin_manager,
                     )
             except Exception as exc:
                 logger.exception(exc)
+                console.print(exc)
                 await uow.rollback()
                 raise typer.Exit(1) from None
             else:
@@ -1242,6 +1246,15 @@ async def main(
             yield uow
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
+
+    def plugin_manager_factory():
+        pm = PluginManager("managed_daemon")
+        pm.add_hookspecs(AttachedDaemonHookSpec)
+        return pm
+    services.register_factory(context, PluginManager, plugin_manager_factory)
+    plugin_manager = await services.aget(context, PluginManager)
+    #import ipdb;ipdb.set_trace()
+
     async with uow:
         try:
             machine_id = await ServiceBase.read_machine_id()

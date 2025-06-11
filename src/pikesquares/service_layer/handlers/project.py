@@ -6,7 +6,6 @@ import netifaces
 
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
-from pikesquares.exceptions import StatsReadError
 from pikesquares.presets.project import ProjectSection
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor
 from pikesquares.service_layer.handlers.routers import (
@@ -246,8 +245,15 @@ async def project_delete(
             await uow.http_routers.delete(http_router.id)
             logger.info(f"deleted http router {http_router.service_id}")
 
+        project_attached_daemons = await project.awaitable_attrs.attached_daemons
+        for attached_daemon in project_attached_daemons:
+            await uow.attached_daemons.delete(attached_daemon.id)
+            logger.info(f"deleted attached daemon {attached_daemon.name} {attached_daemon.service_id}")
+
         await uow.projects.delete(project.id)
         logger.info(f"deleted project {project.name}")
 
     except Exception as exc:
         raise exc
+
+    return True

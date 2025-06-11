@@ -7,10 +7,8 @@ import structlog
 from aiopath import AsyncPath
 import tenacity
 import netifaces
-from typing import List
 
 from pikesquares import get_first_available_port
-
 #from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import HttpRouter, TuntapDevice, TuntapRouter
@@ -134,26 +132,27 @@ async def get_tuntap_router_networks(uow: UnitOfWork):
         for router in tuntap_routers
     ]
 
-async def range_free_ip(existing_networks: List[IPv4Network]) -> int:
+def range_free_ip(existing_networks: list[IPv4Network]) -> int:
 
     if existing_networks:
-        return int(str(existing_networks[0]).split('.')[2])
+        return int(str(existing_networks[0]).split(".")[2])
+
 
     used_subnets = set()
-
-    # LAN
     for iface in netifaces.interfaces():
         try:
             addrs = netifaces.ifaddresses(iface).get(netifaces.InterfaceType.AF_INET, [])
             for addr in addrs:
-                ip = addr['addr']
-                netmask = addr.get('netmask', '255.255.255.0')
+                ip = addr["addr"]
+                netmask = addr.get("netmask", "255.255.255.0")
                 network = IPv4Network(f"{ip}/{netmask}", strict=False)
                 if str(network).startswith("192.168."):
                     used_subnets.add(network)
-        except Exception:
+        except Exception as exc:
+            logger.exception(exc)
             continue
 
+    #import ipdb;ipdb.set_trace()
     for start in [1, 100, 200]:
         collision = False
         end = 100 if start == 1 else 200 if start == 100 else 256
@@ -172,11 +171,15 @@ async def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
     logger.debug(f"Looking for available subnet for tuntap router. "
                  f"{len(existing_networks)} existing subnets")
 
-    start = await range_free_ip(existing_networks)
+    start = range_free_ip(existing_networks)
 
     end = min(start + 100, 256)
     for i in range(start, end):
         n = IPv4Network(f"192.168.{i}.0/24")
+
+        #if not any([not n.compare_networks(en) != 0 for en in existing_networks]):
+        #    logger.debug(f"found a subnet {n} for new tuntap router")
+
         if all(n != en for en in existing_networks):
             logger.debug(f"Found a subnet {n} for new tuntap router")
             return n
@@ -230,6 +233,7 @@ async def create_tuntap_router(
             return tuntap_router
     except Exception as exc:
         logger.error(f"unable to create tuntap router for project {project.service_id}")
+        print(exc)
         raise exc
 
 async def create_tuntap_device(

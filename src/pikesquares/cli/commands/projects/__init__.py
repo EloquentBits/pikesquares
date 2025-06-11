@@ -120,7 +120,12 @@ async def create(
         questionary.print(f"Provisioning project {name}")
         async with uow:
             try:
-                project = await provision_project(name, device, uow, selected_services=selected_services)
+                project = await provision_project(
+                    name,
+                    device,
+                    uow,
+                    selected_services=selected_services
+                )
                 #questionary.print(f"Provisioned project {name}")
                 console.success(f":heavy_check_mark:     Provisioned project {name}")
             except Exception as exc:
