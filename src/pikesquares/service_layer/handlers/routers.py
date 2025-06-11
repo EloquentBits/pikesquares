@@ -132,7 +132,7 @@ async def get_tuntap_router_networks(uow: UnitOfWork):
         for router in tuntap_routers
     ]
 
-def range_free_ip(existing_networks: list[IPv4Network]) -> int:
+async def range_free_ip(existing_networks: list[IPv4Network]) -> int:
 
     if existing_networks:
         return int(str(existing_networks[0]).split(".")[2])
@@ -171,7 +171,7 @@ async def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
     logger.debug(f"Looking for available subnet for tuntap router. "
                  f"{len(existing_networks)} existing subnets")
 
-    start = range_free_ip(existing_networks)
+    start = await range_free_ip(existing_networks)
 
     end = min(start + 100, 256)
     for i in range(start, end):

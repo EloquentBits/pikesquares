@@ -104,12 +104,12 @@ async def create(
             selected_services = await questionary.checkbox(
                 "Provision services: ",
                 choices=[
-                    questionary.Choice("http-router", value="http-router", checked=True),
-                    questionary.Choice("tuntap-router", value="tuntap-router", checked=True),
-                    questionary.Choice("forkpty-router", value="forkpty-router", disabled="coming soone"),
+                    questionary.Choice("HTTP Router", value="http-router", checked=False),
+                    questionary.Choice("TunTap Router", value="tuntap-router", checked=True),
+                    questionary.Choice("Forkpty Router", value="forkpty-router", disabled="coming soon"),
                     questionary.Separator(),
-                    questionary.Choice("zmq-monitor",  value="zmq-monitor",  checked=True),
-                    questionary.Choice("dir-monitor", value="dir-monitor", disabled="coming soon"),
+                    questionary.Choice("ZMQ Monitor",  value="zmq-monitor",  checked=True),
+                    questionary.Choice("DIR Monitor", value="dir-monitor", disabled="coming soon"),
                 ],
                 style=custom_style,
             ).unsafe_ask_async()

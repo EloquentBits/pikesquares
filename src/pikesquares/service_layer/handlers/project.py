@@ -21,9 +21,10 @@ async def provision_project(
     name: str,
     device: Device,
     uow: UnitOfWork,
-    selected_services: list[str] | None,
+    selected_services: list[str] | None = None
 ) -> Project | None:
 
+    selected_services = selected_services or []
     try:
         project = Project(
             service_id=f"proj-{cuid.slug()}",
@@ -38,15 +39,13 @@ async def provision_project(
         project = await uow.projects.add(project)
         logger.info(f"created project {project}")
 
-        if "zmq-monitor" in selected_services:
-            logger.info(f"creating project zmq monitor in project {project.service_id}")
-            project_zmq_monitor = await create_zmq_monitor(uow, project=project)
-            logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
+        logger.info(f"creating project zmq monitor in project {project.service_id}")
+        project_zmq_monitor = await create_zmq_monitor(uow, project=project)
+        logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
 
-        if "tuntap-router" in selected_services:
-            logger.info(f"creatint tuntap router for project {project.service_id}")
-            tuntap_router = await create_tuntap_router(uow, project)
-            logger.info(f"created tuntap router @ {tuntap_router.socket_address}")
+        logger.info(f"creating tuntap router for project {project.service_id}")
+        tuntap_router = await create_tuntap_router(uow, project)
+        logger.info(f"created tuntap router @ {tuntap_router.socket_address}")
 
         if "http-router" in selected_services:
             logger.info(f"creating http router for project {project.service_id}")
@@ -85,11 +84,11 @@ async def get_nat_interfaces() -> list[str]:
             addr_info = netifaces.ifaddresses(iface)
 
             has_ipv4 = AF_INET in addr_info and any(
-                'addr' in entry for entry in addr_info[AF_INET]
+                "addr" in entry for entry in addr_info[AF_INET]
             )
 
             has_mac = AF_LINK in addr_info and any(
-                'addr' in entry for entry in addr_info[AF_LINK]
+                "addr" in entry for entry in addr_info[AF_LINK]
             )
 
             if has_ipv4 and has_mac:
