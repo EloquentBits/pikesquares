@@ -68,7 +68,7 @@ async def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
                  f"{len(existing_networks)} existing subnets")
 
     start = await range_free_ip(existing_networks)
-    end = min(start + 1, 256)
+    end = min(start + 100, 256)
     for i in range(start, end):
         n = IPv4Network(f"172.28.{i}.0/24")
 

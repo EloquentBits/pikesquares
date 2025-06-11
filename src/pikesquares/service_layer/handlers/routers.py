@@ -12,7 +12,11 @@ from pikesquares.domain.project import Project
 from pikesquares.domain.router import HttpRouter, TuntapDevice, TuntapRouter
 from pikesquares.presets.routers import HttpRouterSection
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
-from pikesquares.service_layer.ipaddress_utils import tuntap_router_next_available_network, get_tuntap_router_networks
+from pikesquares.service_layer.ipaddress_utils import (
+    tuntap_router_next_available_network,
+    tuntap_router_next_available_ip,
+    get_tuntap_router_networks,
+)
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
