@@ -15,17 +15,17 @@ import anyio
 import cuid
 import git
 import giturlparse
-import tenacity
 
 #from sqlalchemy.sql import text
 import questionary
 import randomname
-from pluggy import PluginManager
 import sentry_sdk
 import structlog
+import tenacity
 import typer
 from aiopath import AsyncPath
 from dotenv import load_dotenv
+from pluggy import PluginManager
 from plumbum import ProcessExecutionError
 from rich.layout import Layout
 from rich.live import Live
@@ -56,10 +56,7 @@ from pikesquares.conf import (
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.caddy import register_caddy_process
 from pikesquares.domain.device import register_device_stats
-from pikesquares.domain.managed_services import (
-    #register_plugin_manager,
-    AttachedDaemonHookSpec
-)
+from pikesquares.domain.managed_services import AttachedDaemonHookSpec  #register_plugin_manager,
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ProcessCompose,
@@ -75,7 +72,6 @@ from pikesquares.service_layer.handlers.attached_daemon import (
     provision_attached_daemon,
 )
 from pikesquares.service_layer.handlers.device import provision_device
-
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.project import project_up, provision_project
 from pikesquares.service_layer.handlers.routers import http_router_up
@@ -383,19 +379,38 @@ async def launch(
             #create_data_dir  = True
             #if attached_daemon_name == "postgres":
             #    create_data_dir = False
+            #
             try:
                 attached_daemon = await provision_attached_daemon(
                     attached_daemon_name,
                     project,
                     uow,
-                    #create_data_dir=create_data_dir,
                 )
                 if attached_daemon:
+                    plugin_manager = await services.aget(context, PluginManager)
+                    daemon_conf = conf.attached_daemon_plugins.\
+                        get(attached_daemon.name)
+                    if not daemon_conf:
+                        logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
+                        raise typer.Exit(1) from None
+
+                    plugin_class = daemon_conf.get("class")
+                    attached_daemon_device = await uow.tuntap_devices.\
+                        get_by_linked_service_id(attached_daemon.service_id)
+
+                    if attached_daemon_device:
+                        plugin_manager.register(
+                            plugin_class(
+                                daemon_service=attached_daemon,
+                                bind_ip=str(attached_daemon_device.ip),
+                            )
+                        )
                     await attached_daemon_up(
+                        attached_daemon,
+                        plugin_manager,
                         uow,
                         conf,
-                        attached_daemon,
-                        await services.aget(context, PluginManager),
+                        create_data_dir=daemon_conf.get("create_data_dir"),
                     )
             except Exception as exc:
                 logger.exception(exc)

@@ -31,7 +31,7 @@ cron = 59 3 -1 -1 -1  pg_dump -U ZZZ YYY | bzip2 -9 > $(HOME)/backup/YYY_`date +
 """
 
 
-class PostgresAttachedDaemon:
+class PostgresAttachedDaemonPlugin:
 
     def __init__(
         self,
@@ -88,7 +88,7 @@ class PostgresAttachedDaemon:
         ...
 
 
-class RedisAttachedDaemon:
+class RedisAttachedDaemonPlugin:
 
     def __init__(
         self,
@@ -164,10 +164,26 @@ class RedisAttachedDaemon:
         """
            stop redis
         """
-        return True
+        cmd_args = ["-h", self.bind_ip, "-p", self.bind_port, "--raw", "incr", "ping"]
+        if not Path(self.daemon_service.daemon_data_dir).exists():
+            logger.info(f"{self.daemon_service.service_id} data directory missing")
+            return False
+        try:
+            with pl_local.cwd(self.daemon_service.daemon_data_dir):
+                retcode, stdout, stderr = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
+                if int(retcode) != 0:
+                    logger.debug(f"{retcode=}")
+                    logger.debug(f"{stdout=}")
+                    logger.debug(f"{stderr=}")
+                    return False
+                else:
+                    return stdout.strip().isdigit()
+        except ProcessExecutionError as exc:
+            raise exc
 
 
-class SimpleSocketAttachedDaemon:
+
+class SimpleSocketAttachedDaemonPlugin:
 
     def __init__(
         self,
@@ -253,9 +269,12 @@ class AttachedDaemonHookSpec:
     def collect_command_arguments(self) -> None:
         ...
 
-
     @hook_spec
     def ping(self) -> bool:
+        ...
+
+    @hook_spec
+    def stop(self) -> bool:
         ...
 
 

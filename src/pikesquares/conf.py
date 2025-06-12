@@ -29,9 +29,9 @@ from pikesquares.services import register_factory
 from pikesquares.cli.console import console
 
 from pikesquares.domain.managed_services import (
-    SimpleSocketAttachedDaemon,
-    RedisAttachedDaemon,
-    PostgresAttachedDaemon,
+    SimpleSocketAttachedDaemonPlugin,
+    RedisAttachedDaemonPlugin,
+    PostgresAttachedDaemonPlugin,
 )
 
 logger = structlog.get_logger()
@@ -342,9 +342,20 @@ class AppConfig(BaseSettings):
     @property
     def attached_daemon_plugins(self):
          return {
-            "redis": RedisAttachedDaemon,
-            "postgres": PostgresAttachedDaemon,
-            "simple-socket": SimpleSocketAttachedDaemon,
+            "redis": {
+                "class": RedisAttachedDaemonPlugin,
+                "create_data_dir": True,
+            },
+
+            "postgres": {
+                "class": PostgresAttachedDaemonPlugin,
+                "create_data_dir": False,
+            },
+
+            "simple-socket": {
+                "class": SimpleSocketAttachedDaemonPlugin,
+                "create_data_dir": True,
+            },
         }
 
     """

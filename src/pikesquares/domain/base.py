@@ -193,29 +193,23 @@ class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
                 if len(data) < 1:
                     break
                 js += data.decode("utf8", "ignore")
-            logger.debug(js)
             try:
                 return json.loads(js)
             except json.JSONDecodeError:
                 logger.error(traceback.format_exc())
-                logger.info(js)
+                logger.debug(js)
         except ConnectionRefusedError as e:
-            logger.debug("ConnectionRefusedError read_stats")
             raise e
-            #raise StatsReadError(f"Connection refused @ {(self.stats_address)}")
         except FileNotFoundError as e:
-            logger.debug("FileNotFoundError read_stats")
-            #raise StatsReadError(f"Socket not available @ {(self.stats_address)}")
             raise e
         except IOError as e:
-            logger.debug("IOError read_stats")
             if e.errno != errno.EINTR:
                 # uwsgi.log(f"socket @ {addr} not available")
                 pass
-            #raise StatsReadError(f"IOError @ {(self.stats_address)}")
             raise e
         except Exception as exc:
-            logger.exception(exc)
+            if not isinstance(exc, tenacity.RetryError):
+                logger.exception(exc)
             raise exc
         finally:
             if writer:

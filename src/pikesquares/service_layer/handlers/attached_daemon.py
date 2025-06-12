@@ -20,7 +20,6 @@ async def provision_attached_daemon(
     name: str,
     project: Project,
     uow: UnitOfWork,
-    create_data_dir: bool = False,
     run_as_uid: str = "pikesquares",
     run_as_gid: str = "pikesquares",
 ) -> AttachedDaemon | None:
@@ -39,7 +38,6 @@ async def provision_attached_daemon(
                 config_dir=str(project.config_dir),
                 log_dir=str(project.log_dir),
                 run_dir=str(project.run_dir),
-                create_data_dir=create_data_dir,
             )
             daemon = await uow.attached_daemons.add(daemon)
             tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
@@ -55,10 +53,11 @@ async def provision_attached_daemon(
 
 
 async def attached_daemon_up(
-    uow: "UnitOfWork",
-    conf: "AppConfig",
     attached_daemon: AttachedDaemon,
     plugin_manager: PluginManager,
+    uow: "UnitOfWork",
+    conf: "AppConfig",
+    create_data_dir: bool = False
 ):
     try:
         project = await attached_daemon.awaitable_attrs.project
@@ -76,12 +75,6 @@ async def attached_daemon_up(
         if not plugin_class:
             raise Exception(f"unable to lookup attached daemon plugin {attached_daemon.name}")
 
-        plugin_manager.register(
-            plugin_class(
-                daemon_service=attached_daemon,
-                bind_ip=str(attached_daemon_device.ip),
-            )
-        )
         cmd_args = plugin_manager.hook.collect_command_arguments()
         # FIXME
         # why is this a list?
@@ -169,7 +162,7 @@ async def attached_daemon_up(
             )
             section._set("end-if", "")
 
-        if attached_daemon.create_data_dir:
+        if create_data_dir:
             section._set("if-not-dir", f"{attached_daemon.daemon_data_dir}")
             section.main_process.run_command_on_event(
                 command=f"mkdir {attached_daemon.daemon_data_dir}",
@@ -195,7 +188,6 @@ async def attached_daemon_up(
         raise exc
 
 async def attached_daemon_down(
-    project: "Project",
     attached_daemon: AttachedDaemon,
     plugin_manager: PluginManager,
     uow: "UnitOfWork",
@@ -209,25 +201,18 @@ async def attached_daemon_down(
             logger.info(f"Managed service {attached_daemon.name} is not running")
             return False
 
-        attached_daemon_device = await uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
+        attached_daemon_device = await uow.tuntap_devices.\
+            get_by_linked_service_id(attached_daemon.service_id)
         if not attached_daemon_device:
             raise Exception(f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}")
 
+        project = await attached_daemon.awaitable_attrs.project
         project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
         project_zmq_monitor_address = project_zmq_monitor.zmq_address
         logger.info(f"stopping attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
         await destroy_instance(project_zmq_monitor_address, f"{attached_daemon.service_id}.ini")
         logger.info(f"stopped attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
 
-        plugin_class = conf.attached_daemon_plugins.get(attached_daemon.name)
-        if not plugin_class:
-            raise Exception(f"unable to lookup attached daemon plugin {attached_daemon.name}")
-        plugin_manager.register(
-            plugin_class(
-                daemon_service=attached_daemon,
-                bind_ip=str(attached_daemon_device.ip),
-            )
-        )
         return plugin_manager.hook.stop()
 
     except Exception as exc:

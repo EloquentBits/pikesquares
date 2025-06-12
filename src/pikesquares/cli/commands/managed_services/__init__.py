@@ -1,18 +1,25 @@
-import typer
+from typing import Annotated
+import traceback
 
-from typing_extensions import Annotated
-
-import questionary
 import structlog
+import typer
 from pluggy import PluginManager
+import tenacity
 
-from pikesquares.cli.cli import run_async
 from pikesquares import services
-from pikesquares.conf import AppConfig, AppConfigError
-from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers.attached_daemon import attached_daemon_down
-from pikesquares.domain.base import ServiceBase
+from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
+from pikesquares.conf import AppConfig
+from pikesquares.domain.managed_services import AttachedDaemon
+from pikesquares.service_layer.handlers.attached_daemon import (
+    attached_daemon_down,
+    attached_daemon_up,
+)
+from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.service_layer.handlers.prompt_utils import (
+    prompt_for_project,
+    prompt_for_attached_daemons,
+)
 
 logger = structlog.getLogger()
 
@@ -36,6 +43,108 @@ async def create(
     custom_style = obj.get("cli-style")
 
 
+@app.command(short_help="List running managed services \nAliases:[s] list")
+@app.command("list")
+@run_async
+async def list_(ctx: typer.Context):
+    """
+    List managed services
+
+    Aliases:[l] list
+    """
+    context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+    conf = await services.aget(context, AppConfig)
+    uow = await services.aget(context, UnitOfWork)
+    try:
+        async with uow:
+            try:
+                project = await prompt_for_project(uow, custom_style)
+                if not project:
+                    console.warning("unable to retrieve list of projects")
+                    raise typer.Exit(0) from None
+            except KeyboardInterrupt:
+                console.info("selection cancelled.")
+                raise typer.Exit(0) from None
+
+            attached_daemons = await project.awaitable_attrs.attached_daemons
+            if not attached_daemons:
+                console.success(f"Appears there are no managed services in project {project.name} [{project.service_id}].")
+                raise typer.Exit(0) from None
+
+            async def check_status(daemon: AttachedDaemon) -> str:
+                try:
+                    if bool(await daemon.read_stats()):
+                        return "running"
+                except tenacity.RetryError:
+                    pass
+                return "stopped"
+
+            for daemon in attached_daemons:
+                status = await check_status(daemon)
+                console.info(f"{daemon.name} - {daemon.service_id} - {status}")
+
+    except Exception as exc:
+        logger.error(exc)
+        console.error("failed to list managed services")
+        raise typer.Exit(1) from None
+
+
+@app.command(short_help="Start running managed service \nAliases:[s] start")
+@run_async
+async def start(
+    ctx: typer.Context,
+    service_name: str | None = typer.Argument("", help="Name of managed service to start"),
+):
+    """
+    Start a stopped Managed service
+
+
+    Aliases:[s] start
+    """
+    context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+    conf = await services.aget(context, AppConfig)
+    uow = await services.aget(context, UnitOfWork)
+    try:
+        async with uow:
+            try:
+                project = await prompt_for_project(uow, custom_style)
+                if not project:
+                    console.warning("unable to retrieve project")
+                    raise typer.Exit(0) from None
+                attached_daemons = await prompt_for_attached_daemons(
+                    uow,
+                    project,
+                    custom_style,
+                    is_running=False,
+                )
+            except KeyboardInterrupt:
+                console.info("selection cancelled.")
+                raise typer.Exit(0) from None
+
+            if not attached_daemons:
+                console.success("Appears there are no stopped managed services in this project.")
+                raise typer.Exit(0) from None
+
+            plugin_manager = await services.aget(context, PluginManager)
+            for attached_daemon in attached_daemons :
+                try:
+                    if await attached_daemon_up(
+                        attached_daemon,
+                        plugin_manager,
+                        uow,
+                        conf,
+                    ):
+                        console.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
+                except Exception as exc:
+                    logger.error(exc)
+                    console.error("failed to stop managed service {attached_daemon.name} [{attached_daemon.service_id}]")
+    except Exception as exc:
+        logger.error(exc)
+        console.error("failed to stop managed services")
+        raise typer.Exit(1) from None
+
 @app.command(short_help="Stop running managed service \nAliases:[s] stop")
 @run_async
 async def stop(
@@ -43,7 +152,8 @@ async def stop(
     service_name: str | None = typer.Argument("", help="Name of managed service to stop"),
 ):
     """
-    Stop a running Managed Service
+    Stop a running Managed service
+
 
     Aliases:[s] stop
     """
@@ -52,84 +162,44 @@ async def stop(
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
 
-    machine_id = await ServiceBase.read_machine_id()
-    device = await uow.devices.get_by_machine_id(machine_id)
-    if not device:
-        raise AppConfigError("no device found in context")
+    try:
+        async with uow:
+            project = await prompt_for_project(uow, custom_style)
+            if not project:
+                console.warning("unable to retrieve project")
+                raise typer.Exit(0) from None
 
-    if not len(await device.awaitable_attrs.projects):
-        console.success("Appears there have been no projects created yet.")
-        raise typer.Exit(0)
+            attached_daemons = await prompt_for_attached_daemons(
+                uow,
+                project,
+                custom_style,
+                is_running=True,
+                )
+            if not attached_daemons:
+                console.success("Appears there have been no Managed Services created in this project yet.")
+                raise typer.Exit(0) from None
 
-    async with uow:
-        try:
-            selected_project_id = await questionary.select(
-                "Select an existing project: ",
-                choices=[
-                    questionary.Choice(
-                        project.name, value=project.id
-                    ) for project in await device.awaitable_attrs.projects
-                ],
-                style=custom_style,
-            ).unsafe_ask_async()
-        except KeyboardInterrupt:
-            raise typer.Exit(0) from None
-
-        if not selected_project_id:
-            console.warning("no project selected")
-            raise typer.Exit(0)
-
-        project = await uow.projects.get_by_id(selected_project_id)
-        if not project:
-            console.warning(f"Unable to locate project by id {selected_project_id}")
-            raise typer.Exit(0)
-
-        attached_daemons = await project.awaitable_attrs.attached_daemons
-        if not attached_daemons:
-            console.success("Appears there have been no Managed Services created in this project yet.")
-            raise typer.Exit(0) from None
-
-
-        plugin_manager = await services.aget(context, PluginManager)
-        try:
-            selected_attached_daemon_ids = await questionary.checkbox(
-                "Select running managed services to stop: ",
-                choices=[
-                    questionary.Choice(
-                        attached_daemon.name, value=attached_daemon.id, checked=True
-                    ) for attached_daemon in attached_daemons
-                ],
-                style=custom_style,
-            ).unsafe_ask_async()
-
-            for selected_attached_daemon_id in selected_attached_daemon_ids:
-                selected_attached_daemon = await uow.attached_daemons.get_by_id(selected_attached_daemon_id)
-                if not selected_attached_daemon:
-                    console.warning("unable to lookup selected managed service")
-                    raise typer.Exit(0) from None
-
+            plugin_manager = await services.aget(context, PluginManager)
+            for attached_daemon in attached_daemons :
                 try:
                     if await attached_daemon_down(
-                        project,
-                        selected_attached_daemon,
+                        attached_daemon,
                         plugin_manager,
                         uow,
                         conf,
                     ):
-                        console.info(f"stopped managed service {selected_attached_daemon.name}")
+                        console.info(f"stopped managed service {attached_daemon.name} {attached_daemon.service_id}")
                 except Exception as exc:
                     logger.error(exc)
-                    print(exc)
-                    console.error("failed to stop managed services")
-                    await uow.rollback()
-                    raise typer.Exit(1) from None
-                else:
-                    await uow.commit()
-
-        except KeyboardInterrupt:
-            raise typer.Exit(0) from None
-
-
+                    print(traceback.format_exc())
+                    console.error(
+                        f"failed to stop managed service {attached_daemon.name} [{attached_daemon.service_id}]"
+                    )
+    except Exception as exc:
+        logger.error(exc)
+        print(traceback.format_exc())
+        console.error("failed to stop managed services")
+        raise typer.Exit(1) from None
 
 if __name__ == "__main__":
     app()

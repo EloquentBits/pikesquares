@@ -111,6 +111,7 @@ async def create(
                 style=custom_style,
             ).unsafe_ask_async()
         except KeyboardInterrupt:
+            console.info("selection cancelled.")
             raise typer.Exit(0)
 
         process_compose = await services.aget(context, ProcessCompose)
@@ -224,6 +225,7 @@ async def stop(
                 style=custom_style,
             ).unsafe_ask_async()
         except KeyboardInterrupt:
+            console.info("selection cancelled.")
             raise typer.Exit(0) from None
 
         for project_id in selected_projects:
@@ -346,13 +348,16 @@ async def delete(
                 "Existing projects: ",
                 choices=[
                     questionary.Choice(
-                        project.name, value=project.id, checked=True
-                    ) for project in await device.awaitable_attrs.projects 
+                        f"{project.name} [{project.service_id}]",
+                        value=project.id,
+                        checked=True,
+                    ) for project in await device.awaitable_attrs.projects
                 ],
                 style=custom_style,
             ).unsafe_ask_async()
         except KeyboardInterrupt:
-            raise typer.Exit(0)
+            console.info("selection cancelled.")
+            raise typer.Exit(0) from None
 
         for project_id in selected_projects:
             if not project_id:

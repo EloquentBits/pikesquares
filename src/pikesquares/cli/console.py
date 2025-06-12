@@ -1,18 +1,18 @@
 from pathlib import Path
 
-from rich.console import Console as BaseConsole
-from rich.prompt import Prompt, Confirm
-from rich.panel import Panel
+import questionary
 from rich.columns import Columns
-from rich.text import Text
-from rich.table import Table, Column
+from rich.console import Console as BaseConsole
 from rich.layout import Layout
+from rich.panel import Panel
 from rich.progress import (
     Progress,
-    TextColumn,
     SpinnerColumn,
+    TextColumn,
 )
-import questionary
+from rich.prompt import Confirm, Prompt
+from rich.table import Column, Table
+from rich.text import Text
 
 # import os
 

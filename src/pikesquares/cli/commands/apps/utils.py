@@ -1,27 +1,17 @@
-import time
 import os
-import traceback
-import sys
 import subprocess
+import sys
+import traceback
 from pathlib import Path
 
-import typer
 import git
-import questionary
 import giturlparse
-from cuid import cuid
-#from tinydb import TinyDB, where, Query
+import questionary
+
 import structlog
+import typer
 
-
-from pikesquares.conf import AppConfig
-from pikesquares.domain.project import Project
-from pikesquares.domain.router import HttpRouter
-
-from .validators import (
-    RepoAddressValidator,
-    PathValidator,
-)
+from .validators import PathValidator, RepoAddressValidator
 
 logger = structlog.get_logger()
 
