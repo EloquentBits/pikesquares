@@ -56,7 +56,6 @@ async def attached_daemon_up(
     attached_daemon: AttachedDaemon,
     plugin_manager: PluginManager,
     uow: "UnitOfWork",
-    conf: "AppConfig",
     create_data_dir: bool = False
 ):
     try:
@@ -70,10 +69,6 @@ async def attached_daemon_up(
         attached_daemon_device = await uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
         if not attached_daemon_device:
             raise Exception(f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}")
-
-        plugin_class = conf.attached_daemon_plugins.get(attached_daemon.name)
-        if not plugin_class:
-            raise Exception(f"unable to lookup attached daemon plugin {attached_daemon.name}")
 
         cmd_args = plugin_manager.hook.collect_command_arguments()
         # FIXME
@@ -102,11 +97,32 @@ async def attached_daemon_up(
             plugins="tuntap",
             search_dirs=[str(attached_daemon.plugins_dir)],
         )
+
+        if create_data_dir:
+            #section._set("if-not-dir", f"{attached_daemon.daemon_data_dir}")
+            section.main_process.run_command_on_event(
+                command=f"mkdir -p {attached_daemon.daemon_data_dir}",
+                phase=section.main_process.phases.PRIV_DROP_POST,
+            )
+            section.main_process.run_command_on_event(
+                command=f"chown {attached_daemon.run_as_uid}:{attached_daemon.run_as_uid} {attached_daemon.daemon_data_dir}",
+                phase=section.main_process.phases.PRIV_DROP_POST,
+            )
+            #section._set("end-if", "")
+
+        #section._set("if-not-file", f"{attached_daemon.touch_reload_file}")
+        #section.main_process.run_command_on_event(
+        #    command=f"touch {attached_daemon.touch_reload_file}",
+        #    phase=section.main_process.phases.PRIV_DROP_POST,
+        #)
+        #section._set("end-if", "")
+
         section.monitoring.set_stats_params(
             address=str(attached_daemon.stats_address),
         )
         section.master_process.set_basic_params(enable=True)
         section.master_process.set_exit_events(reload=True)
+
         section.networking.register_socket(
             section.networking.sockets.default(str(attached_daemon.socket_address))
         )
@@ -162,14 +178,6 @@ async def attached_daemon_up(
             )
             section._set("end-if", "")
 
-        if create_data_dir:
-            section._set("if-not-dir", f"{attached_daemon.daemon_data_dir}")
-            section.main_process.run_command_on_event(
-                command=f"mkdir {attached_daemon.daemon_data_dir}",
-                phase=section.main_process.phases.PRIV_DROP_POST,
-            )
-            section._set("end-if", "")
-
         section.master_process.attach_process(**cmd_args)
         try:
             _ = await attached_daemon.read_stats()
@@ -191,7 +199,6 @@ async def attached_daemon_down(
     attached_daemon: AttachedDaemon,
     plugin_manager: PluginManager,
     uow: "UnitOfWork",
-    conf: "AppConfig",
 ) -> bool:
     try:
 
@@ -200,6 +207,16 @@ async def attached_daemon_down(
         except tenacity.RetryError:
             logger.info(f"Managed service {attached_daemon.name} is not running")
             return False
+
+        if plugin_manager.hook.ping():
+            logger.info(f"stopping {attached_daemon.name} [{attached_daemon.service_id}]")
+            stop_result = plugin_manager.hook.stop()
+            if stop_result:
+                logger.info(f"stopped {attached_daemon.name} [{attached_daemon.service_id}]")
+            else:
+                logger.info(f"unable to stop {attached_daemon.name} [{attached_daemon.service_id}]")
+        else:
+            logger.info(f"daemon ping filed. not stopping {attached_daemon.name}")
 
         attached_daemon_device = await uow.tuntap_devices.\
             get_by_linked_service_id(attached_daemon.service_id)
@@ -212,11 +229,6 @@ async def attached_daemon_down(
         logger.info(f"stopping attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
         await destroy_instance(project_zmq_monitor_address, f"{attached_daemon.service_id}.ini")
         logger.info(f"stopped attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
-
-        if plugin_manager.hook.ping():
-            return plugin_manager.hook.stop()
-        else:
-            logger.info(f"not stopping {attached_daemon.name}")
 
     except Exception as exc:
         raise exc

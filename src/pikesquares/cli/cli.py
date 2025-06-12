@@ -56,7 +56,7 @@ from pikesquares.conf import (
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.caddy import register_caddy_process
 from pikesquares.domain.device import register_device_stats
-from pikesquares.domain.managed_services import AttachedDaemonHookSpec  #register_plugin_manager,
+from pikesquares.domain.managed_services import AttachedDaemonHookSpec
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ProcessCompose,
@@ -409,7 +409,6 @@ async def launch(
                         attached_daemon,
                         plugin_manager,
                         uow,
-                        conf,
                         create_data_dir=daemon_conf.get("create_data_dir"),
                     )
             except Exception as exc:

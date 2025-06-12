@@ -70,7 +70,7 @@ class PostgresAttachedDaemonPlugin:
             "pidfile": self.daemon_service.pid_file,
             "control": self.daemon_service.control,
             "daemonize": self.daemon_service.daemonize,
-            #"touch_reload": str(self.daemon_service.touch_reload_file),
+            "touch_reload": str(self.daemon_service.touch_reload_file),
             "signal_stop": self.daemon_service.signal_stop,
             "signal_reload": self.daemon_service.signal_reload,
             "honour_stdin": bool(self.daemon_service.honour_stdin),
@@ -308,13 +308,13 @@ class AttachedDaemon(ServiceBase, table=True):
     @property
     def daemon_data_dir(self) -> Path:
         daemon_dir = Path(self.data_dir) / "attached-daemons" / self.service_id
-        if not daemon_dir.exists() and self.create_data_dir:
-            daemon_dir.mkdir(parents=True, exist_ok=True)
+        #if not daemon_dir.exists() and self.create_data_dir:
+        #    daemon_dir.mkdir(parents=True, exist_ok=True)
         return daemon_dir
 
     @property
     def touch_reload_file(self) -> Path | None:
-        return #self.daemon_data_dir
+        return self.daemon_data_dir / "touch-to-reload"
 
 
 class ManagedServiceBase(pydantic.BaseModel):

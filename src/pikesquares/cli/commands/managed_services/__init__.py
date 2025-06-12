@@ -101,7 +101,10 @@ async def list_(ctx: typer.Context):
                 if attached_daemon_device:
                     plugin_manager.register(plugin_instance)
                 vassal_state = await check_vassal_state(attached_daemon)
-                daemon_ping = plugin_manager.hook.ping()
+                if vassal_state == "running":
+                    daemon_ping = plugin_manager.hook.ping()
+                else:
+                    daemon_ping = False
                 console.info(
                     f"{attached_daemon.name} - {attached_daemon.service_id} - Vassal: {vassal_state} - Daemon Ping: {'Up' if daemon_ping else 'Down'}"
                 )
@@ -172,7 +175,12 @@ async def start(
                     )
                     if attached_daemon_device:
                         plugin_manager.register(plugin_instance)
-                    if await attached_daemon_up(attached_daemon, plugin_manager, uow, conf):
+                    if await attached_daemon_up(
+                        attached_daemon,
+                        plugin_manager,
+                        uow,
+                        create_data_dir=daemon_conf.get("create_data_dir"),
+                        ):
                         console.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
                     plugin_manager.unregister(plugin_instance)
                 except Exception as exc:
@@ -247,7 +255,6 @@ async def stop(
                         attached_daemon,
                         plugin_manager,
                         uow,
-                        conf,
                     ):
                         console.info(f"stopped managed service {attached_daemon.name} {attached_daemon.service_id}")
                     plugin_manager.unregister(plugin_instance)
