@@ -146,6 +146,7 @@ class RedisAttachedDaemonPlugin:
             ping redis
         """
         cmd_args = ["-h", self.bind_ip, "-p", self.bind_port, "--raw", "incr", "ping"]
+        logger.info(cmd_args)
         try:
             with pl_local.cwd(self.daemon_service.daemon_data_dir):
                 retcode, stdout, stderr = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
@@ -164,13 +165,16 @@ class RedisAttachedDaemonPlugin:
         """
            stop redis
         """
-        cmd_args = ["-h", self.bind_ip, "-p", self.bind_port, "--raw", "incr", "ping"]
+        cmd_args = ["-h", self.bind_ip, "-p", self.bind_port, "shutdown"]
         if not Path(self.daemon_service.daemon_data_dir).exists():
             logger.info(f"{self.daemon_service.service_id} data directory missing")
             return False
         try:
             with pl_local.cwd(self.daemon_service.daemon_data_dir):
-                retcode, stdout, stderr = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
+                retcode, stdout, stderr = pl_local[
+                    str(self.get_daemon_cli_bin())
+                ].run(cmd_args)
+
                 if int(retcode) != 0:
                     logger.debug(f"{retcode=}")
                     logger.debug(f"{stdout=}")

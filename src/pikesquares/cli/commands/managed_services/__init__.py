@@ -72,7 +72,7 @@ async def list_(ctx: typer.Context):
                 console.success(f"Appears there are no managed services in project {project.name} [{project.service_id}].")
                 raise typer.Exit(0) from None
 
-            async def check_status(daemon: AttachedDaemon) -> str:
+            async def check_vassal_state(daemon: AttachedDaemon) -> str:
                 try:
                     if bool(await daemon.read_stats()):
                         return "running"
@@ -80,9 +80,33 @@ async def list_(ctx: typer.Context):
                     pass
                 return "stopped"
 
-            for daemon in attached_daemons:
-                status = await check_status(daemon)
-                console.info(f"{daemon.name} - {daemon.service_id} - {status}")
+            plugin_manager = await services.aget(context, PluginManager)
+            for attached_daemon in attached_daemons:
+                daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
+                if not daemon_conf:
+                    logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
+                    raise typer.Exit(1) from None
+                plugin_class = daemon_conf.get("class")
+                if not plugin_class:
+                    logger.error(f"unable to lookup {attached_daemon.name} class in config")
+                    continue
+
+                attached_daemon_device = await uow.tuntap_devices.\
+                    get_by_linked_service_id(attached_daemon.service_id)
+
+                plugin_instance = plugin_class(
+                    daemon_service=attached_daemon,
+                    bind_ip=str(attached_daemon_device.ip),
+                )
+                if attached_daemon_device:
+                    plugin_manager.register(plugin_instance)
+                vassal_state = await check_vassal_state(attached_daemon)
+                daemon_ping = plugin_manager.hook.ping()
+                console.info(
+                    f"{attached_daemon.name} - {attached_daemon.service_id} - Vassal: {vassal_state} - Daemon Ping: {'Up' if daemon_ping else 'Down'}"
+                )
+
+                plugin_manager.unregister(plugin_instance)
 
     except Exception as exc:
         logger.error(exc)
@@ -128,18 +152,35 @@ async def start(
                 raise typer.Exit(0) from None
 
             plugin_manager = await services.aget(context, PluginManager)
-            for attached_daemon in attached_daemons :
+            for attached_daemon in attached_daemons:
                 try:
-                    if await attached_daemon_up(
-                        attached_daemon,
-                        plugin_manager,
-                        uow,
-                        conf,
-                    ):
+                    daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
+                    if not daemon_conf:
+                        logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
+                        raise typer.Exit(1) from None
+                    plugin_class = daemon_conf.get("class")
+                    if not plugin_class:
+                        logger.error(f"unable to lookup {attached_daemon.name} class in config")
+                        continue
+
+                    attached_daemon_device = await uow.tuntap_devices.\
+                        get_by_linked_service_id(attached_daemon.service_id)
+
+                    plugin_instance = plugin_class(
+                        daemon_service=attached_daemon,
+                        bind_ip=str(attached_daemon_device.ip),
+                    )
+                    if attached_daemon_device:
+                        plugin_manager.register(plugin_instance)
+                    if await attached_daemon_up(attached_daemon, plugin_manager, uow, conf):
                         console.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
+                    plugin_manager.unregister(plugin_instance)
                 except Exception as exc:
                     logger.error(exc)
-                    console.error("failed to stop managed service {attached_daemon.name} [{attached_daemon.service_id}]")
+                    console.error(
+                        f"failed to stop managed service {attached_daemon.name} [{attached_daemon.service_id}]"
+                    )
+
     except Exception as exc:
         logger.error(exc)
         console.error("failed to stop managed services")
@@ -180,8 +221,28 @@ async def stop(
                 raise typer.Exit(0) from None
 
             plugin_manager = await services.aget(context, PluginManager)
-            for attached_daemon in attached_daemons :
+            for attached_daemon in attached_daemons:
                 try:
+
+                    daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
+                    if not daemon_conf:
+                        logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
+                        raise typer.Exit(1) from None
+                    plugin_class = daemon_conf.get("class")
+                    if not plugin_class:
+                        logger.error(f"unable to lookup {attached_daemon.name} class in config")
+                        continue
+
+                    attached_daemon_device = await uow.tuntap_devices.\
+                        get_by_linked_service_id(attached_daemon.service_id)
+
+                    plugin_instance = plugin_class(
+                        daemon_service=attached_daemon,
+                        bind_ip=str(attached_daemon_device.ip),
+                    )
+                    if attached_daemon_device:
+                        plugin_manager.register(plugin_instance)
+
                     if await attached_daemon_down(
                         attached_daemon,
                         plugin_manager,
@@ -189,6 +250,7 @@ async def stop(
                         conf,
                     ):
                         console.info(f"stopped managed service {attached_daemon.name} {attached_daemon.service_id}")
+                    plugin_manager.unregister(plugin_instance)
                 except Exception as exc:
                     logger.error(exc)
                     print(traceback.format_exc())

@@ -213,7 +213,10 @@ async def attached_daemon_down(
         await destroy_instance(project_zmq_monitor_address, f"{attached_daemon.service_id}.ini")
         logger.info(f"stopped attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
 
-        return plugin_manager.hook.stop()
+        if plugin_manager.hook.ping():
+            return plugin_manager.hook.stop()
+        else:
+            logger.info(f"not stopping {attached_daemon.name}")
 
     except Exception as exc:
         raise exc
