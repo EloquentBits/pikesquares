@@ -15,6 +15,38 @@ from pikesquares.service_layer.uow import UnitOfWork
 logger = structlog.getLogger()
 
 
+
+async def prompt_for_launch_service(uow: UnitOfWork, custom_style) -> str | None:
+
+    try:
+        launch_service = await questionary.select(
+            "Select an app or a managed, self-hosted service to launch: ",
+            choices=[
+                questionary.Choice("Python/WSGI (new app)", value="python-wsgi-new"),
+                questionary.Choice("Python/WSGI (from git repo)", value="python-wsgi-git"),
+                questionary.Separator(),
+                #questionary.Choice("Django (empty)", value="python-wsgi-django"),
+                #questionary.Choice("Flask (empty)", value="python-wsgi-flask"),
+                #questionary.Separator(),
+                questionary.Choice("Bugsink (Django)", value="bugsink"),
+                questionary.Choice("MeshDB (Django)", value="meshdb"),
+                questionary.Separator(),
+                questionary.Choice("PostgreSQL", value="postgres"),
+                questionary.Choice("Redis", value="redis"),
+                questionary.Separator(),
+                questionary.Choice("ruby/Rack", disabled="coming soon"),
+                questionary.Choice("PHP", disabled="coming soon"),
+                questionary.Choice("perl/PSGI", disabled="coming soon"),
+            ],
+            style=custom_style,
+        ).unsafe_ask_async()
+
+        return launch_service
+
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None
+
 async def prompt_for_project(uow: UnitOfWork, custom_style) -> Project | None:
 
     machine_id = await ServiceBase.read_machine_id()

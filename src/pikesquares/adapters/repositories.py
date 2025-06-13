@@ -8,6 +8,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.sql.expression import SelectOfScalar
 
 from pikesquares.domain.base import ServiceBase
+
+from pikesquares.domain.runtime import (
+    AppRuntime,
+    AppCodebase,
+)
 from pikesquares.domain.device import Device, DeviceUWSGIOption
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import (
@@ -478,6 +483,47 @@ class AttachedDaemonRepositoryBase(GenericRepository[AttachedDaemon], ABC):
 class AttachedDaemonRepository(GenericSqlRepository[AttachedDaemon], AttachedDaemonRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, AttachedDaemon)
+
+    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
+        stmt = select(AttachedDaemon).where(
+            AttachedDaemon.name == name,
+            AttachedDaemon.project_id == project_id,
+        )
+        results = await self._session.exec(stmt)
+        return results.all()
+
+
+class AppRuntimeRepositoryBase(GenericRepository[AppRuntime], ABC):
+    """AppRuntime repository."""
+
+    @abstractmethod
+    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
+        raise NotImplementedError()
+
+
+class AppRuntimeRepository(GenericSqlRepository[AppRuntime], AppRuntimeRepositoryBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, AppRuntime)
+
+    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
+        stmt = select(AttachedDaemon).where(
+            AttachedDaemon.name == name,
+            AttachedDaemon.project_id == project_id,
+        )
+        results = await self._session.exec(stmt)
+        return results.all()
+
+class AppCodebaseRepositoryBase(GenericRepository[AppCodebase], ABC):
+    """AppCodebase repository."""
+
+    @abstractmethod
+    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
+        raise NotImplementedError()
+
+
+class AppCodebaseRepository(GenericSqlRepository[AppCodebase], AppCodebaseRepositoryBase):
+    def __init__(self, session: AsyncSession) -> None:
+        super().__init__(session, AppCodebase)
 
     async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
         stmt = select(AttachedDaemon).where(

@@ -21,6 +21,7 @@ from pikesquares.service_layer.handlers.project import (
     project_down,
 )
 from pikesquares.service_layer.handlers.routers import http_router_up
+from pikesquares.services.data import DeviceStats
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.process_compose import ProcessCompose
@@ -261,9 +262,15 @@ async def list_(ctx: typer.Context, show_id: bool = False):
     context = ctx.ensure_object(dict)
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
-    device = context.get("device")
+
+    machine_id = await ServiceBase.read_machine_id()
+    device = await uow.devices.get_by_machine_id(machine_id)
     if not device:
         console.warning("unable to lookup device")
+        raise typer.Exit(0)
+
+    if not len(await device.awaitable_attrs.projects):
+        console.success("Appears there have been no projects created yet.")
         raise typer.Exit(0)
 
     #device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
@@ -275,14 +282,22 @@ async def list_(ctx: typer.Context, show_id: bool = False):
         raise typer.Exit()
 
     projects_out = []
-    device_stats = device.stats()
+    try:
+        stats = await device.read_stats()
+        device_stats = DeviceStats()
+    except tenacity.RetryError:
+        console.error(f"Unable to read stats for device [{device.machine_id}]")
+        raise typer.Exit(1) from None
+
     if not device_stats:
-        console.warning("unable to lookup project stats")
+        console.warning("unable to lookup device stats")
         raise typer.Exit(0)
 
     for project in projects:
         try:
-            vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
+            vassal_stats = next(
+                filter(lambda v: v.id.split(".ini")[0], device_stats.vassals)
+            )
             projects_out.append(
                 {
                     "name": project.name,
@@ -351,7 +366,7 @@ async def delete(
                         f"{project.name} [{project.service_id}]",
                         value=project.id,
                         checked=True,
-                    ) for project in await device.awaitable_attrs.projects
+                    ) for project in await device.awaitable_attrs.projects 
                 ],
                 style=custom_style,
             ).unsafe_ask_async()

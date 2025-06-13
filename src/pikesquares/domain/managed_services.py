@@ -1,3 +1,4 @@
+from typing import NewType
 from pathlib import Path
 from string import Template
 from typing import Annotated
@@ -12,13 +13,15 @@ from sqlmodel import (
     Relationship,
 )
 
-from pikesquares.services import register_factory
 from pikesquares.domain.base import ServiceBase
 
 logger = structlog.get_logger()
 
-hook_spec = HookspecMarker("managed_daemon" )
-hook_impl = HookimplMarker("managed_daemon" )
+
+AttachedDaemonPluginManager = NewType("AttachedDaemonPluginManager", PluginManager)
+
+hook_spec = HookspecMarker("attached-daemon" )
+hook_impl = HookimplMarker("attached-daemon" )
 
 """
 https://www.postgresql.org/docs/current/reference-server.html
@@ -388,14 +391,3 @@ class Redis(ManagedServiceBase):
 
     cmd_args: list[str] = []
     cmd_env: dict[str, str] = {}
-
-
-def register_plugin_manager(context: dict):
-
-    def plugin_manager_factory():
-        pm = PluginManager("managed_daemon")
-        pm.add_hookspecs(AttachedDaemonHookSpec)
-        return pm
-
-    register_factory(context, PluginManager, plugin_manager_factory)
-

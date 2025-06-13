@@ -51,7 +51,7 @@ class TimeStampedBase(SQLModel):
     )
 
 
-class ServiceBase(AsyncAttrs, TimeStampedBase, SQLModel):
+class ServiceBase(AsyncAttrs, TimeStampedBase):
     """Base SQL model class."""
 
     id: str = Field(

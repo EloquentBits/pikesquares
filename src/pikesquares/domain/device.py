@@ -15,9 +15,8 @@ from sqlmodel import (
     SQLModel,
 )
 
-from sqlalchemy import event
+#from sqlalchemy import event
 
-from pikesquares.exceptions import StatsReadError
 from pikesquares.presets.device import DeviceSection
 from pikesquares import services
 from pikesquares.services.data import DeviceStats

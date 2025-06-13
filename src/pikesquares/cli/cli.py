@@ -4,8 +4,6 @@ import grp
 import logging
 import os
 import shutil
-
-# import pwd
 import tempfile
 from functools import wraps
 from pathlib import Path
@@ -15,8 +13,6 @@ import anyio
 import cuid
 import git
 import giturlparse
-
-#from sqlalchemy.sql import text
 import questionary
 import randomname
 import sentry_sdk
@@ -44,19 +40,15 @@ from pikesquares.cli.console import (
     make_layout,
     make_progress,
 )
-
-# from circus import Arbiter, get_arbiter
 from pikesquares.conf import (
     AppConfig,
     AppConfigError,
     register_app_conf,
 )
-
-# from pikesquares.cli.commands.apps.validators import NameValidator
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.caddy import register_caddy_process
 from pikesquares.domain.device import register_device_stats
-from pikesquares.domain.managed_services import AttachedDaemonHookSpec
+from pikesquares.domain.managed_services import AttachedDaemonHookSpec, AttachedDaemonPluginManager
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ProcessCompose,
@@ -66,19 +58,30 @@ from pikesquares.domain.process_compose import (
     register_dnsmasq_process,
     register_process_compose,
 )
-from pikesquares.exceptions import StatsReadError
+from pikesquares.domain.python_runtime import PythonRuntime
+from pikesquares.domain.runtime import (
+    AppCodebase,
+    AppRuntime,
+    AppRuntimeHookSpec,
+    AppRuntimePluginManager,
+)
 from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
     provision_attached_daemon,
 )
 from pikesquares.service_layer.handlers.device import provision_device
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
-from pikesquares.service_layer.handlers.project import project_up, provision_project
+from pikesquares.service_layer.handlers.project import project_up
+from pikesquares.service_layer.handlers.prompt_utils import (
+    prompt_for_launch_service,
+    prompt_for_project,
+)
 from pikesquares.service_layer.handlers.routers import http_router_up
 from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app
 from pikesquares.service_layer.handlers.wsgi_app import up as wsgi_app_up
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.services.apps.django import PythonRuntimeDjango
+
+#from pikesquares.services.apps.django import PythonRuntimeDjango
 from pikesquares.services.apps.exceptions import (
     # PythonRuntimeCheckError,
     # PythonRuntimeDjangoCheckError,
@@ -93,12 +96,10 @@ from pikesquares.services.apps.exceptions import (
 )
 
 # from pikesquares.services.apps import RubyRuntime, PHPRuntime
-from pikesquares.services.apps.python import PythonRuntime
-
+#from pikesquares.services.apps.python import PythonRuntime
 from .console import console
 
 LOG_FILE = "app.log"
-
 
 """
 def write_to_file(logger, method_name, event_dict):
@@ -169,6 +170,7 @@ structlog.configure(
 logger = structlog.get_logger()
 
 load_dotenv()
+
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -295,7 +297,7 @@ def attach(
 async def launch(
     ctx: typer.Context,
 ):
-    """Launch a preconfigured app or attached daemon"""
+    """Launch a preconfigured app or managed, self-hosted service"""
 
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
@@ -304,6 +306,9 @@ async def launch(
     uow = await services.aget(context, UnitOfWork)
     machine_id = await ServiceBase.read_machine_id()
     device = await uow.devices.get_by_machine_id(machine_id)
+    if not device:
+        console.error(f"cli launch: unable to locate device by machine id {machine_id}")
+        raise typer.Exit(code=0) from None
 
     #try:
     #    vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
@@ -313,119 +318,53 @@ async def launch(
     #    vassals_home = project_zmq_monitor.uwsgi_zmq_address
     #    await project.up(device_zmq_monitor, vassals_home, tuntap_router)
     #
-    launch_service_q = questionary.select(
-        "Select an app or service to launch: ",
-        choices=[
-            questionary.Choice("PostgreSQL", value="postgres"),
-            questionary.Choice("Redis", value="redis"),
-            questionary.Separator(),
-            questionary.Choice("Python/WSGI", value="python-wsgi"),
-            questionary.Separator(),
-            questionary.Choice("ruby/Rack", disabled="coming soon"),
-            questionary.Choice("PHP", disabled="coming soon"),
-            questionary.Choice("perl/PSGI", disabled="coming soon"),
-        ],
-        style=custom_style,
-    )
-    launch_service = await launch_service_q.ask_async()
-    print(launch_service)
-
-    if launch_service  in ["postgres", "redis"]:
-
-        launch_into_q = questionary.select(
-            "Launch into an existing project or standalone: ",
+    #
+    launch_service = await prompt_for_launch_service(uow, custom_style)
+    try:
+        launch_into = await questionary.select(
+            "Launch into an existing project or create a new project: ",
             choices=[
-                questionary.Choice("Existing Project", value="existing_project"),
-                questionary.Choice("Standalone", value="standalone"),
+                questionary.Choice("Existing Project", value="existing-project"),
+                questionary.Choice("Create Project", value="create-project"),
             ],
             style=custom_style,
+        ).unsafe_ask_async()
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None
+
+    project = None
+    if launch_into == "existing-project":
+        if not len(await device.awaitable_attrs.projects):
+            console.success("Appears there have been no projects created.")
+            raise typer.Exit(0) from None
+
+        project = await prompt_for_project(uow, custom_style)
+        #project = await uow.projects.get_by_service_id(project_service_id)
+        print(f"launching into project {project}")
+
+    elif launch_into == "create-project":
+        pass
+
+    if launch_service in ["python-wsgi-git", "bugsink", "meshdb"]:
+
+        app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
+        #daemon_conf = conf.attached_daemon_plugins.get(launch_service)
+        #if not daemon_conf:
+        #    logger.error(f"unable to lookup attached daemon plugin {launch_service}")
+        #    raise typer.Exit(1) from None
+
+        #plugin_class = daemon_conf.get("class")
+        #if not plugin_class:
+        #    logger.error(f"unable to lookup {attached_daemon.name} class in config")
+
+        app_runtime_plugin_manager.register(
+            PythonRuntime()
         )
-        launch_into = await launch_into_q.ask_async()
-        print(launch_into)
-        project = None
+        runtime_version = app_runtime_plugin_manager.hook.prompt_for_version()
+        console.info(f"selected Python {runtime_version}")
 
-        if launch_into == "existing_project":
-            if not len(await device.awaitable_attrs.projects):
-                console.success("Appears there have been no projects created.")
-                raise typer.Exit()
-
-            try:
-                selected_project_id = await questionary.select(
-                    "Select a project: ",
-                    choices=[
-                        questionary.Choice(
-                            project.name, value=project.id
-                        ) for project in await device.awaitable_attrs.projects 
-                    ],
-                    style=custom_style,
-                ).unsafe_ask_async()
-            except KeyboardInterrupt:
-                raise typer.Exit()
-
-            #project = await uow.projects.get_by_service_id(project_service_id)
-            project = await uow.projects.get_by_id(selected_project_id)
-            print(f"launching into project {project}")
-
-        attached_daemon_name = launch_service
-        if not project:
-            console.warning("no project selected. exiting")
-            raise typer.Exit()
-
-        async with uow:
-            #attached_daemons = await uow.attached_daemons.list()
-            #for daemon in attached_daemons:
-            #    logger.info(daemon)
-            #attached_daemon_choices = [d.service_id for d in attached_daemons]
-            #create_data_dir  = True
-            #if attached_daemon_name == "postgres":
-            #    create_data_dir = False
-            #
-            try:
-                attached_daemon = await provision_attached_daemon(
-                    attached_daemon_name,
-                    project,
-                    uow,
-                )
-                if attached_daemon:
-                    plugin_manager = await services.aget(context, PluginManager)
-                    daemon_conf = conf.attached_daemon_plugins.\
-                        get(attached_daemon.name)
-                    if not daemon_conf:
-                        logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
-                        raise typer.Exit(1) from None
-
-                    plugin_class = daemon_conf.get("class")
-                    attached_daemon_device = await uow.tuntap_devices.\
-                        get_by_linked_service_id(attached_daemon.service_id)
-
-                    if attached_daemon_device:
-                        plugin_manager.register(
-                            plugin_class(
-                                daemon_service=attached_daemon,
-                                bind_ip=str(attached_daemon_device.ip),
-                            )
-                        )
-                    await attached_daemon_up(
-                        attached_daemon,
-                        plugin_manager,
-                        uow,
-                        create_data_dir=daemon_conf.get("create_data_dir"),
-                    )
-            except Exception as exc:
-                logger.exception(exc)
-                console.print(exc)
-                await uow.rollback()
-                raise typer.Exit(1) from None
-            else:
-                await uow.commit()
-
-            if 0:
-                if attached_daemon.ping("/usr/local/bin/redis-cli", attached_daemon_device.ip):
-                    console.success(f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!")
-                else:
-                    console.error(f"{attached_daemon_name} ping failed.")
-    else:
-
+        """
         def git_clone(repo_url: str, clone_into_dir: Path):
             class CloneProgress(git.RemoteProgress):
                 def update(self, op_code, cur_count, max_count=None, message=""):
@@ -441,24 +380,90 @@ async def launch(
                     logger.exception(exc)
                 # if "already exists and is not an empty directory" in exc.stderr:
                     pass
+        """
+        repo_url = None
+        app_name = None
+        if launch_service == "bugsink":
+            repo_url = "https://github.com/bugsink/bugsink.git"
+        elif launch_service == "bugsink":
+            repo_url = "https://github.com/meshnyc/meshdb.git"
+        elif launch_service == "python-wsgi-git":
+            """
+            def gather_repo_details_and_clone() -> Path:
+                repo = None
+                repo_url, _, clone_into_dir = gather_repo_details(custom_style)
 
-        repo_url = "https://github.com/bugsink/bugsink.git"
-        giturl = giturlparse.parse(repo_url)
-        app_name = giturl.name
+                def try_again_q(instruction):
+                    return questionary.confirm(
+                            "Try entring a different repository url?",
+                            instruction=instruction,
+                            default=True,
+                            auto_enter=True,
+                            style=custom_style,
+                    )
+                #with console.status(f"cloning `{repo_name}` repository into `{clone_into_dir}`", spinner="earth"):
+                while not repo:
+                    try:
+                        repo = git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
+                    except git.GitCommandError as exc:
+                        if "already exists and is not an empty directory" in exc.stderr:
+                            if questionary.confirm(
+                                    "Continue with this directory?",
+                                    instruction=f"A git repository exists at {clone_into_dir}",
+                                    default=True,
+                                    auto_enter=True,
+                                    style=custom_style,
+                                    ).ask():
+                                break
+                            #base_dir = prompt_base_dir(repo_name, custom_style)
+                        elif "Repository not found" in exc.stderr:
+                            if try_again_q(f"Unable to locate a git repository at {repo_url}").ask():
+                                gather_repo_details_and_clone()
+                            raise typer.Exit()
+                        else:
+                            console.warning(traceback.format_exc())
+                            console.warning(f"{exc.stdout}")
+                            console.warning(f"{exc.stderr}")
+                            if try_again_q(f"Unable to clone the provided repository url at {repo_url} into {clone_into_dir}").ask():
+                                gather_repo_details_and_clone()
+                            raise typer.Exit()
+
+                return clone_into_dir
+
+            gather_repo_details_and_clone()
+
+            """
+
+        if repo_url:
+            giturl = giturlparse.parse(repo_url)
+            app_name = giturl.name
+
+        if not app_name:
+            app_name = await questionary.text(
+                "Choose a name for your app: ",
+                default=randomname.get_name().lower(),
+                style=custom_style,
+                #validate=NameValidator,
+            ).ask_async()
+
         app_root_dir = AsyncPath(conf.pyapps_dir) / app_name
         await app_root_dir.mkdir(exist_ok=True)
         app_repo_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
         app_pyvenv_dir = app_repo_dir / ".venv"
-        try:
-            repo = git_clone(repo_url, Path(app_repo_dir))
-        except Exception as exc:
-            logger.exception(exc)
-            console.error(f"unable to clone {app_name} repo from {repo_url}")
-            raise typer.Exit(1) from None
 
-        project_name = app_name
+        if repo_url:
+            try:
+                repo = git_clone(repo_url, Path(app_repo_dir))
+            except Exception as exc:
+                logger.exception(exc)
+                console.error(f"unable to clone {app_name} repo from {repo_url}")
+                raise typer.Exit(1) from None
+
+        wsgi_app = None
         async with uow:
             try:
+                """
+                project_name = app_name
                 project = await uow.projects.get_by_name(project_name) or \
                     await provision_project(project_name, device, uow)
                 project_up_result = await project_up(project)
@@ -470,6 +475,7 @@ async def launch(
                 for http_router in http_routers:
                     await http_router_up(uow, http_router)
 
+                """
                 wsgi_app = await provision_wsgi_app(
                     app_name,
                     app_root_dir,
@@ -479,15 +485,80 @@ async def launch(
                     uow,
                     project,
                 )
-
-                await wsgi_app_up(uow, wsgi_app, project, http_routers[0], console)
-
             except Exception as exc:
                 logger.exception(exc)
                 await uow.rollback()
                 raise typer.Exit(1) from None
-            else:
+
+            if wsgi_app:
                 await uow.commit()
+                await wsgi_app_up(
+                    uow,
+                    wsgi_app,
+                    project,
+                    http_routers[0],
+                    console,
+                )
+    elif launch_service  in ["postgres", "redis"]:
+
+        attached_daemon_name = launch_service
+        if not project:
+            console.warning("no project selected. exiting")
+            raise typer.Exit()
+
+        async with uow:
+            #attached_daemons = await uow.attached_daemons.list()
+            #for daemon in attached_daemons:
+            #    logger.info(daemon)
+            #attached_daemon_choices = [d.service_id for d in attached_daemons]
+            #create_data_dir  = True
+            #if attached_daemon_name == "postgres":
+            #    create_data_dir = False
+            #
+            attached_daemon_plugin_manager = await services.aget(context, AttachedDaemonPluginManager)
+            daemon_conf = conf.attached_daemon_plugins.get(launch_service)
+            if not daemon_conf:
+                logger.error(f"unable to lookup attached daemon plugin {launch_service}")
+                raise typer.Exit(1) from None
+            attached_daemon = None
+            try:
+                attached_daemon = await provision_attached_daemon(
+                    attached_daemon_name,
+                    project,
+                    uow,
+                )
+                if attached_daemon:
+                    plugin_class = daemon_conf.get("class")
+                    if not plugin_class:
+                        logger.error(f"unable to lookup {attached_daemon.name} class in config")
+
+                    attached_daemon_device = await uow.tuntap_devices.\
+                        get_by_linked_service_id(attached_daemon.service_id)
+                    if attached_daemon_device:
+                        attached_daemon_plugin_manager.register(plugin_class(
+                            daemon_service=attached_daemon,
+                            bind_ip=str(attached_daemon_device.ip),
+                        ))
+            except Exception as exc:
+                logger.exception(exc)
+                console.print(exc)
+                await uow.rollback()
+                raise typer.Exit(1) from None
+
+            await uow.commit()
+            if attached_daemon:
+                await attached_daemon_up(
+                    attached_daemon,
+                    attached_daemon_plugin_manager,
+                    uow,
+                    create_data_dir=daemon_conf.get("create_data_dir"),
+                )
+                if 0:
+                    if attached_daemon.ping("/usr/local/bin/redis-cli", attached_daemon_device.ip):
+                        console.success(f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!")
+                    else:
+                        console.error(f"{attached_daemon_name} ping failed.")
+
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")
 @run_async
@@ -1261,13 +1332,19 @@ async def main(
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
 
-    def plugin_manager_factory():
-        pm = PluginManager("managed_daemon")
+    def attached_daemon_plugin_manager_factory():
+        pm = PluginManager("attached-daemon")
         pm.add_hookspecs(AttachedDaemonHookSpec)
         return pm
-    services.register_factory(context, PluginManager, plugin_manager_factory)
-    plugin_manager = await services.aget(context, PluginManager)
-    #import ipdb;ipdb.set_trace()
+    services.register_factory(context, AttachedDaemonPluginManager , attached_daemon_plugin_manager_factory)
+    #attached_daemon_plugin_manager = await services.aget(context, AttachedDaemonPluginManager)
+
+    def app_runtime_plugin_manager_factory():
+        pm = PluginManager("app-runtime")
+        pm.add_hookspecs(AppRuntimeHookSpec)
+        return pm
+    services.register_factory(context, AppRuntimePluginManager , app_runtime_plugin_manager_factory)
+    #app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
 
     async with uow:
         try:

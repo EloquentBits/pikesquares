@@ -33,6 +33,9 @@ from pikesquares.domain.managed_services import (
     RedisAttachedDaemonPlugin,
     PostgresAttachedDaemonPlugin,
 )
+#from pikesquares.domain.wsgi_app import (
+#    BugsinkPlugin,
+#)
 
 logger = structlog.get_logger()
 
@@ -357,6 +360,15 @@ class AppConfig(BaseSettings):
                 "create_data_dir": True,
             },
         }
+
+    #@property
+    #def preconfigured_app_plugins(self):
+    #     return {
+    #        "bugsink": {
+    #            "class": BugsinkPlugin,
+    #        },
+    #    }
+
 
     """
     @pydantic.field_validator('temp_dir', mode="after")

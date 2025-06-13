@@ -108,7 +108,7 @@ def info(
     # client_conf = services.get(context, conf.ClientConfig)
     device = services.get(context, Device)
     try:
-        device_stats = device.stats()
+        device_stats = device.read_stats()
     except StatsReadError:
         console.warning(f"""Device stats @ {device.stats_address} are unavailable.\nIs the PikeSquares Server running?""")
         raise typer.Exit() from None

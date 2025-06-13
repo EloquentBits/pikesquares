@@ -22,6 +22,10 @@ from pikesquares.adapters.repositories import (
     TuntapDeviceRepository,
     AttachedDaemonRepositoryBase,
     AttachedDaemonRepository,
+    AppRuntimeRepositoryBase,
+    AppRuntimeRepository,
+    AppCodebaseRepositoryBase,
+    AppCodebaseRepository,
 )
 
 # logger = logging.getLogger("uvicorn.error")
@@ -43,6 +47,8 @@ class UnitOfWorkBase(ABC):
     tuntap_routers: TuntapRouterRepositoryBase
     tuntap_devices: TuntapDeviceRepositoryBase
     attached_daemons: AttachedDaemonRepositoryBase
+    app_runtimes: AppRuntimeRepositoryBase
+    app_codebases: AppCodebaseRepositoryBase
 
     async def __aenter__(self):
         return self

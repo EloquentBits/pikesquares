@@ -6,7 +6,7 @@ import tenacity
 from pluggy import PluginManager
 from uwsgiconf.config import Section
 
-from pikesquares.domain.managed_services import AttachedDaemon
+from pikesquares.domain.managed_services import AttachedDaemon, AttachedDaemonPluginManager
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, destroy_instance
 from pikesquares.service_layer.handlers.routers import create_tuntap_device
@@ -54,7 +54,7 @@ async def provision_attached_daemon(
 
 async def attached_daemon_up(
     attached_daemon: AttachedDaemon,
-    plugin_manager: PluginManager,
+    plugin_manager: AttachedDaemonPluginManager,
     uow: "UnitOfWork",
     create_data_dir: bool = False
 ):
@@ -183,7 +183,7 @@ async def attached_daemon_up(
             _ = await attached_daemon.read_stats()
             logger.info(f"Attached Daemon {attached_daemon.name} is already running")
         except tenacity.RetryError:
-            print(section.as_configuration().format())
+            #print(section.as_configuration().format())
             project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
             project_zmq_monitor_address = project_zmq_monitor.zmq_address
             logger.info(f"launching Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
