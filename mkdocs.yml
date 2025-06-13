@@ -1,0 +1,70 @@
+yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+
+site_name: PikeSquares API Docs
+site_url: https://sitename.example
+theme:
+  name: material
+  font:
+    text: Merriweather Sans
+    code: Red Hat Mono
+  logo: assets/pks.svg
+  palette:
+    # Dark Mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Dark mode
+      primary: green
+      accent: deep purple
+    # Light Mode
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+      name: Light mode
+      primary: blue
+      accent: deep orange
+
+markdown_extensions:
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+        anchor_linenums: true
+        line_spans: __span
+        pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: ["src"]
+          options:
+              docstring_style: google
+              show_source: false  # можешь включить если хочешь видеть исходник
+              show_root_toc_entry: true
+              show_signature: true
+              show_docstring: true
+              show_category_heading: true
+              merge_init_into_class: true
+
+
+nav:
+  - Home: index.md
+  - Repositories: repositories.md
+  - Caddy: caddy.md
+  - Domain: domain.md
+  - Unit of work: uow.md
+  - Handlers: handlers.md
+  - CLI: cli.md
+  - Presets: presets.md
+  - Wsgi_apps: wsgi_apps.md
+  - App: app.md
+  - Services: services.md
