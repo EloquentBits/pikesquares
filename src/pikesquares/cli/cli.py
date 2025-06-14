@@ -1,3 +1,4 @@
+import traceback
 import asyncio
 import atexit
 import grp
@@ -60,11 +61,13 @@ from pikesquares.domain.process_compose import (
 )
 from pikesquares.domain.runtime import (
     AppCodebase,
-    AppRuntime,
     AppRuntimeHookSpec,
     AppRuntimePluginManager,
 )
-from pikesquares.domain.python_runtime import PythonAppRuntime
+from pikesquares.domain.python_runtime import (
+    PythonAppRuntime,
+    PythonRuntimePlugin,
+)
 
 from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
@@ -78,8 +81,9 @@ from pikesquares.service_layer.handlers.prompt_utils import (
     prompt_for_project,
 )
 from pikesquares.service_layer.handlers.routers import http_router_up
-from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app
-from pikesquares.service_layer.handlers.wsgi_app import up as wsgi_app_up
+from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, up as wsgi_app_up 
+from pikesquares.service_layer.handlers.runtimes import provision_python_app_runtime
+
 from pikesquares.service_layer.uow import UnitOfWork
 
 #from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -359,11 +363,23 @@ async def launch(
         #if not plugin_class:
         #    logger.error(f"unable to lookup {attached_daemon.name} class in config")
 
-        app_runtime_plugin_manager.register(
-            PythonRuntime()
-        )
+        app_runtime_plugin_manager.register(PythonRuntimePlugin())
         runtime_version = app_runtime_plugin_manager.hook.prompt_for_version()
+        if runtime_version and isinstance(runtime_version, list):
+            runtime_version = runtime_version[0]
         console.info(f"selected Python {runtime_version}")
+        python_app_runtime = None
+        async with uow:
+            try:
+                python_app_runtime = await provision_python_app_runtime(runtime_version, uow)
+            except Exception as exc:
+                await uow.rollback()
+                console.error(f"failed to provision a Python {runtime_version} App Runtime")
+                raise typer.Exit(1) from None
+            else:
+                await uow.commit()
+
+        raise typer.Exit(0) from None
 
         """
         def git_clone(repo_url: str, clone_into_dir: Path):

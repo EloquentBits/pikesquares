@@ -9,10 +9,8 @@ from sqlmodel.sql.expression import SelectOfScalar
 
 from pikesquares.domain.base import ServiceBase
 
-from pikesquares.domain.runtime import (
-    AppRuntime,
-    AppCodebase,
-)
+from pikesquares.domain.runtime import AppCodebase
+from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.domain.device import Device, DeviceUWSGIOption
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import (
@@ -493,25 +491,26 @@ class AttachedDaemonRepository(GenericSqlRepository[AttachedDaemon], AttachedDae
         return results.all()
 
 
-class AppRuntimeRepositoryBase(GenericRepository[AppRuntime], ABC):
-    """AppRuntime repository."""
+class PythonAppRuntimeRepositoryBase(GenericRepository[PythonAppRuntime], ABC):
+    """PythonAppRuntime repository."""
 
     @abstractmethod
-    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
+    async def get_by_version(self, version: str) -> PythonAppRuntime | None:
         raise NotImplementedError()
 
 
-class AppRuntimeRepository(GenericSqlRepository[AppRuntime], AppRuntimeRepositoryBase):
+class PythonAppRuntimeRepository(GenericSqlRepository[PythonAppRuntime], PythonAppRuntimeRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session, AppRuntime)
+        super().__init__(session, PythonAppRuntime)
 
-    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
-        stmt = select(AttachedDaemon).where(
-            AttachedDaemon.name == name,
-            AttachedDaemon.project_id == project_id,
+    async def get_by_version(self, version: str) -> PythonAppRuntime | None:
+        stmt = select(PythonAppRuntime).where(
+            PythonAppRuntime.version == version,
         )
         results = await self._session.exec(stmt)
-        return results.all()
+        if results:
+            obj = results.first()
+            return obj
 
 class AppCodebaseRepositoryBase(GenericRepository[AppCodebase], ABC):
     """AppCodebase repository."""

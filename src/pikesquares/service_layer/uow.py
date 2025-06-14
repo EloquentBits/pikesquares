@@ -22,8 +22,8 @@ from pikesquares.adapters.repositories import (
     TuntapDeviceRepository,
     AttachedDaemonRepositoryBase,
     AttachedDaemonRepository,
-    AppRuntimeRepositoryBase,
-    AppRuntimeRepository,
+    PythonAppRuntimeRepositoryBase,
+    PythonAppRuntimeRepository,
     AppCodebaseRepositoryBase,
     AppCodebaseRepository,
 )
@@ -47,7 +47,7 @@ class UnitOfWorkBase(ABC):
     tuntap_routers: TuntapRouterRepositoryBase
     tuntap_devices: TuntapDeviceRepositoryBase
     attached_daemons: AttachedDaemonRepositoryBase
-    app_runtimes: AppRuntimeRepositoryBase
+    python_app_runtimes: PythonAppRuntimeRepositoryBase
     app_codebases: AppCodebaseRepositoryBase
 
     async def __aenter__(self):
@@ -87,6 +87,8 @@ class UnitOfWork(UnitOfWorkBase):
         self.tuntap_routers = TuntapRouterRepository(self._session)
         self.tuntap_devices = TuntapDeviceRepository(self._session)
         self.attached_daemons = AttachedDaemonRepository(self._session)
+        self.python_app_runtimes = PythonAppRuntimeRepository(self._session)
+        self.app_codebases = AppCodebaseRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args):
