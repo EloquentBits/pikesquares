@@ -92,8 +92,8 @@ class WsgiApp(ServiceBase, table=True):
     project_id: str | None = Field(default=None, foreign_key="projects.id")
     project: "Project" = Relationship(back_populates="wsgi_apps")
 
-    app_runtime_id: str | None = Field(default=None, foreign_key="app_runtimes.id")
-    app_runtime: "AppRuntime" = Relationship(back_populates="wsgi_apps")
+    python_app_runtime_id: str | None = Field(default=None, foreign_key="python_app_runtimes.id")
+    python_app_runtime: "PythonAppRuntime" = Relationship(back_populates="wsgi_apps")
 
     app_codebase_id: str | None = Field(default=None, foreign_key="app_codebases.id")
     app_codebase: "AppCodebase" = Relationship(back_populates="wsgi_apps")

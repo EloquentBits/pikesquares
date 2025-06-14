@@ -24,7 +24,7 @@ class AppRuntimeHookSpec:
     def prompt_for_version(self) -> str:
         ...
 
-class AppRuntime(AsyncAttrs, TimeStampedBase, table=True):
+class AppRuntime(AsyncAttrs, TimeStampedBase):
     """Base App Runtime SQL model class."""
 
     __tablename__ = "app_runtimes"
@@ -35,7 +35,6 @@ class AppRuntime(AsyncAttrs, TimeStampedBase, table=True):
         max_length=36,
     )
     version: str = Field(max_length=25)
-    wsgi_apps: list["WsgiApp"] = Relationship(back_populates="app_runtime")
 
     class Config:
         populate_by_name = True

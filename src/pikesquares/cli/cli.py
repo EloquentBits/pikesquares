@@ -58,13 +58,14 @@ from pikesquares.domain.process_compose import (
     register_dnsmasq_process,
     register_process_compose,
 )
-from pikesquares.domain.python_runtime import PythonRuntime
 from pikesquares.domain.runtime import (
     AppCodebase,
     AppRuntime,
     AppRuntimeHookSpec,
     AppRuntimePluginManager,
 )
+from pikesquares.domain.python_runtime import PythonAppRuntime
+
 from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
     provision_attached_daemon,
