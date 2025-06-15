@@ -12,8 +12,6 @@ from typing import Annotated, Optional
 
 import anyio
 import cuid
-import git
-import giturlparse
 import questionary
 import randomname
 import sentry_sdk
@@ -81,8 +79,8 @@ from pikesquares.service_layer.handlers.prompt_utils import (
     prompt_for_project,
 )
 from pikesquares.service_layer.handlers.routers import http_router_up
-from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, up as wsgi_app_up 
-from pikesquares.service_layer.handlers.runtimes import provision_python_app_runtime
+from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, wsgi_app_up
+from pikesquares.service_layer.handlers.runtimes import provision_python_app_runtime, provision_app_codebase
 
 from pikesquares.service_layer.uow import UnitOfWork
 
@@ -371,7 +369,9 @@ async def launch(
         python_app_runtime = None
         async with uow:
             try:
-                python_app_runtime = await provision_python_app_runtime(runtime_version, uow)
+                python_app_runtime = await provision_python_app_runtime(
+                    runtime_version, uow, custom_style
+                )
             except Exception as exc:
                 await uow.rollback()
                 console.error(f"failed to provision a Python {runtime_version} App Runtime")
@@ -379,143 +379,68 @@ async def launch(
             else:
                 await uow.commit()
 
-        raise typer.Exit(0) from None
+        if not python_app_runtime:
+            console.error(f"failed to provision a Python {runtime_version} App Runtime")
+            raise typer.Exit(1) from None
 
-        """
-        def git_clone(repo_url: str, clone_into_dir: Path):
-            class CloneProgress(git.RemoteProgress):
-                def update(self, op_code, cur_count, max_count=None, message=""):
-                    # console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
-                    if message:
-                        console.info(f"Completed git clone {message}")
-
-            clone_into_dir.mkdir(exist_ok=True)
-            if not any(clone_into_dir.iterdir()):
-                try:
-                    return git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
-                except git.GitCommandError as exc:
-                    logger.exception(exc)
-                # if "already exists and is not an empty directory" in exc.stderr:
-                    pass
-        """
-        repo_url = None
-        app_name = None
-        if launch_service == "bugsink":
-            repo_url = "https://github.com/bugsink/bugsink.git"
-        elif launch_service == "bugsink":
-            repo_url = "https://github.com/meshnyc/meshdb.git"
-        elif launch_service == "python-wsgi-git":
-            """
-            def gather_repo_details_and_clone() -> Path:
-                repo = None
-                repo_url, _, clone_into_dir = gather_repo_details(custom_style)
-
-                def try_again_q(instruction):
-                    return questionary.confirm(
-                            "Try entring a different repository url?",
-                            instruction=instruction,
-                            default=True,
-                            auto_enter=True,
-                            style=custom_style,
-                    )
-                #with console.status(f"cloning `{repo_name}` repository into `{clone_into_dir}`", spinner="earth"):
-                while not repo:
-                    try:
-                        repo = git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
-                    except git.GitCommandError as exc:
-                        if "already exists and is not an empty directory" in exc.stderr:
-                            if questionary.confirm(
-                                    "Continue with this directory?",
-                                    instruction=f"A git repository exists at {clone_into_dir}",
-                                    default=True,
-                                    auto_enter=True,
-                                    style=custom_style,
-                                    ).ask():
-                                break
-                            #base_dir = prompt_base_dir(repo_name, custom_style)
-                        elif "Repository not found" in exc.stderr:
-                            if try_again_q(f"Unable to locate a git repository at {repo_url}").ask():
-                                gather_repo_details_and_clone()
-                            raise typer.Exit()
-                        else:
-                            console.warning(traceback.format_exc())
-                            console.warning(f"{exc.stdout}")
-                            console.warning(f"{exc.stderr}")
-                            if try_again_q(f"Unable to clone the provided repository url at {repo_url} into {clone_into_dir}").ask():
-                                gather_repo_details_and_clone()
-                            raise typer.Exit()
-
-                return clone_into_dir
-
-            gather_repo_details_and_clone()
-
-            """
-
-        if repo_url:
-            giturl = giturlparse.parse(repo_url)
-            app_name = giturl.name
-
-        if not app_name:
-            app_name = await questionary.text(
-                "Choose a name for your app: ",
-                default=randomname.get_name().lower(),
-                style=custom_style,
-                #validate=NameValidator,
-            ).ask_async()
-
-        app_root_dir = AsyncPath(conf.pyapps_dir) / app_name
-        await app_root_dir.mkdir(exist_ok=True)
-        app_repo_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
-        app_pyvenv_dir = app_repo_dir / ".venv"
-
-        if repo_url:
-            try:
-                repo = git_clone(repo_url, Path(app_repo_dir))
-            except Exception as exc:
-                logger.exception(exc)
-                console.error(f"unable to clone {app_name} repo from {repo_url}")
-                raise typer.Exit(1) from None
-
-        wsgi_app = None
         async with uow:
             try:
-                """
-                project_name = app_name
-                project = await uow.projects.get_by_name(project_name) or \
-                    await provision_project(project_name, device, uow)
-                project_up_result = await project_up(project)
-                if not project_up_result:
-                    console.error(f"unable to launch {project.name}")
-                    raise typer.Exit(1)
-
-                http_routers = await project.awaitable_attrs.http_routers
-                for http_router in http_routers:
-                    await http_router_up(uow, http_router)
-
-                """
-                wsgi_app = await provision_wsgi_app(
-                    app_name,
-                    app_root_dir,
-                    app_repo_dir,
-                    app_pyvenv_dir,
-                    conf.UV_BIN,
+                app_codebase = await provision_app_codebase(
+                    launch_service,
+                    AsyncPath(conf.pyapps_dir),
                     uow,
-                    project,
+                    custom_style,
                 )
             except Exception as exc:
-                logger.exception(exc)
                 await uow.rollback()
+                console.error(f"failed to provision a Python {runtime_version} App Runtime")
                 raise typer.Exit(1) from None
-
-            if wsgi_app:
+            else:
                 await uow.commit()
-                await wsgi_app_up(
-                    uow,
-                    wsgi_app,
-                    project,
-                    http_routers[0],
-                    console,
-                )
+
+        if 0:
+            wsgi_app = None
+            async with uow:
+                try:
+                    """
+                    project_name = app_name
+                    project = await uow.projects.get_by_name(project_name) or \
+                        await provision_project(project_name, device, uow)
+                    project_up_result = await project_up(project)
+                    if not project_up_result:
+                        console.error(f"unable to launch {project.name}")
+                        raise typer.Exit(1)
+
+                    http_routers = await project.awaitable_attrs.http_routers
+                    for http_router in http_routers:
+                        await http_router_up(uow, http_router)
+
+                    """
+                    wsgi_app = await provision_wsgi_app(
+                        app_name,
+                        app_root_dir,
+                        app_repo_dir,
+                        app_pyvenv_dir,
+                        conf.UV_BIN,
+                        uow,
+                        project,
+                        python_app_runtime,
+                    )
+                except Exception as exc:
+                    logger.exception(exc)
+                    await uow.rollback()
+                    raise typer.Exit(1) from None
+
+                if wsgi_app:
+                    await uow.commit()
+                    await wsgi_app_up(
+                        uow,
+                        wsgi_app,
+                        project,
+                        python_app_runtime,
+                        http_routers[0],
+                        console,
+                        )
     elif launch_service  in ["postgres", "redis"]:
 
         attached_daemon_name = launch_service
@@ -1358,9 +1283,12 @@ async def main(
 
     def app_runtime_plugin_manager_factory():
         pm = PluginManager("app-runtime")
+        # magic line to set a writer function
+        pm.trace.root.setwriter(print)
+        undo = pm.enable_tracing()
         pm.add_hookspecs(AppRuntimeHookSpec)
         return pm
-    services.register_factory(context, AppRuntimePluginManager , app_runtime_plugin_manager_factory)
+    services.register_factory(context, AppRuntimePluginManager, app_runtime_plugin_manager_factory)
     #app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
 
     async with uow:

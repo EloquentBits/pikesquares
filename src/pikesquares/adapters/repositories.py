@@ -516,7 +516,7 @@ class AppCodebaseRepositoryBase(GenericRepository[AppCodebase], ABC):
     """AppCodebase repository."""
 
     @abstractmethod
-    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
+    async def get_by_root_dir(self, root_dir: str) -> AppCodebase | None:
         raise NotImplementedError()
 
 
@@ -524,10 +524,11 @@ class AppCodebaseRepository(GenericSqlRepository[AppCodebase], AppCodebaseReposi
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, AppCodebase)
 
-    async def for_project_by_name(self, name: str, project_id: str) -> Sequence[AttachedDaemon] | None:
-        stmt = select(AttachedDaemon).where(
-            AttachedDaemon.name == name,
-            AttachedDaemon.project_id == project_id,
+    async def get_by_root_dir(self, root_dir: str) -> AppCodebase | None:
+        stmt = select(AppCodebase).where(
+            AppCodebase.root_dir == root_dir,
         )
         results = await self._session.exec(stmt)
-        return results.all()
+        if results:
+            obj = results.first()
+            return obj

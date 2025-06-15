@@ -6,6 +6,7 @@ from aiopath import AsyncPath
 import tenacity
 
 from pikesquares.domain.wsgi_app import WsgiApp
+from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import HttpRouter
@@ -28,6 +29,7 @@ async def provision_wsgi_app(
         uv_bin: Path,
         uow: UnitOfWork,
         project: Project,
+        python_app_runtime: PythonAppRuntime,
         # routers: list[Router],
 ) -> WsgiApp | None:
     try:
@@ -155,6 +157,7 @@ async def provision_wsgi_app(
                 run_as_uid="pikesquares",
                 run_as_gid="pikesquares",
                 project=project,
+                python_app_runtime=python_app_runtime,
                 uwsgi_plugins="tuntap;forkptyrouter",
                 root_dir=str(runtime.app_repo_dir),
                 wsgi_file=str(wsgi_file),
@@ -179,10 +182,11 @@ async def provision_wsgi_app(
     return wsgi_app
 
 
-async def up(
+async def wsgi_app_up(
         uow: UnitOfWork,
         wsgi_app: WsgiApp,
         project: Project,
+        python_app_runtime: PythonAppRuntime,
         http_router: HttpRouter,
         console,
     ):
