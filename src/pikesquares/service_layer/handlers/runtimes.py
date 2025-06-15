@@ -1,3 +1,4 @@
+import traceback
 import structlog
 import questionary
 from aiopath import AsyncPath
@@ -76,7 +77,7 @@ async def provision_app_codebase(
         if app_root_dir:
             await app_root_dir.mkdir(exist_ok=True)
 
-        app_repo_dir = await gather_repo_details_and_clone(
+        app_repo_dir, repo_git_url = await gather_repo_details_and_clone(
             app_name,
             repo_git_url,
             app_root_dir,
@@ -100,6 +101,7 @@ async def provision_app_codebase(
     except Exception as exc:
         logger.info(f"failed provisioning App Codebase @ {app_root_dir}")
         logger.exception(exc)
+        print(traceback.format_exc())
         raise exc
 
     return app_codebase

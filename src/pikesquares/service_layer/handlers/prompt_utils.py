@@ -103,7 +103,7 @@ async def prompt_for_launch_service(uow: UnitOfWork, custom_style) -> str | None
 async def prompt_base_dir(repo_name: str, custom_style: questionary.Style) -> AsyncPath:
     return await questionary.path(
             f"Choose a directory to clone your `{repo_name}` git repository into: ",
-        default=str(AsyncPath.cwd()),
+        default=str(await AsyncPath.cwd()),
         only_directories=True,
         style=custom_style,
         validate=PathValidator,
@@ -148,9 +148,16 @@ async def gather_repo_details(
     giturl = giturlparse.parse(repo_url)
     app_name = app_name or giturl.name
     app_root_dir = app_root_dir or await prompt_base_dir(giturl.name, custom_style)
+
     clone_into_dir = AsyncPath(app_root_dir) / app_name / app_name
-    if await clone_into_dir.exists() and any(clone_into_dir.iterdir()):
-        clone_into_dir_files = list(clone_into_dir.iterdir())
+    print(f"{clone_into_dir=}")
+
+    if await clone_into_dir.exists():
+        #and any(await clone_into_dir.glob("*")):
+        #import ipdb;ipdb.set_trace()
+        clone_into_dir_files = [path async for path in clone_into_dir.glob('**/*')]
+        print(clone_into_dir_files)
+        #await clone_into_dir.glob("*")
         if clone_into_dir / ".git" in clone_into_dir_files:
             if not await questionary.confirm(
                 f"There appears to be a git repository already cloned in {clone_into_dir}. Chose another directory?",
@@ -180,7 +187,7 @@ async def gather_repo_details_and_clone(
     app_root_dir: AsyncPath | None,
     pyapps_dir: AsyncPath,
     custom_style: questionary.Style
-) -> AsyncPath:
+) -> tuple[AsyncPath, str]:
     repo = None
     repo_url, _, clone_into_dir = await gather_repo_details(
         app_name,
@@ -199,39 +206,56 @@ async def gather_repo_details_and_clone(
                 style=custom_style,
         )
     #with console.status(f"cloning `{repo_name}` repository into `{clone_into_dir}`", spinner="earth"):
-    while not repo:
-        try:
-            repo = git.Repo.clone_from(
-                repo_url,
-                clone_into_dir,
-                progress=CloneProgress()
-            )
-        except git.GitCommandError as exc:
-            if "already exists and is not an empty directory" in exc.stderr:
-                if await questionary.confirm(
-                        "Continue with this directory?",
-                        instruction=f"A git repository exists at {clone_into_dir}",
-                        default=True,
-                        auto_enter=True,
-                        style=custom_style,
-                        ).unsafe_ask_async():
-                    break
-                #base_dir = prompt_base_dir(repo_name, custom_style)
-            elif "Repository not found" in exc.stderr:
-                if await try_again_q(
-                    f"Unable to locate a git repository at {repo_url}"
-                ).unsafe_ask_async():
-                    await gather_repo_details_and_clone(custom_style)
-                raise typer.Exit(0) from None
-            else:
-                console.warning(traceback.format_exc())
-                console.warning(f"{exc.stdout}")
-                console.warning(f"{exc.stderr}")
-                if try_again_q(f"Unable to clone the provided repository url at {repo_url} into {clone_into_dir}").ask():
-                    await gather_repo_details_and_clone(custom_style)
-                raise typer.Exit(0) from None
-
-    return clone_into_dir
+    try:
+        while not repo:
+            try:
+                repo = git.Repo.clone_from(
+                    repo_url,
+                    clone_into_dir,
+                    progress=CloneProgress()
+                )
+            except git.GitCommandError as exc:
+                if "already exists and is not an empty directory" in exc.stderr:
+                    if await questionary.confirm(
+                            "Continue with this directory?",
+                            instruction=f"A git repository exists at {clone_into_dir}",
+                            default=True,
+                            auto_enter=True,
+                            style=custom_style,
+                            ).unsafe_ask_async():
+                        break
+                    #base_dir = prompt_base_dir(repo_name, custom_style)
+                elif "Repository not found" in exc.stderr:
+                    if await try_again_q(
+                        f"Unable to locate a git repository at {repo_url}"
+                    ).unsafe_ask_async():
+                        await gather_repo_details_and_clone(
+                            app_name,
+                            repo_git_url,
+                            app_root_dir,
+                            pyapps_dir,
+                            custom_style,
+                        )
+                    raise typer.Exit(0) from None
+                else:
+                    console.warning(traceback.format_exc())
+                    console.warning(f"{exc.stdout}")
+                    console.warning(f"{exc.stderr}")
+                    if try_again_q(f"Unable to clone the provided repository url at {repo_url} into {clone_into_dir}").ask():
+                        await gather_repo_details_and_clone(
+                            app_name,
+                            repo_git_url,
+                            app_root_dir,
+                            pyapps_dir,
+                            custom_style
+                        )
+            
+    except Exception as exc:
+        logger.info(f"failed provisioning App Codebase @ {app_root_dir}")
+        logger.exception(exc)
+        print(traceback.format_exc())
+        raise exc
+    return AsyncPath(clone_into_dir), repo_url
 
 
 async def prompt_for_project(uow: UnitOfWork, custom_style) -> Project | None:
