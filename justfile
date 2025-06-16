@@ -92,6 +92,9 @@ pc-attach:
 pc-down:	
   sudo process-compose down -u /var/run/pikesquares/process-compose.sock
 
+mk-build:
+   mkdocs build
+
 
 pc-up-sock:
   process-compose --use-uds --unix-socket pc.sock --log-file pc.log 
