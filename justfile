@@ -75,7 +75,7 @@ fastapi-up:
     PYTHONASYNCIODEBUG=1 uv run fastapi dev src/pikesquares/app/main.py
 
 uvicorn-up:
-  uv run uvicorn app.main:app --reload --debug
+  uv run uvicorn app.main:app --reload --log-level debug
 
 pc-attach:
   sudo process-compose attach -u /var/run/pikesquares/process-compose.sock
@@ -98,3 +98,11 @@ db-browse:
 
 export-dotenv-file:
   export $(cat .env | xargs)
+
+# Add Pikesquares root certificate to local browsers storage (Chrome, Chromium, Firefox)
+add-certificate:
+  sudo scripts/add-cert.sh
+
+# Remove Pikesquares root certificate from local browsers storage (Chrome, Chromium, Firefox)
+rm-certificate:
+  scripts/rm-cert.sh
