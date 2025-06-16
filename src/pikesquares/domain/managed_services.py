@@ -272,15 +272,15 @@ class AttachedDaemonHookSpec:
     Attached Daemon Hook Specification
     """
 
-    @hook_spec
+    @hook_spec(firstresult=True)
     def collect_command_arguments(self) -> None:
         ...
 
-    @hook_spec
+    @hook_spec(firstresult=True)
     def ping(self) -> bool:
         ...
 
-    @hook_spec
+    @hook_spec(firstresult=True)
     def stop(self) -> bool:
         ...
 

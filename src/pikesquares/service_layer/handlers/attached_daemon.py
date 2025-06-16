@@ -71,11 +71,6 @@ async def attached_daemon_up(
             raise Exception(f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}")
 
         cmd_args = plugin_manager.hook.collect_command_arguments()
-        # FIXME
-        # why is this a list?
-        if cmd_args and isinstance(cmd_args, list):
-            cmd_args = cmd_args[0]
-
         section = Section(
             name="uwsgi",
             runtime_dir=str(attached_daemon.run_dir),

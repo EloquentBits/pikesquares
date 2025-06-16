@@ -362,8 +362,6 @@ async def launch(
 
         app_runtime_plugin_manager.register(PythonRuntimePlugin())
         runtime_version = app_runtime_plugin_manager.hook.prompt_for_version()
-        if runtime_version and isinstance(runtime_version, list):
-            runtime_version = runtime_version[0]
         console.info(f"selected Python {runtime_version}")
         python_app_runtime = None
         async with uow:
@@ -1287,7 +1285,11 @@ async def main(
         undo = pm.enable_tracing()
         pm.add_hookspecs(AppRuntimeHookSpec)
         return pm
-    services.register_factory(context, AppRuntimePluginManager, app_runtime_plugin_manager_factory)
+    services.register_factory(
+        context,
+        AppRuntimePluginManager,
+        app_runtime_plugin_manager_factory
+    )
     #app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
 
     async with uow:

@@ -20,7 +20,7 @@ class AppRuntimeHookSpec:
     App Runtime Hook Specification
     """
 
-    @hook_spec
+    @hook_spec(firstresult=True)
     def prompt_for_version(self) -> str:
         ...
 
