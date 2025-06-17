@@ -6,11 +6,12 @@ import uuid
 from pathlib import Path
 
 import pydantic
+import aiofiles
 import structlog
 from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
 
-# import toml
+import toml
 from plumbum import local as pl_local
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlmodel import Field, Relationship
@@ -217,46 +218,54 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             return "3.12"
 
     async def detect_deps(self) -> bool | None:
-        # asynctempfile
-        app_tmp_dir = AsyncPath(
-            tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app")
-        )
-        shutil.copytree(
-            self.root_dir,
-            app_tmp_dir,
-            dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns(*list(PY_IGNORE_PATTERNS)),
-        )
-        # for p in AsyncPath(app_tmp_dir).iterdir():
-        #    logger.debug(p)
-        # Detect Project Dependencies
-        #cmd_env = {}
-        #await self.create_venv(
-        #    venv=app_tmp_dir / ".venv",
-        #    cmd_env=cmd_env,
-        #)
-        logger.info(f"created a tmp dir {app_tmp_dir}")
 
-        try:
-            logger.info(f"installing deps into tmp dir {app_tmp_dir}")
-            await self.install_dependencies(
-                venv=app_tmp_dir / ".venv",
-                app_tmp_dir=app_tmp_dir,
+        async with aiofiles.tempfile.TemporaryDirectory() as tmp_dir:
+            #filename = os.path.join(d, "file.ext")
+            app_tmp_dir = AsyncPath(tmp_dir)
+            shutil.copytree(
+                self.root_dir,
+                app_tmp_dir,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(*list(PY_IGNORE_PATTERNS)),
             )
-            logger.info(f"installed deps into tmp dir {app_tmp_dir}")
-        except (UvSyncError, UvPipInstallError):
-            logger.error("installing dependencies failed.")
-            await self.check_cleanup(app_tmp_dir)
-            return
+            # for p in AsyncPath(app_tmp_dir).iterdir():
+            #    logger.debug(p)
+            # Detect Project Dependencies
+            #cmd_env = {}
+            #await self.create_venv(
+            #    venv=app_tmp_dir / ".venv",
+            #    cmd_env=cmd_env,
+            #)
+            logger.info(f"created a tmp dir {app_tmp_dir}")
 
-        try:
-            dependencies_count = len(await self.dependencies_list())
-            logger.info(f"{dependencies_count} dependencies detected")
-        except UvPipListError as exc:
-            logger.error(exc)
-            traceback.format_exc()
+            try:
+                logger.info(f"installing deps into tmp dir {app_tmp_dir}")
+                await self.install_dependencies(
+                    venv=app_tmp_dir / ".venv",
+                    app_tmp_dir=app_tmp_dir,
+                )
+                logger.info(f"installed deps into tmp dir {app_tmp_dir}")
+            except (UvSyncError, UvPipInstallError):
+                logger.error("installing dependencies failed.")
+                #await self.check_cleanup(app_tmp_dir)
+                return
 
-        return True
+            try:
+                dependencies_count = len(await self.dependencies_list())
+                logger.info(f"{dependencies_count} dependencies detected")
+            except UvPipListError as exc:
+                logger.error(exc)
+                traceback.format_exc()
+
+            return True
+
+    async def read_pyproject_toml(self):
+        with open(AsyncPath(self.root_dir) / "pyproject.toml", "r") as f:
+            config = toml.load(f)
+            deps = config["project"]["dependencies"]
+            print("[pikesquares] located deps in pyproject.toml")
+            print(deps)
+
 
     async def install_dependencies(
         self,
@@ -268,12 +277,6 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         logger.info(f"uv installing dependencies in venv @ {venv}")
         cmd_args = []
         install_inspect_extensions = False
-
-        # with open(self.app_root_dir / "pyproject.toml", "r") as f:
-        #    config = toml.load(f)
-        #    deps = config["project"]["dependencies"]
-        #    print("[pikesquares] located deps in pyproject.toml")
-        #    print(deps)
 
         #if "uv.lock" and "pyproject.toml" in self.top_level_file_names:
         #    logger.info("installing dependencies from uv.lock")

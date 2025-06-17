@@ -17,7 +17,6 @@ from pikesquares.domain import project
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.monitors import destroy_instance
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.services.router import HttpRouter
 
 # from tests.unit_tests.service_layer_tests.conftest import project
 
