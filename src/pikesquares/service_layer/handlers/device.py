@@ -1,4 +1,5 @@
 import cuid
+import randomname
 import structlog
 
 from pikesquares.conf import AppConfigError
@@ -19,6 +20,7 @@ async def provision_device(uow: UnitOfWork, create_kwargs: dict) -> Device:
             service_id=f"device-{cuid.slug()}",
             uwsgi_plugins="emperor_zeromq",
             machine_id=machine_id,
+            title=randomname.get_name(),
             **create_kwargs,
         )
         device = await uow.devices.add(device)
