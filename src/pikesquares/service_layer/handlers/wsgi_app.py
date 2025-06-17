@@ -4,6 +4,7 @@ import structlog
 import cuid
 from aiopath import AsyncPath
 import tenacity
+import pluggy
 
 from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.domain.python_runtime import PythonAppRuntime
@@ -30,6 +31,7 @@ async def provision_wsgi_app(
         uow: UnitOfWork,
         project: Project,
         python_app_runtime: PythonAppRuntime,
+        wsgi_app_plugin_manager: pluggy.PluginManager,
         # routers: list[Router],
 ) -> WsgiApp | None:
     try:

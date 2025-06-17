@@ -129,56 +129,14 @@ class CloneProgress(git.RemoteProgress):
         if message:
             console.info(f"Completed git clone {message}")
 
-
-async def gather_repo_details(
-    app_name: str | None,
-    repo_git_url: str | None,
-    app_root_dir: AsyncPath | None,
-    pyapps_dir: AsyncPath,
-    custom_style: questionary.Style,
-    ) -> tuple[str, str, Path]:
-    """
-    prompt for repo git url
-    prompt for app root dir
-    compose clone into dir
-    """
-    #clone_into_dir = AsyncPath(base_dir) / giturl.name
-
-    repo_url = repo_git_url or await prompt_repo_url(custom_style)
-    giturl = giturlparse.parse(repo_url)
-    app_name = app_name or giturl.name
-    app_root_dir = app_root_dir or await prompt_base_dir(giturl.name, custom_style)
-
-    clone_into_dir = AsyncPath(app_root_dir) / app_name / app_name
-    print(f"{clone_into_dir=}")
-
-    if await clone_into_dir.exists():
-        #and any(await clone_into_dir.glob("*")):
-        #import ipdb;ipdb.set_trace()
-        clone_into_dir_files = [path async for path in clone_into_dir.glob('**/*')]
-        print(clone_into_dir_files)
-        #await clone_into_dir.glob("*")
-        if clone_into_dir / ".git" in clone_into_dir_files:
-            if not await questionary.confirm(
-                f"There appears to be a git repository already cloned in {clone_into_dir}. Chose another directory?",
-                default=True,
-                auto_enter=True,
-                style=custom_style,
-            ).unsafe_ask_async():
-                raise typer.Exit(0) from None
-
-            return giturl.name, repo_url, await prompt_base_dir(giturl.name, custom_style)
-
-        elif len(clone_into_dir_files):
-            if not await questionary.confirm(
-                f"Directory {str(clone_into_dir)} is not emptry. Continue?",
-                default=True,
-                auto_enter=True,
-                style=custom_style,
-            ).unsafe_ask_async():
-                raise typer.Exit(0) from None
-
-    return repo_url, giturl.name, clone_into_dir
+def try_again_q(instruction, custom_style):
+    return questionary.confirm(
+            "Try entring a different repository url?",
+            instruction=instruction,
+            default=True,
+            auto_enter=True,
+            style=custom_style,
+    )
 
 
 async def gather_repo_details_and_clone(
@@ -189,22 +147,45 @@ async def gather_repo_details_and_clone(
     custom_style: questionary.Style
 ) -> tuple[AsyncPath, str]:
     repo = None
-    repo_url, _, clone_into_dir = await gather_repo_details(
-        app_name,
-        repo_git_url,
-        app_root_dir,
-        pyapps_dir,
-        custom_style,
-    )
 
-    def try_again_q(instruction):
-        return questionary.confirm(
-                "Try entring a different repository url?",
-                instruction=instruction,
+    """
+    prompt for repo git url
+    prompt for app root dir
+    compose clone into dir
+    """
+    repo_url = repo_git_url or await prompt_repo_url(custom_style)
+    giturl = giturlparse.parse(repo_url)
+    app_root_dir = app_root_dir or await prompt_base_dir(giturl.name, custom_style)
+    clone_into_dir = AsyncPath(app_root_dir) / giturl.name
+    if await clone_into_dir.exists():
+        #and any(await clone_into_dir.glob("*")):
+        #import ipdb;ipdb.set_trace()
+        clone_into_dir_files = [path async for path in clone_into_dir.glob('**/*')]
+        #await clone_into_dir.glob("*")
+        if clone_into_dir / ".git" in clone_into_dir_files:
+            if await questionary.confirm(
+                f"There appears to be a git repository already cloned in {clone_into_dir}. Skip cloning repo?",
                 default=True,
                 auto_enter=True,
                 style=custom_style,
-        )
+            ).unsafe_ask_async():
+                return clone_into_dir, repo_url
+        else:
+            # FIXME
+            return clone_into_dir, repo_url
+        #return giturl.name, repo_url, await prompt_base_dir(giturl.name, custom_style)
+
+        """
+        elif len(clone_into_dir_files):
+            if not await questionary.confirm(
+                f"Directory {str(clone_into_dir)} is not emptry. Continue?",
+                default=True,
+                auto_enter=True,
+                style=custom_style,
+            ).unsafe_ask_async():
+                raise typer.Exit(0) from None
+        """
+
     #with console.status(f"cloning `{repo_name}` repository into `{clone_into_dir}`", spinner="earth"):
     try:
         while not repo:
@@ -227,7 +208,8 @@ async def gather_repo_details_and_clone(
                     #base_dir = prompt_base_dir(repo_name, custom_style)
                 elif "Repository not found" in exc.stderr:
                     if await try_again_q(
-                        f"Unable to locate a git repository at {repo_url}"
+                        f"Unable to locate a git repository at {repo_url}",
+                        custom_style,
                     ).unsafe_ask_async():
                         await gather_repo_details_and_clone(
                             app_name,
@@ -241,7 +223,11 @@ async def gather_repo_details_and_clone(
                     console.warning(traceback.format_exc())
                     console.warning(f"{exc.stdout}")
                     console.warning(f"{exc.stderr}")
-                    if try_again_q(f"Unable to clone the provided repository url at {repo_url} into {clone_into_dir}").ask():
+                    if await try_again_q(
+                        f"Unable to clone the provided repository url at {repo_url} into {clone_into_dir}",
+                        custom_style,
+                        ).\
+                        unsafe_ask_async():
                         await gather_repo_details_and_clone(
                             app_name,
                             repo_git_url,
@@ -249,7 +235,6 @@ async def gather_repo_details_and_clone(
                             pyapps_dir,
                             custom_style
                         )
-            
     except Exception as exc:
         logger.info(f"failed provisioning App Codebase @ {app_root_dir}")
         logger.exception(exc)

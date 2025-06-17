@@ -3,7 +3,8 @@ from sqlmodel import Relationship
 
 logger = structlog.getLogger()
 
-from pikesquares.domain.runtime import AppRuntime, hook_impl
+from pikesquares.domain.runtime import AppRuntime
+from pikesquares.hooks.markers import hook_impl
 
 
 class PythonAppRuntime(AppRuntime, table=True):
@@ -20,7 +21,7 @@ class PythonRuntimePlugin:
     """
 
     @hook_impl
-    def prompt_for_version(self) -> str:
+    def app_runtime_prompt_for_version(self) -> str:
         print("prompt for version")
         return "3.12"
 

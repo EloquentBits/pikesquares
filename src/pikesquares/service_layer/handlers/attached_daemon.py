@@ -1,12 +1,13 @@
+import traceback
 from pathlib import Path
 
 import cuid
 import structlog
 import tenacity
-from pluggy import PluginManager
+import pluggy
 from uwsgiconf.config import Section
 
-from pikesquares.domain.managed_services import AttachedDaemon, AttachedDaemonPluginManager
+from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, destroy_instance
 from pikesquares.service_layer.handlers.routers import create_tuntap_device
@@ -24,9 +25,13 @@ async def provision_attached_daemon(
     run_as_gid: str = "pikesquares",
 ) -> AttachedDaemon | None:
 
-    try:
-        daemons = await uow.attached_daemons.for_project_by_name(name, project.id)
-        if not daemons:
+    daemon = None
+    async with uow:
+        try:
+            daemons = await uow.attached_daemons.for_project_by_name(name, project.id)
+            if daemons:
+                return daemons[0]
+
             daemon = AttachedDaemon(
                 service_id=f"{name}-{cuid.slug()}",
                 name=name,
@@ -44,17 +49,22 @@ async def provision_attached_daemon(
             if tuntap_routers:
                 ip = await tuntap_router_next_available_ip(tuntap_routers[0])
                 await create_tuntap_device(uow, tuntap_routers[0], ip, daemon.service_id)
-            return daemon
 
-    except Exception as exc:
-        raise exc
+        except Exception as exc:
+            logger.info(f"failed provisioning attached daemon {name}")
+            logger.exception(exc)
+            print(traceback.format_exc())
+            await uow.rollback()
+            raise exc
 
-    return daemons[0]
+        await uow.commit()
+
+    return daemon
 
 
 async def attached_daemon_up(
     attached_daemon: AttachedDaemon,
-    plugin_manager: AttachedDaemonPluginManager,
+    plugin_manager: pluggy.PluginManager,
     uow: "UnitOfWork",
     create_data_dir: bool = False
 ):
@@ -70,7 +80,7 @@ async def attached_daemon_up(
         if not attached_daemon_device:
             raise Exception(f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}")
 
-        cmd_args = plugin_manager.hook.collect_command_arguments()
+        cmd_args = plugin_manager.hook.attached_daemon_collect_command_arguments()
         section = Section(
             name="uwsgi",
             runtime_dir=str(attached_daemon.run_dir),
@@ -192,7 +202,7 @@ async def attached_daemon_up(
 
 async def attached_daemon_down(
     attached_daemon: AttachedDaemon,
-    plugin_manager: PluginManager,
+    plugin_manager: pluggy.PluginManager,
     uow: "UnitOfWork",
 ) -> bool:
     try:
@@ -203,7 +213,7 @@ async def attached_daemon_down(
             logger.info(f"Managed service {attached_daemon.name} is not running")
             return False
 
-        if plugin_manager.hook.ping():
+        if plugin_manager.hook.attached_daemon_ping():
             logger.info(f"stopping {attached_daemon.name} [{attached_daemon.service_id}]")
             stop_result = plugin_manager.hook.stop()
             if stop_result:

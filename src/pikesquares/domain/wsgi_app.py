@@ -3,18 +3,14 @@ from pathlib import Path
 import pydantic
 import structlog
 from sqlmodel import Field, Relationship
-from pluggy import PluginManager, HookspecMarker, HookimplMarker
 
+from pikesquares.hooks.markers import hook_impl
 from pikesquares.presets.wsgi_app import WsgiAppSection
 from pikesquares.services.apps.django import PythonRuntimeDjango
 
 from .base import ServiceBase
 
 logger = structlog.getLogger()
-
-
-hook_spec = HookspecMarker("wsgi-app" )
-hook_impl = HookimplMarker("wsgi-app" )
 
 
 class Router(pydantic.BaseModel):
@@ -53,36 +49,6 @@ class VirtualHost(pydantic.BaseModel):
         return all([self.certificate_key, self.certificate_path])
 
 
-"""
-class WsgiAppOptions(pydantic.BaseModel):
-    root_dir: Path
-    pyvenv_dir: Path
-    wsgi_file: Path
-    wsgi_module: str
-    routers: list[Router] = []
-    project_id: str
-    workers: int = 3
-"""
-
-
-class WsgiAppHookSpec:
-    """
-    WSGI App Hook Specification
-    """
-
-    @hook_spec
-    def collect_command_arguments(self) -> None:
-        ...
-
-    @hook_spec
-    def ping(self) -> bool:
-        ...
-
-    @hook_spec
-    def stop(self) -> bool:
-        ...
-
-
 class WsgiApp(ServiceBase, table=True):
 
     __tablename__ = "python_wsgi_apps"
@@ -95,8 +61,8 @@ class WsgiApp(ServiceBase, table=True):
     python_app_runtime_id: str | None = Field(default=None, foreign_key="python_app_runtimes.id")
     python_app_runtime: "PythonAppRuntime" = Relationship(back_populates="wsgi_apps")
 
-    app_codebase_id: str | None = Field(default=None, foreign_key="app_codebases.id")
-    app_codebase: "AppCodebase" = Relationship(back_populates="wsgi_apps")
+    python_app_codebase_id: str | None = Field(default=None, foreign_key="python_app_codebases.id")
+    python_app_codebase: "PythonAppCodebase" = Relationship(back_populates="wsgi_apps")
 
     root_dir: str = Field(max_length=255)
     #pyvenv_dir: str = Field(max_length=255)

@@ -9,7 +9,7 @@ from sqlmodel.sql.expression import SelectOfScalar
 
 from pikesquares.domain.base import ServiceBase
 
-from pikesquares.domain.runtime import AppCodebase
+from pikesquares.domain.runtime import PythonAppCodebase
 from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.domain.device import Device, DeviceUWSGIOption
 from pikesquares.domain.project import Project
@@ -512,21 +512,21 @@ class PythonAppRuntimeRepository(GenericSqlRepository[PythonAppRuntime], PythonA
             obj = results.first()
             return obj
 
-class AppCodebaseRepositoryBase(GenericRepository[AppCodebase], ABC):
-    """AppCodebase repository."""
+class PythonAppCodebaseRepositoryBase(GenericRepository[PythonAppCodebase], ABC):
+    """PythonAppCodebase repository."""
 
     @abstractmethod
-    async def get_by_root_dir(self, root_dir: str) -> AppCodebase | None:
+    async def get_by_root_dir(self, root_dir: str) -> PythonAppCodebase | None:
         raise NotImplementedError()
 
 
-class AppCodebaseRepository(GenericSqlRepository[AppCodebase], AppCodebaseRepositoryBase):
+class PythonAppCodebaseRepository(GenericSqlRepository[PythonAppCodebase], PythonAppCodebaseRepositoryBase):
     def __init__(self, session: AsyncSession) -> None:
-        super().__init__(session, AppCodebase)
+        super().__init__(session, PythonAppCodebase)
 
-    async def get_by_root_dir(self, root_dir: str) -> AppCodebase | None:
-        stmt = select(AppCodebase).where(
-            AppCodebase.root_dir == root_dir,
+    async def get_by_root_dir(self, root_dir: str) -> PythonAppCodebase | None:
+        stmt = select(PythonAppCodebase).where(
+            PythonAppCodebase.root_dir == root_dir,
         )
         results = await self._session.exec(stmt)
         if results:

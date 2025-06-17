@@ -1,9 +1,7 @@
-from typing import NewType
 from pathlib import Path
 from string import Template
 from typing import Annotated
 
-from pluggy import PluginManager, HookspecMarker, HookimplMarker
 import pydantic
 import structlog
 from plumbum import ProcessExecutionError
@@ -14,14 +12,11 @@ from sqlmodel import (
 )
 
 from pikesquares.domain.base import ServiceBase
+from pikesquares.hooks.markers import hook_impl
 
 logger = structlog.get_logger()
 
 
-AttachedDaemonPluginManager = NewType("AttachedDaemonPluginManager", PluginManager)
-
-hook_spec = HookspecMarker("attached-daemon" )
-hook_impl = HookimplMarker("attached-daemon" )
 
 """
 https://www.postgresql.org/docs/current/reference-server.html
@@ -51,7 +46,7 @@ class PostgresAttachedDaemonPlugin:
 
 
     @hook_impl
-    def collect_command_arguments(self) -> dict:
+    def attached_daemon_collect_command_arguments(self) -> dict:
         cmd = Template(
             "$bin -D $dir -h $bind_ip -p $bind_port -k $rundir"
         ).substitute({
@@ -113,7 +108,7 @@ class RedisAttachedDaemonPlugin:
     #   redis-cli config get dir
 
     @hook_impl
-    def collect_command_arguments(self) -> dict:
+    def attached_daemon_collect_command_arguments(self) -> dict:
         cmd = Template(
             "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
         ).substitute({
@@ -209,7 +204,7 @@ class SimpleSocketAttachedDaemonPlugin:
         return Path("/usr/bin/redis-cli")
 
     @hook_impl
-    def collect_command_arguments(self) -> dict:
+    def attached_daemon_collect_command_arguments(self) -> dict:
         cmd = Template(
             "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
         ).substitute({
@@ -263,25 +258,6 @@ class SimpleSocketAttachedDaemonPlugin:
         """
            stop socket server
         """
-        ...
-
-
-
-class AttachedDaemonHookSpec:
-    """
-    Attached Daemon Hook Specification
-    """
-
-    @hook_spec(firstresult=True)
-    def collect_command_arguments(self) -> None:
-        ...
-
-    @hook_spec(firstresult=True)
-    def ping(self) -> bool:
-        ...
-
-    @hook_spec(firstresult=True)
-    def stop(self) -> bool:
         ...
 
 

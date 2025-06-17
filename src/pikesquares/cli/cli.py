@@ -16,10 +16,10 @@ import randomname
 import sentry_sdk
 import structlog
 import tenacity
+import pluggy
 import typer
 from aiopath import AsyncPath
 from dotenv import load_dotenv
-from pluggy import PluginManager
 from plumbum import ProcessExecutionError
 from rich.layout import Layout
 from rich.live import Live
@@ -46,7 +46,7 @@ from pikesquares.conf import (
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.caddy import register_caddy_process
 from pikesquares.domain.device import register_device_stats
-from pikesquares.domain.managed_services import AttachedDaemonHookSpec, AttachedDaemonPluginManager
+
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ProcessCompose,
@@ -56,20 +56,12 @@ from pikesquares.domain.process_compose import (
     register_dnsmasq_process,
     register_process_compose,
 )
-from pikesquares.domain.runtime import (
-    AppCodebase,
-    AppRuntimeHookSpec,
-    AppRuntimePluginManager,
-)
-from pikesquares.domain.python_runtime import (
-    PythonAppRuntime,
-    PythonRuntimePlugin,
-)
-
+#from pikesquares.domain.runtime import PythonAppCodebase
 from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
     provision_attached_daemon,
 )
+from pikesquares.hooks.specs import AttachedDaemonHookSpec, AppRuntimeHookSpec
 from pikesquares.service_layer.handlers.device import provision_device
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.project import project_up
@@ -78,9 +70,8 @@ from pikesquares.service_layer.handlers.prompt_utils import (
     prompt_for_project,
 )
 from pikesquares.service_layer.handlers.routers import http_router_up
+from pikesquares.service_layer.handlers.runtimes import provision_app_codebase, provision_python_app_runtime
 from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, wsgi_app_up
-from pikesquares.service_layer.handlers.runtimes import provision_python_app_runtime, provision_app_codebase
-
 from pikesquares.service_layer.uow import UnitOfWork
 
 #from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -306,6 +297,8 @@ async def launch(
 
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
+    plugin_manager = await services.aget(context, pluggy.PluginManager)
+
     machine_id = await ServiceBase.read_machine_id()
     device = await uow.devices.get_by_machine_id(machine_id)
     if not device:
@@ -350,7 +343,7 @@ async def launch(
 
     if launch_service in ["python-wsgi-git", "bugsink", "meshdb"]:
 
-        app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
+        #app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
         #daemon_conf = conf.attached_daemon_plugins.get(launch_service)
         #if not daemon_conf:
         #    logger.error(f"unable to lookup attached daemon plugin {launch_service}")
@@ -360,23 +353,16 @@ async def launch(
         #if not plugin_class:
         #    logger.error(f"unable to lookup {attached_daemon.name} class in config")
 
-        app_runtime_plugin_manager.register(PythonRuntimePlugin())
-        runtime_version = app_runtime_plugin_manager.hook.prompt_for_version()
-        console.info(f"selected Python {runtime_version}")
+        #app_runtime_plugin_manager.register(PythonRuntimePlugin())
+        #runtime_version = plugin_manager.hook.app_runtime_prompt_for_version()
+        #console.info(f"selected Python {runtime_version}")
+        runtime_version  = "3.12"
         python_app_runtime = None
-        async with uow:
-            try:
-                python_app_runtime = await provision_python_app_runtime(
-                    runtime_version, uow, custom_style
-                )
-            except Exception as exc:
-                await uow.rollback()
-                console.error(f"failed to provision a Python {runtime_version} App Runtime")
-                raise typer.Exit(1) from None
-            else:
-                await uow.commit()
-
-        if not python_app_runtime:
+        try:
+            python_app_runtime = await provision_python_app_runtime(
+                runtime_version, uow, custom_style
+            )
+        except Exception as exc:
             console.error(f"failed to provision a Python {runtime_version} App Runtime")
             raise typer.Exit(1) from None
 
@@ -389,11 +375,36 @@ async def launch(
                     custom_style,
                 )
             except Exception as exc:
-                await uow.rollback()
                 console.error(f"failed to provision a Python {runtime_version} App Runtime")
                 raise typer.Exit(1) from None
-            else:
-                await uow.commit()
+        wsgi_app = None
+        if 0:
+            try:
+                wsgi_app = await provision_wsgi_app(
+                    app_name,
+                    app_root_dir,
+                    app_repo_dir,
+                    app_pyvenv_dir,
+                    conf.UV_BIN,
+                    uow,
+                    project,
+                    python_app_runtime,
+                    await services.aget(context, WsgiAppPluginManager),
+                )
+            except Exception as exc:
+                logger.exception(exc)
+                raise typer.Exit(1) from None
+
+        if wsgi_app:
+            await uow.commit()
+            await wsgi_app_up(
+                uow,
+                wsgi_app,
+                project,
+                python_app_runtime,
+                http_routers[0],
+                console,
+                )
 
         if 0:
             wsgi_app = None
@@ -445,50 +456,41 @@ async def launch(
             console.warning("no project selected. exiting")
             raise typer.Exit()
 
-        async with uow:
-            #attached_daemons = await uow.attached_daemons.list()
-            #for daemon in attached_daemons:
-            #    logger.info(daemon)
-            #attached_daemon_choices = [d.service_id for d in attached_daemons]
-            #create_data_dir  = True
-            #if attached_daemon_name == "postgres":
-            #    create_data_dir = False
-            #
-            attached_daemon_plugin_manager = await services.aget(context, AttachedDaemonPluginManager)
-            daemon_conf = conf.attached_daemon_plugins.get(launch_service)
-            if not daemon_conf:
-                logger.error(f"unable to lookup attached daemon plugin {launch_service}")
-                raise typer.Exit(1) from None
-            attached_daemon = None
-            try:
-                attached_daemon = await provision_attached_daemon(
-                    attached_daemon_name,
-                    project,
-                    uow,
-                )
-                if attached_daemon:
-                    plugin_class = daemon_conf.get("class")
-                    if not plugin_class:
-                        logger.error(f"unable to lookup {attached_daemon.name} class in config")
+        #attached_daemons = await uow.attached_daemons.list()
+        #for daemon in attached_daemons:
+        #    logger.info(daemon)
+        #attached_daemon_choices = [d.service_id for d in attached_daemons]
+        #create_data_dir  = True
+        #if attached_daemon_name == "postgres":
+        #    create_data_dir = False
+        #
+        daemon_conf = conf.attached_daemon_plugins.get(launch_service)
+        if not daemon_conf:
+            logger.error(f"unable to lookup attached daemon plugin {launch_service}")
+            raise typer.Exit(1) from None
+        attached_daemon = None
+        try:
+            attached_daemon = await provision_attached_daemon(
+                attached_daemon_name,
+                project,
+                uow,
+            )
+            if attached_daemon:
+                plugin_class = daemon_conf.get("class")
+                if not plugin_class:
+                    logger.error(f"unable to lookup {attached_daemon.name} class in config")
 
-                    attached_daemon_device = await uow.tuntap_devices.\
-                        get_by_linked_service_id(attached_daemon.service_id)
-                    if attached_daemon_device:
-                        attached_daemon_plugin_manager.register(plugin_class(
-                            daemon_service=attached_daemon,
-                            bind_ip=str(attached_daemon_device.ip),
-                        ))
-            except Exception as exc:
-                logger.exception(exc)
-                console.print(exc)
-                await uow.rollback()
-                raise typer.Exit(1) from None
-
-            await uow.commit()
+                attached_daemon_device = await uow.tuntap_devices.\
+                    get_by_linked_service_id(attached_daemon.service_id)
+                if attached_daemon_device:
+                    plugin_manager.register(plugin_class(
+                        daemon_service=attached_daemon,
+                        bind_ip=str(attached_daemon_device.ip),
+                    ))
             if attached_daemon:
                 await attached_daemon_up(
                     attached_daemon,
-                    attached_daemon_plugin_manager,
+                    plugin_manager,
                     uow,
                     create_data_dir=daemon_conf.get("create_data_dir"),
                 )
@@ -497,6 +499,9 @@ async def launch(
                         console.success(f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!")
                     else:
                         console.error(f"{attached_daemon_name} ping failed.")
+        except Exception as exc:
+            logger.exception(exc)
+            raise typer.Exit(1) from None
 
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")
@@ -900,10 +905,7 @@ async def init(
             for task in progress.tasks:
                 if not task.finished:
                     if task.id == detect_dependencies_task:
-                        ####################################
-
                         # asynctempfile
-
                         app_tmp_dir = AsyncPath(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
                         shutil.copytree(
                             runtime.app_root_dir,
@@ -1271,6 +1273,20 @@ async def main(
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
 
+    def plugin_manager_factory():
+        pm = pluggy.PluginManager("pikesquares")
+        pm.add_hookspecs(AttachedDaemonHookSpec)
+        pm.add_hookspecs(AppRuntimeHookSpec)
+        return pm
+    services.register_factory(context, pluggy.PluginManager, plugin_manager_factory)
+
+    #plugin_manager = await services.aget(context, pluggy.PluginManager)
+    #plugin_manager.register(
+    #    PythonRuntimePlugin(),
+    #)
+
+    """
+
     def attached_daemon_plugin_manager_factory():
         pm = PluginManager("attached-daemon")
         pm.add_hookspecs(AttachedDaemonHookSpec)
@@ -1290,7 +1306,20 @@ async def main(
         AppRuntimePluginManager,
         app_runtime_plugin_manager_factory
     )
+    def wsgi_app_plugin_manager_factory():
+        pm = PluginManager("wsgi-app")
+        # magic line to set a writer function
+        pm.trace.root.setwriter(print)
+        undo = pm.enable_tracing()
+        pm.add_hookspecs(WsgiAppHookSpec)
+        return pm
+    services.register_factory(
+        context,
+        WsgiAppPluginManager,
+        wsgi_app_plugin_manager_factory
+    )
     #app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
+    """
 
     async with uow:
         try:

@@ -24,8 +24,8 @@ from pikesquares.adapters.repositories import (
     AttachedDaemonRepository,
     PythonAppRuntimeRepositoryBase,
     PythonAppRuntimeRepository,
-    AppCodebaseRepositoryBase,
-    AppCodebaseRepository,
+    PythonAppCodebaseRepositoryBase,
+    PythonAppCodebaseRepository,
 )
 
 # logger = logging.getLogger("uvicorn.error")
@@ -48,7 +48,7 @@ class UnitOfWorkBase(ABC):
     tuntap_devices: TuntapDeviceRepositoryBase
     attached_daemons: AttachedDaemonRepositoryBase
     python_app_runtimes: PythonAppRuntimeRepositoryBase
-    app_codebases: AppCodebaseRepositoryBase
+    python_app_codebases: PythonAppCodebaseRepositoryBase
 
     async def __aenter__(self):
         return self
@@ -88,7 +88,7 @@ class UnitOfWork(UnitOfWorkBase):
         self.tuntap_devices = TuntapDeviceRepository(self._session)
         self.attached_daemons = AttachedDaemonRepository(self._session)
         self.python_app_runtimes = PythonAppRuntimeRepository(self._session)
-        self.app_codebases = AppCodebaseRepository(self._session)
+        self.python_app_codebases = PythonAppCodebaseRepository(self._session)
         return await super().__aenter__()
 
     async def __aexit__(self, *args):

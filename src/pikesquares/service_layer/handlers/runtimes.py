@@ -3,7 +3,7 @@ import structlog
 import questionary
 from aiopath import AsyncPath
 
-from pikesquares.domain.runtime import AppRuntime, AppCodebase
+from pikesquares.domain.runtime import PythonAppCodebase
 from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.service_layer.uow import UnitOfWork
 from .prompt_utils import gather_repo_details_and_clone
@@ -17,18 +17,21 @@ async def provision_python_app_runtime(
     custom_style: questionary.Style
 ) -> PythonAppRuntime | None:
 
-    try:
-        python_app_runtime = await uow.python_app_runtimes.get_by_version(version)
-        if not python_app_runtime:
-            python_app_runtime = await uow.python_app_runtimes.add(
-                PythonAppRuntime(version=version)
-            )
-            logger.info(f"created Python App Runtime {python_app_runtime.version}")
-            return python_app_runtime
-    except Exception as exc:
-        logger.exception(exc)
-        logger.info(f"failed provisioning Python App Runtime {version}")
-        raise exc
+    async with uow:
+        try:
+            python_app_runtime = await uow.python_app_runtimes.get_by_version(version)
+            if not python_app_runtime:
+                python_app_runtime = await uow.python_app_runtimes.add(
+                    PythonAppRuntime(version=version)
+                )
+                logger.info(f"created Python App Runtime {python_app_runtime.version}")
+                return python_app_runtime
+        except Exception as exc:
+            logger.exception(exc)
+            logger.info(f"failed provisioning Python App Runtime {version}")
+            await uow.rollback()
+            raise exc
+        await uow.commit()
     logger.info(f"using existing Python {version} App Runtime")
     return python_app_runtime
 
@@ -37,7 +40,7 @@ async def provision_app_codebase(
     pyapps_dir: AsyncPath,
     uow: UnitOfWork,
     custom_style: questionary.Style,
-) -> AppCodebase | None:
+) -> PythonAppCodebase | None:
     """
       set app root dir
       set app repo dir
@@ -49,60 +52,69 @@ async def provision_app_codebase(
         install deps
     """
     app_name = None
+    app_codebase = None
     app_root_dir=None
     app_repo_dir=None
     repo_git_url=None
     editable_mode=True
-    try:
-        if launch_service == "bugsink":
-            repo_git_url = "https://github.com/bugsink/bugsink.git"
-            app_root_dir = AsyncPath(pyapps_dir) / launch_service
-        elif launch_service == "bugsink":
-            repo_git_url = "https://github.com/meshnyc/meshdb.git"
-            app_root_dir = AsyncPath(pyapps_dir) / launch_service
 
-        """
-        if repo_url:
-            giturl = giturlparse.parse(repo_url)
-            app_name = giturl.name
+    async with uow:
+        try:
+            if launch_service == "bugsink":
+                repo_git_url = "https://github.com/bugsink/bugsink.git"
+                app_root_dir = AsyncPath(pyapps_dir) / launch_service
+            elif launch_service == "bugsink":
+                repo_git_url = "https://github.com/meshnyc/meshdb.git"
+                app_root_dir = AsyncPath(pyapps_dir) / launch_service
 
-        if not app_name:
-            app_name = await questionary.text(
-                "Choose a name for your app: ",
-                default=randomname.get_name().lower(),
-                style=custom_style,
-                #validate=NameValidator,
-            ).ask_async()
-        """
-        if app_root_dir:
-            await app_root_dir.mkdir(exist_ok=True)
+            """
+            if repo_url:
+                giturl = giturlparse.parse(repo_url)
+                app_name = giturl.name
 
-        app_repo_dir, repo_git_url = await gather_repo_details_and_clone(
-            app_name,
-            repo_git_url,
-            app_root_dir,
-            pyapps_dir,
-            custom_style,
-        )
-        app_pyvenv_dir = app_repo_dir / ".venv"
-        app_codebase = await uow.app_codebases.get_by_root_dir(app_root_dir)
-        if not app_codebase:
-            app_codebase = await uow.app_codebases.add(
-                AppCodebase(
-                    root_dir=str(app_root_dir),
-                    repo_dir=str(app_repo_dir),
-                    repo_git_url=repo_git_url,
-                    venv_dir=str(app_pyvenv_dir),
-                    editable_mode=editable_mode,
-                )
+            if not app_name:
+                app_name = await questionary.text(
+                    "Choose a name for your app: ",
+                    default=randomname.get_name().lower(),
+                    style=custom_style,
+                    #validate=NameValidator,
+                ).ask_async()
+            """
+            if app_root_dir:
+                await app_root_dir.mkdir(exist_ok=True)
+
+            app_repo_dir, repo_git_url = await gather_repo_details_and_clone(
+                app_name,
+                repo_git_url,
+                app_root_dir,
+                pyapps_dir,
+                custom_style,
             )
-            logger.info(f"created App Codebase @ {app_root_dir}")
-            return app_codebase
-    except Exception as exc:
-        logger.info(f"failed provisioning App Codebase @ {app_root_dir}")
-        logger.exception(exc)
-        print(traceback.format_exc())
-        raise exc
+            app_pyvenv_dir = app_repo_dir / ".venv"
+            app_codebase = await uow.python_app_codebases.get_by_root_dir(str(app_root_dir))
+            if not app_codebase:
+                app_codebase = await uow.python_app_codebases.add(
+                    PythonAppCodebase(
+                        root_dir=str(app_root_dir),
+                        repo_dir=str(app_repo_dir),
+                        repo_git_url=repo_git_url,
+                        venv_dir=str(app_pyvenv_dir),
+                        editable_mode=editable_mode,
+                    )
+                )
+                logger.info(f"created App Codebase @ {app_root_dir}")
+
+            if not await app_codebase.detect_deps():
+                raise Exception("detecting dependencies failed")
+
+        except Exception as exc:
+            logger.exception(exc)
+            logger.info(f"failed provisioning Python App Codebase @ {app_root_dir}")
+            print(traceback.format_exc())
+            await uow.rollback()
+            raise exc
+
+        await uow.commit()
 
     return app_codebase
 
