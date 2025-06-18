@@ -1,3 +1,5 @@
+import pluggy
+
 from .markers import hook_spec
 
 
@@ -26,4 +28,26 @@ class AppRuntimeHookSpec:
 
     @hook_spec(firstresult=True)
     def app_runtime_prompt_for_version(self) -> str:
+        ...
+
+
+class AppCodebaseHookSpec:
+    """
+    App Codebase Hook Specification
+    """
+
+    @hook_spec(firstresult=True)
+    def get_repo_url(self, service_name: str) -> str | None:
+        ...
+
+class PythonAppCodebaseHookSpec:
+    """
+    Python App Codebase Hook Specification
+    """
+
+    @hook_spec(firstresult=True)
+    def python_app_codebase_before_install_dependencies(
+            self,
+            service_name: str,
+    ):
         ...

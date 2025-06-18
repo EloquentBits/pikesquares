@@ -11,12 +11,12 @@ from typing import Annotated, Optional
 
 import anyio
 import cuid
+import pluggy
 import questionary
 import randomname
 import sentry_sdk
 import structlog
 import tenacity
-import pluggy
 import typer
 from aiopath import AsyncPath
 from dotenv import load_dotenv
@@ -46,7 +46,6 @@ from pikesquares.conf import (
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.caddy import register_caddy_process
 from pikesquares.domain.device import register_device_stats
-
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ProcessCompose,
@@ -56,12 +55,18 @@ from pikesquares.domain.process_compose import (
     register_dnsmasq_process,
     register_process_compose,
 )
+from pikesquares.hooks.specs import (
+    AppCodebaseHookSpec,
+    AppRuntimeHookSpec,
+    AttachedDaemonHookSpec,
+    PythonAppCodebaseHookSpec,
+)
+
 #from pikesquares.domain.runtime import PythonAppCodebase
 from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
     provision_attached_daemon,
 )
-from pikesquares.hooks.specs import AttachedDaemonHookSpec, AppRuntimeHookSpec
 from pikesquares.service_layer.handlers.device import provision_device
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.handlers.project import project_up
@@ -370,6 +375,7 @@ async def launch(
             try:
                 app_codebase = await provision_app_codebase(
                     launch_service,
+                    plugin_manager,
                     AsyncPath(conf.pyapps_dir),
                     uow,
                     custom_style,
@@ -1277,6 +1283,8 @@ async def main(
         pm = pluggy.PluginManager("pikesquares")
         pm.add_hookspecs(AttachedDaemonHookSpec)
         pm.add_hookspecs(AppRuntimeHookSpec)
+        pm.add_hookspecs(AppCodebaseHookSpec)
+        pm.add_hookspecs(PythonAppCodebaseHookSpec)
         return pm
     services.register_factory(context, pluggy.PluginManager, plugin_manager_factory)
 

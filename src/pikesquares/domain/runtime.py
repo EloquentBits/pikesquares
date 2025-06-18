@@ -1,17 +1,16 @@
 import json
 import shutil
-import tempfile
 import traceback
 import uuid
 from pathlib import Path
 
-import pydantic
 import aiofiles
+import pluggy
+import pydantic
 import structlog
+import toml
 from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
-
-import toml
 from plumbum import local as pl_local
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlmodel import Field, Relationship
@@ -160,6 +159,39 @@ class AppRuntime(AsyncAttrs, TimeStampedBase):
         arbitrary_types_allowed = True
 
 
+class Bugsink:
+
+    @hook_impl
+    def get_repo_url(self, service_name: str) -> str | None:
+        logger.debug(f"Bugsink: get_repo_url: {service_name=}")
+        if service_name == "bugsink":
+            return "https://github.com/bugsink/bugsink.git"
+
+    @hook_impl
+    def python_app_codebase_before_install_dependencies(
+        self,
+        service_name: str,
+    ):
+        if service_name == "bugsink":
+            logger.info("Bugsink python_app_codebase_before_install_dependencies")
+
+class Meshdb:
+
+    @hook_impl
+    def get_repo_url(self, service_name: str) -> str | None:
+        logger.debug(f"Meshdb: get_repo_url: {service_name=}")
+        if service_name == "meshdb":
+            return "https://github.com/meshnyc/meshdb.git"
+
+    @hook_impl
+    def python_app_codebase_before_install_dependencies(
+        self,
+        service_name: str,
+    ):
+        if service_name == "meshdb":
+            logger.info("Meshdb python_app_codebase_before_install_dependencies")
+
+
 class BaseAppCodebase(AsyncAttrs, TimeStampedBase):
 
     id: str = Field(
@@ -217,7 +249,11 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         except FileNotFoundError:
             return "3.12"
 
-    async def detect_deps(self) -> bool | None:
+    async def detect_deps(
+        self,
+        service_name: str,
+        plugin_manager: pluggy.PluginManager
+    ) -> bool | None:
 
         async with aiofiles.tempfile.TemporaryDirectory() as tmp_dir:
             #filename = os.path.join(d, "file.ext")
@@ -239,6 +275,10 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             logger.info(f"created a tmp dir {app_tmp_dir}")
 
             try:
+                plugin_manager.hook.\
+                    python_app_codebase_before_install_dependencies(
+                        service_name=service_name,
+                    )
                 logger.info(f"installing deps into tmp dir {app_tmp_dir}")
                 await self.install_dependencies(
                     venv=app_tmp_dir / ".venv",

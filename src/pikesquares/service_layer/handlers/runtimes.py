@@ -2,8 +2,13 @@ import traceback
 import structlog
 import questionary
 from aiopath import AsyncPath
+import pluggy
 
-from pikesquares.domain.runtime import PythonAppCodebase
+from pikesquares.domain.runtime import (
+    PythonAppCodebase,
+    Bugsink,
+    Meshdb,
+)
 from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.service_layer.uow import UnitOfWork
 from .prompt_utils import gather_repo_details_and_clone
@@ -36,7 +41,8 @@ async def provision_python_app_runtime(
     return python_app_runtime
 
 async def provision_app_codebase(
-    launch_service: str,
+    service_name: str,
+    plugin_manager: pluggy.PluginManager,
     pyapps_dir: AsyncPath,
     uow: UnitOfWork,
     custom_style: questionary.Style,
@@ -60,12 +66,19 @@ async def provision_app_codebase(
 
     async with uow:
         try:
-            if launch_service == "bugsink":
-                repo_git_url = "https://github.com/bugsink/bugsink.git"
-                app_root_dir = AsyncPath(pyapps_dir) / launch_service
-            elif launch_service == "bugsink":
-                repo_git_url = "https://github.com/meshnyc/meshdb.git"
-                app_root_dir = AsyncPath(pyapps_dir) / launch_service
+            #if service_name == "bugsink":
+            #    plugin_manager.register(Bugsink())
+            #elif service_name == "meshdb":
+            #    plugin_manager.register(Meshdb())
+
+            plugin_manager.register(Bugsink())
+            plugin_manager.register(Meshdb())
+
+            repo_git_url = plugin_manager.hook.get_repo_url(
+                service_name=service_name,
+            )
+            logger.debug(f"provision_app_codebase: {service_name} git repo url: {repo_git_url}")
+            app_root_dir = AsyncPath(pyapps_dir) / service_name
 
             """
             if repo_url:
@@ -104,7 +117,10 @@ async def provision_app_codebase(
                 )
                 logger.info(f"created App Codebase @ {app_root_dir}")
 
-            if not await app_codebase.detect_deps():
+            if not await app_codebase.detect_deps(
+                service_name,
+                plugin_manager,
+            ):
                 raise Exception("detecting dependencies failed")
 
         except Exception as exc:
