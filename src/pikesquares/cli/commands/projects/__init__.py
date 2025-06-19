@@ -284,14 +284,14 @@ async def list_(ctx: typer.Context, show_id: bool = False):
     projects_out = []
     try:
         stats = await device.read_stats()
-        device_stats = DeviceStats()
+        device_stats = DeviceStats(**stats)
     except tenacity.RetryError:
         console.error(f"Unable to read stats for device [{device.machine_id}]")
-        raise typer.Exit(1) from None
+        raise typer.Exit(0) from None
 
     if not device_stats:
         console.warning("unable to lookup device stats")
-        raise typer.Exit(0)
+        raise typer.Exit(0) from None
 
     for project in projects:
         try:

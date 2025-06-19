@@ -1,10 +1,10 @@
 import structlog
 from sqlmodel import Relationship
 
-logger = structlog.getLogger()
-
 from pikesquares.domain.runtime import AppRuntime
 from pikesquares.hooks.markers import hook_impl
+
+logger = structlog.getLogger()
 
 
 class PythonAppRuntime(AppRuntime, table=True):

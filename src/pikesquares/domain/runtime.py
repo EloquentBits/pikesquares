@@ -11,56 +11,22 @@ import structlog
 import toml
 from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
-from plumbum import local as pl_local
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlmodel import Field, Relationship
 
 from pikesquares.domain.base import TimeStampedBase
 from pikesquares.hooks.markers import hook_impl
+from pikesquares.service_layer.uv import uv_cmd
+from pikesquares.exceptions import (
+    DjangoCheckError,
+    UvSyncError,
+    UvPipInstallError,
+    UvPipListError,
+    UvCommandExecutionError,
+)
 
 logger = structlog.getLogger()
 
-
-class UvSyncError(Exception):
-    pass
-
-
-class UvPipInstallError(Exception):
-    pass
-
-
-class UvPipListError(Exception):
-    pass
-
-
-class PythonRuntimeCheckError(Exception):
-    pass
-
-
-class PythonRuntimeDjangoCheckError(Exception):
-    pass
-
-
-class PythonRuntimeInitError(Exception):
-    pass
-
-class PythonRuntimeDepsInstallError(Exception):
-    pass
-
-class DjangoCheckError(Exception):
-    pass
-
-
-class DjangoSettingsError(Exception):
-    pass
-
-
-class DjangoDiffSettingsError(Exception):
-    pass
-
-
-class UvCommandExecutionError(Exception):
-    pass
 
 
 PY_MATCH_FILES: set[str] = set(
@@ -171,9 +137,11 @@ class Bugsink:
     def python_app_codebase_before_install_dependencies(
         self,
         service_name: str,
-    ):
-        if service_name == "bugsink":
-            logger.info("Bugsink python_app_codebase_before_install_dependencies")
+    ) -> None:
+        if service_name != "bugsink":
+            return
+
+        logger.info("Bugsink python_app_codebase_before_install_dependencies")
 
 class Meshdb:
 
@@ -187,9 +155,11 @@ class Meshdb:
     def python_app_codebase_before_install_dependencies(
         self,
         service_name: str,
-    ):
-        if service_name == "meshdb":
-            logger.info("Meshdb python_app_codebase_before_install_dependencies")
+    ) -> None:
+        if service_name != "meshdb":
+            return
+
+        logger.info("Meshdb python_app_codebase_before_install_dependencies")
 
 
 class BaseAppCodebase(AsyncAttrs, TimeStampedBase):
@@ -214,6 +184,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
 
     __tablename__ = "python_app_codebases"
 
+    uv_bin: str = Field(max_length=255)
     wsgi_apps: list["WsgiApp"] = Relationship(back_populates="python_app_codebase")
 
     async def get_files(self) -> set[AsyncPath]:
@@ -321,7 +292,9 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         #if "uv.lock" and "pyproject.toml" in self.top_level_file_names:
         #    logger.info("installing dependencies from uv.lock")
         try:
-            retcode, stdout, stderr = await self.uv_cmd([
+            retcode, stdout, stderr = await uv_cmd(
+                AsyncPath(self.uv_bin),
+                [
                     "sync",
                     # "--directory", str(app_root_dir),
                     # "--project", str(app_root_dir),
@@ -356,7 +329,8 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             logger.info("installing depedencies from requirements.txt")
             cmd_args = [*cmd_args, "pip", "install", "-r", "requirements.txt"]
             try:
-                retcode, stdout, stderr = self.uv_cmd(
+                retcode, stdout, stderr = uv_cmd(
+                    AsyncPath(self.uv_bin),
                     cmd_args,
                     cmd_env=cmd_env,
                     chdir=app_tmp_dir or self.app_repo_dir,
@@ -371,7 +345,11 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
                 logger.info("installing inspect-extensions")
                 cmd_args = [*cmd_args, "pip", "install", "inspect-extensions"]
                 try:
-                    retcode, stdout, stderr = self.uv_cmd(cmd_args, cmd_env)
+                    retcode, stdout, stderr = uv_cmd(
+                        AsyncPath(self.uv_bin),
+                        cmd_args,
+                        cmd_env
+                    )
                 except UvCommandExecutionError:
                     raise UvPipInstallError("unable to install inspect-extensions in")
         #else:
@@ -381,8 +359,10 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         cmd_env = {}
         cmd_args = ["pip", "list", "--format", "json"]
         try:
-            retcode, stdout, stderr = await self.uv_cmd(
-                    cmd_args, cmd_env
+            retcode, stdout, stderr = await uv_cmd(
+                AsyncPath(self.uv_bin),
+                cmd_args,
+                cmd_env,
             )
             return json.loads(stdout)
         except UvCommandExecutionError:
@@ -489,7 +469,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         cmd_args = []
 
         try:
-            retcode, stdout, stderr = await self.uv_cmd(
+            retcode, stdout, stderr = await uv_cmd(
                 [
                   *cmd_args,
                  "venv",
@@ -515,7 +495,9 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
 
         logger.info(f"failed: uv run {' '.join(cmd_args)}")
         try:
-            retcode, stdout, stderr = self.uv_cmd([
+            retcode, stdout, stderr = uv_cmd(
+                AsyncPath(self.uv_bin),
+                [
                     "run",
                     "--verbose",
                     "--python",
@@ -524,55 +506,12 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
                     *cmd_args,
                 ],
                 cmd_env=cmd_env,
-                chdir=self.repo_dir,
+                chdir=AsyncPath(self.repo_dir),
             )
             return retcode, stdout, stderr
         except ProcessExecutionError as exc:
             logger.exception(exc)
             raise UvCommandExecutionError(f"uv run {' '.join(cmd_args)}")
-
-
-    async def uv_cmd(
-            self,
-            cmd_args: list[str],
-            # run_as_user: str = "pikesquares",
-            cmd_env: dict | None = None,
-            chdir: AsyncPath | None = None,
-
-        ) -> tuple[str, str, str]:
-        logger.info(f"[pikesquares] uv_cmd: {cmd_args=}")
-        uv_bin  = AsyncPath("/home/pk/.local/bin/uv")
-        try:
-            if cmd_env:
-                pl_local.env.update(cmd_env)
-                logger.debug(f"{cmd_env=}")
-
-            # with pl_local.as_user(run_as_user):
-            with pl_local.cwd(chdir or self.root_dir):
-                uv = pl_local[str(uv_bin)]
-                retcode, stdout, stderr = uv.run(
-                    cmd_args,
-                    **{"env": cmd_env}
-                )
-                logger.debug(f"[pikesquares] uv_cmd: {retcode=}")
-                logger.debug(f"[pikesquares] uv_cmd: {stdout=}")
-                logger.debug(f"[pikesquares] uv_cmd: {stderr=}")
-                return retcode, stdout, stderr
-        except ProcessExecutionError as exc:
-            raise exc
-            # print(vars(exc))
-            # {
-            #    'message': None,
-            #    'host': None,
-            #    'argv': ['/home/pk/.local/bin/uv', 'run', 'manage.py', 'check'],
-            #    'retcode': 1
-            #    'stdout': '',
-            #    'stderr': "warning: `VIRTUAL_ENV=/home/pk/dev/eqb/pikesquares/.venv` does not match the project environment path `.venv` and will be ignored\nSystemCheckError: System check identified some issues:\n\nERRORS:\n?: (caches.E001) You must define a 'default' cache in your CACHES setting.\n\nSystem check identified 1 issue (0 silenced).\n"
-            # }
-            # print(traceback.format_exc())
-            #raise UvCommandExecutionError(
-            #        f"uv cmd [{' '.join(cmd_args)}] failed.\n{exc.stderr}"
-            #)
 
 
     """
@@ -608,7 +547,8 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         # uv run python -c "from django.conf import settings ; print(settings.WSGI_APPLICATION)"
         cmd_args = ["run", "manage.py", "check"]
         try:
-            retcode, stdout, stderr = await self.uv_cmd(
+            retcode, stdout, stderr = await uv_cmd(
+                AsyncPath(self.uv_bin),
                 cmd_args,
                 cmd_env,
                 chdir=chdir,
@@ -676,7 +616,8 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         cmd_args = ["run", "manage.py", "diffsettings"]
         chdir = str(app_tmp_dir) or self.root_dir
         try:
-            retcode, stdout, stderr = await self.uv_cmd(
+            retcode, stdout, stderr = await uv_cmd(
+                AsyncPath(self.uv_bin),
                 cmd_args,
                 cmd_env,
                 chdir=chdir,

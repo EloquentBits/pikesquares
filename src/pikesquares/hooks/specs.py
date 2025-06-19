@@ -49,5 +49,5 @@ class PythonAppCodebaseHookSpec:
     def python_app_codebase_before_install_dependencies(
             self,
             service_name: str,
-    ):
+    ) -> None:
         ...

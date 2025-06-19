@@ -1,12 +1,13 @@
+import shutil
 import traceback
 from pathlib import Path
 
 import git
 import giturlparse
 import questionary
-import typer
-import tenacity
 import structlog
+import tenacity
+import typer
 from aiopath import AsyncPath
 
 from pikesquares.cli.console import console
@@ -16,7 +17,6 @@ from pikesquares.domain.device import Device
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork
-
 
 logger = structlog.getLogger()
 
@@ -160,15 +160,17 @@ async def gather_repo_details_and_clone(
     if await clone_into_dir.exists():
         #and any(await clone_into_dir.glob("*")):
         #import ipdb;ipdb.set_trace()
-        clone_into_dir_files = [path async for path in clone_into_dir.glob('**/*')]
+        clone_into_dir_files = [path async for path in clone_into_dir.glob("**/*")]
         #await clone_into_dir.glob("*")
         if clone_into_dir / ".git" in clone_into_dir_files:
             if await questionary.confirm(
-                f"There appears to be a git repository already cloned in {clone_into_dir}. Skip cloning repo?",
-                default=True,
+                f"There appears to be a git repository already cloned in {clone_into_dir}. Overwrite?",
+                default=False,
                 auto_enter=True,
                 style=custom_style,
             ).unsafe_ask_async():
+                shutil.rmtree(clone_into_dir)
+                logger.info(f"deleted repo dir {clone_into_dir}")
                 return clone_into_dir, repo_url
         else:
             # FIXME
@@ -193,7 +195,9 @@ async def gather_repo_details_and_clone(
                 repo = git.Repo.clone_from(
                     repo_url,
                     clone_into_dir,
-                    progress=CloneProgress()
+                    progress=CloneProgress(),
+                    depth=1,
+                    #branch="master"
                 )
             except git.GitCommandError as exc:
                 if "already exists and is not an empty directory" in exc.stderr:

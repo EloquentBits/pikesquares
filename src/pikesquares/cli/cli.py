@@ -377,6 +377,7 @@ async def launch(
                     launch_service,
                     plugin_manager,
                     AsyncPath(conf.pyapps_dir),
+                    AsyncPath(str(conf.UV_BIN)),
                     uow,
                     custom_style,
                 )

@@ -44,6 +44,7 @@ async def provision_app_codebase(
     service_name: str,
     plugin_manager: pluggy.PluginManager,
     pyapps_dir: AsyncPath,
+    uv_bin: AsyncPath,
     uow: UnitOfWork,
     custom_style: questionary.Style,
 ) -> PythonAppCodebase | None:
@@ -113,6 +114,7 @@ async def provision_app_codebase(
                         repo_git_url=repo_git_url,
                         venv_dir=str(app_pyvenv_dir),
                         editable_mode=editable_mode,
+                        uv_bin=str(uv_bin),
                     )
                 )
                 logger.info(f"created App Codebase @ {app_root_dir}")
