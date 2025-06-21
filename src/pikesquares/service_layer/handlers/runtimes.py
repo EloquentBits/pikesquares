@@ -1,17 +1,16 @@
 import traceback
-import structlog
-import questionary
-from aiopath import AsyncPath
-import pluggy
 
-from pikesquares.domain.process_compose import ServiceUnavailableError
-from pikesquares.domain.runtime import (
-    PythonAppCodebase,
-    Bugsink,
-    Meshdb,
-)
+import apluggy as pluggy
+import questionary
+import structlog
+from aiopath import AsyncPath
+
 from pikesquares.domain.python_runtime import PythonAppRuntime
+from pikesquares.domain.runtime import PythonAppCodebase
+from pikesquares.hooks.plugins.apps.bugsink import Bugsink
+from pikesquares.hooks.plugins.apps.meshdb import Meshdb
 from pikesquares.service_layer.uow import UnitOfWork
+
 from .prompt_utils import gather_repo_details_and_clone
 
 logger = structlog.getLogger()
@@ -25,21 +24,16 @@ async def provision_python_app_runtime(
 
     async with uow:
         try:
-            python_app_runtime = await uow.python_app_runtimes.get_by_version(version)
-            if not python_app_runtime:
-                python_app_runtime = await uow.python_app_runtimes.add(
-                    PythonAppRuntime(version=version)
-                )
-                logger.info(f"created Python App Runtime {python_app_runtime.version}")
-                return python_app_runtime
+            runtime =  await uow.python_app_runtimes.get_by_version(version)
+            if not runtime:
+                runtime = await uow.python_app_runtimes.add(PythonAppRuntime(version=version))
+                await uow.commit()
+            return runtime
         except Exception as exc:
             logger.exception(exc)
             logger.info(f"failed provisioning Python App Runtime {version}")
             await uow.rollback()
             raise exc
-        await uow.commit()
-    logger.info(f"using existing Python {version} App Runtime")
-    return python_app_runtime
 
 async def provision_app_codebase(
     service_name: str,
@@ -63,28 +57,16 @@ async def provision_app_codebase(
     app_codebase = None
     app_root_dir=None
     app_repo_dir=None
-    repo_git_url=None
     editable_mode=True
-
-    #if service_name == "bugsink":
-    #    plugin_manager.register(Bugsink())
-    #elif service_name == "meshdb":
-    #    plugin_manager.register(Meshdb())
 
     plugin_manager.register(Bugsink())
     plugin_manager.register(Meshdb())
 
-    repo_git_url = plugin_manager.hook.get_repo_url(
+    repo_git_urls: list[str] = await plugin_manager.ahook.get_repo_url(
         service_name=service_name,
     )
-    logger.debug(f"provision_app_codebase: {service_name} git repo url: {repo_git_url}")
     app_root_dir = AsyncPath(pyapps_dir) / service_name
-
     """
-    if repo_url:
-        giturl = giturlparse.parse(repo_url)
-        app_name = giturl.name
-
     if not app_name:
         app_name = await questionary.text(
             "Choose a name for your app: ",
@@ -98,7 +80,7 @@ async def provision_app_codebase(
 
     app_repo_dir, repo_git_url = await gather_repo_details_and_clone(
         app_name,
-        repo_git_url,
+        next(filter(lambda x: x, repo_git_urls)),
         app_root_dir,
         pyapps_dir,
         custom_style,

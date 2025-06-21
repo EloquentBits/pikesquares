@@ -4,7 +4,7 @@ from pathlib import Path
 import cuid
 import structlog
 import tenacity
-import pluggy
+import apluggy as pluggy
 from uwsgiconf.config import Section
 
 from pikesquares.domain.managed_services import AttachedDaemon
@@ -80,7 +80,7 @@ async def attached_daemon_up(
         if not attached_daemon_device:
             raise Exception(f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}")
 
-        cmd_args = plugin_manager.hook.attached_daemon_collect_command_arguments()
+        cmd_args = await plugin_manager.ahook.attached_daemon_collect_command_arguments()
         section = Section(
             name="uwsgi",
             runtime_dir=str(attached_daemon.run_dir),
@@ -213,9 +213,9 @@ async def attached_daemon_down(
             logger.info(f"Managed service {attached_daemon.name} is not running")
             return False
 
-        if plugin_manager.hook.attached_daemon_ping():
+        if await plugin_manager.ahook.attached_daemon_ping():
             logger.info(f"stopping {attached_daemon.name} [{attached_daemon.service_id}]")
-            stop_result = plugin_manager.hook.stop()
+            stop_result = await plugin_manager.ahook.stop()
             if stop_result:
                 logger.info(f"stopped {attached_daemon.name} [{attached_daemon.service_id}]")
             else:

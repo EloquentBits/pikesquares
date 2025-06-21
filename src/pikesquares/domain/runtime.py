@@ -5,8 +5,8 @@ import uuid
 from pathlib import Path
 
 import aiofiles
+import apluggy as pluggy
 import giturlparse
-import pluggy
 import pydantic
 import structlog
 import toml
@@ -130,42 +130,6 @@ class AppRuntime(AsyncAttrs, TimeStampedBase):
         arbitrary_types_allowed = True
 
 
-class Bugsink:
-
-    @hook_impl
-    def get_repo_url(self, service_name: str) -> str | None:
-        logger.debug(f"Bugsink: get_repo_url: {service_name=}")
-        if service_name == "bugsink":
-            return "https://github.com/bugsink/bugsink.git"
-
-    @hook_impl
-    def python_app_codebase_before_install_dependencies(
-        self,
-        service_name: str,
-    ) -> None:
-        if service_name != "bugsink":
-            return
-
-        logger.info("Bugsink python_app_codebase_before_install_dependencies")
-
-class Meshdb:
-
-    @hook_impl
-    def get_repo_url(self, service_name: str) -> str | None:
-        logger.debug(f"Meshdb: get_repo_url: {service_name=}")
-        if service_name == "meshdb":
-            return "https://github.com/meshnyc/meshdb.git"
-
-    @hook_impl
-    def python_app_codebase_before_install_dependencies(
-        self,
-        service_name: str,
-    ) -> None:
-        if service_name != "meshdb":
-            return
-
-        logger.info("Meshdb python_app_codebase_before_install_dependencies")
-
 
 class BaseAppCodebase(AsyncAttrs, TimeStampedBase):
 
@@ -239,28 +203,6 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             return giturl.name
         raise ValueError(f"invalid git repo url {self.repo_git_url}")
 
-
-    async def dependencies_install(self, service_name, plugin_manager: pluggy.PluginManager) -> bool | None:
-
-        plugin_manager.hook.\
-            python_app_codebase_before_install_dependencies(
-                service_name=service_name,
-            )
-        try:
-            logger.info(f"installing deps into dir {self.repo_dir}")
-            await uv_dependencies_install(
-                uv_bin=AsyncPath(self.uv_bin),
-                venv=AsyncPath(self.venv_dir),
-                repo_dir=AsyncPath(self.repo_dir),
-            )
-            logger.info(f"installed deps into dir {self.repo_dir}")
-        except (UvSyncError, UvPipInstallError):
-            logger.error("installing dependencies failed.")
-            #await self.check_cleanup(app_tmp_dir)
-
-        return True
-
-
     async def dependencies_validate(self) -> bool | None:
         """
         copy repo into a temporary directory and attempt to run `uv sync`
@@ -301,6 +243,37 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
                     traceback.format_exc()
 
             return True
+
+    async def dependencies_install(self, service_name, plugin_manager: pluggy.PluginManager) -> bool | None:
+
+        await plugin_manager.ahook.\
+            before_dependencies_install(
+                service_name=service_name,
+                uv_bin=AsyncPath(self.uv_bin),
+                repo_dir=AsyncPath(self.repo_dir),
+            )
+        try:
+            logger.info(f"installing deps into dir {self.repo_dir}")
+            await uv_dependencies_install(
+                uv_bin=AsyncPath(self.uv_bin),
+                venv=AsyncPath(self.venv_dir),
+                repo_dir=AsyncPath(self.repo_dir),
+            )
+            logger.info(f"installed deps into dir {self.repo_dir}")
+        except (UvSyncError, UvPipInstallError):
+            logger.error("installing dependencies failed.")
+            #await self.check_cleanup(app_tmp_dir)
+
+        await plugin_manager.ahook.\
+            after_dependencies_install(
+                service_name=service_name,
+                uv_bin=AsyncPath(self.uv_bin),
+                repo_dir=AsyncPath(self.repo_dir),
+        )
+
+        return True
+
+
 
     """
     async def init(

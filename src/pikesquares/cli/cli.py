@@ -5,13 +5,14 @@ import logging
 import os
 import shutil
 import tempfile
+import traceback
 from functools import wraps
 from pathlib import Path
 from typing import Annotated, Optional
 
 import anyio
+import apluggy as pluggy
 import cuid
-import pluggy
 import questionary
 import randomname
 import sentry_sdk
@@ -368,7 +369,8 @@ async def launch(
                 runtime_version, uow, custom_style
             )
         except Exception as exc:
-            console.error(f"failed to provision a Python {runtime_version} App Runtime")
+            print(traceback.format_exc())
+            console.error(f"Failed to provision a Python {runtime_version} Runtime")
             raise typer.Exit(1) from None
 
         async with uow:
@@ -382,7 +384,8 @@ async def launch(
                     custom_style,
                 )
             except Exception as exc:
-                console.error(f"failed to provision a Python {runtime_version} App Runtime")
+                print(traceback.format_exc())
+                console.error(f"failed to provision a Python {runtime_version} Codebase")
                 raise typer.Exit(1) from None
         wsgi_app = None
         if 0:

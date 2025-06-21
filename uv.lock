@@ -140,6 +140,19 @@ wheels = [
 ]
 
 [[package]]
+name = "apluggy"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pluggy" },
+    { name = "types-decorator" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/97/ec/01f4e36a8991d934459dba376ebb34bc7f01d1b04dd4546f39dffb6f802a/apluggy-1.1.0.tar.gz", hash = "sha256:3273887b6d4b2d0d7cba0f620f8e9e5c492a40b492b93eb928bf28c95475a6ee", size = 26990, upload-time = "2025-02-17T17:29:47.337Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/42/8dd33468d0587c6734af92ff6d68cd3cc5fe4376edc7e5b4a9f97d81ff5b/apluggy-1.1.0-py3-none-any.whl", hash = "sha256:b0918965ef763513c042b961191095e0d3bd258fcb1ebd9fa369ab969338a9dc", size = 12067, upload-time = "2025-02-17T17:29:45.327Z" },
+]
+
+[[package]]
 name = "app-paths"
 version = "0.0.8"
 source = { registry = "https://pypi.org/simple" }
@@ -964,6 +977,7 @@ dependencies = [
     { name = "aiopath" },
     { name = "aiosqlite" },
     { name = "alembic" },
+    { name = "apluggy" },
     { name = "app-paths" },
     { name = "asgi-lifespan" },
     { name = "cuid" },
@@ -1020,6 +1034,7 @@ requires-dist = [
     { name = "aiopath", specifier = ">=0.7.7" },
     { name = "aiosqlite", specifier = ">=0.21.0" },
     { name = "alembic", specifier = ">=1.14.1" },
+    { name = "apluggy", specifier = ">=1.1.0" },
     { name = "app-paths", specifier = ">=0.0.8" },
     { name = "asgi-lifespan", specifier = ">=2.1.0" },
     { name = "cuid", specifier = ">=0.4" },
@@ -1765,6 +1780,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/76/41/49ead3ad3310545e767bcb917c759b026ca9eada5d5c150c2fb6fc555568/typer-0.13.1.tar.gz", hash = "sha256:9d444cb96cc268ce6f8b94e13b4335084cef4c079998a9f4851a90229a3bd25c", size = 98631, upload-time = "2024-11-18T22:39:19.727Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/22/69/e90a0b4d0c16e095901679216c8ecdc728110c7c54e7b5f43a623bc4c789/typer-0.13.1-py3-none-any.whl", hash = "sha256:5b59580fd925e89463a29d363e0a43245ec02765bde9fb77d39e5d0f29dd7157", size = 44723, upload-time = "2024-11-18T22:39:17.882Z" },
+]
+
+[[package]]
+name = "types-decorator"
+version = "5.2.0.20250324"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b4/61/afe7f9505058fc8d0c22deacb379eb299cd7319ee7459ab5c3ec2d435e93/types_decorator-5.2.0.20250324.tar.gz", hash = "sha256:8fbd72b0dadc56176e48e5187de744e76fe45bcc91a25874baa75662412155d3", size = 9063, upload-time = "2025-03-24T02:57:41.52Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/02/49fff752b50ad681003f3adb9573d6a4a928fdaa786eefd8e1d87226c0d6/types_decorator-5.2.0.20250324-py3-none-any.whl", hash = "sha256:0740cee7ce57cf9cf2b306114a1588984255f706efa0f35b54b2cff290a110e2", size = 8175, upload-time = "2025-03-24T02:57:40.306Z" },
 ]
 
 [[package]]

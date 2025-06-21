@@ -8,8 +8,8 @@ from plumbum import local as pl_local
 from pikesquares.exceptions import (
     UvCommandExecutionError,
     UvPipInstallError,
-    UvSyncError,
     UvPipListError,
+    UvSyncError,
 )
 
 logger = structlog.getLogger()

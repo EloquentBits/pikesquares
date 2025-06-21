@@ -4,7 +4,7 @@ import structlog
 import cuid
 from aiopath import AsyncPath
 import tenacity
-import pluggy
+import apluggy as pluggy
 
 from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.domain.python_runtime import PythonAppRuntime
@@ -68,62 +68,6 @@ async def provision_wsgi_app(
             except Exception as exc:
                 logger.exception("unable to install dependencies")
                 raise exc
-
-        if name == "bugsink":
-            if 0:
-                # uv run bugsink-show-version
-                cmd_create_conf = [
-                    "bugsink-create-conf",
-                    "--template=singleserver",
-                    "--host=bugsink.pikesquares.local",
-                    f"--base-dir={app_root_dir}",
-                ]
-                cmd_db_migrate = [
-                    "bugsink-manage",
-                    "migrate",
-                ]
-                cmd_db_migrate_snappea = [
-                    "bugsink-manage",
-                    "migrate",
-                    "--database=snappea",
-                ]
-                cmd_createsuperuser = [
-                    "bugsink-manage",
-                    "createsuperuser",
-                    "",
-                ]
-                
-                #uv run bugsink-runsnappea
-
-                for cmd_args in (
-                    cmd_create_conf,
-                    cmd_db_migrate,
-                    cmd_db_migrate_snappea,
-                    cmd_createsuperuser,
-                ):
-                    try:
-                        retcode, stdout, stderr = runtime.run_app_init_command(cmd_args)
-                        if stdout:
-                            print(stdout)
-                    except Exception as exc:
-                        logger.exception("unable to run app init command")
-                        raise exc
-            #    /new
-            #csrfmiddlewaretoken PIym56UZ7PBxq2htBU1JZzMgri5yJhivqgI6ifF4HmGIlRvzpwTLuA6qQhz17SjH
-            #team 464d797d-55c2-4e78-8489-eb7dbf7c09e4
-            #name test
-            #visibility 99
-            #retention_max_event_count 10000
-            #action invite
-            #uv run bugsink-manage shell <<EOF
-
-            #from projects.models import Project
-            #from teams.models import Team
-            #t = Team.objects.first()
-            #p1 = Project.objects.create(team=Team.objects.first(), name="123123123", visibility=99, retention_max_event_count=10000)
-            #print(p1.sentry_key)
-            #EOF
-
 
         if isinstance(runtime, PythonRuntimeDjango):
             django_settings = DjangoSettings(
