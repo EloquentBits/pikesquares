@@ -4,6 +4,7 @@ import questionary
 from aiopath import AsyncPath
 import pluggy
 
+from pikesquares.domain.process_compose import ServiceUnavailableError
 from pikesquares.domain.runtime import (
     PythonAppCodebase,
     Bugsink,
@@ -65,46 +66,47 @@ async def provision_app_codebase(
     repo_git_url=None
     editable_mode=True
 
+    #if service_name == "bugsink":
+    #    plugin_manager.register(Bugsink())
+    #elif service_name == "meshdb":
+    #    plugin_manager.register(Meshdb())
+
+    plugin_manager.register(Bugsink())
+    plugin_manager.register(Meshdb())
+
+    repo_git_url = plugin_manager.hook.get_repo_url(
+        service_name=service_name,
+    )
+    logger.debug(f"provision_app_codebase: {service_name} git repo url: {repo_git_url}")
+    app_root_dir = AsyncPath(pyapps_dir) / service_name
+
+    """
+    if repo_url:
+        giturl = giturlparse.parse(repo_url)
+        app_name = giturl.name
+
+    if not app_name:
+        app_name = await questionary.text(
+            "Choose a name for your app: ",
+            default=randomname.get_name().lower(),
+            style=custom_style,
+            #validate=NameValidator,
+        ).ask_async()
+    """
+    if app_root_dir:
+        await app_root_dir.mkdir(exist_ok=True)
+
+    app_repo_dir, repo_git_url = await gather_repo_details_and_clone(
+        app_name,
+        repo_git_url,
+        app_root_dir,
+        pyapps_dir,
+        custom_style,
+    )
+    app_pyvenv_dir = app_repo_dir / ".venv"
+
     async with uow:
         try:
-            #if service_name == "bugsink":
-            #    plugin_manager.register(Bugsink())
-            #elif service_name == "meshdb":
-            #    plugin_manager.register(Meshdb())
-
-            plugin_manager.register(Bugsink())
-            plugin_manager.register(Meshdb())
-
-            repo_git_url = plugin_manager.hook.get_repo_url(
-                service_name=service_name,
-            )
-            logger.debug(f"provision_app_codebase: {service_name} git repo url: {repo_git_url}")
-            app_root_dir = AsyncPath(pyapps_dir) / service_name
-
-            """
-            if repo_url:
-                giturl = giturlparse.parse(repo_url)
-                app_name = giturl.name
-
-            if not app_name:
-                app_name = await questionary.text(
-                    "Choose a name for your app: ",
-                    default=randomname.get_name().lower(),
-                    style=custom_style,
-                    #validate=NameValidator,
-                ).ask_async()
-            """
-            if app_root_dir:
-                await app_root_dir.mkdir(exist_ok=True)
-
-            app_repo_dir, repo_git_url = await gather_repo_details_and_clone(
-                app_name,
-                repo_git_url,
-                app_root_dir,
-                pyapps_dir,
-                custom_style,
-            )
-            app_pyvenv_dir = app_repo_dir / ".venv"
             app_codebase = await uow.python_app_codebases.get_by_root_dir(str(app_root_dir))
             if not app_codebase:
                 app_codebase = await uow.python_app_codebases.add(
@@ -119,11 +121,13 @@ async def provision_app_codebase(
                 )
                 logger.info(f"created App Codebase @ {app_root_dir}")
 
-            if not await app_codebase.detect_deps(
-                service_name,
-                plugin_manager,
-            ):
-                raise Exception("detecting dependencies failed")
+            if not await app_codebase.dependencies_validate():
+                raise RuntimeError("validating dependencies failed")
+
+            logger.info(f"Successfully validated {service_name} dependencies")
+
+            if not await app_codebase.dependencies_install(service_name, plugin_manager):
+                raise RuntimeError("installing dependencies failed")
 
         except Exception as exc:
             logger.exception(exc)

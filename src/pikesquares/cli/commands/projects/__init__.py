@@ -264,51 +264,52 @@ async def list_(ctx: typer.Context, show_id: bool = False):
     uow = await services.aget(context, UnitOfWork)
 
     machine_id = await ServiceBase.read_machine_id()
-    device = await uow.devices.get_by_machine_id(machine_id)
-    if not device:
-        console.warning("unable to lookup device")
-        raise typer.Exit(0)
+    async with uow:
+        device = await uow.devices.get_by_machine_id(machine_id)
+        if not device:
+            console.warning("unable to lookup device")
+            raise typer.Exit(0)
 
-    if not len(await device.awaitable_attrs.projects):
-        console.success("Appears there have been no projects created yet.")
-        raise typer.Exit(0)
+        if not len(await device.awaitable_attrs.projects):
+            console.success("Appears there have been no projects created yet.")
+            raise typer.Exit(0)
 
-    #device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-    #zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+        #device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+        #zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
 
-    projects = await uow.projects.list()
-    if not len(projects):
-        console.warning("No projects were initialized, nothing to show!")
-        raise typer.Exit()
+        projects = await uow.projects.list()
+        if not len(projects):
+            console.warning("No projects were initialized, nothing to show!")
+            raise typer.Exit()
 
-    projects_out = []
-    try:
-        stats = await device.read_stats()
-        device_stats = DeviceStats(**stats)
-    except tenacity.RetryError:
-        console.error(f"Unable to read stats for device [{device.machine_id}]")
-        raise typer.Exit(0) from None
-
-    if not device_stats:
-        console.warning("unable to lookup device stats")
-        raise typer.Exit(0) from None
-
-    for project in projects:
+        projects_out = []
         try:
-            vassal_stats = next(
-                filter(lambda v: v.id.split(".ini")[0], device_stats.vassals)
-            )
-            projects_out.append(
-                {
-                    "name": project.name,
-                    "status": "running" if vassal_stats else "stopped",
-                    "id": project.service_id,
-                }
-            )
-        except StopIteration:
-            continue
+            stats = await device.read_stats()
+            device_stats = DeviceStats(**stats)
+        except tenacity.RetryError:
+            console.error(f"Unable to read stats for device [{device.machine_id}]")
+            raise typer.Exit(0) from None
 
-    console.print_response(projects_out, title=f"Projects count: {len(projects)}", show_id=show_id)
+        if not device_stats:
+            console.warning("unable to lookup device stats")
+            raise typer.Exit(0) from None
+
+        for project in projects:
+            try:
+                vassal_stats = next(
+                    filter(lambda v: v.id.split(".ini")[0], device_stats.vassals)
+                )
+                projects_out.append(
+                    {
+                        "name": project.name,
+                        "status": "running" if vassal_stats else "stopped",
+                        "id": project.service_id,
+                    }
+                )
+            except StopIteration:
+                continue
+
+        console.print_response(projects_out, title=f"Projects count: {len(projects)}", show_id=show_id)
 
 
 @app.command("logs")

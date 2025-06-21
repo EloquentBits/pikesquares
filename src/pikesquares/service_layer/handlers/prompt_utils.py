@@ -163,18 +163,17 @@ async def gather_repo_details_and_clone(
         clone_into_dir_files = [path async for path in clone_into_dir.glob("**/*")]
         #await clone_into_dir.glob("*")
         if clone_into_dir / ".git" in clone_into_dir_files:
-            if await questionary.confirm(
-                f"There appears to be a git repository already cloned in {clone_into_dir}. Overwrite?",
-                default=False,
-                auto_enter=True,
-                style=custom_style,
-            ).unsafe_ask_async():
-                shutil.rmtree(clone_into_dir)
-                logger.info(f"deleted repo dir {clone_into_dir}")
-                return clone_into_dir, repo_url
-        else:
-            # FIXME
-            return clone_into_dir, repo_url
+            #if await questionary.confirm(
+            #    f"There appears to be a git repository already cloned in {clone_into_dir}. Overwrite?",
+            #    default=False,
+            #    auto_enter=False,
+            #    style=custom_style,
+            #).unsafe_ask_async():
+            shutil.rmtree(clone_into_dir)
+            logger.info(f"deleted repo dir {clone_into_dir}")
+
+        return clone_into_dir, repo_url
+
         #return giturl.name, repo_url, await prompt_base_dir(giturl.name, custom_style)
 
         """

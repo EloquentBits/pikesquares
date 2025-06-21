@@ -1,10 +1,11 @@
-import json
+
 import shutil
 import traceback
 import uuid
 from pathlib import Path
 
 import aiofiles
+import giturlparse
 import pluggy
 import pydantic
 import structlog
@@ -15,14 +16,18 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlmodel import Field, Relationship
 
 from pikesquares.domain.base import TimeStampedBase
-from pikesquares.hooks.markers import hook_impl
-from pikesquares.service_layer.uv import uv_cmd
 from pikesquares.exceptions import (
     DjangoCheckError,
-    UvSyncError,
+    UvCommandExecutionError,
     UvPipInstallError,
     UvPipListError,
-    UvCommandExecutionError,
+    UvSyncError,
+)
+from pikesquares.hooks.markers import hook_impl
+from pikesquares.service_layer.uv import (
+    uv_cmd,
+    uv_dependencies_install,
+    uv_dependencies_list,
 )
 
 logger = structlog.getLogger()
@@ -40,19 +45,19 @@ PY_MATCH_FILES: set[str] = set(
     }
 )
 
-PY_IGNORE_PATTERNS: set[str] = set(
+PY_TMP_DIR_IGNORE_PATTERNS: set[str] = set(
     {
         "*.pyc",
-        ".gitignore",
         "*.sqlite*",
-        "README*",
-        "LICENSE",
         "tmp*",
-        ".git",
         "venv",
         ".venv",
         "tests",
         "__pycache__",
+        #".gitignore",
+        #".git",
+        #"README*",
+        #"LICENSE",
     }
 )
 py_runtime_emoji: str = ":snake:"
@@ -220,56 +225,6 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         except FileNotFoundError:
             return "3.12"
 
-    async def detect_deps(
-        self,
-        service_name: str,
-        plugin_manager: pluggy.PluginManager
-    ) -> bool | None:
-
-        async with aiofiles.tempfile.TemporaryDirectory() as tmp_dir:
-            #filename = os.path.join(d, "file.ext")
-            app_tmp_dir = AsyncPath(tmp_dir)
-            shutil.copytree(
-                self.root_dir,
-                app_tmp_dir,
-                dirs_exist_ok=True,
-                ignore=shutil.ignore_patterns(*list(PY_IGNORE_PATTERNS)),
-            )
-            # for p in AsyncPath(app_tmp_dir).iterdir():
-            #    logger.debug(p)
-            # Detect Project Dependencies
-            #cmd_env = {}
-            #await self.create_venv(
-            #    venv=app_tmp_dir / ".venv",
-            #    cmd_env=cmd_env,
-            #)
-            logger.info(f"created a tmp dir {app_tmp_dir}")
-
-            try:
-                plugin_manager.hook.\
-                    python_app_codebase_before_install_dependencies(
-                        service_name=service_name,
-                    )
-                logger.info(f"installing deps into tmp dir {app_tmp_dir}")
-                await self.install_dependencies(
-                    venv=app_tmp_dir / ".venv",
-                    app_tmp_dir=app_tmp_dir,
-                )
-                logger.info(f"installed deps into tmp dir {app_tmp_dir}")
-            except (UvSyncError, UvPipInstallError):
-                logger.error("installing dependencies failed.")
-                #await self.check_cleanup(app_tmp_dir)
-                return
-
-            try:
-                dependencies_count = len(await self.dependencies_list())
-                logger.info(f"{dependencies_count} dependencies detected")
-            except UvPipListError as exc:
-                logger.error(exc)
-                traceback.format_exc()
-
-            return True
-
     async def read_pyproject_toml(self):
         with open(AsyncPath(self.root_dir) / "pyproject.toml", "r") as f:
             config = toml.load(f)
@@ -277,96 +232,75 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             print("[pikesquares] located deps in pyproject.toml")
             print(deps)
 
+    @property
+    def repo_name(self) -> str:
+        if giturlparse.validate(self.repo_git_url):
+            giturl = giturlparse.parse(self.repo_git_url)
+            return giturl.name
+        raise ValueError(f"invalid git repo url {self.repo_git_url}")
 
-    async def install_dependencies(
-        self,
-        cmd_env: dict | None = None,
-        venv: AsyncPath | None = None,
-        app_tmp_dir: AsyncPath | None = None,
-        ) -> None:
 
-        logger.info(f"uv installing dependencies in venv @ {venv}")
-        cmd_args = []
-        install_inspect_extensions = False
+    async def dependencies_install(self, service_name, plugin_manager: pluggy.PluginManager) -> bool | None:
 
-        #if "uv.lock" and "pyproject.toml" in self.top_level_file_names:
-        #    logger.info("installing dependencies from uv.lock")
-        try:
-            retcode, stdout, stderr = await uv_cmd(
-                AsyncPath(self.uv_bin),
-                [
-                    "sync",
-                    # "--directory", str(app_root_dir),
-                    # "--project", str(app_root_dir),
-                    # "--frozen",
-                    # "--no-sync",
-                    "--all-groups", "--all-extras",
-                    "--verbose",
-                    "--python",
-                    "/usr/bin/python3",
-                    # If the lockfile is not up-to-date,
-                    # an error will be raised instead of updating the lockfile.
-                    #"--locked",
-                    "--color", "never",
-                    # FIXME
-                    "--cache-dir", "/var/lib/pikesquares/uv-cache",
-                    *cmd_args,
-                ],
-                cmd_env=cmd_env,
-                chdir=str(app_tmp_dir) or self.repo_dir,
+        plugin_manager.hook.\
+            python_app_codebase_before_install_dependencies(
+                service_name=service_name,
             )
-        except UvCommandExecutionError:
-            raise UvSyncError("`uv sync` unable to install dependencies")
+        try:
+            logger.info(f"installing deps into dir {self.repo_dir}")
+            await uv_dependencies_install(
+                uv_bin=AsyncPath(self.uv_bin),
+                venv=AsyncPath(self.venv_dir),
+                repo_dir=AsyncPath(self.repo_dir),
+            )
+            logger.info(f"installed deps into dir {self.repo_dir}")
+        except (UvSyncError, UvPipInstallError):
+            logger.error("installing dependencies failed.")
+            #await self.check_cleanup(app_tmp_dir)
 
-        #elif not "uv.lock" in self.top_level_file_names  \
-        #    and "pyproject.toml" in self.top_level_file_names:
-        #    logger.info("uv install")
+        return True
 
-        if 0: #"requirements.txt" in self.top_level_file_names:
-            # uv pip install -r requirements.txt
-            # uv add -r requirements.txt
-            # uv export --format requirements-txt
-            logger.info("installing depedencies from requirements.txt")
-            cmd_args = [*cmd_args, "pip", "install", "-r", "requirements.txt"]
+
+    async def dependencies_validate(self) -> bool | None:
+        """
+        copy repo into a temporary directory and attempt to run `uv sync`
+        """
+
+        async with aiofiles.tempfile.TemporaryDirectory() as tmp_dir:
+            app_tmp_dir = AsyncPath(tmp_dir)
+            logger.info(f"created a tmp dir {app_tmp_dir}")
+            #filename = os.path.join(d, "file.ext")
+            shutil.copytree(
+                self.root_dir,
+                app_tmp_dir,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns(*list(PY_TMP_DIR_IGNORE_PATTERNS)),
+            )
+            logger.info(f"coppied {self.root_dir} into {app_tmp_dir}")
+            app_root_dir = app_tmp_dir / self.repo_name
+            logger.info(f"{app_root_dir=}")
             try:
-                retcode, stdout, stderr = uv_cmd(
-                    AsyncPath(self.uv_bin),
-                    cmd_args,
-                    cmd_env=cmd_env,
-                    chdir=app_tmp_dir or self.app_repo_dir,
+                logger.info(f"installing deps into tmp dir {app_root_dir}")
+                await uv_dependencies_install(
+                    uv_bin=AsyncPath(self.uv_bin),
+                    venv=app_root_dir / ".venv",
+                    repo_dir=app_root_dir,
                 )
-            except UvCommandExecutionError:
-                raise UvPipInstallError(
-                    "unable to install dependencies from requirements.txt"
-                )
-                # for p in Path(app_root_dir / ".venv/lib/python3.12/site-packages").iterdir():
-                #    print(p)
-            if install_inspect_extensions:
-                logger.info("installing inspect-extensions")
-                cmd_args = [*cmd_args, "pip", "install", "inspect-extensions"]
-                try:
-                    retcode, stdout, stderr = uv_cmd(
-                        AsyncPath(self.uv_bin),
-                        cmd_args,
-                        cmd_env
-                    )
-                except UvCommandExecutionError:
-                    raise UvPipInstallError("unable to install inspect-extensions in")
-        #else:
-        #    raise PythonRuntimeDepsInstallError("unable to install Python runtime dependencies")
+                logger.info(f"installed deps into tmp dir {app_root_dir}")
+            except (UvSyncError, UvPipInstallError):
+                logger.error("installing dependencies failed.")
+                #await self.check_cleanup(app_tmp_dir)
+                return
 
-    async def dependencies_list(self):
-        cmd_env = {}
-        cmd_args = ["pip", "list", "--format", "json"]
-        try:
-            retcode, stdout, stderr = await uv_cmd(
-                AsyncPath(self.uv_bin),
-                cmd_args,
-                cmd_env,
-            )
-            return json.loads(stdout)
-        except UvCommandExecutionError:
-            raise UvPipListError("unable to get a list of dependencies")
+            if 0:
+                try:
+                    dependencies_count = len(await uv_dependencies_list(AsyncPath(self.uv_bin)))
+                    logger.info(f"{dependencies_count} dependencies detected")
+                except UvPipListError as exc:
+                    logger.error(exc)
+                    traceback.format_exc()
+
+            return True
 
     """
     async def init(

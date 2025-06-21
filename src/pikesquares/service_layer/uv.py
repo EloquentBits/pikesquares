@@ -1,7 +1,16 @@
+import json
+
 import structlog
 from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
 from plumbum import local as pl_local
+
+from pikesquares.exceptions import (
+    UvCommandExecutionError,
+    UvPipInstallError,
+    UvSyncError,
+    UvPipListError,
+)
 
 logger = structlog.getLogger()
 
@@ -46,4 +55,101 @@ async def uv_cmd(
         #raise UvCommandExecutionError(
         #        f"uv cmd [{' '.join(cmd_args)}] failed.\n{exc.stderr}"
         #)
+
+async def uv_dependencies_install(
+    uv_bin: AsyncPath,
+    venv: AsyncPath,
+    repo_dir: AsyncPath,
+    cmd_env: dict | None = None,
+    ) -> None:
+
+    logger.info(f"uv installing dependencies in venv @ {venv}")
+    cmd_args = []
+    install_inspect_extensions = False
+
+    #if "uv.lock" and "pyproject.toml" in self.top_level_file_names:
+    #    logger.info("installing dependencies from uv.lock")
+    assert await repo_dir.exists(), f"repo dir {repo_dir} does not exist"
+    try:
+        retcode, stdout, stderr = await uv_cmd(
+            AsyncPath(uv_bin),
+            [
+                "sync",
+                # "--directory", str(app_root_dir),
+                # "--project", str(app_root_dir),
+                # "--frozen",
+                # "--no-sync",
+                "--all-groups", "--all-extras",
+                "--verbose",
+                "--python",
+                "/usr/bin/python3",
+                # If the lockfile is not up-to-date,
+                # an error will be raised instead of updating the lockfile.
+                #"--locked",
+                "--color", "never",
+                # FIXME
+                "--cache-dir", "/var/lib/pikesquares/uv-cache",
+                *cmd_args,
+            ],
+            cmd_env=cmd_env,
+            chdir=repo_dir,
+        )
+        #print(retcode)
+        #print(stdout)
+        #print(stderr)
+    except UvCommandExecutionError:
+        raise UvSyncError("`uv sync` unable to install dependencies")
+
+    #elif not "uv.lock" in self.top_level_file_names  \
+    #    and "pyproject.toml" in self.top_level_file_names:
+    #    logger.info("uv install")
+
+    if 0: #"requirements.txt" in self.top_level_file_names:
+        # uv pip install -r requirements.txt
+        # uv add -r requirements.txt
+        # uv export --format requirements-txt
+        logger.info("installing depedencies from requirements.txt")
+        cmd_args = [*cmd_args, "pip", "install", "-r", "requirements.txt"]
+        try:
+            retcode, stdout, stderr = await uv_cmd(
+                AsyncPath(uv_bin),
+                cmd_args,
+                cmd_env=cmd_env,
+                chdir=repo_dir,
+            )
+        except UvCommandExecutionError:
+            raise UvPipInstallError(
+                "unable to install dependencies from requirements.txt"
+            )
+            # for p in Path(app_root_dir / ".venv/lib/python3.12/site-packages").iterdir():
+            #    print(p)
+        if install_inspect_extensions:
+            logger.info("installing inspect-extensions")
+            cmd_args = [*cmd_args, "pip", "install", "inspect-extensions"]
+            try:
+                retcode, stdout, stderr = await uv_cmd(
+                    AsyncPath(uv_bin),
+                    cmd_args,
+                    cmd_env
+                )
+            except UvCommandExecutionError:
+                raise UvPipInstallError("unable to install inspect-extensions in")
+    #else:
+    #    raise PythonRuntimeDepsInstallError("unable to install Python runtime dependencies")
+    #
+async def uv_dependencies_list(
+    uv_bin: AsyncPath,
+
+):
+    cmd_env = {}
+    cmd_args = ["pip", "list", "--format", "json"]
+    try:
+        retcode, stdout, stderr = await uv_cmd(
+            AsyncPath(uv_bin),
+            cmd_args,
+            cmd_env,
+        )
+        return json.loads(stdout)
+    except UvCommandExecutionError:
+        raise UvPipListError("unable to get a list of dependencies")
 
