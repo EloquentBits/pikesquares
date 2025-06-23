@@ -8,7 +8,7 @@ import tempfile
 import traceback
 from functools import wraps
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated,  Literal
 
 import anyio
 import apluggy as pluggy
@@ -194,7 +194,7 @@ def run_async(func):
 @app.command(rich_help_panel="Control", short_help="Reset device")
 def reset(
     ctx: typer.Context,
-    shutdown: Optional[str] = typer.Option("", "--shutdown", help="Shutdown PikeSquares server after reset."),
+    shutdown: str | None = typer.Option("", "--shutdown", help="Shutdown PikeSquares server after reset."),
 ):
     """Reset PikeSquares Installation"""
 
@@ -320,32 +320,11 @@ async def launch(
     #    await project.up(device_zmq_monitor, vassals_home, tuntap_router)
     #
     #
+    #launch_service_preconfigured: Literal["bugsink", "meshdb"]
+    #launch_service_wsgi: Literal["python-wsgi-git"]
     launch_service = await prompt_for_launch_service(uow, custom_style)
-    try:
-        launch_into = await questionary.select(
-            "Launch into an existing project or create a new project: ",
-            choices=[
-                questionary.Choice("Existing Project", value="existing-project"),
-                questionary.Choice("Create Project", value="create-project"),
-            ],
-            style=custom_style,
-        ).unsafe_ask_async()
-    except KeyboardInterrupt:
-        console.info("selection cancelled.")
-        raise typer.Exit(0) from None
 
-    project = None
-    if launch_into == "existing-project":
-        if not len(await device.awaitable_attrs.projects):
-            console.success("Appears there have been no projects created.")
-            raise typer.Exit(0) from None
-
-        project = await prompt_for_project(uow, custom_style)
-        #project = await uow.projects.get_by_service_id(project_service_id)
-        print(f"launching into project {project}")
-
-    elif launch_into == "create-project":
-        pass
+    project = await prompt_for_project(launch_service, uow, custom_style)
 
     if launch_service in ["python-wsgi-git", "bugsink", "meshdb"]:
 

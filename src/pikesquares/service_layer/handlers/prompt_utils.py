@@ -17,6 +17,7 @@ from pikesquares.domain.device import Device
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.service_layer.handlers.project import provision_project
 
 logger = structlog.getLogger()
 
@@ -140,7 +141,7 @@ def try_again_q(instruction, custom_style):
 
 
 async def gather_repo_details_and_clone(
-    app_name: str | None,
+    app_name: str,
     repo_git_url: str | None,
     app_root_dir: AsyncPath | None,
     pyapps_dir: AsyncPath,
@@ -154,9 +155,8 @@ async def gather_repo_details_and_clone(
     compose clone into dir
     """
     repo_url = repo_git_url or await prompt_repo_url(custom_style)
-    giturl = giturlparse.parse(repo_url)
-    app_root_dir = app_root_dir or await prompt_base_dir(giturl.name, custom_style)
-    clone_into_dir = AsyncPath(app_root_dir) / giturl.name
+    app_root_dir = app_root_dir or await prompt_base_dir(app_name, custom_style)
+    clone_into_dir = AsyncPath(app_root_dir) / app_name
     if await clone_into_dir.exists():
         #and any(await clone_into_dir.glob("*")):
         #import ipdb;ipdb.set_trace()
@@ -171,11 +171,6 @@ async def gather_repo_details_and_clone(
             #).unsafe_ask_async():
             shutil.rmtree(clone_into_dir)
             logger.info(f"deleted repo dir {clone_into_dir}")
-
-        return clone_into_dir, repo_url
-
-        #return giturl.name, repo_url, await prompt_base_dir(giturl.name, custom_style)
-
         """
         elif len(clone_into_dir_files):
             if not await questionary.confirm(
@@ -186,7 +181,6 @@ async def gather_repo_details_and_clone(
             ).unsafe_ask_async():
                 raise typer.Exit(0) from None
         """
-
     #with console.status(f"cloning `{repo_name}` repository into `{clone_into_dir}`", spinner="earth"):
     try:
         while not repo:
@@ -246,7 +240,11 @@ async def gather_repo_details_and_clone(
     return AsyncPath(clone_into_dir), repo_url
 
 
-async def prompt_for_project(uow: UnitOfWork, custom_style) -> Project | None:
+async def prompt_for_project(
+    launch_service: str,
+    uow: UnitOfWork,
+    custom_style: questionary.Style
+) -> Project | None:
 
     machine_id = await ServiceBase.read_machine_id()
     device = await uow.devices.get_by_machine_id(machine_id)
@@ -254,33 +252,71 @@ async def prompt_for_project(uow: UnitOfWork, custom_style) -> Project | None:
         raise AppConfigError("no device found in context")
 
     projects = await device.awaitable_attrs.projects
-    if not len(projects):
-        return
-    elif len(projects) == 1:
-        return projects[0]
-    try:
-        selected_project_id = await questionary.select(
-            "Select an existing project: ",
-            choices=[
-                questionary.Choice(
-                    project.name, value=project.id
-                ) for project in await device.awaitable_attrs.projects
-            ],
-            style=custom_style,
-        ).unsafe_ask_async()
-    except KeyboardInterrupt as exc:
-        raise exc
 
-    if not selected_project_id:
-        console.warning("no project selected")
-        return
+    if launch_service in set({"meshdb", "bugsink"}):
+        project = await uow.projects.get_by_name(launch_service) or \
+            await provision_project(
+                launch_service,
+                device,
+                uow,
+                selected_services=["http-router"]
+            )
+    elif launch_service == "python-wsgi-git":
+        try:
+            launch_into = await questionary.select(
+                "Launch into an existing project or create a new project: ",
+                choices=[
+                    questionary.Choice("Existing Project", value="existing-project"),
+                    questionary.Choice("Create Project", value="create-project"),
+                ],
+                style=custom_style,
+            ).unsafe_ask_async()
+        except KeyboardInterrupt:
+            console.info("selection cancelled.")
+            raise typer.Exit(0) from None
 
-    project = await uow.projects.get_by_id(selected_project_id)
-    if not project:
-        console.warning(f"Unable to locate project by id {selected_project_id}")
-        return
+        project = None
+        if launch_into == "existing-project":
+            if not len(await device.awaitable_attrs.projects):
+                console.success("Appears there have been no projects created.")
+                raise typer.Exit(0) from None
 
-    return project
+            #project = await prompt_for_project(uow, custom_style)
+            #project = await uow.projects.get_by_service_id(project_service_id)
+
+            if not len(projects):
+                return
+            elif len(projects) == 1:
+                return projects[0]
+            try:
+                selected_project_id = await questionary.select(
+                    "Select an existing project: ",
+                    choices=[
+                        questionary.Choice(
+                            project.name, value=project.id
+                        ) for project in await device.awaitable_attrs.projects
+                    ],
+                    style=custom_style,
+                ).unsafe_ask_async()
+            except KeyboardInterrupt as exc:
+                raise exc
+
+            if not selected_project_id:
+                console.warning("no project selected")
+                return
+
+            project = await uow.projects.get_by_id(selected_project_id)
+            if not project:
+                console.warning(f"Unable to locate project by id {selected_project_id}")
+                return
+
+            return project
+
+            print(f"launching into project {project}")
+
+        elif launch_into == "create-project":
+            pass
+
 
 async def prompt_for_attached_daemons(
     uow: UnitOfWork,

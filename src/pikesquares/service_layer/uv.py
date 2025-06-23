@@ -8,8 +8,8 @@ from plumbum import local as pl_local
 from pikesquares.exceptions import (
     UvCommandExecutionError,
     UvPipInstallError,
-    UvPipListError,
     UvSyncError,
+    UvPipListError,
 )
 
 logger = structlog.getLogger()
@@ -25,23 +25,20 @@ async def uv_cmd(
     ) -> tuple[str, str, str]:
     logger.info(f"[pikesquares] uv_cmd: {cmd_args=}")
     try:
-        if cmd_env:
-            pl_local.env.update(cmd_env)
-            logger.debug(f"{cmd_env=}")
 
         # with pl_local.as_user(run_as_user):
         with pl_local.cwd(chdir):
             uv = pl_local[str(uv_bin)]
-            retcode, stdout, stderr = uv.run(
-                cmd_args,
-                **{"env": cmd_env}
-            )
+            if cmd_env:
+                pl_local.env.update(cmd_env)
+            retcode, stdout, stderr = uv.run(cmd_args)
             logger.debug(f"[pikesquares] uv_cmd: {retcode=}")
             logger.debug(f"[pikesquares] uv_cmd: {stdout=}")
             logger.debug(f"[pikesquares] uv_cmd: {stderr=}")
             return retcode, stdout, stderr
     except ProcessExecutionError as exc:
-        raise exc
+        logger.exception(exc)
+        raise UvCommandExecutionError(f"uv run {' '.join(cmd_args)}")
         # print(vars(exc))
         # {
         #    'message': None,
@@ -61,12 +58,15 @@ async def uv_dependencies_install(
     venv: AsyncPath,
     repo_dir: AsyncPath,
     cmd_env: dict | None = None,
+    debug: bool = False,
+    python_bin: AsyncPath = AsyncPath("/usr/bin/python3")
     ) -> None:
 
     logger.info(f"uv installing dependencies in venv @ {venv}")
     cmd_args = []
+    if debug:
+        cmd_args.append("--verbose")
     install_inspect_extensions = False
-
     #if "uv.lock" and "pyproject.toml" in self.top_level_file_names:
     #    logger.info("installing dependencies from uv.lock")
     assert await repo_dir.exists(), f"repo dir {repo_dir} does not exist"
@@ -80,9 +80,8 @@ async def uv_dependencies_install(
                 # "--frozen",
                 # "--no-sync",
                 "--all-groups", "--all-extras",
-                "--verbose",
                 "--python",
-                "/usr/bin/python3",
+                str(python_bin),
                 # If the lockfile is not up-to-date,
                 # an error will be raised instead of updating the lockfile.
                 #"--locked",

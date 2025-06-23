@@ -253,13 +253,16 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
                 repo_dir=AsyncPath(self.repo_dir),
             )
         try:
-            logger.info(f"installing deps into dir {self.repo_dir}")
-            await uv_dependencies_install(
-                uv_bin=AsyncPath(self.uv_bin),
-                venv=AsyncPath(self.venv_dir),
-                repo_dir=AsyncPath(self.repo_dir),
-            )
-            logger.info(f"installed deps into dir {self.repo_dir}")
+            if not await AsyncPath(self.venv_dir).exists():
+                logger.info(f"installing deps into dir {self.repo_dir}")
+                await uv_dependencies_install(
+                    uv_bin=AsyncPath(self.uv_bin),
+                    venv=AsyncPath(self.venv_dir),
+                    repo_dir=AsyncPath(self.repo_dir),
+                )
+                logger.info(f"installed deps into dir {self.repo_dir}")
+            else:
+                logger.info(f"skipping installing deps into dir {self.repo_dir}")
         except (UvSyncError, UvPipInstallError):
             logger.error("installing dependencies failed.")
             #await self.check_cleanup(app_tmp_dir)

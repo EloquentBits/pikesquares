@@ -1,6 +1,5 @@
 import structlog
 from aiopath import AsyncPath
-from plumbum import ProcessExecutionError
 
 from pikesquares.exceptions import UvCommandExecutionError
 from pikesquares.hooks.markers import hook_impl
@@ -14,8 +13,7 @@ async def uv_run_cmd(
     chdir: AsyncPath,
     cmd_args: list[str],
     cmd_env: dict | None = None
-):
-    logger.info(f"failed: uv run {' '.join(cmd_args)}")
+) -> tuple[str, str, str]:
     try:
         retcode, stdout, stderr = await uv_cmd(
             AsyncPath(uv_bin),
@@ -24,17 +22,17 @@ async def uv_run_cmd(
                 "--verbose",
                 "--python",
                 "/usr/bin/python3",
-                "--color", "never",
+                "--color",
+                "never",
                 *cmd_args,
             ],
-            cmd_env=cmd_env,
+            cmd_env=cmd_env or {},
             chdir=chdir,
         )
         return retcode, stdout, stderr
-    except ProcessExecutionError as exc:
-        logger.exception(exc)
-        raise UvCommandExecutionError(f"uv run {' '.join(cmd_args)}")
-
+    except UvCommandExecutionError as exc:
+        logger.error(f"failed: uv run {' '.join(cmd_args)}")
+        raise exc
 
 
 class Bugsink:
@@ -63,12 +61,11 @@ class Bugsink:
         service_name: str,
         uv_bin: AsyncPath,
         repo_dir: AsyncPath,
-    ) -> None:
+    ) -> bool:
         if service_name != "bugsink":
-            return
+            return False
 
         logger.info("Bugsink after_dependencies_install")
-
         # uv run bugsink-show-version
         cmd_create_conf = [
             "bugsink-create-conf",
@@ -77,18 +74,25 @@ class Bugsink:
             f"--base-dir={repo_dir}",
         ]
         cmd_db_migrate = [
-                "bugsink-manage",
-                "migrate",
-            ]
+            "bugsink-manage",
+            "migrate",
+            "--noinput",
+        ]
         cmd_db_migrate_snappea = [
             "bugsink-manage",
             "migrate",
             "--database=snappea",
+            "--noinput",
         ]
         cmd_createsuperuser = [
             "bugsink-manage",
             "createsuperuser",
-            "",
+            "--email",
+            "admin@bugsink.pikesquares.local",
+            "--noinput",
+            "--no-color",
+            "--skip-checks",
+            "--traceback",
         ]
         #uv run bugsink-runsnappea
 
@@ -98,18 +102,28 @@ class Bugsink:
             cmd_db_migrate_snappea,
             cmd_createsuperuser,
         ):
+            cmd_env = None
+            if "createsuperuser" in cmd_args:
+                 cmd_env = {
+                    "DJANGO_SUPERUSER_USERNAME": "admin",
+                    "DJANGO_SUPERUSER_PASSWORD": "secret",
+                }
             try:
-                retcode, stdout, stderr = await uv_run_cmd(
+                retcode, stdout, stderr  = await uv_run_cmd(
                     uv_bin=uv_bin,
                     chdir=repo_dir,
                     cmd_args=cmd_args,
-                    #cmd_env
+                    cmd_env=cmd_env
                 )
-                if stdout:
-                    print(stdout)
-            except Exception as exc:
-                logger.exception("unable to run app init command")
-                raise exc
+                if "createsuperuser" in cmd_args:
+                    if stdout.strip() != "Superuser created successfully.":
+                        raise RuntimeError("bugsink-manage unable to create a Superuser")
+
+            except UvCommandExecutionError as exc:
+                return False
+
+        return True
+
         #    /new
         #csrfmiddlewaretoken PIym56UZ7PBxq2htBU1JZzMgri5yJhivqgI6ifF4HmGIlRvzpwTLuA6qQhz17SjH
         #team 464d797d-55c2-4e78-8489-eb7dbf7c09e4
@@ -123,9 +137,5 @@ class Bugsink:
         #from teams.models import Team
         #t = Team.objects.first()
         #p1 = Project.objects.create(team=Team.objects.first(), name="123123123", visibility=99, retention_max_event_count=10000)
-        #print(p1.sentry_key)
         #EOF
-
-
-
-
+        #print(p1.sentry_key)

@@ -53,7 +53,7 @@ async def provision_app_codebase(
         validate deps
         install deps
     """
-    app_name = None
+    app_name = service_name
     app_codebase = None
     app_root_dir=None
     app_repo_dir=None
@@ -65,7 +65,7 @@ async def provision_app_codebase(
     repo_git_urls: list[str] = await plugin_manager.ahook.get_repo_url(
         service_name=service_name,
     )
-    app_root_dir = AsyncPath(pyapps_dir) / service_name
+    app_root_dir = AsyncPath(pyapps_dir) / app_name
     """
     if not app_name:
         app_name = await questionary.text(
