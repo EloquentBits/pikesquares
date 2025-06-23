@@ -254,7 +254,7 @@ async def prompt_for_project(
     projects = await device.awaitable_attrs.projects
 
     if launch_service in set({"meshdb", "bugsink"}):
-        project = await uow.projects.get_by_name(launch_service) or \
+        return await uow.projects.get_by_name(launch_service) or \
             await provision_project(
                 launch_service,
                 device,

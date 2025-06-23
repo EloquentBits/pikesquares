@@ -170,7 +170,7 @@ class WsgiAppSection(BaseWsgiAppSection):
             enable_threads=True,
             # search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
         )
-        self.python.set_basic_params(python_home=self.wsgi_app.pyvenv_dir)
+        self.python.set_basic_params(python_home=self.wsgi_app.venv_dir)
 
         self.main_process.change_dir(to=self.wsgi_app.root_dir)
         self.main_process.set_pid_file(str(self.wsgi_app.pid_file))

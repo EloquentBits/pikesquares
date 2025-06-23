@@ -42,7 +42,7 @@ class AppCodebaseHookSpec:
     """
 
     @hook_spec(firstresult=False)
-    async def get_repo_url(self, service_name: str) -> list[str]:
+    async def get_repo_url(self, service_name: str) -> str:
         ...
 
 class PythonAppCodebaseHookSpec:
@@ -66,4 +66,25 @@ class PythonAppCodebaseHookSpec:
             uv_bin: AsyncPath,
             repo_dir: AsyncPath,
     ) -> None:
+        ...
+
+
+class WSGIPythonAppCodebaseHookSpec:
+    """
+    Python App Codebase Hook Specification
+    """
+
+    @hook_spec(firstresult=False)
+    async def get_wsgi_file(
+            self,
+            service_name: str,
+            repo_dir: AsyncPath,
+    ) -> AsyncPath | None:
+        ...
+
+    @hook_spec(firstresult=False)
+    async def get_wsgi_module(
+            self,
+            service_name: str,
+    ) -> str | None:
         ...

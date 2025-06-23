@@ -61,6 +61,7 @@ from pikesquares.hooks.specs import (
     AppRuntimeHookSpec,
     AttachedDaemonHookSpec,
     PythonAppCodebaseHookSpec,
+    WSGIPythonAppCodebaseHookSpec,
 )
 
 #from pikesquares.domain.runtime import PythonAppCodebase
@@ -125,11 +126,9 @@ logging.basicConfig(
     # stream=sys.stdout,
     format="%(message)s",
 )
-
-# imported_module_logger = logging.getLogger("svsc")
-# imported_module_logger.setLevel(logging.WARNING)
-svcs_logger = logging.getLogger("svcs")
-svcs_logger.setLevel(logging.WARNING)
+for import_lib in ["svcs", "asyncio", "aiosqlite", "plumbum"]:
+    warn_logger = logging.getLogger(import_lib)
+    warn_logger.setLevel(logging.WARNING)
 
 structlog.configure(
     processors=[
@@ -323,8 +322,10 @@ async def launch(
     #launch_service_preconfigured: Literal["bugsink", "meshdb"]
     #launch_service_wsgi: Literal["python-wsgi-git"]
     launch_service = await prompt_for_launch_service(uow, custom_style)
-
     project = await prompt_for_project(launch_service, uow, custom_style)
+    if not project:
+        console.error(f"cli launch: unable to select or provision project")
+        raise typer.Exit(code=1) from None
 
     if launch_service in ["python-wsgi-git", "bugsink", "meshdb"]:
 
@@ -343,18 +344,19 @@ async def launch(
         #console.info(f"selected Python {runtime_version}")
         runtime_version  = "3.12"
         python_app_runtime = None
+        wsgi_app = None
         try:
-            python_app_runtime = await provision_python_app_runtime(
-                runtime_version, uow, custom_style
-            )
-        except Exception as exc:
-            print(traceback.format_exc())
-            console.error(f"Failed to provision a Python {runtime_version} Runtime")
-            raise typer.Exit(1) from None
-
-        async with uow:
             try:
-                app_codebase = await provision_app_codebase(
+                python_app_runtime = await provision_python_app_runtime(
+                    runtime_version, uow, custom_style
+                )
+            except Exception as exc:
+                logger.exception(exc)
+                console.error(f"unable to provision the {launch_service} python app runtime.")
+                raise typer.Exit(code=1) from None
+
+            try:
+                python_app_codebase = await provision_app_codebase(
                     launch_service,
                     plugin_manager,
                     AsyncPath(conf.pyapps_dir),
@@ -363,37 +365,43 @@ async def launch(
                     custom_style,
                 )
             except Exception as exc:
-                print(traceback.format_exc())
-                console.error(f"failed to provision a Python {runtime_version} Codebase")
-                raise typer.Exit(1) from None
-        wsgi_app = None
-        if 0:
-            try:
-                wsgi_app = await provision_wsgi_app(
-                    app_name,
-                    app_root_dir,
-                    app_repo_dir,
-                    app_pyvenv_dir,
-                    conf.UV_BIN,
-                    uow,
-                    project,
-                    python_app_runtime,
-                    await services.aget(context, WsgiAppPluginManager),
-                )
-            except Exception as exc:
                 logger.exception(exc)
-                raise typer.Exit(1) from None
+                console.error(f"unable to provision the {launch_service} codebase.")
+                raise typer.Exit(code=1) from None
 
-        if wsgi_app:
-            await uow.commit()
-            await wsgi_app_up(
-                uow,
-                wsgi_app,
-                project,
-                python_app_runtime,
-                http_routers[0],
-                console,
-                )
+            if python_app_codebase:
+                try:
+                    wsgi_app = await provision_wsgi_app(
+                        launch_service,
+                        AsyncPath(python_app_codebase.root_dir),
+                        uow,
+                        plugin_manager
+                    )
+                except Exception as exc:
+                    logger.exception(exc)
+                    console.error(f"unable to provision {launch_service}")
+                    raise typer.Exit(code=1) from None
+
+            if wsgi_app:
+                try:
+                    await wsgi_app_up(
+                        wsgi_app.service_id,
+                        uow,
+                        console,
+                    )
+                except Exception as exc:
+                    logger.exception(exc)
+                    console.error(f"unable to bring {launch_service} up.")
+                    raise typer.Exit(code=1) from None
+
+        except Exception as exc:
+            logger.exception(exc)
+            print(traceback.format_exc())
+            console.error(f"Failed to provision a Python {runtime_version} Runtime")
+            await uow.rollback()
+            raise typer.Exit(1) from None
+
+        await uow.commit()
 
         if 0:
             wsgi_app = None
@@ -1268,6 +1276,8 @@ async def main(
         pm.add_hookspecs(AppRuntimeHookSpec)
         pm.add_hookspecs(AppCodebaseHookSpec)
         pm.add_hookspecs(PythonAppCodebaseHookSpec)
+        pm.add_hookspecs(WSGIPythonAppCodebaseHookSpec)
+
         return pm
     services.register_factory(context, pluggy.PluginManager, plugin_manager_factory)
 

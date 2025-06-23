@@ -65,9 +65,9 @@ class WsgiApp(ServiceBase, table=True):
     python_app_codebase: "PythonAppCodebase" = Relationship(back_populates="wsgi_apps")
 
     root_dir: str = Field(max_length=255)
-    #pyvenv_dir: str = Field(max_length=255)
     wsgi_file: str = Field(max_length=255)
     wsgi_module: str = Field(max_length=50)
+    venv_dir: str = Field(max_length=255)
     workers: int = Field(default=1)
     threads: int = Field(default=1)
 
@@ -78,10 +78,6 @@ class WsgiApp(ServiceBase, table=True):
 
     # virtual_hosts: list[VirtualHost] = []
     # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
-    #
-    @property
-    def pyvenv_dir(self) -> Path:
-        return Path(self.root_dir) / ".venv"
 
     @property
     def uwsgi_config_section_class(self) -> WsgiAppSection:

@@ -44,6 +44,27 @@ class Bugsink:
             return "https://github.com/bugsink/bugsink.git"
 
     @hook_impl
+    async def get_wsgi_file(
+            self,
+            service_name: str,
+            repo_dir: AsyncPath,
+    ) -> AsyncPath | None:
+        if service_name != "bugsink":
+            return
+
+        return repo_dir / "bugsink" / "wsgi.py"
+
+    @hook_impl
+    async def get_wsgi_module(
+            self,
+            service_name: str,
+    ) -> str | None:
+        if service_name != "bugsink":
+            return
+
+        return "application"
+
+    @hook_impl
     async def before_dependencies_install(
         self,
         service_name: str,
@@ -94,13 +115,28 @@ class Bugsink:
             "--skip-checks",
             "--traceback",
         ]
+        cmd_check_migrations = [
+            "bugsink-manage",
+            "check_migrations",
+        ]
+        cmd_check_migrations = [
+            "bugsink-manage",
+            "check",
+            "--deploy",
+            "--fail-level",
+            "WARNING",
+        ]
+
         #uv run bugsink-runsnappea
+
+
 
         for cmd_args in (
             cmd_create_conf,
             cmd_db_migrate,
             cmd_db_migrate_snappea,
             cmd_createsuperuser,
+            cmd_check_migrations,
         ):
             cmd_env = None
             if "createsuperuser" in cmd_args:
