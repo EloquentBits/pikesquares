@@ -252,23 +252,7 @@ async def wsgi_app_up(
     )
 
     #section._set("env","REQUESTS_CA_BUNDLE=/var/lib/pikesquares/pikesquares-ca.pem")
-    if 0:
-        section.master_process.attach_process(
-            command="/usr/bin/redis-server /etc/pikesquares/redis.conf",
-            for_legion=False,
-            broken_counter=3,
-            #pidfile="/var/run/pikesquares/redis-server.pid",
-            control=False,
-            daemonize=True,
-            touch_reload="/etc/pikesquares/redis.conf",
-            signal_stop=15,
-            signal_reload=15,
-            honour_stdin=0,
-            uid="pikesquarees",
-            gid="pikesquarees",
-            new_pid_ns=0,
-            change_dir="/var/lib/pikesquares/redis",
-        )
+    section._set("pythonpath", app_codebase.repo_dir)
 
     #try:
     #    _ = await wsgi_app.read_stats()
@@ -284,6 +268,6 @@ async def wsgi_app_up(
     await create_or_restart_instance(
         project_zmq_monitor_address,
         f"{wsgi_app.service_id}.ini",
-        section.as_configuration().format(do_print=True),
+        section.as_configuration().format(do_print=False),
     )
     #await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)

@@ -189,7 +189,8 @@ class WsgiAppSection(BaseWsgiAppSection):
                 plugins=plugin,
                 search_dirs=self.wsgi_app.plugins_dir,
             )
-        self.print_plugins()
+        if 0:
+            self.print_plugins()
 
         # if app.wsgi_module and callable(app.wsgi_module):
         #    wsgi_callable = wsgi_module.__name__
@@ -208,7 +209,10 @@ class WsgiAppSection(BaseWsgiAppSection):
         #        * mypackage.my_wsgi_module:my_app -- read from `my_app` attr of mypackage/my_wsgi_module.py
         # :param callable_name: Set WSGI callable name. Default: application.
 
-        self.python.set_wsgi_params(module=str(self.wsgi_app.wsgi_file), callable_name=self.wsgi_app.wsgi_module)
+        self.python.set_wsgi_params(
+            module=str(self.wsgi_app.wsgi_file),
+            callable_name=self.wsgi_app.wsgi_module
+        )
         self.applications.set_basic_params(exit_if_none=require_app)
 
         self.networking.register_socket(self.networking.sockets.default(str(self.wsgi_app.socket_address)))
