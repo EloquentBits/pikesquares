@@ -13,7 +13,6 @@ from aiopath import AsyncPath
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfigError
 from pikesquares.domain.base import ServiceBase
-from pikesquares.domain.device import Device
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.uow import UnitOfWork

@@ -157,12 +157,12 @@ async def wsgi_app_up(
 
         http_routers = await project.awaitable_attrs.http_routers
         if not http_routers:
-            raise Exception(f"could not locate http routers for project {project.name} [{project.id}]")
+            raise RuntimeError(f"could not locate http routers for project {project.name} [{project.id}]")
 
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
         #tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
         if not tuntap_routers:
-            raise Exception(f"could not locate tuntap routers for project {project.name} [{project.id}]")
+            raise RuntimeError(f"could not locate tuntap routers for project {project.name} [{project.id}]")
 
         tuntap_router  = tuntap_routers[0]
         wsgi_app_device = await uow.tuntap_devices.get_by_linked_service_id(wsgi_app.service_id)
@@ -260,8 +260,7 @@ async def wsgi_app_up(
     #    return False
 
     console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
-
-    print(section.as_configuration().format())
+    #print(section.as_configuration().format())
     project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
     project_zmq_monitor_address  = project_zmq_monitor.zmq_address
     #print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")

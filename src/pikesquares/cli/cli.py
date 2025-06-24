@@ -325,7 +325,20 @@ async def launch(
     project = await prompt_for_project(launch_service, uow, custom_style)
     if not project:
         console.error(f"cli launch: unable to select or provision project")
-        raise typer.Exit(code=1) from None
+        raise typer.Exit(code=0) from None
+
+    if not await project_up(project):
+        console.error(f"Unable to launch project {project.name}")
+        raise typer.Exit(code=0) from None
+
+    http_routers = await project.awaitable_attrs.http_routers
+    if not http_routers:
+        console.error(f"Unable to locate an http router for project {project.name}")
+        raise typer.Exit(code=0) from None
+
+    if not await http_router_up(uow, http_routers[0]):
+        console.error(f"Unable to launch http router for project {project.name}")
+        raise typer.Exit(code=0) from None
 
     if launch_service in ["python-wsgi-git", "bugsink", "meshdb"]:
 
