@@ -23,7 +23,7 @@ async def uv_cmd(
         chdir: AsyncPath | None = None,
 
     ) -> tuple[str, str, str]:
-    logger.info(f"[pikesquares] uv_cmd: {cmd_args=}")
+    #logger.info(f"{cmd_args=}")
     try:
 
         # with pl_local.as_user(run_as_user):
@@ -32,9 +32,10 @@ async def uv_cmd(
             if cmd_env:
                 pl_local.env.update(cmd_env)
             retcode, stdout, stderr = uv.run(cmd_args)
-            logger.debug(f"[pikesquares] uv_cmd: {retcode=}")
-            logger.debug(f"[pikesquares] uv_cmd: {stdout=}")
-            logger.debug(f"[pikesquares] uv_cmd: {stderr=}")
+            #if stdout:
+            #    logger.debug(stdout)
+            #if stderr:
+            #    logger.debug(stderr)
             return retcode, stdout, stderr
     except ProcessExecutionError as exc:
         logger.exception(exc)

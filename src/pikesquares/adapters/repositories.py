@@ -1,6 +1,6 @@
 # import logging
 from abc import ABC, abstractmethod
-from typing import NewType, Generic, TypeVar, Sequence
+from typing import Generic, NewType, Sequence, TypeVar
 
 import structlog
 from sqlmodel import and_, select
@@ -8,21 +8,19 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.sql.expression import SelectOfScalar
 
 from pikesquares.domain.base import ServiceBase
-
-from pikesquares.domain.runtime import PythonAppCodebase
-from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.domain.device import Device, DeviceUWSGIOption
+from pikesquares.domain.managed_services import AttachedDaemon
+from pikesquares.domain.monitors import ZMQMonitor
 from pikesquares.domain.project import Project
+from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.domain.router import (
     HttpRouter,
-    TuntapRouter,
     TuntapDevice,
-    # HttpRouter,
     # HttpsRouter,
+    TuntapRouter,
 )
+from pikesquares.domain.runtime import PythonAppCodebase
 from pikesquares.domain.wsgi_app import WsgiApp
-from pikesquares.domain.monitors import ZMQMonitor
-from pikesquares.domain.managed_services import AttachedDaemon
 
 # logger = logging.getLogger("uvicorn.error")
 # logger.setLevel(logging.DEBUG)

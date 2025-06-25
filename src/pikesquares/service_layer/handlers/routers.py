@@ -187,13 +187,26 @@ async def create_tuntap_device(
 
     return tuntap_device
 
+async def http_router_ips(uow: UnitOfWork) -> list[str]:
+    try:
+        addresses = []
+        routers = await uow.http_routers.list()
+        if routers:
+            for router in routers:
+                device = await uow.tuntap_devices.\
+                    get_by_linked_service_id(router.service_id)
+                if device:
+                    addresses.append(f"/pikesquares.local/{device.ip}")
+        return addresses
+
+    except Exception as exc:
+        raise exc
 
 async def http_router_up(
         uow: UnitOfWork,
         http_router: HttpRouter,
     ) -> bool:
     try:
-
         project = await http_router.awaitable_attrs.project
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
         #await uow.tuntap_routers.get_by_project_id(project.id)
@@ -268,4 +281,4 @@ async def http_router_up(
         return True
 
     except Exception as exc:
-        raise
+        raise exc

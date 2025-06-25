@@ -1,21 +1,23 @@
 import json
-from typing import NewType
 
 import pydantic
 import structlog
 from aiopath import AsyncPath
 
-from pikesquares import services, caddy_client
+from pikesquares import caddy_client, services
 from pikesquares.conf import AppConfig, AppConfigError
-#from pikesquares.domain.device import Device
-from pikesquares.exceptions import ServiceUnavailableError
 
 #from pikesquares.domain.managed_services import ManagedServiceBase
-from pikesquares.domain.process_compose import Process, ProcessMessages, ProcessAvailability
+from pikesquares.domain.process_compose import (
+    CaddyProcess,
+    Process,
+    ProcessAvailability,
+    ProcessMessages,
+)
+from pikesquares.exceptions import ServiceUnavailableError
 
 logger = structlog.get_logger()
 
-CaddyProcess = NewType("CaddyProcess", Process)
 
 class CaddyUnavailableError(ServiceUnavailableError):
     pass

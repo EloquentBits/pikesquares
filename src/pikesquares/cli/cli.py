@@ -8,7 +8,7 @@ import tempfile
 import traceback
 from functools import wraps
 from pathlib import Path
-from typing import Annotated,  Literal
+from typing import Annotated, Literal
 
 import anyio
 import apluggy as pluggy
@@ -30,6 +30,7 @@ from rich.progress import (
 )
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
+from svcs.exceptions import ServiceNotFoundError
 
 from pikesquares import __app_name__, __version__, services
 from pikesquares.adapters.database import DatabaseSessionManager
@@ -45,15 +46,23 @@ from pikesquares.conf import (
     register_app_conf,
 )
 from pikesquares.domain.base import ServiceBase
-from pikesquares.domain.caddy import register_caddy_process
+
+#from pikesquares.domain.caddy import register_caddy_process
 from pikesquares.domain.device import register_device_stats
+from pikesquares.domain.dnsmasq import register_dnsmasq_process
 from pikesquares.domain.process_compose import (
+    Config as ProcessComposeConfig,
+)
+from pikesquares.domain.process_compose import (
+    APIProcess,
+    CaddyProcess,
+    DeviceProcess,
+    DNSMASQProcess,
     PCAPIUnavailableError,
     ProcessCompose,
     ServiceUnavailableError,
     register_api_process,
     register_device_process,
-    register_dnsmasq_process,
     register_process_compose,
 )
 from pikesquares.hooks.specs import (
@@ -63,8 +72,6 @@ from pikesquares.hooks.specs import (
     PythonAppCodebaseHookSpec,
     WSGIPythonAppCodebaseHookSpec,
 )
-
-#from pikesquares.domain.runtime import PythonAppCodebase
 from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
     provision_attached_daemon,
@@ -76,27 +83,18 @@ from pikesquares.service_layer.handlers.prompt_utils import (
     prompt_for_launch_service,
     prompt_for_project,
 )
-from pikesquares.service_layer.handlers.routers import http_router_up
+from pikesquares.service_layer.handlers.routers import http_router_ips, http_router_up
 from pikesquares.service_layer.handlers.runtimes import provision_app_codebase, provision_python_app_runtime
 from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, wsgi_app_up
 from pikesquares.service_layer.uow import UnitOfWork
-
-#from pikesquares.services.apps.django import PythonRuntimeDjango
 from pikesquares.services.apps.exceptions import (
-    # PythonRuntimeCheckError,
-    # PythonRuntimeDjangoCheckError,
-    # UvCommandExecutionError,
-    # PythonRuntimeInitError,
     DjangoCheckError,
     DjangoDiffSettingsError,
-    #DjangoSettingsError,
     UvPipInstallError,
     UvPipListError,
     UvSyncError,
 )
 
-# from pikesquares.services.apps import RubyRuntime, PHPRuntime
-#from pikesquares.services.apps.python import PythonRuntime
 from .console import console
 
 LOG_FILE = "app.log"
@@ -493,10 +491,12 @@ async def launch(
                 attached_daemon_device = await uow.tuntap_devices.\
                     get_by_linked_service_id(attached_daemon.service_id)
                 if attached_daemon_device:
-                    plugin_manager.register(plugin_class(
-                        daemon_service=attached_daemon,
-                        bind_ip=str(attached_daemon_device.ip),
-                    ))
+                    plugin_manager.register(
+                        plugin_class(
+                            daemon_service=attached_daemon,
+                            bind_ip=str(attached_daemon_device.ip),
+                        )
+                    )
             if attached_daemon:
                 await attached_daemon_up(
                     attached_daemon,
@@ -1349,7 +1349,6 @@ async def main(
                         "run_dir": str(conf.run_dir),
                     },
                 )
-
                 zmq_monitor = await create_zmq_monitor(uow, device=device)
                 if not zmq_monitor.socket_address:
                     console.error("device zmq monitor socket address was not provisioned")
@@ -1370,11 +1369,53 @@ async def main(
             await uow.commit()
 
     await register_device_process(context, device.machine_id)
-    await register_api_process(context)
-    await register_dnsmasq_process(context)
-    await register_caddy_process(context)
+    http_router_addresses = await http_router_ips(uow)
+    if http_router_addresses:
+        await register_dnsmasq_process(context, addresses=http_router_addresses)
+
+    #await register_api_process(context)
+    #await register_caddy_process(context)
     await register_device_stats(context)
-    await register_process_compose(context)
+    svcs_container = context["svcs_container"]
+    pc_processes = {}
+    pc_msgs = {}
+    try:
+        pc_processes["device"] , pc_msgs["device"] = await svcs_container.aget(DeviceProcess)
+    except ServiceNotFoundError:
+        pass
+
+    try:
+        pc_processes["caddy"], pc_msgs["caddy"] = await svcs_container.aget(CaddyProcess)
+    except ServiceNotFoundError:
+        pass
+
+    try:
+        pc_processes["dnsmasq"], pc_msgs["dnsmasq"] = await svcs_container.aget(DNSMASQProcess)
+    except ServiceNotFoundError:
+        pass
+
+    try:
+        pc_processes["api"], pc_msgs["api"] = await svcs_container.aget(APIProcess)
+    except ServiceNotFoundError:
+        pass
+
+    pc_config = ProcessComposeConfig(
+        processes=pc_processes,
+        custom_messages=pc_msgs,
+    )
+    pc_kwargs = {
+        "config": pc_config,
+        "daemon_name": "process-compose",
+        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
+        "daemon_config": conf.config_dir / "process-compose.yaml",
+        #"daemon_log": conf.log_dir / "process-compose.log",
+        #"daemon_socket": conf.run_dir / "process-compose.sock",
+        "data_dir": conf.data_dir,
+        "run_dir": conf.run_dir,
+        "log_dir": conf.log_dir,
+        "uv_bin": conf.UV_BIN,
+    }
+    await register_process_compose(context, pc_kwargs)
 
     # pc = services.get(context, ProcessCompose)
 

@@ -328,7 +328,7 @@ class ManagedServiceBase(pydantic.BaseModel):
         chdir: Path | None = None,
         cmd_env: dict[str, str] | None = None,
         # run_as_user: str = "pikesquares",
-    ) -> tuple[int | None, str | None, str | None]:
+    ) -> tuple[str, str, str]:
 
         if not cmd_args:
             raise Exception(f"no args provided for e {self.daemon_name} command")
@@ -340,7 +340,10 @@ class ManagedServiceBase(pydantic.BaseModel):
                 pl_local.env.update(cmd_env)
             # with pl_local.as_user(run_as_user):
             with pl_local.cwd(chdir or self.data_dir):
-                retcode, stdout, stderr = pl_local[str(self.daemon_bin)].run(cmd_args, **{"env": cmd_env})
+                retcode, stdout, stderr = pl_local[
+                        str(self.daemon_bin)
+                    ].run(cmd_args, **{"env": cmd_env})
+
                 if int(retcode) != 0:
                     logger.debug(f"{retcode=}")
                     logger.debug(f"{stdout=}")

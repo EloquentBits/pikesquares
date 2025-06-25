@@ -1,7 +1,7 @@
 import grp
-from asyncio import sleep
 import json
 import os
+from asyncio import sleep
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, NewType
@@ -14,10 +14,7 @@ from pydantic_yaml import to_yaml_str
 
 from pikesquares import services
 from pikesquares.conf import AppConfig, AppConfigError
-#from pikesquares.domain.device import Device
 from pikesquares.domain.managed_services import ManagedServiceBase
-
-# from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.get_logger()
 
@@ -121,16 +118,17 @@ class ProcessCompose(ManagedServiceBase):
 
     uv_bin: Annotated[pydantic.FilePath, pydantic.Field()]
 
-    cmd_args: list[str] = []
-    cmd_env: dict[str, str] = {}
+    cmd_args: list[str] | None = None
+    cmd_env: dict[str, str] | None = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cmd_args = ["--unix-socket", str(self.daemon_socket)]
-        self.cmd_env = {
-            # TODO use shellingham library
-            "COMPOSE_SHELL": os.environ.get("SHELL"),
-        }
+        self.cmd_env : dict[str, str] = {}
+        # TODO use shellingham library
+        shell_path = os.environ.get("SHELL")
+        if shell_path:
+            self.cmd_env["COMPOSE_SHELL"] = shell_path
 
     def __repr__(self) -> str:
         return "process-compose"
@@ -171,74 +169,66 @@ class ProcessCompose(ManagedServiceBase):
     async def reload(self):
         """docket-compose project update"""
         await self.write_config_to_disk()
-        logger.info(f"new config. reloading process compose")
+        logger.info("new config. reloading process compose")
         try:
             self.cmd_args.insert(0, "project")
             self.cmd_args.insert(1, "update")
             self.cmd_args.insert(2, "--config")
             self.cmd_args.insert(3, str(self.daemon_config))
-            return self.cmd(self.cmd_args, cmd_env=self.cmd_env)
+
+            return self.cmd(
+                self.cmd_args,
+                cmd_env=self.cmd_env
+            )
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    async def up(self) -> bool:
+    async def up(self) -> bool | tuple[str, str, str]:
         # always write config to dist before starting
         #
         await self.write_config_to_disk()
-        args = [
-            "up",
-            "--config",
-            str(self.daemon_config),
-            "--log-file",
-            str(self.daemon_log),
-            "--detached",
-            "--hide-disabled",
-        ] + self.cmd_args
 
         # Set the current numeric umask and return the previous umask.
         old_umask = os.umask(0o002)
         os.setgid(grp.getgrnam("pikesquares")[2])
         try:
-            retcode, stdout, stderr = self.cmd(args, cmd_env=self.cmd_env)
-            if retcode:
-                logger.debug(retcode)
-            if stdout:
-                logger.debug(stdout)
-            if stderr:
-                logger.error(stderr)
-            # if retcode != 0:
-            #    logger.error(retcode, stdout, stderr)
-            #    return False
+            return self.cmd([
+                "up",
+                "--config",
+                str(self.daemon_config),
+                "--log-file",
+                str(self.daemon_log),
+                "--detached",
+                "--hide-disabled",
+            ] + self.cmd_args,
+            cmd_env=self.cmd_env)
         except ProcessExecutionError as exc:
             logger.error(exc)
             return False
         finally:
             os.umask(old_umask)
 
-        return True
-
-    async def down(self) -> tuple[int, str, str]:
+    async def down(self) -> tuple[str, str, str]:
         if self.daemon_socket and not await AsyncPath(self.daemon_socket).exists():
             raise PCAPIUnavailableError()
 
         try:
-            cmd_args = self.cmd_args.insert(0, "down")
             return self.cmd(
-                self.cmd_args,
+                ["down", * self.cmd_args],
                 cmd_env=self.cmd_env,
             )
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    def attach(self) -> tuple[int, str, str]:
+    def attach(self) -> tuple[str, str, str]:
         if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
         try:
             return self.cmd(
-                self.cmd_args.insert(0, "attach"),
+                ["attach", * self.cmd_args],
                 cmd_env=self.cmd_env,
             )
         except ProcessExecutionError as exc:
@@ -267,11 +257,11 @@ class ProcessCompose(ManagedServiceBase):
 
         raise PCAPIUnavailableError()
 
-
 APIProcess = NewType("APIProcess", Process)
 DeviceProcess = NewType("DeviceProcess", Process)
-# DeviceProcessMessages = NewType("DeviceProcessMessages", ProcessMessages)
 DNSMASQProcess = NewType("DNSMASQProcess", Process)
+CaddyProcess = NewType("CaddyProcess", Process)
+# DeviceProcessMessages = NewType("DeviceProcessMessages", ProcessMessages)
 
 
 async def process_compose_ping(pc: ProcessCompose):
@@ -279,13 +269,15 @@ async def process_compose_ping(pc: ProcessCompose):
     return True
 
 
-async def register_process_compose(context: dict) -> None:
+async def register_process_compose(
+        context: dict,
+        pc_kwargs: dict,
+) -> None:
     """process-compose factory"""
 
     async def process_compose_factory(svcs_container) -> ProcessCompose:
-        from pikesquares.domain.caddy import CaddyProcess
-
         # uow = await services.aget(context, UnitOfWork)
+        """
         conf = await svcs_container.aget(AppConfig)
         if conf.UV_BIN and not await AsyncPath(conf.UV_BIN).exists():
             raise AppConfigError(f"unable locate uv binary @ {conf.UV_BIN}") from None
@@ -303,20 +295,20 @@ async def register_process_compose(context: dict) -> None:
                 #"api": api_process,
                 "device": device_process,
                 #"caddy": caddy_process,
-                #"dnsmasq": dnsmasq_process,
+                "dnsmasq": dnsmasq_process,
             },
             custom_messages={
                 #"api": api_messages,
                 "device": device_messages,
                 #"caddy": caddy_messages,
-                #"dnsmasq": dnsmasq_messages,
+                "dnsmasq": dnsmasq_messages,
             },
         )
         pc_kwargs = {
             "config": pc_config,
             "daemon_name": "process-compose",
             "daemon_bin": conf.PROCESS_COMPOSE_BIN,
-            "daemon_config": conf.process_compose_config_path,
+            "daemon_config": conf.config_dir / "process-compose.yaml",
             #"daemon_log": conf.log_dir / "process-compose.log",
             #"daemon_socket": conf.run_dir / "process-compose.sock",
             "data_dir": conf.data_dir,
@@ -324,7 +316,7 @@ async def register_process_compose(context: dict) -> None:
             "log_dir": conf.log_dir,
             "uv_bin": conf.UV_BIN,
         }
-
+        """
         return ProcessCompose(**pc_kwargs)
 
     services.register_factory(
@@ -432,74 +424,3 @@ async def register_api_process(context: dict) -> None:
         ping=api_ping,
         on_registry_close=api_close,
     )
-
-
-def dnsmasq_close():
-    ...
-    #logger.debug("dnsmasq closed")
-
-
-async def dnsmasq_ping(dnsmasq_data: tuple[DNSMASQProcess, ProcessMessages]):
-    process, msgs = dnsmasq_data
-    # raise ServiceUnavailableError("dnsmasq down")
-    return True
-
-
-async def register_dnsmasq_process(
-    context: dict,
-    port: int = 5353,
-    addresses: list[str] = ["/pikesquares.local/192.168.34.3"],
-    listen_address: str = "127.0.0.34",
-) -> None:
-    """register device"""
-
-    async def dnsmasq_process_factory(svcs_container) -> tuple[DNSMASQProcess, ProcessMessages]:
-        """dnsmasq process-compose process"""
-
-        conf = await svcs_container.aget(AppConfig)
-
-        if conf.DNSMASQ_BIN and not await AsyncPath(conf.DNSMASQ_BIN).exists():
-            raise AppConfigError(f"unable locate dnsmasq binary @ {conf.DNSMASQ_BIN}") from None
-
-        #--interface=incusbr0
-
-        cmd = f"{conf.DNSMASQ_BIN} " \
-            "--bind-interfaces " \
-            "--conf-file=/dev/null " \
-            "--keep-in-foreground " \
-            "--log-queries " \
-            f"--port {port} " \
-            f"--listen-address {listen_address} " \
-            "--no-resolv " \
-            "-u pikesquares -g pikesquares" 
-
-
-
-        for addr in addresses:
-            cmd = cmd + f" --address {addr}"
-
-        process_messages = ProcessMessages(
-            title_start="!!! dnsmasq start title !!!",
-            title_stop="abc",
-        )
-        process = Process(
-            disabled=not conf.DNSMASQ_ENABLED,
-            description="dns resolver",
-            command=cmd,
-            working_dir=conf.data_dir,
-            availability=ProcessAvailability(),
-            # readiness_probe=ReadinessProbe(
-            #    http_get=ReadinessProbeHttpGet(path="/healthy", port=api_port)
-            # ),
-        )
-        return process, process_messages
-
-    services.register_factory(
-        context,
-        DNSMASQProcess,
-        dnsmasq_process_factory,
-        ping=dnsmasq_ping,
-        on_registry_close=dnsmasq_close,
-    )
-
-
