@@ -177,7 +177,7 @@ class ServiceBase(AsyncAttrs, TimeStampedBase):
         stop=tenacity.stop_after_attempt(3),
         reraise=False,
     )
-    async def read_stats(self):
+    async def read_stats(self) -> dict | None:
         """
         read from uWSGI Stats Server socket
         """

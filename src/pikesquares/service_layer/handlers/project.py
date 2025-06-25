@@ -99,7 +99,14 @@ async def get_nat_interfaces() -> list[str]:
 
     return nat_interfaces
 
-async def project_up(project)  -> bool:
+async def project_up(project)  -> bool | None:
+    stats = None
+    while not stats:
+        try:
+            return await project.read_stats()
+        except tenacity.RetryError:
+            break
+
     try:
         section = ProjectSection(project)
 
@@ -154,55 +161,6 @@ async def project_up(project)  -> bool:
         # fs,pid,ipc,uts,net
         section._set("emperor-use-clone", "net")
 
-        if 0:
-            redis_tuntap_device = section.routing.routers.tuntap().\
-                device_connect(
-                    device_name="redis1",
-                    socket="/var/run/pikesquares/psq-661z17r.sock",
-                )
-            section.routing.use_router(redis_tuntap_device)
-
-            section.main_process.run_command_on_event(
-                command="ifconfig redis1 192.168.100.5 netmask 255.255.255.0 up",
-                phase=section.main_process.phases.PRIV_DROP_PRE,
-            )
-            #section.main_process.run_command_on_event(
-            #    command="route add default gw 192.168.100.1",
-            #    phase=section.main_process.phases.PRIV_DROP_PRE
-            #)
-            #section.main_process.run_command_on_event(
-            #    command="ping -c 1 192.168.100.1",
-            #    phase=section.main_process.phases.PRIV_DROP_PRE,
-            #)
-            #section.main_process.run_command_on_event(
-            #    command="route -n",
-            #    phase=section.main_process.phases.PRIV_DROP_PRE,
-            #)
-            #section.main_process.run_command_on_event(
-            #    command="ping -c 1 8.8.8.8",
-            #    phase=section.main_process.phases.PRIV_DROP_PRE,
-            #)
-
-        if 0:
-            pidfile = "/var/run/pikesquares/redis1.pid"
-            redis_dir = "/var/lib/pikesquares/redis1"
-            redis_cmd = f"/usr/bin/redis-server --pidfile {pidfile} --logfile /var/log/pikesquares/redis1.log --dir {redis_dir} --bind 192.168.100.5 --port 6380 --daemonize no"
-            section.master_process.attach_process(
-                command=redis_cmd, #"/usr/bin/redis-server /etc/pikesquares/redis.conf",
-                for_legion=False,
-                broken_counter=3,
-                pidfile=pidfile,
-                control=False,
-                daemonize=True,
-                touch_reload="/etc/pikesquares/redis.conf",
-                signal_stop=15,
-                signal_reload=15,
-                honour_stdin=0,
-                uid="pikesquares",
-                gid="pikesquares",
-                new_pid_ns="false",
-                change_dir=redis_dir,
-            )
         #try:
         #    _ = await project.read_stats()
         #    logger.info(f"{project.name} [{project.service_id}]. is already running!")
@@ -219,15 +177,16 @@ async def project_up(project)  -> bool:
             f"{project.service_id}.ini",
             section.as_configuration().format(do_print=True),
         )
-        try:
-            stats = await project.read_stats()
-        except tenacity.RetryError:
-            logger.error(f"Unable to read stats {project.name}")
-            return False 
-        return True
-
     except Exception as exc:
         raise exc
+
+    stats = None
+    while not stats:
+        try:
+            return await project.read_stats()
+        except tenacity.RetryError:
+            break
+
 
 async def project_delete(
     project: Project,

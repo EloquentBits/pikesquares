@@ -205,7 +205,15 @@ async def http_router_ips(uow: UnitOfWork) -> list[str]:
 async def http_router_up(
         uow: UnitOfWork,
         http_router: HttpRouter,
-    ) -> bool:
+    ) -> bool | None:
+
+    stats = None
+    while not stats:
+        try:
+            return await http_router.read_stats()
+        except tenacity.RetryError:
+            break
+
     try:
         project = await http_router.awaitable_attrs.project
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
@@ -255,6 +263,15 @@ async def http_router_up(
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
 
+        section.main_process.run_command_on_event(
+            command="route -n",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        section.main_process.run_command_on_event(
+            command="ping -c 1 8.8.8.8",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+
         project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
         if not project_zmq_monitor:
             return False
@@ -272,13 +289,14 @@ async def http_router_up(
         await create_or_restart_instance(
             project_zmq_monitor.zmq_address,
             f"{http_router.service_id}.ini",
-            section.as_configuration().format(do_print=True),
+            section.as_configuration().format(do_print=False),
         )
-        try:
-            stats = await http_router.read_stats()
-        except tenacity.RetryError:
-            return False
-        return True
-
     except Exception as exc:
         raise exc
+
+    stats = None
+    while not stats:
+        try:
+            return await http_router.read_stats()
+        except tenacity.RetryError:
+            break

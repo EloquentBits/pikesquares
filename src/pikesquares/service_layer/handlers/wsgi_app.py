@@ -141,20 +141,25 @@ async def provision_wsgi_app(
 
 
 async def wsgi_app_up(
-        service_id: str,
+        wsgi_app: WsgiApp,
         uow: UnitOfWork,
         console,
     ):
-    try:
-        wsgi_app = await uow.wsgi_apps.get_by_service_id(service_id)
-        if not wsgi_app:
-            raise RuntimeError(f"unable to look up app by service id: {service_id}")
 
+    stats = None
+    while not stats:
+        try:
+            return await wsgi_app.read_stats()
+        except tenacity.RetryError:
+            break
+
+    try:
+        #wsgi_app = await uow.wsgi_apps.get_by_service_id(service_id)
+        #if not wsgi_app:
+        #    raise RuntimeError(f"unable to look up app by service id: {service_id}")
         app_codebase = await wsgi_app.awaitable_attrs.python_app_codebase
         #app_runtime = await wsgi_app.awaitable_attrs.python_app_runtime
         project = await wsgi_app.awaitable_attrs.project
-
-
         http_routers = await project.awaitable_attrs.http_routers
         if not http_routers:
             raise RuntimeError(f"could not locate http routers for project {project.name} [{project.id}]")
@@ -165,108 +170,117 @@ async def wsgi_app_up(
             raise RuntimeError(f"could not locate tuntap routers for project {project.name} [{project.id}]")
 
         tuntap_router  = tuntap_routers[0]
+
         wsgi_app_device = await uow.tuntap_devices.get_by_linked_service_id(wsgi_app.service_id)
-        await uow.commit()
+        http_router = http_routers[0]
+
+        section = WsgiAppSection(wsgi_app)
+        section._set("jailed", "true")
+        # forkpty
+        section._set("unshared", "true")
+        section.main_process.run_command_on_event(
+            command=f"hostname {wsgi_app.service_id}",
+            phase=section.main_process.phases.PRIV_DROP_PRE
+        )
+
+        router_tuntap = section.routing.routers.tuntap().device_connect(
+            device_name=wsgi_app_device.name,
+            socket=tuntap_router.socket_address,
+        )
+        #.device_add_rule(
+        #    direction="in",
+        #    action="route",
+        #    src=tuntap_router.ip,
+        #    dst=http_router_tuntap_device.ip,
+        #    target="10.20.30.40:5060",
+        #)
+        section.routing.use_router(router_tuntap)
+        if 0:
+            router_forkpty = section.routing.routers.forkpty(
+                on=AsyncPath(wsgi_app.run_dir) / f"{wsgi_app.service_id}-forkptyrouter.socket",
+                undeferred=True
+            ).set_basic_params(
+                run_command="/bin/zsh"
+            ).set_connections_params(
+                timeout_socket=13
+            ).set_window_params(cols=10, rows=15)
+
+            section.routing.use_router(router_forkpty)
+
+        #; bring up loopback
+        #exec-as-root = ifconfig lo up
+        section.main_process.run_command_on_event(
+            command="ifconfig lo up",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        # bring up interface uwsgi0
+        #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
+        section.main_process.run_command_on_event(
+            command=f"ifconfig {wsgi_app_device.name} {wsgi_app_device.ip} netmask {wsgi_app_device.netmask} up",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        # and set the default gateway
+        #exec-as-root = route add default gw 192.168.0.1
+        section.main_process.run_command_on_event(
+            command=f"route add default gw {tuntap_router.ip}",
+            phase=section.main_process.phases.PRIV_DROP_PRE
+        )
+        section.main_process.run_command_on_event(
+            command=f"ping -c 1 {tuntap_router.ip}",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        section.main_process.run_command_on_event(
+            command="route -n",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+        section.main_process.run_command_on_event(
+            command="ping -c 1 8.8.8.8",
+            phase=section.main_process.phases.PRIV_DROP_PRE,
+        )
+
+        #if not all([
+        #    http_router.subscription_server_address.exists(),
+        #    http_router.subscription_server_address.is_socket()]):
+        #    raise Exception("http router subscription server is not available")
+
+        section.subscriptions.subscribe(
+            server=http_router.subscription_server_address,
+            address=str(wsgi_app.socket_address),  # address and port of wsgi app
+            key=f"{wsgi_app.name}.pikesquares.local",
+        )
+        section.subscriptions.set_server_params(
+            client_notify_address=wsgi_app.subscription_notify_socket,
+        )
+
+        #section._set("env","REQUESTS_CA_BUNDLE=/var/lib/pikesquares/pikesquares-ca.pem")
+        section._set("pythonpath", app_codebase.repo_dir)
+
+        #try:
+        #    _ = await wsgi_app.read_stats()
+        #except tenacity.RetryError:
+        #    return False
+
+        console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
+        #print(section.as_configuration().format())
+        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        project_zmq_monitor_address  = project_zmq_monitor.zmq_address
+        #print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
+
+        await create_or_restart_instance(
+            project_zmq_monitor_address,
+            f"{wsgi_app.service_id}.ini",
+            section.as_configuration().format(do_print=False),
+        )
+        #await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
+
     except Exception as exc:
-        logger.info(f"failed provisioning Python App Codebase @ {app_codebase.root_dir}")
+        logger.error("failed provisioning Python App")
         raise exc
 
-    http_router = http_routers[0]
+    stats = None
+    while not stats:
+        try:
+            return await wsgi_app.read_stats()
+        except tenacity.RetryError:
+            break
 
-    section = WsgiAppSection(wsgi_app)
-    section._set("jailed", "true")
-    # forkpty
-    section._set("unshared", "true")
-    section.main_process.run_command_on_event(
-        command=f"hostname {wsgi_app.service_id}",
-        phase=section.main_process.phases.PRIV_DROP_PRE
-    )
-
-    router_tuntap = section.routing.routers.tuntap().device_connect(
-        device_name=wsgi_app_device.name,
-        socket=tuntap_router.socket_address,
-    )
-    #.device_add_rule(
-    #    direction="in",
-    #    action="route",
-    #    src=tuntap_router.ip,
-    #    dst=http_router_tuntap_device.ip,
-    #    target="10.20.30.40:5060",
-    #)
-    section.routing.use_router(router_tuntap)
-    if 0:
-        router_forkpty = section.routing.routers.forkpty(
-            on=AsyncPath(wsgi_app.run_dir) / f"{wsgi_app.service_id}-forkptyrouter.socket",
-            undeferred=True
-        ).set_basic_params(
-            run_command="/bin/zsh"
-        ).set_connections_params(
-            timeout_socket=13
-        ).set_window_params(cols=10, rows=15)
-
-        section.routing.use_router(router_forkpty)
-
-    #; bring up loopback
-    #exec-as-root = ifconfig lo up
-    section.main_process.run_command_on_event(
-        command="ifconfig lo up",
-        phase=section.main_process.phases.PRIV_DROP_PRE,
-    )
-    # bring up interface uwsgi0
-    #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
-    section.main_process.run_command_on_event(
-        command=f"ifconfig {wsgi_app_device.name} {wsgi_app_device.ip} netmask {wsgi_app_device.netmask} up",
-        phase=section.main_process.phases.PRIV_DROP_PRE,
-    )
-    # and set the default gateway
-    #exec-as-root = route add default gw 192.168.0.1
-    section.main_process.run_command_on_event(
-        command=f"route add default gw {tuntap_router.ip}",
-        phase=section.main_process.phases.PRIV_DROP_PRE
-    )
-    section.main_process.run_command_on_event(
-        command=f"ping -c 1 {tuntap_router.ip}",
-        phase=section.main_process.phases.PRIV_DROP_PRE,
-    )
-    section.main_process.run_command_on_event(
-        command="route -n",
-        phase=section.main_process.phases.PRIV_DROP_PRE,
-    )
-    section.main_process.run_command_on_event(
-        command="ping -c 1 8.8.8.8",
-        phase=section.main_process.phases.PRIV_DROP_PRE,
-    )
-
-    #if not all([
-    #    http_router.subscription_server_address.exists(),
-    #    http_router.subscription_server_address.is_socket()]):
-    #    raise Exception("http router subscription server is not available")
-
-    section.subscriptions.subscribe(
-        server=http_router.subscription_server_address,
-        address=str(wsgi_app.socket_address),  # address and port of wsgi app
-        key=f"{wsgi_app.name}.pikesquares.local",
-    )
-    section.subscriptions.set_server_params(
-        client_notify_address=wsgi_app.subscription_notify_socket,
-    )
-
-    #section._set("env","REQUESTS_CA_BUNDLE=/var/lib/pikesquares/pikesquares-ca.pem")
-    section._set("pythonpath", app_codebase.repo_dir)
-
-    #try:
-    #    _ = await wsgi_app.read_stats()
-    #except tenacity.RetryError:
-    #    return False
-
-    console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
-    #print(section.as_configuration().format())
-    project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
-    project_zmq_monitor_address  = project_zmq_monitor.zmq_address
-    #print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
-    await create_or_restart_instance(
-        project_zmq_monitor_address,
-        f"{wsgi_app.service_id}.ini",
-        section.as_configuration().format(do_print=False),
-    )
-    #await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)

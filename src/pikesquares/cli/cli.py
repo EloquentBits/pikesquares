@@ -315,7 +315,7 @@ async def launch(
         console.error(f"Unable to launch project {project.name}")
         raise typer.Exit(code=0) from None
 
-    http_routers = await project.awaitable_attrs.http_routers
+    http_routers = await project.awaitable_attrs.http_routers or []
     if not http_routers:
         console.error(f"Unable to locate an http router for project {project.name}")
         raise typer.Exit(code=0) from None
@@ -343,62 +343,46 @@ async def launch(
         python_app_runtime = None
         wsgi_app = None
         try:
-            try:
-                python_app_runtime = await provision_python_app_runtime(
-                    runtime_version, uow, custom_style
-                )
-            except Exception as exc:
-                logger.exception(exc)
-                console.error(f"unable to provision the {launch_service} python app runtime.")
-                raise typer.Exit(code=1) from None
-
-            try:
-                python_app_codebase = await provision_app_codebase(
-                    launch_service,
-                    plugin_manager,
-                    AsyncPath(conf.pyapps_dir),
-                    AsyncPath(str(conf.UV_BIN)),
-                    uow,
-                    custom_style,
-                )
-            except Exception as exc:
-                logger.exception(exc)
-                console.error(f"unable to provision the {launch_service} codebase.")
-                raise typer.Exit(code=1) from None
-
-            if python_app_codebase:
-                try:
-                    wsgi_app = await provision_wsgi_app(
-                        launch_service,
-                        AsyncPath(python_app_codebase.root_dir),
-                        uow,
-                        plugin_manager
-                    )
-                except Exception as exc:
-                    logger.exception(exc)
-                    console.error(f"unable to provision {launch_service}")
-                    raise typer.Exit(code=1) from None
-
-            if wsgi_app:
-                try:
-                    await wsgi_app_up(
-                        wsgi_app.service_id,
-                        uow,
-                        console,
-                    )
-                except Exception as exc:
-                    logger.exception(exc)
-                    console.error(f"unable to bring {launch_service} up.")
-                    raise typer.Exit(code=1) from None
-
+            python_app_runtime = await provision_python_app_runtime(
+                runtime_version, uow, custom_style
+            )
+            python_app_codebase = await provision_app_codebase(
+                launch_service,
+                plugin_manager,
+                AsyncPath(conf.pyapps_dir),
+                AsyncPath(str(conf.UV_BIN)),
+                uow,
+                custom_style,
+            )
+            if not python_app_codebase:
+                console.error(f"unable to provision the {launch_service} runtime.")
+                raise typer.Exit(code=0) from None
         except Exception as exc:
             logger.exception(exc)
-            print(traceback.format_exc())
-            console.error(f"Failed to provision a Python {runtime_version} Runtime")
-            await uow.rollback()
-            raise typer.Exit(1) from None
+            console.error(f"unable to provision the {launch_service} runtime.")
+            raise typer.Exit(code=0) from None
 
-        await uow.commit()
+        async with uow:
+            try:
+                wsgi_app = await provision_wsgi_app(
+                    launch_service,
+                    AsyncPath(python_app_codebase.root_dir),
+                    uow,
+                    plugin_manager
+                )
+                if not wsgi_app:
+                    console.error(f"unable to provision the {launch_service} app.")
+                    raise typer.Exit(code=0) from None
+
+                await wsgi_app_up(wsgi_app, uow, console)
+
+            except Exception as exc:
+                logger.exception(exc)
+                await uow.rollback()
+                console.error(f"unable to provision the {launch_service} app.")
+                raise typer.Exit(code=0) from None
+            await uow.commit()
+
 
         if 0:
             wsgi_app = None
