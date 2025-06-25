@@ -30,7 +30,6 @@ from rich.progress import (
 )
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-from svcs.exceptions import ServiceNotFoundError
 
 from pikesquares import __app_name__, __version__, services
 from pikesquares.adapters.database import DatabaseSessionManager
@@ -46,23 +45,10 @@ from pikesquares.conf import (
     register_app_conf,
 )
 from pikesquares.domain.base import ServiceBase
-
-#from pikesquares.domain.caddy import register_caddy_process
-from pikesquares.domain.device import register_device_stats
-from pikesquares.domain.dnsmasq import register_dnsmasq_process
 from pikesquares.domain.process_compose import (
-    Config as ProcessComposeConfig,
-)
-from pikesquares.domain.process_compose import (
-    APIProcess,
-    CaddyProcess,
-    DeviceProcess,
-    DNSMASQProcess,
     PCAPIUnavailableError,
     ProcessCompose,
     ServiceUnavailableError,
-    register_api_process,
-    register_device_process,
     register_process_compose,
 )
 from pikesquares.hooks.specs import (
@@ -83,7 +69,7 @@ from pikesquares.service_layer.handlers.prompt_utils import (
     prompt_for_launch_service,
     prompt_for_project,
 )
-from pikesquares.service_layer.handlers.routers import http_router_ips, http_router_up
+from pikesquares.service_layer.handlers.routers import http_router_up
 from pikesquares.service_layer.handlers.runtimes import provision_app_codebase, provision_python_app_runtime
 from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, wsgi_app_up
 from pikesquares.service_layer.uow import UnitOfWork
@@ -1300,7 +1286,6 @@ async def main(
     #)
 
     """
-
     def attached_daemon_plugin_manager_factory():
         pm = PluginManager("attached-daemon")
         pm.add_hookspecs(AttachedDaemonHookSpec)
@@ -1368,56 +1353,8 @@ async def main(
         else:
             await uow.commit()
 
-    await register_device_process(context, device.machine_id)
-    http_router_addresses = await http_router_ips(uow)
-    if http_router_addresses:
-        await register_dnsmasq_process(context, addresses=http_router_addresses)
-
-    #await register_api_process(context)
-    #await register_caddy_process(context)
-    await register_device_stats(context)
-    svcs_container = context["svcs_container"]
-    pc_processes = {}
-    pc_msgs = {}
-    try:
-        pc_processes["device"] , pc_msgs["device"] = await svcs_container.aget(DeviceProcess)
-    except ServiceNotFoundError:
-        pass
-
-    try:
-        pc_processes["caddy"], pc_msgs["caddy"] = await svcs_container.aget(CaddyProcess)
-    except ServiceNotFoundError:
-        pass
-
-    try:
-        pc_processes["dnsmasq"], pc_msgs["dnsmasq"] = await svcs_container.aget(DNSMASQProcess)
-    except ServiceNotFoundError:
-        pass
-
-    try:
-        pc_processes["api"], pc_msgs["api"] = await svcs_container.aget(APIProcess)
-    except ServiceNotFoundError:
-        pass
-
-    pc_config = ProcessComposeConfig(
-        processes=pc_processes,
-        custom_messages=pc_msgs,
-    )
-    pc_kwargs = {
-        "config": pc_config,
-        "daemon_name": "process-compose",
-        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
-        "daemon_config": conf.config_dir / "process-compose.yaml",
-        #"daemon_log": conf.log_dir / "process-compose.log",
-        #"daemon_socket": conf.run_dir / "process-compose.sock",
-        "data_dir": conf.data_dir,
-        "run_dir": conf.run_dir,
-        "log_dir": conf.log_dir,
-        "uv_bin": conf.UV_BIN,
-    }
-    await register_process_compose(context, pc_kwargs)
-
     # pc = services.get(context, ProcessCompose)
+    await register_process_compose(context, device.machine_id, uow)
 
     @atexit.register
     def cleanup():

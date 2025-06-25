@@ -11,10 +11,13 @@ import structlog
 from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
 from pydantic_yaml import to_yaml_str
+from svcs.exceptions import ServiceNotFoundError
 
 from pikesquares import services
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.managed_services import ManagedServiceBase
+from pikesquares.service_layer.handlers.routers import http_router_ips
+from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.get_logger()
 
@@ -270,53 +273,67 @@ async def process_compose_ping(pc: ProcessCompose):
 
 
 async def register_process_compose(
-        context: dict,
-        pc_kwargs: dict,
+    context: dict,
+    machine_id: str,
+    uow: UnitOfWork,
 ) -> None:
     """process-compose factory"""
 
-    async def process_compose_factory(svcs_container) -> ProcessCompose:
-        # uow = await services.aget(context, UnitOfWork)
-        """
-        conf = await svcs_container.aget(AppConfig)
-        if conf.UV_BIN and not await AsyncPath(conf.UV_BIN).exists():
-            raise AppConfigError(f"unable locate uv binary @ {conf.UV_BIN}") from None
+    from pikesquares.domain.caddy import register_caddy_process
+    from pikesquares.domain.device import register_device_stats
+    from pikesquares.domain.dnsmasq import register_dnsmasq_process
 
-        if conf.UWSGI_BIN and not await AsyncPath(conf.UWSGI_BIN).exists():
-            raise AppConfigError(f"unable locate uWSGI binary @ {conf.UWSGI_BIN}") from None
+    svcs_container = context["svcs_container"]
+    conf = await svcs_container.aget(AppConfig)
 
-        device_process, device_messages = await svcs_container.aget(DeviceProcess)
-        caddy_process, caddy_messages = await svcs_container.aget(CaddyProcess)
-        dnsmasq_process, dnsmasq_messages = await svcs_container.aget(DNSMASQProcess)
-        api_process, api_messages = await svcs_container.aget(APIProcess)
+    await register_device_process(context, machine_id)
+    http_router_addresses = await http_router_ips(uow)
+    if http_router_addresses:
+        await register_dnsmasq_process(context, addresses=http_router_addresses)
 
-        pc_config = Config(
-            processes={
-                #"api": api_process,
-                "device": device_process,
-                #"caddy": caddy_process,
-                "dnsmasq": dnsmasq_process,
-            },
-            custom_messages={
-                #"api": api_messages,
-                "device": device_messages,
-                #"caddy": caddy_messages,
-                "dnsmasq": dnsmasq_messages,
-            },
-        )
-        pc_kwargs = {
-            "config": pc_config,
-            "daemon_name": "process-compose",
-            "daemon_bin": conf.PROCESS_COMPOSE_BIN,
-            "daemon_config": conf.config_dir / "process-compose.yaml",
-            #"daemon_log": conf.log_dir / "process-compose.log",
-            #"daemon_socket": conf.run_dir / "process-compose.sock",
-            "data_dir": conf.data_dir,
-            "run_dir": conf.run_dir,
-            "log_dir": conf.log_dir,
-            "uv_bin": conf.UV_BIN,
-        }
-        """
+    #await register_api_process(context)
+    #await register_caddy_process(context)
+    await register_device_stats(context)
+    pc_processes = {}
+    pc_msgs = {}
+    try:
+        pc_processes["device"] , pc_msgs["device"] = await svcs_container.aget(DeviceProcess)
+    except ServiceNotFoundError:
+        pass
+
+    try:
+        pc_processes["caddy"], pc_msgs["caddy"] = await svcs_container.aget(CaddyProcess)
+    except ServiceNotFoundError:
+        pass
+
+    try:
+        pc_processes["dnsmasq"], pc_msgs["dnsmasq"] = await svcs_container.aget(DNSMASQProcess)
+    except ServiceNotFoundError:
+        pass
+
+    try:
+        pc_processes["api"], pc_msgs["api"] = await svcs_container.aget(APIProcess)
+    except ServiceNotFoundError:
+        pass
+
+    pc_config = Config(
+        processes=pc_processes,
+        custom_messages=pc_msgs,
+    )
+    pc_kwargs = {
+        "config": pc_config,
+        "daemon_name": "process-compose",
+        "daemon_bin": conf.PROCESS_COMPOSE_BIN,
+        "daemon_config": conf.config_dir / "process-compose.yaml",
+        #"daemon_log": conf.log_dir / "process-compose.log",
+        #"daemon_socket": conf.run_dir / "process-compose.sock",
+        "data_dir": conf.data_dir,
+        "run_dir": conf.run_dir,
+        "log_dir": conf.log_dir,
+        "uv_bin": conf.UV_BIN,
+    }
+
+    async def process_compose_factory() -> ProcessCompose:
         return ProcessCompose(**pc_kwargs)
 
     services.register_factory(
