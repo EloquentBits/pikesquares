@@ -291,8 +291,11 @@ async def register_process_compose(
     if http_router_addresses:
         await register_dnsmasq_process(context, addresses=http_router_addresses)
 
+    routers = await uow.http_routers.list()
+    if routers:
+        await register_caddy_process(context)
+
     #await register_api_process(context)
-    #await register_caddy_process(context)
     await register_device_stats(context)
     pc_processes = {}
     pc_msgs = {}

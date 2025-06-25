@@ -6,8 +6,6 @@ from aiopath import AsyncPath
 
 from pikesquares import caddy_client, services
 from pikesquares.conf import AppConfig, AppConfigError
-
-#from pikesquares.domain.managed_services import ManagedServiceBase
 from pikesquares.domain.process_compose import (
     CaddyProcess,
     Process,
@@ -15,6 +13,9 @@ from pikesquares.domain.process_compose import (
     ProcessMessages,
 )
 from pikesquares.exceptions import ServiceUnavailableError
+
+#from pikesquares.domain.managed_services import ManagedServiceBase
+from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.get_logger()
 
@@ -120,29 +121,51 @@ async def register_caddy_process(context: dict) -> None:
         """Caddy process-compose process"""
 
         conf = await svcs_container.aget(AppConfig)
+        uow = await svcs_container.aget(UnitOfWork)
 
         if conf.CADDY_BIN and not await AsyncPath(conf.CADDY_BIN).exists():
             raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
 
         #await AsyncPath(conf.caddy_config_path).write_text(caddy_config_initial)
-        """
+        routers = await uow.http_routers.list()
+        #if routers:
         with open(conf.caddy_config_path, "r+") as caddy_config:
-            vhost_key = "*.pikesquares.local"
+            #vhost_key = "*.pikesquares.local"
             # data = json.load(caddy_config)
-            data = json.loads(conf.caddy_config_initial)
-            apps = data.get("apps")
-            routes = apps.get("http").get("servers").get(vhost_key).get("routes")
-            handles = routes[0].get("handle")
-            upstreams = handles[0].get("upstreams")
-            upstream_address = upstreams[0].get("dial")
-            if upstream_address != f"{http_router_ip}:{http_router_port}":
-                data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0][
-                    "dial"
-                ] = f"{http_router_ip}:{http_router_port}"
-                caddy_config.seek(0)
-                json.dump(data, caddy_config)
-                caddy_config.truncate()
-        """
+            data = json.loads(caddy_config_initial)
+            servers = data["apps"]["http"]["servers"]
+            #routes = apps.get("http").get("servers").get(vhost_key).get("routes")
+            #handles = routes[0].get("handle")
+            #upstreams = handles[0].get("upstreams")
+            #upstream_address = upstreams[0].get("dial")
+            #if upstream_address != f"{http_router_ip}:{http_router_port}":
+            #          data["apps"]["http"]["servers"][vhost_key]["routes"]
+            #          [0]["handle"]
+            #          [0]["upstreams"]
+            #          [0]["dial" ] = "{http_router.address}"
+            #
+            routes = []
+            for router in routers:
+                routes.append({
+                    "@id": router.service_id,
+                    "match": [{"host": ["*.pikesquares.local"]}],
+                    "handle": [{
+                        "handler": "reverse_proxy",
+                        #// https://github.com/wxh06/caddy-uwsgi-transport
+                        #// "transport": {"protocol": "uwsgi"},
+                        "transport": {"protocol": "http"},
+                        "upstreams": [
+                            {"dial": router.address}
+                        ]
+                    }]
+                })
+            servers["*.pikesquares.local"] = {
+                "listen": [":443"],
+                "routes": routes,
+            }
+            caddy_config.seek(0)
+            json.dump(data, caddy_config)
+            caddy_config.truncate()
 
         process_messages = ProcessMessages(
             title_start="!! caddy start title !!",
