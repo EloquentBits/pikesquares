@@ -91,7 +91,7 @@ class Bugsink:
         cmd_create_conf = [
             "bugsink-create-conf",
             "--template=singleserver",
-            "--host=bugsink.pikesquares.local",
+            "--host=bugsink.pikesquares.dev",
             f"--base-dir={repo_dir}",
         ]
         cmd_db_migrate = [
@@ -109,7 +109,7 @@ class Bugsink:
             "bugsink-manage",
             "createsuperuser",
             "--email",
-            "admin@bugsink.pikesquares.local",
+            "admin@bugsink.pikesquares.dev",
             "--noinput",
             "--no-color",
             "--skip-checks",

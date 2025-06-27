@@ -246,7 +246,7 @@ async def wsgi_app_up(
         section.subscriptions.subscribe(
             server=http_router.subscription_server_address,
             address=str(wsgi_app.socket_address),  # address and port of wsgi app
-            key=f"{wsgi_app.name}.pikesquares.local",
+            key=f"{wsgi_app.name}.pikesquares.dev",
         )
         section.subscriptions.set_server_params(
             client_notify_address=wsgi_app.subscription_notify_socket,

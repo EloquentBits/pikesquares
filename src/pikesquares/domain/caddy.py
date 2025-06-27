@@ -52,11 +52,11 @@ caddy_config_initial = """{
 
 """
     "servers": {
-        "*.pikesquares.local": {
+        "*.pikesquares.dev": {
             "listen": [":443", "unix//path/to/socket|0200"],
             "routes": [{
                 "@id": "http-router-123",
-                "match": [{"host": ["*.pikesquares.local"]}],
+                "match": [{"host": ["*.pikesquares.dev"]}],
                 "handle": [{
                     "handler": "reverse_proxy",
                     // https://github.com/wxh06/caddy-uwsgi-transport
@@ -130,7 +130,7 @@ async def register_caddy_process(context: dict) -> None:
         routers = await uow.http_routers.list()
         #if routers:
         with open(conf.caddy_config_path, "r+") as caddy_config:
-            #vhost_key = "*.pikesquares.local"
+            #vhost_key = "*.pikesquares.dev"
             # data = json.load(caddy_config)
             data = json.loads(caddy_config_initial)
             servers = data["apps"]["http"]["servers"]
@@ -148,7 +148,7 @@ async def register_caddy_process(context: dict) -> None:
             for router in routers:
                 routes.append({
                     "@id": router.service_id,
-                    "match": [{"host": ["*.pikesquares.local"]}],
+                    "match": [{"host": ["*.pikesquares.dev"]}],
                     "handle": [{
                         "handler": "reverse_proxy",
                         #// https://github.com/wxh06/caddy-uwsgi-transport
@@ -159,7 +159,7 @@ async def register_caddy_process(context: dict) -> None:
                         ]
                     }]
                 })
-            servers["*.pikesquares.local"] = {
+            servers["*.pikesquares.dev"] = {
                 "listen": [":443"],
                 "routes": routes,
             }
@@ -249,11 +249,11 @@ if __name__ == "__main__":
             "http": {
             "https_port": 443,
             "servers": {
-                "*.pikesquares.local": {
+                "*.pikesquares.dev": {
                 "listen": [":443"],
                 "routes": [
                     {
-                    "match": [{"host": ["*.pikesquares.local"]}],
+                    "match": [{"host": ["*.pikesquares.dev"]}],
                     "handle": [
                         {
                         "handler": "reverse_proxy",

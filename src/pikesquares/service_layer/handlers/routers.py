@@ -1,27 +1,25 @@
 import json
-from ipaddress import IPv4Interface, IPv4Network
+from ipaddress import IPv4Interface
 from pathlib import Path
 
 import cuid
 import structlog
 import tenacity
 
-from pikesquares import get_first_available_port
-#from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import HttpRouter, TuntapDevice, TuntapRouter
 from pikesquares.presets.routers import HttpRouterSection
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 from pikesquares.service_layer.ipaddress_utils import (
-    tuntap_router_next_available_network,
-    tuntap_router_next_available_ip,
     get_tuntap_router_networks,
+    tuntap_router_next_available_ip,
+    tuntap_router_next_available_network,
 )
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
 
-#caddy_config_initial = """{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.local": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.local"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
+#caddy_config_initial = """{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.dev": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.dev"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
 
 caddy_config_initial = """
 {
@@ -30,11 +28,11 @@ caddy_config_initial = """
       "https_port": 443,
       "servers": {
 
-        "*.pikesquares.local": {
+        "*.pikesquares.dev": {
           "listen": [":443"],
           "routes": [
             {
-              "match": [{"host": ["*.pikesquares.local"]}],
+              "match": [{"host": ["*.pikesquares.dev"]}],
               "handle": [
                 {
                   "handler": "reverse_proxy",
@@ -73,7 +71,7 @@ def edit_caddy_config(caddy_config_path: Path):
 
     with open(caddy_config_path, "r+") as caddy_config:
 
-        vhost_key = "*.pikesquares.local"
+        vhost_key = "*.pikesquares.dev"
 
         # data = json.load(caddy_config)
         #
@@ -98,18 +96,24 @@ def edit_caddy_config(caddy_config_path: Path):
             caddy_config.truncate()
 
 
-async def provision_http_router(uow: UnitOfWork, project: Project, tuntap_router: TuntapRouter) -> HttpRouter:
+async def provision_http_router(
+    uow: UnitOfWork,
+    project: Project,
+    tuntap_router: TuntapRouter,
+    listen_on_port: int = 8034,
+    run_as_uid: str = "pikesquares",
+    run_as_gid: str = "pikesquares",
+) -> HttpRouter:
 
     try:
-        #http_router_ip = tuntap_router.ipv4_interface + 1
         http_router_ip = await tuntap_router_next_available_ip(tuntap_router)
         http_router = HttpRouter(
             service_id=f"http-router-{cuid.slug()}",
-            run_as_uid="pikesquares",
-            run_as_gid="pikesquares",
+            run_as_uid=run_as_uid,
+            run_as_gid=run_as_gid,
             project=project,
-            uwsgi_plugins="tuntap" ,
-            address=f"{str(http_router_ip.ip)}:{get_first_available_port(port=8034)}",
+            uwsgi_plugins="tuntap",
+            address=f"{http_router_ip.ip}:{listen_on_port}",
             data_dir=str(project.data_dir),
             config_dir=str(project.config_dir),
             log_dir=str(project.log_dir),
@@ -122,6 +126,8 @@ async def provision_http_router(uow: UnitOfWork, project: Project, tuntap_router
             http_router_ip,
             http_router.service_id,
         )
+        if http_router_tuntap_device:
+            logger.info(f"Created tuntap device for http router @ {http_router.address}")
     except Exception as exc:
         raise exc
 
@@ -196,7 +202,7 @@ async def http_router_ips(uow: UnitOfWork) -> list[str]:
                 device = await uow.tuntap_devices.\
                     get_by_linked_service_id(router.service_id)
                 if device:
-                    addresses.append(f"/pikesquares.local/{device.ip}")
+                    addresses.append(f"/pikesquares.dev/{device.ip}")
         return addresses
 
     except Exception as exc:

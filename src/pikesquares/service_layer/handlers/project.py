@@ -45,9 +45,9 @@ async def provision_project(
 
         logger.info(f"creating tuntap router for project {project.service_id}")
         tuntap_router = await provision_tuntap_router(uow, project)
-        logger.info(f"created tuntap router @ {tuntap_router.socket_address}")
+        logger.info(f"created tuntap router @ {project.name}")
 
-        if "http-router" in selected_services:
+        if tuntap_router and "http-router" in selected_services:
             logger.info(f"creating http router for project {project.service_id}")
             http_router = await provision_http_router(uow, project, tuntap_router)
             logger.info(f"created http router @ {http_router.socket_address}")
