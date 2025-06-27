@@ -5,6 +5,7 @@ from pathlib import Path
 import git
 import giturlparse
 import questionary
+import apluggy as pluggy
 import structlog
 import tenacity
 import typer
@@ -15,8 +16,8 @@ from pikesquares.conf import AppConfigError
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
-from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.service_layer.handlers.project import provision_project
+from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
 
@@ -242,6 +243,7 @@ async def gather_repo_details_and_clone(
 async def prompt_for_project(
     launch_service: str,
     uow: UnitOfWork,
+    plugin_manager: pluggy.PluginManager,
     custom_style: questionary.Style
 ) -> Project | None:
 
@@ -257,6 +259,7 @@ async def prompt_for_project(
             await provision_project(
                 launch_service,
                 device,
+                plugin_manager,
                 uow,
                 selected_services=["http-router"]
             )

@@ -1,10 +1,10 @@
 import traceback
 from pathlib import Path
 
+import apluggy as pluggy
 import cuid
 import structlog
 import tenacity
-import apluggy as pluggy
 from uwsgiconf.config import Section
 
 from pikesquares.domain.managed_services import AttachedDaemon
@@ -26,38 +26,33 @@ async def provision_attached_daemon(
 ) -> AttachedDaemon | None:
 
     daemon = None
-    async with uow:
-        try:
-            daemons = await uow.attached_daemons.for_project_by_name(name, project.id)
-            if daemons:
-                return daemons[0]
+    try:
+        daemons = await uow.attached_daemons.for_project_by_name(name, project.id)
+        if daemons:
+            return daemons[0]
 
-            daemon = AttachedDaemon(
-                service_id=f"{name}-{cuid.slug()}",
-                name=name,
-                run_as_uid=run_as_uid,
-                run_as_gid=run_as_gid,
-                project=project,
-                uwsgi_plugins="tuntap",
-                data_dir=str(project.data_dir),
-                config_dir=str(project.config_dir),
-                log_dir=str(project.log_dir),
-                run_dir=str(project.run_dir),
-            )
-            daemon = await uow.attached_daemons.add(daemon)
-            tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
-            if tuntap_routers:
-                ip = await tuntap_router_next_available_ip(tuntap_routers[0])
-                await create_tuntap_device(uow, tuntap_routers[0], ip, daemon.service_id)
-
-        except Exception as exc:
-            logger.info(f"failed provisioning attached daemon {name}")
-            logger.exception(exc)
-            print(traceback.format_exc())
-            await uow.rollback()
-            raise exc
-
-        await uow.commit()
+        daemon = AttachedDaemon(
+            service_id=f"{name}-{cuid.slug()}",
+            name=name,
+            run_as_uid=run_as_uid,
+            run_as_gid=run_as_gid,
+            project=project,
+            uwsgi_plugins="tuntap",
+            data_dir=str(project.data_dir),
+            config_dir=str(project.config_dir),
+            log_dir=str(project.log_dir),
+            run_dir=str(project.run_dir),
+        )
+        daemon = await uow.attached_daemons.add(daemon)
+        tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
+        if tuntap_routers:
+            ip = await tuntap_router_next_available_ip(tuntap_routers[0])
+            await create_tuntap_device(uow, tuntap_routers[0], ip, daemon.service_id)
+    except Exception as exc:
+        logger.info(f"failed provisioning attached daemon {name}")
+        logger.exception(exc)
+        print(traceback.format_exc())
+        raise exc
 
     return daemon
 
@@ -237,5 +232,7 @@ async def attached_daemon_down(
 
     except Exception as exc:
         raise exc
+
+    return True
 
 #/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/pikesquares/attached-daemons/postgres-ne021zr stop

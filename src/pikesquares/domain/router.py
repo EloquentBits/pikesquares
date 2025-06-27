@@ -1,18 +1,16 @@
-from ipaddress import IPv4Network, IPv4Interface
 import uuid
+from ipaddress import IPv4Interface, IPv4Network
 from pathlib import Path
 
 import pydantic
 import structlog
-from cuid import cuid
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship
+from uwsgiconf.options.routing_routers import RouterTunTap
 
-# from pikesquares import get_first_available_port
 from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
 
 from .base import ServiceBase, TimeStampedBase
 from .project import Project
-from uwsgiconf.options.routing_routers import RouterTunTap
 
 logger = structlog.getLogger()
 

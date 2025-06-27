@@ -1,16 +1,19 @@
+import apluggy as pluggy
 import cuid
-import structlog
-from aiopath import AsyncPath
-import tenacity
 import netifaces
+import structlog
+import tenacity
+from aiopath import AsyncPath
 
 from pikesquares.domain.device import Device
+from pikesquares.domain.managed_services import DnsmasqAttachedDaemonPlugin
 from pikesquares.domain.project import Project
 from pikesquares.presets.project import ProjectSection
+from pikesquares.service_layer.handlers.attached_daemon import provision_attached_daemon, attached_daemon_up
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor, destroy_instance
 from pikesquares.service_layer.handlers.routers import (
-    provision_tuntap_router,
     provision_http_router,
+    provision_tuntap_router,
 )
 from pikesquares.service_layer.uow import UnitOfWork
 
@@ -20,6 +23,7 @@ logger = structlog.getLogger()
 async def provision_project(
     name: str,
     device: Device,
+    plugin_manager: pluggy.PluginManager,
     uow: UnitOfWork,
     selected_services: list[str] | None = None
 ) -> Project | None:
@@ -50,7 +54,29 @@ async def provision_project(
         if tuntap_router and "http-router" in selected_services:
             logger.info(f"creating http router for project {project.service_id}")
             http_router = await provision_http_router(uow, project, tuntap_router)
-            logger.info(f"created http router @ {http_router.socket_address}")
+            logger.info(f"created http router for project {project.service_id}")
+
+        if tuntap_router and "dnsmasq" in selected_services:
+            logger.info(f"creating attached daemon dnsmasq for project {project.service_id}")
+            #http_router = await provision_http_router(uow, project, tuntap_router)
+
+            async with uow:
+                attached_daemon = await provision_attached_daemon("dnsmasq", project, uow)
+                if attached_daemon:
+                    attached_daemon_device = await uow.tuntap_devices.\
+                        get_by_linked_service_id(attached_daemon.service_id)
+                    if attached_daemon_device:
+                        plugin_manager.register(
+                            DnsmasqAttachedDaemonPlugin(
+                                daemon_service=attached_daemon,
+                                bind_ip=str(attached_daemon_device.ip),
+                            )
+                        )
+                    if await attached_daemon_up(attached_daemon, plugin_manager, uow):
+                        logger.info(
+                            f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]"
+                        )
+                    logger.info(f"created attached daemon dnsmasq for project {project.service_id}")
 
         # if "dir-monitor" in selected_services:
         #    if not await AsyncPath(project.apps_dir).exists():
@@ -61,7 +87,6 @@ async def provision_project(
     except Exception as exc:
         logger.info(f"failed provisioning project {name}")
         raise exc
-
 
     return project
 

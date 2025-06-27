@@ -184,6 +184,113 @@ class RedisAttachedDaemonPlugin:
             raise exc
 
 
+class DnsmasqAttachedDaemonPlugin:
+
+    def __init__(
+        self,
+        daemon_service: "AttachedDaemon",
+        bind_ip: str,
+        bind_port: int | None = None
+    ):
+        self.daemon_service = daemon_service
+        self.bind_ip = bind_ip
+        self.bind_port = bind_port or 5353
+
+    def get_daemon_bin(self) -> Path:
+        return Path("/usr/sbin/dnsmasq")
+
+    @hook_impl
+    def attached_daemon_collect_command_arguments(self) -> dict:
+        cmd = Template(
+            "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
+        ).substitute({
+            "bin" : str(self.get_daemon_bin()),
+            "bind_port": self.bind_port,
+            "bind_ip": self.bind_ip,
+            "dir": str(self.daemon_service.daemon_data_dir),
+            "logfile": str(Path(self.daemon_service.log_dir) / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"),
+            "pidfile": str(self.daemon_service.pid_file),
+        })
+
+
+        cmd = Template(
+            "$bin --bind-interfaces --conf-file=/dev/null --keep-in-foreground --log-queries --log-facility $logfile --port $bind_port --listen-address $bind_ip --pid-file $pidfile -no-resolv -u pikesquares -g pikesquares"
+        ).substitute({
+            "bin" : str(self.get_daemon_bin()),
+            "bind_port": self.bind_port,
+            "bind_ip": self.bind_ip,
+            "logfile": str(Path(self.daemon_service.log_dir) / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"),
+            "pidfile": str(self.daemon_service.pid_file),
+        })
+
+        #for addr in addresses:
+        #    cmd = cmd + f" --address {addr}"
+
+        logger.debug(cmd)
+
+        return {
+            "command": cmd,
+            "for_legion": self.daemon_service.for_legion,
+            "broken_counter": self.daemon_service.broken_counter,
+            "pidfile": self.daemon_service.pid_file,
+            "control": self.daemon_service.control,
+            "daemonize": self.daemon_service.daemonize,
+            "touch_reload": str(self.daemon_service.touch_reload_file),
+            "signal_stop": self.daemon_service.signal_stop,
+            "signal_reload": self.daemon_service.signal_reload,
+            "honour_stdin": bool(self.daemon_service.honour_stdin),
+            "uid": self.daemon_service.run_as_uid,
+            "gid": self.daemon_service.run_as_gid,
+            "new_pid_ns": self.daemon_service.new_pid_ns,
+            "change_dir": str(self.daemon_service.daemon_data_dir),
+        }
+
+    @hook_impl
+    def ping(self) -> bool:
+        """
+            ping redis
+        """
+        cmd_args = ["-h", self.bind_ip, "-p", self.bind_port, "--raw", "incr", "ping"]
+        logger.info(cmd_args)
+        try:
+            with pl_local.cwd(self.daemon_service.daemon_data_dir):
+                retcode, stdout, stderr = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
+                if int(retcode) != 0:
+                    logger.debug(f"{retcode=}")
+                    logger.debug(f"{stdout=}")
+                    logger.debug(f"{stderr=}")
+                    return False
+                else:
+                    return stdout.strip().isdigit()
+        except ProcessExecutionError:
+            raise
+
+    @hook_impl
+    def stop(self) -> bool:
+        """
+           stop redis
+        """
+        cmd_args = ["-h", self.bind_ip, "-p", self.bind_port, "shutdown"]
+        if not Path(self.daemon_service.daemon_data_dir).exists():
+            logger.info(f"{self.daemon_service.service_id} data directory missing")
+            return False
+        try:
+            with pl_local.cwd(self.daemon_service.daemon_data_dir):
+                retcode, stdout, stderr = pl_local[
+                    str(self.get_daemon_cli_bin())
+                ].run(cmd_args)
+
+                if int(retcode) != 0:
+                    logger.debug(f"{retcode=}")
+                    logger.debug(f"{stdout=}")
+                    logger.debug(f"{stderr=}")
+                    return False
+                else:
+                    return stdout.strip().isdigit()
+        except ProcessExecutionError as exc:
+            raise exc
+
+
 
 class SimpleSocketAttachedDaemonPlugin:
 

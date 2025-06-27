@@ -1,34 +1,36 @@
+import traceback
 from pathlib import Path
 from typing import Optional
-import traceback
 
+import apluggy as pluggy
+import questionary
 import randomname
 import structlog
-
-import typer
-import questionary
 import tenacity
+import typer
 
 # from pikesquares import (
 #    get_service_status,
 # )
 from pikesquares import services
-from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.service_layer.handlers.project import (
-    provision_project,
-    project_up,
-    project_delete,
-    project_down,
-)
-from pikesquares.service_layer.handlers.routers import http_router_up
-from pikesquares.services.data import DeviceStats
-from pikesquares.conf import AppConfig, AppConfigError
-from pikesquares.domain.base import ServiceBase
-from pikesquares.domain.process_compose import ProcessCompose
 from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
 from pikesquares.cli.validators import ServiceNameValidator
+from pikesquares.conf import AppConfig, AppConfigError
+from pikesquares.domain.base import ServiceBase
+from pikesquares.domain.process_compose import ProcessCompose
+from pikesquares.service_layer.handlers.project import (
+    project_delete,
+    project_down,
+    project_up,
+    provision_project,
+)
+from pikesquares.service_layer.handlers.routers import http_router_up
+from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.services.data import DeviceStats
+
 #, NameValidator
+
 
 
 
@@ -66,9 +68,14 @@ async def create(
     custom_style = context.get("cli-style")
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
+    plugin_manager = await services.aget(context, pluggy.PluginManager)
 
     machine_id = await ServiceBase.read_machine_id()
     device = await uow.devices.get_by_machine_id(machine_id)
+
+    if not device:
+        console.error(f"cli up: unable to locate device by machine id {machine_id}")
+        raise typer.Exit(code=0) from None
 
     #answers = questionary.form(
     #    first = questionary.confirm("Would you like the next question?", default=True),
@@ -104,6 +111,7 @@ async def create(
                 choices=[
                     questionary.Choice("HTTP Router", value="http-router", checked=False),
                     questionary.Choice("TunTap Router", value="tuntap-router", checked=True),
+                    questionary.Choice("dnsmasq", value="dnsmasq", checked=True),
                     questionary.Choice("Forkpty Router", value="forkpty-router", disabled="coming soon"),
                     questionary.Separator(),
                     questionary.Choice("ZMQ Monitor",  value="zmq-monitor",  checked=True),
@@ -115,13 +123,14 @@ async def create(
             console.info("selection cancelled.")
             raise typer.Exit(0)
 
-        process_compose = await services.aget(context, ProcessCompose)
+        #process_compose = await services.aget(context, ProcessCompose)
         questionary.print(f"Provisioning project {name}")
         async with uow:
             try:
                 project = await provision_project(
                     name,
                     device,
+                    plugin_manager,
                     uow,
                     selected_services=selected_services
                 )
@@ -132,8 +141,8 @@ async def create(
                 console.warning(f"Unable to provision project {name}")
                 await uow.rollback()
                 raise typer.Exit(1) from None
-            else:
-                await uow.commit()
+
+            await uow.commit()
 
             if await questionary.confirm("Launch Project?").ask_async():
                 try:
@@ -274,42 +283,42 @@ async def list_(ctx: typer.Context, show_id: bool = False):
             console.success("Appears there have been no projects created yet.")
             raise typer.Exit(0)
 
-        #device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-        #zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+    #device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+    #zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
 
-        projects = await uow.projects.list()
-        if not len(projects):
-            console.warning("No projects were initialized, nothing to show!")
-            raise typer.Exit()
+    projects = await uow.projects.list()
+    if not len(projects):
+        console.warning("No projects were initialized, nothing to show!")
+        raise typer.Exit()
 
-        projects_out = []
+    projects_out = []
+    try:
+        stats = await device.read_stats()
+        device_stats = DeviceStats(**stats)
+    except tenacity.RetryError:
+        console.error(f"Unable to read stats for device [{device.machine_id}]")
+        raise typer.Exit(0) from None
+
+    if not device_stats:
+        console.warning("unable to lookup device stats")
+        raise typer.Exit(0) from None
+
+    for project in projects:
         try:
-            stats = await device.read_stats()
-            device_stats = DeviceStats(**stats)
-        except tenacity.RetryError:
-            console.error(f"Unable to read stats for device [{device.machine_id}]")
-            raise typer.Exit(0) from None
+            vassal_stats = next(
+                filter(lambda v: v.id.split(".ini")[0], device_stats.vassals)
+            )
+            projects_out.append(
+                {
+                    "name": project.name,
+                    "status": "running" if vassal_stats else "stopped",
+                    "id": project.service_id,
+                }
+            )
+        except StopIteration:
+            continue
 
-        if not device_stats:
-            console.warning("unable to lookup device stats")
-            raise typer.Exit(0) from None
-
-        for project in projects:
-            try:
-                vassal_stats = next(
-                    filter(lambda v: v.id.split(".ini")[0], device_stats.vassals)
-                )
-                projects_out.append(
-                    {
-                        "name": project.name,
-                        "status": "running" if vassal_stats else "stopped",
-                        "id": project.service_id,
-                    }
-                )
-            except StopIteration:
-                continue
-
-        console.print_response(projects_out, title=f"Projects count: {len(projects)}", show_id=show_id)
+    console.print_response(projects_out, title=f"Projects count: {len(projects)}", show_id=show_id)
 
 
 @app.command("logs")

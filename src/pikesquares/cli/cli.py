@@ -282,7 +282,7 @@ async def launch(
     #launch_service_preconfigured: Literal["bugsink", "meshdb"]
     #launch_service_wsgi: Literal["python-wsgi-git"]
     launch_service = await prompt_for_launch_service(uow, custom_style)
-    project = await prompt_for_project(launch_service, uow, custom_style)
+    project = await prompt_for_project(launch_service, uow, plugin_manager, custom_style)
     if not project:
         console.error(f"cli launch: unable to select or provision project")
         raise typer.Exit(code=0) from None
@@ -413,7 +413,11 @@ async def launch(
                         console.error(f"{attached_daemon_name} ping failed.")
         except Exception as exc:
             logger.exception(exc)
-            raise typer.Exit(1) from None
+            await uow.rollback()
+            console.error(f"unable to provision the {launch_service} app.")
+            raise typer.Exit(code=0) from None
+
+        await uow.commit()
 
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")

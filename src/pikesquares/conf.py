@@ -32,6 +32,7 @@ from pikesquares.domain.managed_services import (
     SimpleSocketAttachedDaemonPlugin,
     RedisAttachedDaemonPlugin,
     PostgresAttachedDaemonPlugin,
+    DnsmasqAttachedDaemonPlugin,
 )
 #from pikesquares.domain.wsgi_app import (
 #    BugsinkPlugin,
@@ -349,7 +350,10 @@ class AppConfig(BaseSettings):
                 "class": RedisAttachedDaemonPlugin,
                 "create_data_dir": True,
             },
-
+            "dnsmasq": {
+                "class": DnsmasqAttachedDaemonPlugin,
+                "create_data_dir": False,
+            },
             "postgres": {
                 "class": PostgresAttachedDaemonPlugin,
                 "create_data_dir": False,

@@ -148,12 +148,19 @@ async def register_caddy_process(context: dict) -> None:
             for router in routers:
                 routes.append({
                     "@id": router.service_id,
-                    "match": [{"host": ["*.pikesquares.dev"]}],
+                    "match": [
+                        {"host": ["*.pikesquares.dev"]}
+                    ],
                     "handle": [{
                         "handler": "reverse_proxy",
                         #// https://github.com/wxh06/caddy-uwsgi-transport
                         #// "transport": {"protocol": "uwsgi"},
-                        "transport": {"protocol": "http"},
+                        "resolver": {
+                            "addresses": ["127.0.0.34:5353"]
+                        },
+                        "transport": {
+                            "protocol": "http",
+                        },
                         "upstreams": [
                             {"dial": router.address}
                         ]
