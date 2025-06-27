@@ -36,21 +36,22 @@ async def register_dnsmasq_process(
             raise AppConfigError(f"unable locate dnsmasq binary @ {conf.DNSMASQ_BIN}") from None
 
         #--interface=incusbr0
-        cmd = f"{conf.DNSMASQ_BIN} " \
-            "--bind-interfaces " \
-            "--conf-file=/dev/null " \
-            "--keep-in-foreground " \
-            "--log-queries " \
-            f"--port {port} " \
-            f"--listen-address {listen_address} " \
-            "--no-resolv " \
-            "-u pikesquares -g pikesquares" 
+        cmd = f"{conf.DNSMASQ_BIN} "\
+            "--bind-interfaces "\
+            "--conf-file=/dev/null "\
+            "--keep-in-foreground "\
+            "--log-queries "\
+            f"--log-facility {conf.log_dir / 'dnsmasq.log'} "\
+            f"--port {port} "\
+            f"--listen-address {listen_address} "\
+            "--no-resolv "\
+            "-u pikesquares -g pikesquares"
 
         for addr in addresses:
             cmd = cmd + f" --address {addr}"
 
         process_messages = ProcessMessages(
-            title_start="!!! dnsmasq start title !!!",
+            title_start="dnsmasq starting",
             title_stop="abc",
         )
         process = Process(
