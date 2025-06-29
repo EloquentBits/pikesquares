@@ -37,16 +37,16 @@ class DnsmasqAttachedDaemon:
         if attached_daemon.name != "dnsmasq":
             return
 
+        #FIXME perms issues
+        #--log-facility=$logfile
+
         cmd = Template(
-            "$bin --bind-interfaces --conf-file=/dev/null --keep-in-foreground --log-queries --log-facility=$logfile --port=$bind_port --listen-address=$bind_ip --pid-file=$pidfile --no-resolv --user=pikesquares --group=pikesquares"
+            "$bin --conf-file=/dev/null --keep-in-foreground --log-queries  --port=$bind_port --listen-address=$bind_ip --pid-file=$pidfile --no-resolv --user=pikesquares --group=pikesquares"
         ).substitute({
             "bin" : str(await self.get_daemon_bin()),
             "bind_port": str(bind_port),
             "bind_ip": bind_ip,
-            "logfile": str(
-                AsyncPath(attached_daemon.log_dir) \
-                / f"{attached_daemon.name}-server-{attached_daemon.service_id}.log"
-            ),
+            #"logfile": str(attached_daemon.log_file),
             "pidfile": str(attached_daemon.pid_file),
         })
 
