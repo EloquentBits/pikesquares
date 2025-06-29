@@ -6,10 +6,9 @@ import tenacity
 from aiopath import AsyncPath
 
 from pikesquares.domain.device import Device
-from pikesquares.domain.managed_services import DnsmasqAttachedDaemonPlugin
 from pikesquares.domain.project import Project
 from pikesquares.presets.project import ProjectSection
-from pikesquares.service_layer.handlers.attached_daemon import provision_attached_daemon, attached_daemon_up
+from pikesquares.service_layer.handlers.attached_daemon import attached_daemon_up, provision_attached_daemon
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor, destroy_instance
 from pikesquares.service_layer.handlers.routers import (
     provision_http_router,
@@ -61,22 +60,18 @@ async def provision_project(
             #http_router = await provision_http_router(uow, project, tuntap_router)
 
             async with uow:
-                attached_daemon = await provision_attached_daemon("dnsmasq", project, uow)
+                attached_daemon = await provision_attached_daemon(
+                    "dnsmasq", project, uow, plugin_manager
+                )
                 if attached_daemon:
                     attached_daemon_device = await uow.tuntap_devices.\
                         get_by_linked_service_id(attached_daemon.service_id)
                     if attached_daemon_device:
-                        plugin_manager.register(
-                            DnsmasqAttachedDaemonPlugin(
-                                daemon_service=attached_daemon,
-                                bind_ip=str(attached_daemon_device.ip),
+                        if await attached_daemon_up(attached_daemon, uow, plugin_manager):
+                            logger.info(
+                                f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]"
                             )
-                        )
-                    if await attached_daemon_up(attached_daemon, plugin_manager, uow):
-                        logger.info(
-                            f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]"
-                        )
-                    logger.info(f"created attached daemon dnsmasq for project {project.service_id}")
+                        logger.info(f"created attached daemon for project {project.service_id}")
 
         # if "dir-monitor" in selected_services:
         #    if not await AsyncPath(project.apps_dir).exists():

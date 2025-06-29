@@ -1,42 +1,33 @@
-import warnings
-import secrets
+import grp
 import json
 import os
 import pwd
-import grp
+import secrets
+#import warnings
 from pathlib import Path
 from typing import (
-    Any,
-    Optional,
     Annotated,
+    Any,
     Literal,
+    Optional,
     Self,
 )
+
+import pydantic
+import structlog
 
 # from questionary import Style as QuestionaryStyle
 from aiopath import AsyncPath
 from plumbum import local
-import pydantic
 from pydantic import AnyUrl, BeforeValidator
 from pydantic_settings import (
     BaseSettings,
     # PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
-import structlog
 
-from pikesquares.services import register_factory
 from pikesquares.cli.console import console
-
-from pikesquares.domain.managed_services import (
-    SimpleSocketAttachedDaemonPlugin,
-    RedisAttachedDaemonPlugin,
-    PostgresAttachedDaemonPlugin,
-    DnsmasqAttachedDaemonPlugin,
-)
-#from pikesquares.domain.wsgi_app import (
-#    BugsinkPlugin,
-#)
+from pikesquares.services import register_factory
 
 logger = structlog.get_logger()
 
@@ -342,28 +333,6 @@ class AppConfig(BaseSettings):
         path = Path(v)
         ensure_system_path(path)
         return path
-
-    @property
-    def attached_daemon_plugins(self):
-         return {
-            "redis": {
-                "class": RedisAttachedDaemonPlugin,
-                "create_data_dir": True,
-            },
-            "dnsmasq": {
-                "class": DnsmasqAttachedDaemonPlugin,
-                "create_data_dir": False,
-            },
-            "postgres": {
-                "class": PostgresAttachedDaemonPlugin,
-                "create_data_dir": False,
-            },
-
-            "simple-socket": {
-                "class": SimpleSocketAttachedDaemonPlugin,
-                "create_data_dir": True,
-            },
-        }
 
     #@property
     #def preconfigured_app_plugins(self):

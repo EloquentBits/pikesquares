@@ -34,13 +34,7 @@ from pikesquares.domain.process_compose import (
     ServiceUnavailableError,
     register_process_compose,
 )
-from pikesquares.hooks.specs import (
-    AppCodebaseHookSpec,
-    AppRuntimeHookSpec,
-    AttachedDaemonHookSpec,
-    PythonAppCodebaseHookSpec,
-    WSGIPythonAppCodebaseHookSpec,
-)
+from pikesquares.hooks.specs import plugin_manager_factory
 from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
     provision_attached_daemon,
@@ -374,37 +368,26 @@ async def launch(
         #if attached_daemon_name == "postgres":
         #    create_data_dir = False
         #
-        daemon_conf = conf.attached_daemon_plugins.get(launch_service)
-        if not daemon_conf:
-            logger.error(f"unable to lookup attached daemon plugin {launch_service}")
-            raise typer.Exit(1) from None
+        #daemon_conf = conf.attached_daemon_plugins.get(launch_service)
+        #if not daemon_conf:
+        #    logger.error(f"unable to lookup attached daemon plugin {launch_service}")
+        #    raise typer.Exit(1) from None
         attached_daemon = None
         try:
             attached_daemon = await provision_attached_daemon(
                 attached_daemon_name,
                 project,
                 uow,
+                plugin_manager,
             )
             if attached_daemon:
-                plugin_class = daemon_conf.get("class")
-                if not plugin_class:
-                    logger.error(f"unable to lookup {attached_daemon.name} class in config")
-
                 attached_daemon_device = await uow.tuntap_devices.\
                     get_by_linked_service_id(attached_daemon.service_id)
-                if attached_daemon_device:
-                    plugin_manager.register(
-                        plugin_class(
-                            daemon_service=attached_daemon,
-                            bind_ip=str(attached_daemon_device.ip),
-                        )
-                    )
-            if attached_daemon:
+
                 await attached_daemon_up(
                     attached_daemon,
-                    plugin_manager,
                     uow,
-                    create_data_dir=daemon_conf.get("create_data_dir"),
+                    plugin_manager,
                 )
                 if 0:
                     if attached_daemon.ping("/usr/local/bin/redis-cli", attached_daemon_device.ip):
@@ -775,16 +758,11 @@ async def main(
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
 
-    def plugin_manager_factory():
-        pm = pluggy.PluginManager("pikesquares")
-        pm.add_hookspecs(AttachedDaemonHookSpec)
-        pm.add_hookspecs(AppRuntimeHookSpec)
-        pm.add_hookspecs(AppCodebaseHookSpec)
-        pm.add_hookspecs(PythonAppCodebaseHookSpec)
-        pm.add_hookspecs(WSGIPythonAppCodebaseHookSpec)
-
-        return pm
-    services.register_factory(context, pluggy.PluginManager, plugin_manager_factory)
+    services.register_factory(
+        context,
+        pluggy.PluginManager,
+        plugin_manager_factory,
+    )
 
     #plugin_manager = await services.aget(context, pluggy.PluginManager)
     #plugin_manager.register(

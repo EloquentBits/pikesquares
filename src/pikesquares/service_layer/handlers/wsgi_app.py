@@ -106,7 +106,7 @@ async def provision_wsgi_app(
                 repo_dir=AsyncPath(app_codebase.repo_dir),
             )))
         wsgi_module = next(filter(lambda m: m is not None, await plugin_manager.ahook.\
-            get_wsgi_module( service_name=name)))
+            get_wsgi_module(service_name=name)))
         wsgi_app = WsgiApp(
             service_id=f"{service_type.lower()}-{cuid.slug()}",
             name=name,

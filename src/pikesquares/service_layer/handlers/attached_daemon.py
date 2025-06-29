@@ -14,6 +14,9 @@ from pikesquares.service_layer.handlers.routers import create_tuntap_device
 from pikesquares.service_layer.ipaddress_utils import tuntap_router_next_available_ip
 from pikesquares.service_layer.uow import UnitOfWork
 
+from pikesquares.hooks.plugins.attached_daemons.dnsmasq import DnsmasqAttachedDaemon
+from pikesquares.hooks.plugins.attached_daemons.redis import RedisAttachedDaemon
+
 logger = structlog.getLogger()
 
 
@@ -21,6 +24,7 @@ async def provision_attached_daemon(
     name: str,
     project: Project,
     uow: UnitOfWork,
+    plugin_manager: pluggy.PluginManager,
     run_as_uid: str = "pikesquares",
     run_as_gid: str = "pikesquares",
 ) -> AttachedDaemon | None:
@@ -59,11 +63,13 @@ async def provision_attached_daemon(
 
 async def attached_daemon_up(
     attached_daemon: AttachedDaemon,
+    uow: UnitOfWork,
     plugin_manager: pluggy.PluginManager,
-    uow: "UnitOfWork",
-    create_data_dir: bool = False
 ):
     try:
+        plugin_manager.register(DnsmasqAttachedDaemon)
+        plugin_manager.register(RedisAttachedDaemon)
+
         project = await attached_daemon.awaitable_attrs.project
         tuntap_routers = await project.awaitable_attrs.tuntap_routers
 
@@ -75,7 +81,13 @@ async def attached_daemon_up(
         if not attached_daemon_device:
             raise Exception(f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}")
 
-        cmd_args = await plugin_manager.ahook.attached_daemon_collect_command_arguments()
+        cmd_args = await plugin_manager.ahook.\
+            attached_daemon_collect_command_arguments(
+                attached_daemon=attached_daemon,
+                bind_ip=attached_daemon_device.ip,
+            )
+        cmd_args = next(filter(lambda f: f is not None, cmd_args))
+
         section = Section(
             name="uwsgi",
             runtime_dir=str(attached_daemon.run_dir),
@@ -98,7 +110,9 @@ async def attached_daemon_up(
             search_dirs=[str(attached_daemon.plugins_dir)],
         )
 
-        if create_data_dir:
+        if await plugin_manager.ahook.create_data_dir(
+            service_name=attached_daemon.name
+        ):
             #section._set("if-not-dir", f"{attached_daemon.daemon_data_dir}")
             section.main_process.run_command_on_event(
                 command=f"mkdir -p {attached_daemon.daemon_data_dir}",

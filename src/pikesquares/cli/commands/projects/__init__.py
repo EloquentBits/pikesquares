@@ -18,7 +18,7 @@ from pikesquares.cli.console import console
 from pikesquares.cli.validators import ServiceNameValidator
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.base import ServiceBase
-from pikesquares.domain.process_compose import ProcessCompose
+#from pikesquares.domain.process_compose import ProcessCompose
 from pikesquares.service_layer.handlers.project import (
     project_delete,
     project_down,

@@ -1,7 +1,9 @@
+import apluggy as pluggy
 from aiopath import AsyncPath
 
-from .markers import hook_spec
+from pikesquares.domain.managed_services import AttachedDaemon
 
+from .markers import hook_spec
 
 # FIXME
 # firstresult=True
@@ -13,16 +15,35 @@ class AttachedDaemonHookSpec:
     Attached Daemon Hook Specification
     """
 
-    @hook_spec(firstresult=False)
-    def attached_daemon_collect_command_arguments(self) -> None:
+    @hook_spec
+    async def create_data_dir(self, service_name: str) -> bool | None:
         ...
 
     @hook_spec(firstresult=False)
-    def attached_daemon_ping(self) -> bool:
+    async def attached_daemon_collect_command_arguments(
+        self,
+        attached_daemon: AttachedDaemon,
+        bind_ip: str,
+        bind_port: int = 6379,
+    ) -> dict | None:
         ...
 
     @hook_spec(firstresult=False)
-    def attached_daemon_stop(self) -> bool:
+    async def attached_daemon_ping(
+        self,
+        attached_daemon: AttachedDaemon,
+        bind_ip: str,
+        bind_port: int = 6379,
+    ) -> bool | None:
+        ...
+
+    @hook_spec(firstresult=False)
+    async def attached_daemon_stop(
+        self,
+        attached_daemon: AttachedDaemon,
+        bind_ip: str,
+        bind_port: int = 6379,
+    ) -> bool | None:
         ...
 
 
@@ -88,3 +109,13 @@ class WSGIPythonAppCodebaseHookSpec:
             service_name: str,
     ) -> str | None:
         ...
+
+
+def plugin_manager_factory():
+    pm = pluggy.PluginManager("pikesquares")
+    pm.add_hookspecs(AttachedDaemonHookSpec)
+    pm.add_hookspecs(AppRuntimeHookSpec)
+    pm.add_hookspecs(AppCodebaseHookSpec)
+    pm.add_hookspecs(PythonAppCodebaseHookSpec)
+    pm.add_hookspecs(WSGIPythonAppCodebaseHookSpec)
+    return pm
