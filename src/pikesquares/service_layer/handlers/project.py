@@ -7,6 +7,7 @@ from aiopath import AsyncPath
 
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
+from pikesquares.domain.router import TuntapRouter
 from pikesquares.presets.project import ProjectSection
 from pikesquares.service_layer.handlers.attached_daemon import attached_daemon_up, provision_attached_daemon
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor, destroy_instance
@@ -52,27 +53,15 @@ async def provision_project(
 
         if tuntap_router and "http-router" in selected_services:
             logger.info(f"creating http router for project {project.service_id}")
-            http_router = await provision_http_router(uow, project, tuntap_router)
+            _ = await provision_http_router(uow, project, tuntap_router)
             logger.info(f"created http router for project {project.service_id}")
 
         if tuntap_router and "dnsmasq" in selected_services:
             logger.info(f"creating attached daemon dnsmasq for project {project.service_id}")
-            #http_router = await provision_http_router(uow, project, tuntap_router)
-
-            async with uow:
-                attached_daemon = await provision_attached_daemon(
-                    "dnsmasq", project, uow, plugin_manager
-                )
-                if attached_daemon:
-                    attached_daemon_device = await uow.tuntap_devices.\
-                        get_by_linked_service_id(attached_daemon.service_id)
-                    if attached_daemon_device:
-                        if await attached_daemon_up(attached_daemon, uow, plugin_manager):
-                            logger.info(
-                                f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]"
-                            )
-                        logger.info(f"created attached daemon for project {project.service_id}")
-
+            attached_daemon = await provision_attached_daemon(
+                "dnsmasq", project, uow, plugin_manager
+            )
+            logger.info(f"created attached daemon {attached_daemon.name} for project {project.service_id}")
         # if "dir-monitor" in selected_services:
         #    if not await AsyncPath(project.apps_dir).exists():
         #        await AsyncPath(project.apps_dir).mkdir(parents=True, exist_ok=True)
@@ -119,7 +108,11 @@ async def get_nat_interfaces() -> list[str]:
 
     return nat_interfaces
 
-async def project_up(project)  -> bool | None:
+async def project_up(
+        project: Project,
+        tuntap_routers: list[TuntapRouter],
+        uow: UnitOfWork
+)  -> bool | None:
     stats = None
     while not stats:
         try:
@@ -139,7 +132,8 @@ async def project_up(project)  -> bool | None:
                 spawn_asap=True,
                 # pid_file=str((Path(conf.RUN_DIR) / f"{project.service_id}.pid").resolve()),
             )
-        for tuntap_router in await project.awaitable_attrs.tuntap_routers:
+        logger.info(project_zmq_monitor)
+        for tuntap_router in await tuntap_routers:
             router_cls = section.routing.routers.tuntap
             router = router_cls(
                 on=str(tuntap_router.socket_address),

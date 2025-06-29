@@ -2,6 +2,7 @@ from typing import Annotated
 import traceback
 
 import structlog
+import questionary
 import typer
 from pluggy import PluginManager
 import tenacity
@@ -56,16 +57,46 @@ async def list_(ctx: typer.Context):
     custom_style = context.get("cli-style")
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
+
     try:
         async with uow:
+            machine_id = await AttachedDaemon.read_machine_id()
+            device = await uow.devices.get_by_machine_id(machine_id)
+            if not device:
+                raise RuntimeError("no device found")
+
+            projects = await device.awaitable_attrs.projects
+            if not len(await device.awaitable_attrs.projects):
+                console.success("Appears there have been no projects created.")
+                raise typer.Exit(0) from None
+
             try:
-                project = await prompt_for_project(uow, custom_style)
-                if not project:
-                    console.warning("unable to retrieve list of projects")
-                    raise typer.Exit(0) from None
+                if not len(projects):
+                    return
+                elif len(projects) == 1:
+                    return projects[0]
+
+                selected_project_id = await questionary.select(
+                    "Select an existing project: ",
+                    choices=[
+                        questionary.Choice(
+                            project.name, value=project.id
+                        ) for project in await device.awaitable_attrs.projects
+                    ],
+                    style=custom_style,
+                ).unsafe_ask_async()
             except KeyboardInterrupt:
                 console.info("selection cancelled.")
                 raise typer.Exit(0) from None
+
+            if not selected_project_id:
+                console.warning("no project selected")
+                return
+
+            project = await uow.projects.get_by_id(selected_project_id)
+            if not project:
+                console.warning(f"Unable to locate project by id {selected_project_id}")
+                return
 
             attached_daemons = await project.awaitable_attrs.attached_daemons
             if not attached_daemons:
@@ -80,8 +111,9 @@ async def list_(ctx: typer.Context):
                     pass
                 return "stopped"
 
-            plugin_manager = await services.aget(context, PluginManager)
+            #plugin_manager = await services.aget(context, PluginManager)
             for attached_daemon in attached_daemons:
+                """
                 daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
                 if not daemon_conf:
                     logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
@@ -100,16 +132,18 @@ async def list_(ctx: typer.Context):
                 )
                 if attached_daemon_device:
                     plugin_manager.register(plugin_instance)
-                vassal_state = await check_vassal_state(attached_daemon)
+
+                """
+                vassal_state = "running" #await check_vassal_state(attached_daemon)
                 if vassal_state == "running":
-                    daemon_ping = plugin_manager.hook.ping()
+                    daemon_ping = True #plugin_manager.hook.ping()
                 else:
                     daemon_ping = False
                 console.info(
                     f"{attached_daemon.name} - {attached_daemon.service_id} - Vassal: {vassal_state} - Daemon Ping: {'Up' if daemon_ping else 'Down'}"
                 )
 
-                plugin_manager.unregister(plugin_instance)
+                #plugin_manager.unregister(plugin_instance)
 
     except Exception as exc:
         logger.error(exc)
@@ -133,6 +167,7 @@ async def start(
     custom_style = context.get("cli-style")
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
+    plugin_manager = await services.aget(context, pluggy.PluginManager)
     try:
         async with uow:
             try:

@@ -26,6 +26,8 @@ from pikesquares.service_layer.handlers.project import (
     provision_project,
 )
 from pikesquares.service_layer.handlers.routers import http_router_up
+from pikesquares.service_layer.handlers.attached_daemon import attached_daemon_up
+
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.data import DeviceStats
 
@@ -121,7 +123,7 @@ async def create(
             ).unsafe_ask_async()
         except KeyboardInterrupt:
             console.info("selection cancelled.")
-            raise typer.Exit(0)
+            raise typer.Exit(0) from None
 
         #process_compose = await services.aget(context, ProcessCompose)
         questionary.print(f"Provisioning project {name}")
@@ -134,49 +136,61 @@ async def create(
                     uow,
                     selected_services=selected_services
                 )
-                #questionary.print(f"Provisioned project {name}")
-                console.success(f":heavy_check_mark:     Provisioned project {name}")
+                console.success(f":heavy_check_mark:     Provisioned {name}")
+
+                if not project:
+                    console.warning(f"missing project {name}")
+                    raise typer.Exit(1) from None
+
+                if await questionary.confirm(f"Launch {project.name}?").ask_async():
+                    try:
+                        if not await project_up(
+                            project,
+                            project.awaitable_attrs.tuntap_routers,
+                            uow
+                        ):
+                            console.error(f"Unable to launch project {project.name}")
+                            raise typer.Exit(1)
+                    #await process_compose.add_tail_log_process(project.name, project.log_file)
+                    except Exception as exc:
+                        logger.exception(exc)
+                        console.print(traceback.format_exc())
+                        console.warning(f"Unable to launch project {name}")
+                        raise typer.Exit(1) from None
+
+                    console.success(f":heavy_check_mark:     Launched project {name}")
+                else:
+                    console.info(f"Not launching {project.name}")
+                    raise typer.Exit(0) from None
+
+                for http_router in await project.awaitable_attrs.http_routers  or []:
+                    try:
+                        http_router_up_result = await http_router_up(uow, http_router)
+                        if http_router_up_result:
+                            console.success(":heavy_check_mark:     Launching http router.. Done!")
+                            console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+                            #await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+                    except Exception as exc:
+                        logger.exception(exc)
+                        console.print(traceback.format_exc())
+                        console.warning(f"Unable to launch http router {http_router}")
+                        raise typer.Exit(1) from None
+
+                for attached_daemon in await project.awaitable_attrs.attached_daemons or []:
+                    if await attached_daemon_up(attached_daemon, uow, plugin_manager):
+                        logger.info(
+                            f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]"
+                        )
+                    logger.info(f"launched attached daemon for project {project.service_id}")
+
             except Exception as exc:
                 logger.exception(exc)
+                console.print(traceback.format_exc())
                 console.warning(f"Unable to provision project {name}")
                 await uow.rollback()
                 raise typer.Exit(1) from None
 
             await uow.commit()
-
-            if await questionary.confirm("Launch Project?").ask_async():
-                try:
-                    if not await project_up(project):
-                        console.error(f"Unable to launch project {project.name}")
-                        raise typer.Exit(1)
-                    if 0:
-                        try:
-                            stats = await project.read_stats()
-                        except tenacity.RetryError:
-                            console.error(f"Unable to read stats {project.name}")
-                            raise typer.Exit(1)
-                #await process_compose.add_tail_log_process(project.name, project.log_file)
-                except Exception as exc:
-                    logger.exception(exc)
-                    console.print(traceback.format_exc())
-                    console.warning(f"Unable to launch project {name}")
-                    raise typer.Exit(1) from None
-
-                console.success(f":heavy_check_mark:     Launched project {name}")
-
-            project_http_routers = await project.awaitable_attrs.http_routers
-            for http_router in project_http_routers:
-                try:
-                    http_router_up_result = await http_router_up(uow, http_router)
-                    if http_router_up_result:
-                        console.success(":heavy_check_mark:     Launching http router.. Done!")
-                        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-                        #await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
-                except Exception as exc:
-                    logger.exception(exc)
-                    console.print(traceback.format_exc())
-                    console.warning(f"Unable to launch http router {http_router}")
-                    raise typer.Exit(1) from None
 
     if 0:
         name = project_name or console.ask(

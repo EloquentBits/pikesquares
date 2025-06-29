@@ -2,10 +2,12 @@ from string import Template
 
 import structlog
 from aiopath import AsyncPath
-from plumbum import ProcessExecutionError
-from plumbum import local as pl_local
 
+#from plumbum import ProcessExecutionError
+#from plumbum import local as pl_local
 from pikesquares.domain.managed_services import AttachedDaemon
+
+#from pikesquares.service_layer.handlers.routers import http_router_ips
 from pikesquares.hooks.markers import hook_impl
 
 logger = structlog.getLogger()
@@ -36,7 +38,7 @@ class DnsmasqAttachedDaemon:
             return
 
         cmd = Template(
-            "$bin --bind-interfaces --conf-file=/dev/null --keep-in-foreground --log-queries --log-facility $logfile --port $bind_port --listen-address $bind_ip --pid-file $pidfile -no-resolv -u pikesquares -g pikesquares"
+            "$bin --bind-interfaces --conf-file=/dev/null --keep-in-foreground --log-queries --log-facility=$logfile --port=$bind_port --listen-address=$bind_ip --pid-file=$pidfile --no-resolv --user=pikesquares --group=pikesquares"
         ).substitute({
             "bin" : str(await self.get_daemon_bin()),
             "bind_port": str(bind_port),
@@ -48,9 +50,10 @@ class DnsmasqAttachedDaemon:
             "pidfile": str(attached_daemon.pid_file),
         })
 
-        #for addr in addresses:
-        #    cmd = cmd + f" --address {addr}"
-
+        #http_router_addresses = await http_router_ips(uow)
+        #if http_router_addresses:
+        #    for addr in http_router_addresses:
+        #        cmd = cmd + f" --address {addr}"
         logger.debug(cmd)
 
         return {
