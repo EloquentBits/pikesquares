@@ -336,7 +336,10 @@ async def list_(ctx: typer.Context, show_id: bool = False):
 
 
 @app.command("logs")
-def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
+def logs(
+    ctx: typer.Context,
+    project_id: Optional[str] = typer.Argument("")
+):
     obj = ctx.ensure_object(dict)
     conf = obj.get("conf")
 

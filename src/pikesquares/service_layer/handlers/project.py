@@ -108,11 +108,7 @@ async def get_nat_interfaces() -> list[str]:
 
     return nat_interfaces
 
-async def project_up(
-        project: Project,
-        tuntap_routers: list[TuntapRouter],
-        uow: UnitOfWork
-)  -> bool | None:
+async def project_up(project: Project)  -> bool | None:
     stats = None
     while not stats:
         try:
@@ -133,7 +129,7 @@ async def project_up(
                 # pid_file=str((Path(conf.RUN_DIR) / f"{project.service_id}.pid").resolve()),
             )
         logger.info(project_zmq_monitor)
-        for tuntap_router in await tuntap_routers:
+        for tuntap_router in await project.awaitable_attrs.tuntap_routers:
             router_cls = section.routing.routers.tuntap
             router = router_cls(
                 on=str(tuntap_router.socket_address),
