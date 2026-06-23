@@ -4,7 +4,7 @@ import os
 import pwd
 import secrets
 
-#import warnings
+# import warnings
 from pathlib import Path
 from typing import (
     Annotated,
@@ -124,6 +124,7 @@ class APISettings(BaseSettings):
     @property
     def emails_enabled(self) -> bool:
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
+
     """
     EMAIL_TEST_USER: pydantic.EmailStr = "test@example.com"
     FIRST_SUPERUSER: pydantic.EmailStr = "admin@pikesquares.com"
@@ -212,7 +213,6 @@ def get_lift_file_section(lift_file: Path, lift_file_key: str):
 
 
 class AppConfig(BaseSettings):
-
     model_config = SettingsConfigDict(
         env_prefix="PIKESQUARES_",
         env_file=".env",
@@ -335,14 +335,13 @@ class AppConfig(BaseSettings):
         ensure_system_path(path)
         return path
 
-    #@property
-    #def preconfigured_app_plugins(self):
+    # @property
+    # def preconfigured_app_plugins(self):
     #     return {
     #        "bugsink": {
     #            "class": BugsinkPlugin,
     #        },
     #    }
-
 
     """
     @pydantic.field_validator('temp_dir', mode="after")

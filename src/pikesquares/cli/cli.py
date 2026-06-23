@@ -244,6 +244,7 @@ def attach(
     pc = services.get(context, ProcessCompose)
     pc.attach()
 
+
 @app.command(rich_help_panel="Control", short_help="Launch a preconfigured app")
 @run_async
 async def launch(
@@ -264,17 +265,17 @@ async def launch(
         console.error(f"cli launch: unable to locate device by machine id {machine_id}")
         raise typer.Exit(code=0) from None
 
-    #try:
+    # try:
     #    vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
     #    print(vassal_stats)
-    #except StopIteration:
+    # except StopIteration:
     #    project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
     #    vassals_home = project_zmq_monitor.uwsgi_zmq_address
     #    await project.up(device_zmq_monitor, vassals_home, tuntap_router)
     #
     #
-    #launch_service_preconfigured: Literal["bugsink", "meshdb"]
-    #launch_service_wsgi: Literal["python-wsgi-git"]
+    # launch_service_preconfigured: Literal["bugsink", "meshdb"]
+    # launch_service_wsgi: Literal["python-wsgi-git"]
     launch_service = await prompt_for_launch_service(uow, custom_style)
     project = await prompt_for_project(launch_service, uow, plugin_manager, custom_style)
     if not project:
@@ -295,27 +296,24 @@ async def launch(
         raise typer.Exit(code=0) from None
 
     if launch_service in ["python-wsgi-git", "bugsink", "meshdb"]:
-
-        #app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
-        #daemon_conf = conf.attached_daemon_plugins.get(launch_service)
-        #if not daemon_conf:
+        # app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
+        # daemon_conf = conf.attached_daemon_plugins.get(launch_service)
+        # if not daemon_conf:
         #    logger.error(f"unable to lookup attached daemon plugin {launch_service}")
         #    raise typer.Exit(1) from None
 
-        #plugin_class = daemon_conf.get("class")
-        #if not plugin_class:
+        # plugin_class = daemon_conf.get("class")
+        # if not plugin_class:
         #    logger.error(f"unable to lookup {attached_daemon.name} class in config")
 
-        #app_runtime_plugin_manager.register(PythonRuntimePlugin())
-        #runtime_version = plugin_manager.hook.app_runtime_prompt_for_version()
-        #console.info(f"selected Python {runtime_version}")
-        runtime_version  = "3.12"
+        # app_runtime_plugin_manager.register(PythonRuntimePlugin())
+        # runtime_version = plugin_manager.hook.app_runtime_prompt_for_version()
+        # console.info(f"selected Python {runtime_version}")
+        runtime_version = "3.12"
         python_app_runtime = None
         wsgi_app = None
         try:
-            python_app_runtime = await provision_python_app_runtime(
-                runtime_version, uow, custom_style
-            )
+            python_app_runtime = await provision_python_app_runtime(runtime_version, uow, custom_style)
             python_app_codebase = await provision_app_codebase(
                 launch_service,
                 plugin_manager,
@@ -335,10 +333,7 @@ async def launch(
         async with uow:
             try:
                 wsgi_app = await provision_wsgi_app(
-                    launch_service,
-                    AsyncPath(python_app_codebase.root_dir),
-                    uow,
-                    plugin_manager
+                    launch_service, AsyncPath(python_app_codebase.root_dir), uow, plugin_manager
                 )
                 if not wsgi_app:
                     console.error(f"unable to provision the {launch_service} app.")
@@ -353,23 +348,22 @@ async def launch(
                 raise typer.Exit(code=0) from None
             await uow.commit()
 
-    elif launch_service  in ["postgres", "redis"]:
-
+    elif launch_service in ["postgres", "redis"]:
         attached_daemon_name = launch_service
         if not project:
             console.warning("no project selected. exiting")
             raise typer.Exit()
 
-        #attached_daemons = await uow.attached_daemons.list()
-        #for daemon in attached_daemons:
+        # attached_daemons = await uow.attached_daemons.list()
+        # for daemon in attached_daemons:
         #    logger.info(daemon)
-        #attached_daemon_choices = [d.service_id for d in attached_daemons]
-        #create_data_dir  = True
-        #if attached_daemon_name == "postgres":
+        # attached_daemon_choices = [d.service_id for d in attached_daemons]
+        # create_data_dir  = True
+        # if attached_daemon_name == "postgres":
         #    create_data_dir = False
         #
-        #daemon_conf = conf.attached_daemon_plugins.get(launch_service)
-        #if not daemon_conf:
+        # daemon_conf = conf.attached_daemon_plugins.get(launch_service)
+        # if not daemon_conf:
         #    logger.error(f"unable to lookup attached daemon plugin {launch_service}")
         #    raise typer.Exit(1) from None
         attached_daemon = None
@@ -381,8 +375,7 @@ async def launch(
                 plugin_manager,
             )
             if attached_daemon:
-                attached_daemon_device = await uow.tuntap_devices.\
-                    get_by_linked_service_id(attached_daemon.service_id)
+                attached_daemon_device = await uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
 
                 await attached_daemon_up(
                     attached_daemon,
@@ -391,7 +384,9 @@ async def launch(
                 )
                 if 0:
                     if attached_daemon.ping("/usr/local/bin/redis-cli", attached_daemon_device.ip):
-                        console.success(f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!")
+                        console.success(
+                            f":heavy_check_mark:     Launching attached daemon [{attached_daemon_name}]. Done!"
+                        )
                     else:
                         console.error(f"{attached_daemon_name} ping failed.")
         except Exception as exc:
@@ -423,10 +418,10 @@ async def info(
             logger.debug(f"{process[0]} {stats=}")
             if stats.status == "Running":
                 pass
-                #console.success(f":heavy_check_mark:     {process[1]} \[process-compose] is running.")
+                # console.success(f":heavy_check_mark:     {process[1]} \[process-compose] is running.")
             elif stats.status == "Completed":
                 pass
-                #console.warning(f":heavy_exclamation_mark:     {process[1]} \[process-compose] is not running.")
+                # console.warning(f":heavy_exclamation_mark:     {process[1]} \[process-compose] is not running.")
         except PCAPIUnavailableError:
             console.warning(f":heavy_exclamation_mark:     Process Compose is not running.")
             break
@@ -437,7 +432,7 @@ async def info(
         svc_name = svc.name.split(".")[-1]
         try:
             await svc.aping()
-            #console.success(f":heavy_check_mark:     {svc_name} \[svcs] is running")
+            # console.success(f":heavy_check_mark:     {svc_name} \[svcs] is running")
         except ServiceUnavailableError:
             console.warning(f":heavy_exclamation_mark:     {svc_name} is not running.")
 
@@ -508,13 +503,12 @@ async def up(
         projects = await device.awaitable_attrs.projects
         for project in projects:
             try:
-                if await project_up(project) or \
-                    not await project.read_stats():
+                if await project_up(project) or not await project.read_stats():
                     console.success(f":heavy_check_mark:     Launched project [{project.name}]. Done!")
-                    #await process_compose.add_tail_log_process(project.name, project.log_file)
+                    # await process_compose.add_tail_log_process(project.name, project.log_file)
             except tenacity.RetryError:
-                    console.warning(f"Project {project.name} has not launched. Giving up.")
-                    continue
+                console.warning(f"Project {project.name} has not launched. Giving up.")
+                continue
             except Exception as exc:
                 logger.exception(exc)
                 console.warning(f"Project {project.name} has not launched. Giving up.")
@@ -526,7 +520,7 @@ async def up(
                 if http_router_up_result:
                     console.success(":heavy_check_mark:     Launching http router.. Done!")
                     console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-                    #await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+                    # await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
 
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")
@@ -568,6 +562,7 @@ async def down(
     #    pass
     # except process_compose.PCDeviceUnavailableError:
     #    pass  # device.up()
+
 
 @app.command(rich_help_panel="Control", short_help="tail the service log")
 def tail_service_log(
@@ -681,7 +676,7 @@ async def main(
     Welcome to Pike Squares. Building blocks for your apps.
     """
 
-    #logger.info(f"About to execute command: {ctx.invoked_subcommand}")
+    # logger.info(f"About to execute command: {ctx.invoked_subcommand}")
     is_root: bool = os.getuid() == 0
 
     # FIXME make sure to make an exception for --help
@@ -730,16 +725,15 @@ async def main(
             traces_sample_rate=0,
         )
 
-    sessionmanager = DatabaseSessionManager(
-        conf.SQLALCHEMY_DATABASE_URI,
-        {"echo": False}
-    )
+    sessionmanager = DatabaseSessionManager(conf.SQLALCHEMY_DATABASE_URI, {"echo": False})
 
     async def get_session() -> AsyncSession:
         async with sessionmanager.session() as session:
             return session
 
-    services.register_factory(context, AsyncSession, get_session) #ping=lambda session: session.execute(text("SELECT 1")),
+    services.register_factory(
+        context, AsyncSession, get_session
+    )  # ping=lambda session: session.execute(text("SELECT 1")),
     session = await services.aget(context, AsyncSession)
 
     async with sessionmanager.connect() as conn:
@@ -755,6 +749,7 @@ async def main(
     async def uow_factory():
         async with UnitOfWork(session=session) as uow:
             yield uow
+
     services.register_factory(context, UnitOfWork, uow_factory)
     uow = await services.aget(context, UnitOfWork)
 
@@ -764,10 +759,10 @@ async def main(
         plugin_manager_factory,
     )
 
-    #plugin_manager = await services.aget(context, pluggy.PluginManager)
-    #plugin_manager.register(
+    # plugin_manager = await services.aget(context, pluggy.PluginManager)
+    # plugin_manager.register(
     #    PythonRuntimePlugin(),
-    #)
+    # )
 
     """
     def attached_daemon_plugin_manager_factory():
@@ -842,7 +837,7 @@ async def main(
 
     @atexit.register
     def cleanup():
-        #logger.debug("CLEANUP")
+        # logger.debug("CLEANUP")
         services.close_registry(context)
 
 

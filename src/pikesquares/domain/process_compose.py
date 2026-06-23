@@ -31,7 +31,6 @@ class PCAPIUnavailableError(ServiceUnavailableError):
 
 
 class ProcessStats(pydantic.BaseModel):
-
     is_running: bool
     age: int
     cpu: float
@@ -115,7 +114,6 @@ class Config(pydantic.BaseModel):
 
 
 class ProcessCompose(ManagedServiceBase):
-
     daemon_name: str = "process-compose"
     config: Config
 
@@ -127,7 +125,7 @@ class ProcessCompose(ManagedServiceBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cmd_args = ["--unix-socket", str(self.daemon_socket)]
-        self.cmd_env : dict[str, str] = {}
+        self.cmd_env: dict[str, str] = {}
         # TODO use shellingham library
         shell_path = os.environ.get("SHELL")
         if shell_path:
@@ -141,8 +139,7 @@ class ProcessCompose(ManagedServiceBase):
 
     async def write_config_to_disk(self) -> None:
         if self.daemon_config:
-            await AsyncPath(self.daemon_config).\
-            write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
+            await AsyncPath(self.daemon_config).write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
 
     async def add_tail_log_process(self, name: str, logfile: Path) -> None:
         """
@@ -158,14 +155,14 @@ class ProcessCompose(ManagedServiceBase):
             return
 
         self.config.processes["-".join([name, "logs"])] = Process(
-                description=f"logfile {name}",
-                disabled=False,
-                command=f"tail -f {logfile}",
-                working_dir=self.data_dir,
-                availability=ProcessAvailability(),
-                # readiness_probe=ReadinessProbe(
-                #    http_get=ReadinessProbeHttpGet()
-                # ),
+            description=f"logfile {name}",
+            disabled=False,
+            command=f"tail -f {logfile}",
+            working_dir=self.data_dir,
+            availability=ProcessAvailability(),
+            # readiness_probe=ReadinessProbe(
+            #    http_get=ReadinessProbeHttpGet()
+            # ),
         )
         await self.reload()
 
@@ -179,10 +176,7 @@ class ProcessCompose(ManagedServiceBase):
             self.cmd_args.insert(2, "--config")
             self.cmd_args.insert(3, str(self.daemon_config))
 
-            return self.cmd(
-                self.cmd_args,
-                cmd_env=self.cmd_env
-            )
+            return self.cmd(self.cmd_args, cmd_env=self.cmd_env)
         except ProcessExecutionError as exc:
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
@@ -196,16 +190,19 @@ class ProcessCompose(ManagedServiceBase):
         old_umask = os.umask(0o002)
         os.setgid(grp.getgrnam("pikesquares")[2])
         try:
-            return self.cmd([
-                "up",
-                "--config",
-                str(self.daemon_config),
-                "--log-file",
-                str(self.daemon_log),
-                "--detached",
-                "--hide-disabled",
-            ] + self.cmd_args,
-            cmd_env=self.cmd_env)
+            return self.cmd(
+                [
+                    "up",
+                    "--config",
+                    str(self.daemon_config),
+                    "--log-file",
+                    str(self.daemon_log),
+                    "--detached",
+                    "--hide-disabled",
+                ]
+                + self.cmd_args,
+                cmd_env=self.cmd_env,
+            )
         except ProcessExecutionError as exc:
             logger.error(exc)
             return False
@@ -218,7 +215,7 @@ class ProcessCompose(ManagedServiceBase):
 
         try:
             return self.cmd(
-                ["down", * self.cmd_args],
+                ["down", *self.cmd_args],
                 cmd_env=self.cmd_env,
             )
         except ProcessExecutionError as exc:
@@ -231,7 +228,7 @@ class ProcessCompose(ManagedServiceBase):
 
         try:
             return self.cmd(
-                ["attach", * self.cmd_args],
+                ["attach", *self.cmd_args],
                 cmd_env=self.cmd_env,
             )
         except ProcessExecutionError as exc:
@@ -259,6 +256,7 @@ class ProcessCompose(ManagedServiceBase):
             pass
 
         raise PCAPIUnavailableError()
+
 
 APIProcess = NewType("APIProcess", Process)
 DeviceProcess = NewType("DeviceProcess", Process)
@@ -295,12 +293,12 @@ async def register_process_compose(
     if routers:
         await register_caddy_process(context)
 
-    #await register_api_process(context)
+    # await register_api_process(context)
     await register_device_stats(context)
     pc_processes = {}
     pc_msgs = {}
     try:
-        pc_processes["device"] , pc_msgs["device"] = await svcs_container.aget(DeviceProcess)
+        pc_processes["device"], pc_msgs["device"] = await svcs_container.aget(DeviceProcess)
     except ServiceNotFoundError:
         pass
 
@@ -328,8 +326,8 @@ async def register_process_compose(
         "daemon_name": "process-compose",
         "daemon_bin": conf.PROCESS_COMPOSE_BIN,
         "daemon_config": conf.config_dir / "process-compose.yaml",
-        #"daemon_log": conf.log_dir / "process-compose.log",
-        #"daemon_socket": conf.run_dir / "process-compose.sock",
+        # "daemon_log": conf.log_dir / "process-compose.log",
+        # "daemon_socket": conf.run_dir / "process-compose.sock",
         "data_dir": conf.data_dir,
         "run_dir": conf.run_dir,
         "log_dir": conf.log_dir,
@@ -350,7 +348,7 @@ async def register_process_compose(
 
 def device_close():
     ...
-    #logger.debug("device closed")
+    # logger.debug("device closed")
 
 
 async def device_ping(device_data: tuple[DeviceProcess, ProcessMessages]):
@@ -374,7 +372,7 @@ async def register_device_process(context: dict, machine_id: str) -> None:
         #
         conf = await svcs_container.aget(AppConfig)
         cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
-        sql = f'"SELECT option_key,option_value FROM uwsgi_options WHERE machine_id=\'{machine_id}\' ORDER BY sort_order_index"'
+        sql = f"\"SELECT option_key,option_value FROM uwsgi_options WHERE machine_id='{machine_id}' ORDER BY sort_order_index\""
         process = Process(
             description="Device Manager",
             disabled=not conf.DEVICE_ENABLED,
@@ -403,7 +401,7 @@ async def register_device_process(context: dict, machine_id: str) -> None:
 
 def api_close():
     ...
-    #logger.debug("api closed")
+    # logger.debug("api closed")
 
 
 async def api_ping(api_data: tuple[APIProcess, ProcessMessages]):

@@ -16,8 +16,7 @@ class AttachedDaemonHookSpec:
     """
 
     @hook_spec
-    async def create_data_dir(self, service_name: str) -> bool | None:
-        ...
+    async def create_data_dir(self, service_name: str) -> bool | None: ...
 
     @hook_spec(firstresult=False)
     async def attached_daemon_collect_command_arguments(
@@ -25,8 +24,7 @@ class AttachedDaemonHookSpec:
         attached_daemon: AttachedDaemon,
         bind_ip: str,
         bind_port: int = 6379,
-    ) -> dict | None:
-        ...
+    ) -> dict | None: ...
 
     @hook_spec(firstresult=False)
     async def attached_daemon_ping(
@@ -34,8 +32,7 @@ class AttachedDaemonHookSpec:
         attached_daemon: AttachedDaemon,
         bind_ip: str,
         bind_port: int = 6379,
-    ) -> bool | None:
-        ...
+    ) -> bool | None: ...
 
     @hook_spec(firstresult=False)
     async def attached_daemon_stop(
@@ -43,8 +40,7 @@ class AttachedDaemonHookSpec:
         attached_daemon: AttachedDaemon,
         bind_ip: str,
         bind_port: int = 6379,
-    ) -> bool | None:
-        ...
+    ) -> bool | None: ...
 
 
 class AppRuntimeHookSpec:
@@ -53,8 +49,7 @@ class AppRuntimeHookSpec:
     """
 
     @hook_spec(firstresult=False)
-    def app_runtime_prompt_for_version(self) -> str:
-        ...
+    def app_runtime_prompt_for_version(self) -> str: ...
 
 
 class AppCodebaseHookSpec:
@@ -63,8 +58,8 @@ class AppCodebaseHookSpec:
     """
 
     @hook_spec(firstresult=False)
-    async def get_repo_url(self, service_name: str) -> str:
-        ...
+    async def get_repo_url(self, service_name: str) -> str: ...
+
 
 class PythonAppCodebaseHookSpec:
     """
@@ -73,21 +68,19 @@ class PythonAppCodebaseHookSpec:
 
     @hook_spec(firstresult=False)
     async def before_dependencies_install(
-            self,
-            service_name: str,
-            uv_bin: AsyncPath,
-            repo_dir: AsyncPath,
-    ) -> None:
-        ...
+        self,
+        service_name: str,
+        uv_bin: AsyncPath,
+        repo_dir: AsyncPath,
+    ) -> None: ...
 
     @hook_spec(firstresult=False)
     async def after_dependencies_install(
-            self,
-            service_name: str,
-            uv_bin: AsyncPath,
-            repo_dir: AsyncPath,
-    ) -> None:
-        ...
+        self,
+        service_name: str,
+        uv_bin: AsyncPath,
+        repo_dir: AsyncPath,
+    ) -> None: ...
 
 
 class WSGIPythonAppCodebaseHookSpec:
@@ -97,18 +90,16 @@ class WSGIPythonAppCodebaseHookSpec:
 
     @hook_spec(firstresult=False)
     async def get_wsgi_file(
-            self,
-            service_name: str,
-            repo_dir: AsyncPath,
-    ) -> AsyncPath | None:
-        ...
+        self,
+        service_name: str,
+        repo_dir: AsyncPath,
+    ) -> AsyncPath | None: ...
 
     @hook_spec(firstresult=False)
     async def get_wsgi_module(
-            self,
-            service_name: str,
-    ) -> str | None:
-        ...
+        self,
+        service_name: str,
+    ) -> str | None: ...
 
 
 def plugin_manager_factory():

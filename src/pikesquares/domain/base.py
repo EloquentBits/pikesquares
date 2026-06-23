@@ -1,5 +1,5 @@
-import enum
 import asyncio
+import enum
 import errno
 import json
 import traceback
@@ -12,8 +12,8 @@ from pathlib import Path
 
 # from typing import Any
 import pydantic
-import tenacity
 import structlog
+import tenacity
 from aiopath import AsyncPath
 from sqlalchemy import (
     DateTime,
@@ -36,7 +36,6 @@ def enum_values(enum_class: type[enum.Enum]) -> list:
 
 
 class TimeStampedBase(SQLModel):
-
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         nullable=False,
@@ -113,9 +112,8 @@ class ServiceBase(AsyncAttrs, TimeStampedBase):
 
     @property
     def touch_reload_file(self) -> Path:
-        #return self.service_config
+        # return self.service_config
         return Path("/var/lib/pikesquares/pyapps/bugsink/bugsink/pyproject.toml")
-
 
     @property
     def pid_file(self) -> Path:
@@ -165,14 +163,15 @@ class ServiceBase(AsyncAttrs, TimeStampedBase):
         machine_id = await AsyncPath("/var/lib/dbus/machine-id").read_text(encoding="utf-8")
         return machine_id.strip()
 
-
     @tenacity.retry(
-        retry=tenacity.retry_if_exception_type((
-            StatsReadError,
-            ConnectionRefusedError,
-            IOError,
-            FileNotFoundError,
-        )),
+        retry=tenacity.retry_if_exception_type(
+            (
+                StatsReadError,
+                ConnectionRefusedError,
+                IOError,
+                FileNotFoundError,
+            )
+        ),
         wait=tenacity.wait_fixed(1),
         stop=tenacity.stop_after_attempt(3),
         reraise=False,
@@ -292,16 +291,17 @@ class ServiceBase(AsyncAttrs, TimeStampedBase):
 async def main():
 
     class StatsTest(pydantic.BaseModel):
-
         stats_address: Path
 
         @tenacity.retry(
-            retry=tenacity.retry_if_exception_type((
-                StatsReadError,
-                ConnectionRefusedError,
-                IOError,
-                FileNotFoundError,
-            )),
+            retry=tenacity.retry_if_exception_type(
+                (
+                    StatsReadError,
+                    ConnectionRefusedError,
+                    IOError,
+                    FileNotFoundError,
+                )
+            ),
             wait=tenacity.wait_fixed(1),
             stop=tenacity.stop_after_attempt(3),
             reraise=False,
@@ -331,17 +331,17 @@ async def main():
             except ConnectionRefusedError as e:
                 logger.debug("ConnectionRefusedError read_stats")
                 raise e
-                #raise StatsReadError(f"Connection refused @ {(self.stats_address)}")
+                # raise StatsReadError(f"Connection refused @ {(self.stats_address)}")
             except FileNotFoundError as e:
                 logger.debug("FileNotFoundError read_stats")
-                #raise StatsReadError(f"Socket not available @ {(self.stats_address)}")
+                # raise StatsReadError(f"Socket not available @ {(self.stats_address)}")
                 raise e
             except IOError as e:
                 logger.debug("IOError read_stats")
                 if e.errno != errno.EINTR:
                     # uwsgi.log(f"socket @ {addr} not available")
                     pass
-                #raise StatsReadError(f"IOError @ {(self.stats_address)}")
+                # raise StatsReadError(f"IOError @ {(self.stats_address)}")
                 raise e
             except Exception as exc:
                 logger.exception(exc)

@@ -15,23 +15,23 @@ from sqlmodel import (
     SQLModel,
 )
 
-#from sqlalchemy import event
-
-from pikesquares.presets.device import DeviceSection
 from pikesquares import services
+
+# from sqlalchemy import event
+from pikesquares.presets.device import DeviceSection
 from pikesquares.services.data import DeviceStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
 
 from .base import ServiceBase, TimeStampedBase
 from .monitors import ZMQMonitor
-#from .project import Project
+
+# from .project import Project
 
 
 logger = structlog.getLogger()
 
 
 class Device(ServiceBase, DevicePKIMixin, table=True):
-
     __tablename__ = "devices"
 
     machine_id: str = Field(default=None, unique=True, max_length=32)
@@ -41,8 +41,8 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
     zmq_monitor: "ZMQMonitor" = Relationship(back_populates="device", sa_relationship_kwargs={"uselist": False})
 
-    #routers: list["HttpRouter"] = Relationship(back_populates="device")
-    #tuntap_routers: list["TuntapRouter"] = Relationship(back_populates="device")
+    # routers: list["HttpRouter"] = Relationship(back_populates="device")
+    # tuntap_routers: list["TuntapRouter"] = Relationship(back_populates="device")
 
     # def model_post_init(self, __context: Any) -> None:
     #    super().model_post_init(__context)
@@ -183,7 +183,6 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
 
 class DeviceUWSGIOption(TimeStampedBase, SQLModel, table=True):
-
     __tablename__ = "uwsgi_options"
 
     id: str = Field(
@@ -252,13 +251,13 @@ async def register_device_stats(
         # ping=lambda svc: svc.ping()
     )
 
-#@event.listens_for(Device, "after_insert")
-#def handle_device_created(
-#    mapper,
-#    connection,
-#    target,
-#) -> Device:
-#    device = target
+    # @event.listens_for(Device, "after_insert")
+    # def handle_device_created(
+    #    mapper,
+    #    connection,
+    #    target,
+    # ) -> Device:
+    #    device = target
     """
     device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
         uow, device=device
@@ -276,6 +275,8 @@ async def register_device_stats(
             #not in existing_options:
             #    await uow.uwsgi_options.add(uwsgi_option)
         """
+
+
 #    return device
 """
             network_device_name = "psq0"
@@ -316,4 +317,3 @@ async def register_device_stats(
             section._set("emperor-use-clone", "net")
         return super().get_uwsgi_config()
 """
-
