@@ -1,8 +1,7 @@
-from typing import overload
 from collections.abc import Callable
+from typing import overload
 
 import structlog
-
 
 logger = structlog.get_logger()
 

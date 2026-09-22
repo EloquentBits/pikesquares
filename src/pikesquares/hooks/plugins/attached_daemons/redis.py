@@ -3,7 +3,7 @@ from string import Template
 import structlog
 from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
-from plumbum import local as pl_local
+from plumbum import async_local as pl_local
 
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.hooks.markers import hook_impl
@@ -11,9 +11,7 @@ from pikesquares.hooks.markers import hook_impl
 logger = structlog.getLogger()
 
 
-
 class RedisAttachedDaemon:
-
     async def get_daemon_bin(self) -> AsyncPath:
         return AsyncPath("/usr/bin/redis-server")
 
@@ -41,17 +39,19 @@ class RedisAttachedDaemon:
 
         cmd = Template(
             "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
-        ).substitute({
-            "bin" : str(await self.get_daemon_bin()),
-            "bind_port": bind_port,
-            "bind_ip": bind_ip,
-            "dir": str(attached_daemon.daemon_data_dir),
-            "logfile": str(
-                AsyncPath(attached_daemon.log_dir) \
-                / f"{attached_daemon.name}-server-{attached_daemon.service_id}.log"
-            ),
-            "pidfile": str(attached_daemon.pid_file),
-        })
+        ).substitute(
+            {
+                "bin": str(await self.get_daemon_bin()),
+                "bind_port": bind_port,
+                "bind_ip": bind_ip,
+                "dir": str(attached_daemon.daemon_data_dir),
+                "logfile": str(
+                    AsyncPath(attached_daemon.log_dir)
+                    / f"{attached_daemon.name}-server-{attached_daemon.service_id}.log"
+                ),
+                "pidfile": str(attached_daemon.pid_file),
+            }
+        )
         logger.debug(cmd)
 
         return {
@@ -79,14 +79,14 @@ class RedisAttachedDaemon:
         bind_port: int = 6379,
     ) -> bool | None:
         """
-            ping redis
+        ping redis
         """
         if attached_daemon.name != "redis":
             return
         cmd_args = ["-h", bind_ip, "-p", bind_port, "--raw", "incr", "ping"]
         logger.info(cmd_args)
         try:
-            with pl_local.cwd(attached_daemon.daemon_data_dir):
+            async with pl_local.cwd(attached_daemon.daemon_data_dir):
                 retcode, stdout, stderr = pl_local[str(await self.get_daemon_cli_bin())].run(cmd_args)
                 if int(retcode) != 0:
                     logger.debug(f"{retcode=}")
@@ -106,7 +106,7 @@ class RedisAttachedDaemon:
         bind_port: int = 6379,
     ) -> bool | None:
         """
-           stop redis
+        stop redis
         """
         if attached_daemon.name != "redis":
             return
@@ -117,9 +117,7 @@ class RedisAttachedDaemon:
             return False
         try:
             with pl_local.cwd(attached_daemon.daemon_data_dir):
-                retcode, stdout, stderr = pl_local[
-                    str(self.get_daemon_cli_bin())
-                ].run(cmd_args)
+                retcode, stdout, stderr = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
 
                 if int(retcode) != 0:
                     logger.debug(f"{retcode=}")
@@ -130,4 +128,3 @@ class RedisAttachedDaemon:
                     return stdout.strip().isdigit()
         except ProcessExecutionError as exc:
             raise exc
-

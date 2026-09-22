@@ -20,7 +20,6 @@ logger = structlog.get_logger()
 
 
 class PythonRuntime(BaseLanguageRuntime, UVMixin):
-
     uv_bin: Path | None = None
 
     MATCH_FILES: set[str] = set(

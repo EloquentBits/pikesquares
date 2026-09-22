@@ -51,12 +51,13 @@ dependencies = [
   #"pyuwsgi",
   #"pyuwsgi==2.0.28.post1",
   "email-validator>=2.3.0",
+  "structlog-sentry-logger[sentry]>=1.6.2",
 ]
 
 version = "0.8.0"
 description = ''
 #readme = "README.md"
-requires-python = "==3.12.*"
+requires-python = "==3.13.*"
 keywords = []
 authors = [
   { name = "Philip Kalinsky", email = "philip.kalinsky@eloquentbits.com" },

@@ -11,7 +11,9 @@ import anyio
 import apluggy as pluggy
 import questionary
 import sentry_sdk
-import structlog
+
+# import structlog
+import structlog_sentry_logger
 import tenacity
 import typer
 from aiopath import AsyncPath
@@ -84,6 +86,7 @@ for import_lib in ["svcs", "asyncio", "aiosqlite", "plumbum"]:
     warn_logger = logging.getLogger(import_lib)
     warn_logger.setLevel(logging.WARNING)
 
+"""
 structlog.configure(
     processors=[
         # If log level is too low, abort pipeline and throw away log entry.
@@ -120,6 +123,9 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 logger = structlog.get_logger()
+"""
+
+logger = structlog_sentry_logger.get_logger()
 
 load_dotenv()
 
@@ -410,20 +416,19 @@ async def info(
         ("device", "device manager"),
         ("caddy", "reverse proxy"),
         ("dnsmasq", "dns server"),
-        ("api", "PikeSquares API"),
+        # ("api", "PikeSquares API"),
     ]
     for process in processes:
         try:
             stats = await process_compose.ping_api(process[0])
             logger.debug(f"{process[0]} {stats=}")
+
             if stats.status == "Running":
-                pass
-                # console.success(f":heavy_check_mark:     {process[1]} \[process-compose] is running.")
+                console.success(f":heavy_check_mark:     {process[1]} [process-compose] is running.")
             elif stats.status == "Completed":
-                pass
-                # console.warning(f":heavy_exclamation_mark:     {process[1]} \[process-compose] is not running.")
+                console.warning(f":heavy_exclamation_mark:     {process[1]} [process-compose] is not running.")
         except PCAPIUnavailableError:
-            console.warning(f":heavy_exclamation_mark:     Process Compose is not running.")
+            console.warning(":heavy_exclamation_mark:     Process Compose is not running.")
             break
 
     for svc in services.get_pings(context):

@@ -19,7 +19,7 @@ import structlog
 
 # from questionary import Style as QuestionaryStyle
 from aiopath import AsyncPath
-from plumbum import local
+from plumbum import async_local
 from pydantic import AnyUrl, BeforeValidator
 from pydantic_settings import (
     BaseSettings,
@@ -100,8 +100,8 @@ class APISettings(BaseSettings):
         path_to_db = ensure_system_path(Path("/var/lib/pikesquares") / "pikesquares.db", is_dir=False)
         return f"sqlite+aiosqlite:///{path_to_db}"
 
-        db_path: Path = ensure_system_path(self.data_dir / "pikesquares.db")
-        return f"sqlite+aiosqlite:///{db_path}"
+        # db_path: Path = ensure_system_path(self.data_dir / "pikesquares.db")
+        # return f"sqlite+aiosqlite:///{db_path}"
 
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
@@ -158,37 +158,6 @@ class APISettings(BaseSettings):
 #       log_dir = /var/log/pikesquares
 
 
-def ensure_system_path(
-    new_path: Path | str,
-    owner_username: str = "root",
-    owner_groupname: str = "pikesquares",
-    owner_uid: int | None = None,
-    owner_gid: int | None = None,
-    is_dir: bool = True,
-    is_socket: bool = False,
-) -> Path:
-
-    is_root: bool = os.getuid() == 0
-
-    if not is_root and not Path(new_path).exists():
-        raise AppConfigError(f"{new_path} does not exist.") from None
-
-    local_path: local.LocalPath = local.path(Path(new_path))
-    if not local_path.exists():
-        # Set the current numeric umask and return the previous umask.
-        old_umask = os.umask(0o002)
-        os.setgid(grp.getgrnam("pikesquares")[2])
-        try:
-            if is_dir:
-                local_path.mkdir()
-            else:
-                local_path.touch()
-        finally:
-            os.umask(old_umask)
-
-    return Path(local_path)
-
-
 def get_lift_file_section(lift_file: Path, lift_file_key: str):
 
     # {
@@ -210,6 +179,37 @@ def get_lift_file_section(lift_file: Path, lift_file_key: str):
         lift_json = json.loads(lf.read())
         lift_files = lift_json["scie"]["lift"]["files"]
         return next(filter(lambda x: x.get("key") == lift_file_key, lift_files))
+
+
+def ensure_system_path(
+    new_path: Path,
+    owner_username: str = "root",
+    owner_groupname: str = "pikesquares",
+    owner_uid: int | None = None,
+    owner_gid: int | None = None,
+    is_dir: bool = True,
+    is_socket: bool = False,
+) -> Path:
+
+    is_root: bool = os.getuid() == 0
+
+    if not is_root and not Path(new_path).exists():
+        raise AppConfigError(f"{new_path} does not exist.") from None
+
+    # local_path: async_local.LocalPath = await async_local.path(Path(new_path))
+    if not new_path.exists():
+        # Set the current numeric umask and return the previous umask.
+        old_umask = os.umask(0o002)
+        os.setgid(grp.getgrnam("pikesquares")[2])
+        try:
+            if is_dir:
+                new_path.mkdir()
+            else:
+                new_path.touch()
+        finally:
+            os.umask(old_umask)
+
+    return Path(new_path)
 
 
 class AppConfig(BaseSettings):
@@ -405,7 +405,10 @@ async def register_app_conf(
             return AppConfig(**override_settings)
         except pydantic.ValidationError as exc:
             logger.error(exc)
-            raise AppConfigError("invalid config. giving up.")
+            # raise AppConfigError("invalid config. giving up.")
+            import sys
+
+            sys.exit(1)
 
     register_factory(context, AppConfig, conf_factory)
 

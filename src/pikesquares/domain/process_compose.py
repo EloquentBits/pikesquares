@@ -245,7 +245,7 @@ class ProcessCompose(ManagedServiceBase):
 
         try:
             cmd_args = ["process", "list", "--output", "json"]
-            _, stdout, _ = self.cmd(cmd_args + self.cmd_args, cmd_env=self.cmd_env)
+            _, stdout, _ = await self.cmd(cmd_args + self.cmd_args, cmd_env=self.cmd_env)
         except ProcessExecutionError as exc:
             logger.error(exc)
             raise PCAPIUnavailableError("unable to reach Process Compose API")

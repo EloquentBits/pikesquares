@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pydantic
 import structlog
-from plumbum import local as pl_local
 from plumbum import ProcessExecutionError
+from plumbum import async_local as pl_local
 
 from pikesquares import is_port_open
-from pikesquares.conf import AppConfig
-from pikesquares.services.base import ServiceUnavailableError
-from pikesquares.services import register_factory
 from pikesquares.cli.console import console
+from pikesquares.conf import AppConfig
+from pikesquares.services import register_factory
+from pikesquares.services.base import ServiceUnavailableError
 
 logger = structlog.get_logger()
 
@@ -26,7 +26,6 @@ class PCDeviceUnavailableError(ServiceUnavailableError):
 
 
 class ProcessComposeProcessStats(pydantic.BaseModel):
-
     IsRunning: bool
     age: int
     cpu: float
@@ -72,7 +71,6 @@ class ProcessCompose(pydantic.BaseModel):
             # "false",
             "--unix-socket",
             str(self.socket_address),
-
         ]
         logger.info("calling process-compose up")
         try:
@@ -102,11 +100,11 @@ class ProcessCompose(pydantic.BaseModel):
         try:
             compl = subprocess.run(
                 args=[
-                  # str(self.conf.PROCESS_COMPOSE_BIN),
-                  str(Path(os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")) / "process-compose"),
-                  "attach",
-                  "--unix-socket",
-                  str(self.socket_address),
+                    # str(self.conf.PROCESS_COMPOSE_BIN),
+                    str(Path(os.environ.get("PIKESQUARES_PROCESS_COMPOSE_DIR")) / "process-compose"),
+                    "attach",
+                    "--unix-socket",
+                    str(self.socket_address),
                 ],
                 cwd=str(self.conf.data_dir),
                 capture_output=True,
@@ -122,13 +120,13 @@ class ProcessCompose(pydantic.BaseModel):
         logger.error(compl.stderr.decode())
         logger.debug(compl.stdout.decode())
 
-    def pc_cmd(
-            self,
-            cmd_args: list[str],
-            # run_as_user: str = "pikesquares",
-            cmd_env: dict | None = None,
-            chdir: Path | None = None,
-        ) -> tuple[int, str, str]:
+    async def pc_cmd(
+        self,
+        cmd_args: list[str],
+        # run_as_user: str = "pikesquares",
+        cmd_env: dict | None = None,
+        chdir: Path | None = None,
+    ) -> tuple[int, str, str]:
         logger.info(f"[pikesquares] pc_cmd: {cmd_args=}")
 
         cmd_env = {
@@ -151,16 +149,13 @@ class ProcessCompose(pydantic.BaseModel):
 
         try:
             if cmd_env:
-                pl_local.env.update(cmd_env)
+                await pl_local.env.update(cmd_env)
                 logger.debug(f"{cmd_env=}")
 
             # with pl_local.as_user(run_as_user):
-            with pl_local.cwd(chdir or self.conf.data_dir):
-                pc = pl_local[str(self.conf.PROCESS_COMPOSE_BIN)]
-                retcode, stdout, stderr = pc.run(
-                    cmd_args,
-                    **{"env": cmd_env}
-                )
+            with await pl_local.cwd(chdir or self.conf.data_dir):
+                pc = await pl_local[str(self.conf.PROCESS_COMPOSE_BIN)]
+                retcode, stdout, stderr = pc.run(cmd_args, **{"env": cmd_env})
                 logger.debug(f"[pikesquares] pc_cmd: {retcode=}")
                 logger.debug(f"[pikesquares] pc_cmd: {stdout=}")
                 logger.debug(f"[pikesquares] pc_cmd: {stderr=}")
@@ -177,16 +172,18 @@ class ProcessCompose(pydantic.BaseModel):
             #    'stderr': "warning: `VIRTUAL_ENV=/home/pk/dev/eqb/pikesquares/.venv` does not match the project environment path `.venv` and will be ignored\nSystemCheckError: System check identified some issues:\n\nERRORS:\n?: (caches.E001) You must define a 'default' cache in your CACHES setting.\n\nSystem check identified 1 issue (0 silenced).\n"
             # }
             # print(traceback.format_exc())
-            #raise UvCommandExecutionError(
+            # raise UvCommandExecutionError(
             #        f"uv cmd [{' '.join(cmd_args)}] failed.\n{exc.stderr}"
-            #)
+            # )
 
     def ping(self) -> None:
         if not self.socket_address.exists():
             raise PCAPIUnavailableError()
 
-    def ping_api(self) -> bool:
+    async def ping_api(self) -> bool:
+        logger.debug("process compose - ping api")
         if not self.socket_address.exists():
+            logger.info(f"process compose socket file does not exist {self.socket_address}")
             raise PCAPIUnavailableError()
 
         try:
@@ -200,13 +197,13 @@ class ProcessCompose(pydantic.BaseModel):
                 "--output",
                 "json",
             ]
-            retcode, stdout, stderr = self.pc_cmd(cmd_args)
-            js = json.loads(stdout)
+            logger.debug(cmd_args)
+            # retcode, stdout, stderr = await self.pc_cmd(cmd_args)
+            result = await self.pc_cmd(cmd_args)
+            logger.debug(result)
+            js = json.loads(result.stdout)
             try:
-                device_process = \
-                        next(
-                            filter(lambda p: p.get("name") == "Device", js)
-                        )
+                device_process = next(filter(lambda p: p.get("name") == "Device", js))
                 logger.debug(device_process)
                 process_stats = ProcessComposeProcessStats(**device_process)
                 if process_stats.IsRunning and process_stats.status == "Running":
@@ -217,19 +214,21 @@ class ProcessCompose(pydantic.BaseModel):
             logger.error(exc)
             return False
 
+        logger.debug("ping api done")
         raise PCDeviceUnavailableError()
 
 
 def register_process_compose(
-        context,
-        conf: AppConfig,
-    ):
+    context,
+    conf: AppConfig,
+):
 
     def process_compose_factory():
         return ProcessCompose(
             conf=conf,
             # db=get(context, TinyDB),
         )
+
     register_factory(
         context,
         ProcessCompose,

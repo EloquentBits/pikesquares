@@ -5,7 +5,7 @@ from typing import Annotated
 import pydantic
 import structlog
 from plumbum import ProcessExecutionError
-from plumbum import local as pl_local
+from plumbum import async_local as pl_local
 from sqlmodel import (
     Field,
     Relationship,
@@ -15,7 +15,6 @@ from pikesquares.domain.base import ServiceBase
 from pikesquares.hooks.markers import hook_impl
 
 logger = structlog.get_logger()
-
 
 
 """
@@ -30,13 +29,7 @@ cron = 59 3 -1 -1 -1  pg_dump -U ZZZ YYY | bzip2 -9 > $(HOME)/backup/YYY_`date +
 
 
 class PostgresAttachedDaemonPlugin:
-
-    def __init__(
-        self,
-        daemon_service: "AttachedDaemon",
-        bind_ip: str,
-        bind_port: int | None = None
-    ):
+    def __init__(self, daemon_service: "AttachedDaemon", bind_ip: str, bind_port: int | None = None):
         self.daemon_service = daemon_service
         self.bind_ip = bind_ip
         self.bind_port = bind_port or 5432
@@ -44,22 +37,21 @@ class PostgresAttachedDaemonPlugin:
     def get_daemon_bin(self) -> Path:
         return Path("/usr/lib/postgresql/16/bin/postgres")
 
-
     @hook_impl
     def attached_daemon_collect_command_arguments(self) -> dict:
-        cmd = Template(
-            "$bin -D $dir -h $bind_ip -p $bind_port -k $rundir"
-        ).substitute({
-            "bin" : str(self.get_daemon_bin()),
-            "bind_port": self.bind_port,
-            "bind_ip": self.bind_ip,
-            "dir": str(self.daemon_service.daemon_data_dir),
-            "rundir": str(self.daemon_service.run_dir),
-            #"logfile": str(Path(self.daemon_service.log_dir) / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"),
-            #"pidfile": str(self.daemon_service.pid_file),
-        })
+        cmd = Template("$bin -D $dir -h $bind_ip -p $bind_port -k $rundir").substitute(
+            {
+                "bin": str(self.get_daemon_bin()),
+                "bind_port": self.bind_port,
+                "bind_ip": self.bind_ip,
+                "dir": str(self.daemon_service.daemon_data_dir),
+                "rundir": str(self.daemon_service.run_dir),
+                # "logfile": str(Path(self.daemon_service.log_dir) / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"),
+                # "pidfile": str(self.daemon_service.pid_file),
+            }
+        )
         logger.debug(cmd)
-        #import ipdb;ipdb.set_trace()
+        # import ipdb;ipdb.set_trace()
 
         return {
             "command": cmd,
@@ -81,18 +73,13 @@ class PostgresAttachedDaemonPlugin:
     @hook_impl
     def stop(self) -> bool:
         """
-           stop postgres
+        stop postgres
         """
         ...
 
-class SimpleSocketAttachedDaemonPlugin:
 
-    def __init__(
-        self,
-        daemon_service: "AttachedDaemon",
-        bind_ip: str,
-        bind_port: int | None = None
-    ):
+class SimpleSocketAttachedDaemonPlugin:
+    def __init__(self, daemon_service: "AttachedDaemon", bind_ip: str, bind_port: int | None = None):
         self.daemon_service = daemon_service
         self.bind_ip = bind_ip
         self.bind_port = bind_port or 6379
@@ -107,14 +94,19 @@ class SimpleSocketAttachedDaemonPlugin:
     def attached_daemon_collect_command_arguments(self) -> dict:
         cmd = Template(
             "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
-        ).substitute({
-            "bin" : str(self.get_daemon_bin()),
-            "bind_port": self.bind_port,
-            "bind_ip": self.bind_ip,
-            "dir": str(self.daemon_service.daemon_data_dir),
-            "logfile": str(Path(self.daemon_service.log_dir) / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"),
-            "pidfile": str(self.daemon_service.pid_file),
-        })
+        ).substitute(
+            {
+                "bin": str(self.get_daemon_bin()),
+                "bind_port": self.bind_port,
+                "bind_ip": self.bind_ip,
+                "dir": str(self.daemon_service.daemon_data_dir),
+                "logfile": str(
+                    Path(self.daemon_service.log_dir)
+                    / f"{self.daemon_service.name}-server-{self.daemon_service.service_id}.log"
+                ),
+                "pidfile": str(self.daemon_service.pid_file),
+            }
+        )
         logger.debug(cmd)
 
         return {
@@ -124,7 +116,7 @@ class SimpleSocketAttachedDaemonPlugin:
             "pidfile": self.daemon_service.pid_file,
             "control": self.daemon_service.control,
             "daemonize": self.daemon_service.daemonize,
-            #"touch_reload": str(self.daemon_service.touch_reload_file),
+            # "touch_reload": str(self.daemon_service.touch_reload_file),
             "signal_stop": self.daemon_service.signal_stop,
             "signal_reload": self.daemon_service.signal_reload,
             "honour_stdin": bool(self.daemon_service.honour_stdin),
@@ -135,28 +127,29 @@ class SimpleSocketAttachedDaemonPlugin:
         }
 
     @hook_impl
-    def ping(self) -> bool:
+    async def ping(self) -> bool:
         """
-            ping redis
+        ping redis
         """
         cmd_args = ["-h", self.bind_ip, "-p", self.bind_port, "--raw", "incr", "ping"]
         try:
-            with pl_local.cwd(self.daemon_service.daemon_data_dir):
-                retcode, stdout, stderr = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
-                if int(retcode) != 0:
-                    logger.debug(f"{retcode=}")
-                    logger.debug(f"{stdout=}")
-                    logger.debug(f"{stderr=}")
+            async with pl_local.cwd(self.daemon_service.daemon_data_dir):
+                # retcode, stdout, stderr = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
+                result = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
+                if int(result.returncode) != 0:
+                    logger.debug(f"{result.returncode=}")
+                    logger.debug(f"{result.stdout=}")
+                    logger.debug(f"{result.stderr=}")
                     return False
                 else:
-                    return stdout.strip().isdigit()
+                    return result.stdout.strip().isdigit()
         except ProcessExecutionError:
             raise
 
     @hook_impl
     def stop(self) -> bool:
         """
-           stop socket server
+        stop socket server
         """
         ...
 
@@ -169,15 +162,15 @@ class AttachedDaemon(ServiceBase, table=True):
     name: str = Field(max_length=32)
     for_legion: bool = Field(default=False)
     broken_counter: int = Field(default=3)
-    #pidfile: str | None = Field(max_length=255)
+    # pidfile: str | None = Field(max_length=255)
     control: bool = Field(default=False)
     daemonize: bool = Field(default=True)
-    #touch_reload: str | None = Field(max_length=255)
+    # touch_reload: str | None = Field(max_length=255)
     signal_stop: int = Field(default=15)
     signal_reload: int = Field(default=15)
     honour_stdin: int = Field(default=0)
     new_pid_ns: str = Field(default="false")
-    #change_dir: str = Field(max_length=255)
+    # change_dir: str = Field(max_length=255)
 
     project_id: str | None = Field(default=None, foreign_key="projects.id")
     project: "Project" = Relationship(back_populates="attached_daemons")
@@ -187,7 +180,7 @@ class AttachedDaemon(ServiceBase, table=True):
     @property
     def daemon_data_dir(self) -> Path:
         daemon_dir = Path(self.data_dir) / "attached-daemons" / self.service_id
-        #if not daemon_dir.exists() and self.create_data_dir:
+        # if not daemon_dir.exists() and self.create_data_dir:
         #    daemon_dir.mkdir(parents=True, exist_ok=True)
         return daemon_dir
 
@@ -197,7 +190,6 @@ class AttachedDaemon(ServiceBase, table=True):
 
 
 class ManagedServiceBase(pydantic.BaseModel):
-
     daemon_name: str
     daemon_bin: Annotated[pydantic.FilePath, pydantic.Field()]
     daemon_config: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
@@ -222,7 +214,7 @@ class ManagedServiceBase(pydantic.BaseModel):
     def daemon_log(self) -> Path:
         return Path(self.log_dir) / f"{self.daemon_name}.log"
 
-    def cmd(
+    async def cmd(
         self,
         cmd_args: list[str],
         chdir: Path | None = None,
@@ -233,22 +225,22 @@ class ManagedServiceBase(pydantic.BaseModel):
         if not cmd_args:
             raise Exception(f"no args provided for e {self.daemon_name} command")
 
-        #print(cmd_args)
+        # print(cmd_args)
 
         try:
             if cmd_env:
                 pl_local.env.update(cmd_env)
             # with pl_local.as_user(run_as_user):
-            with pl_local.cwd(chdir or self.data_dir):
-                retcode, stdout, stderr = pl_local[
-                        str(self.daemon_bin)
-                    ].run(cmd_args, **{"env": cmd_env})
 
-                if int(retcode) != 0:
-                    logger.debug(f"{retcode=}")
-                    logger.debug(f"{stdout=}")
-                    logger.debug(f"{stderr=}")
-                return retcode, stdout, stderr
+            # async with pl_local.cwd(chdir or self.data_dir):
+            # retcode, stdout, stderr = await pl_local[str(self.daemon_bin)].run(cmd_args, **{"env": cmd_env})
+            result = await pl_local[str(self.daemon_bin)].run(cmd_args, **{"env": cmd_env})
+
+            if int(result.returncode) != 0:
+                logger.debug(f"{result.returncode=}")
+                logger.debug(f"{result.stdout=}")
+                logger.debug(f"{result.stderr=}")
+            return result.returncode, result.stdout, result.stderr
         except ProcessExecutionError:
             raise
             # print(vars(exc))
@@ -265,8 +257,7 @@ class ManagedServiceBase(pydantic.BaseModel):
             #        f"uv cmd [{' '.join(cmd_args)}] failed.\n{exc.stderr}"
             # )
 
+
 class Redis(ManagedServiceBase):
-
-
     cmd_args: list[str] = []
     cmd_env: dict[str, str] = {}
