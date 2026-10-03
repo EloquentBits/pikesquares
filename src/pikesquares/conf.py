@@ -10,7 +10,6 @@ from typing import (
     Annotated,
     Any,
     Literal,
-    Optional,
     Self,
 )
 
@@ -19,7 +18,8 @@ import structlog
 
 # from questionary import Style as QuestionaryStyle
 from aiopath import AsyncPath
-from plumbum import async_local
+
+# from plumbum import async_local
 from pydantic import AnyUrl, BeforeValidator
 from pydantic_settings import (
     BaseSettings,
@@ -240,19 +240,19 @@ class AppConfig(BaseSettings):
     run_dir: pydantic.DirectoryPath = pydantic.Field(
         default=AsyncPath("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR"
     )
-    UWSGI_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    UWSGI_BIN: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
 
-    SCIE_BASE: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
-    SCIE_BINDINGS: Optional[Annotated[pydantic.DirectoryPath, pydantic.Field()]] = None
-    SCIE_LIFT_FILE: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    SCIE_BASE: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
+    SCIE_BINDINGS: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
+    SCIE_LIFT_FILE: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
 
-    EASYRSA_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-    DNSMASQ_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-    CADDY_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-    UV_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-    PROCESS_COMPOSE_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-    POSTGRES_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
-    REDIS_BIN: Optional[Annotated[pydantic.FilePath, pydantic.Field()]] = None
+    EASYRSA_BIN: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
+    DNSMASQ_BIN: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
+    CADDY_BIN: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
+    UV_BIN: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
+    PROCESS_COMPOSE_BIN: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
+    POSTGRES_BIN: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
+    REDIS_BIN: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
 
     CADDY_ENABLED: bool = True
     DNSMASQ_ENABLED: bool = True

@@ -226,7 +226,6 @@ def register_process_compose(
     def process_compose_factory():
         return ProcessCompose(
             conf=conf,
-            # db=get(context, TinyDB),
         )
 
     register_factory(
