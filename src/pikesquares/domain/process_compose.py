@@ -190,7 +190,8 @@ class ProcessCompose(ManagedServiceBase):
         old_umask = os.umask(0o002)
         os.setgid(grp.getgrnam("pikesquares")[2])
         try:
-            return self.cmd(
+            logger.info("calling process compose up cmd")
+            return await self.cmd(
                 [
                     "up",
                     "--config",
@@ -214,7 +215,7 @@ class ProcessCompose(ManagedServiceBase):
             raise PCAPIUnavailableError()
 
         try:
-            return self.cmd(
+            return await self.cmd(
                 ["down", *self.cmd_args],
                 cmd_env=self.cmd_env,
             )
@@ -222,12 +223,14 @@ class ProcessCompose(ManagedServiceBase):
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    def attach(self) -> tuple[str, str, str]:
+    async def attach(self) -> tuple[str, str, str]:
+        logger.info("attaching to process-compose")
+        logger.info(self.cmd_args)
         if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
         try:
-            return self.cmd(
+            return await self.cmd(
                 ["attach", *self.cmd_args],
                 cmd_env=self.cmd_env,
             )

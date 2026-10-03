@@ -1,4 +1,4 @@
-#import enum
+# import enum
 import uuid
 from typing import Optional
 
@@ -20,9 +20,9 @@ from sqlmodel import (
 
 from .base import TimeStampedBase  # , enum_values
 
-#from .device import Device
-#from .project import Project
-#from .wsgi_app import WsgiApp
+# from .device import Device
+# from .project import Project
+# from .wsgi_app import WsgiApp
 
 logger = structlog.getLogger()
 
@@ -34,7 +34,6 @@ logger = structlog.getLogger()
 
 
 class AppMonitorBase(TimeStampedBase, SQLModel):
-
     id: str = Field(
         primary_key=True,
         default_factory=lambda: str(uuid.uuid4()),
@@ -104,7 +103,9 @@ class ZMQMonitor(AppMonitorBase, table=True):
         ctx = zmq.asyncio.Context()
         sock = ctx.socket(zmq.PUSH)
         if self.zmq_address:
-            logger.info(f"Launching {model.__class__.__name__} {model.service_id} in ZMQ Monitor @ {self.socket_address}")
+            logger.info(
+                f"Launching {model.__class__.__name__} {model.service_id} in ZMQ Monitor @ {self.socket_address}"
+            )
             uwsgi_config = model.get_uwsgi_config()
             sock.connect(self.zmq_address)
             await sock.send_multipart([b"touch", name.encode(), uwsgi_config.format(do_print=True).encode()])

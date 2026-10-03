@@ -221,11 +221,14 @@ class ManagedServiceBase(pydantic.BaseModel):
         cmd_env: dict[str, str] | None = None,
         # run_as_user: str = "pikesquares",
     ) -> tuple[str, str, str]:
+        logger.info("=== cmd ===")
+        logger.info(cmd_args)
 
         if not cmd_args:
             raise Exception(f"no args provided for e {self.daemon_name} command")
 
         # print(cmd_args)
+        #
 
         try:
             if cmd_env:
@@ -234,7 +237,9 @@ class ManagedServiceBase(pydantic.BaseModel):
 
             # async with pl_local.cwd(chdir or self.data_dir):
             # retcode, stdout, stderr = await pl_local[str(self.daemon_bin)].run(cmd_args, **{"env": cmd_env})
+            logger.info(f"executing daemon. {self.daemon_bin}")
             result = await pl_local[str(self.daemon_bin)].run(cmd_args, **{"env": cmd_env})
+            logger.info(result)
 
             if int(result.returncode) != 0:
                 logger.debug(f"{result.returncode=}")

@@ -1,11 +1,11 @@
-from typing import Optional, Annotated
+from typing import Annotated, Optional
 
-import typer
 import questionary
 import structlog
+import typer
 
-from pikesquares.cli.console import console
 from pikesquares import services
+from pikesquares.cli.console import console
 from pikesquares.domain.base import StatsReadError
 from pikesquares.domain.device import Device
 
@@ -35,10 +35,7 @@ def up(
 
 
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
-def down(
-    ctx: typer.Context,
-    noinput: Annotated[bool, typer.Option(help="Do not prompt.")] = False
-):
+def down(ctx: typer.Context, noinput: Annotated[bool, typer.Option(help="Do not prompt.")] = False):
     """Stop the PikeSquares Server"""
 
     obj = ctx.ensure_object(dict)
@@ -55,12 +52,12 @@ def down(
             raise typer.Exit()
 
 
-#@app.command(rich_help_panel="Control", short_help="Reset device")
+# @app.command(rich_help_panel="Control", short_help="Reset device")
 def reset(
-    ctx: typer.Context, 
+    ctx: typer.Context,
     shutdown: Optional[str] = typer.Option("", "--shutdown", help="Shutdown PikeSquares server after reset."),
 ):
-    """ Reset PikeSquares Installation """
+    """Reset PikeSquares Installation"""
 
     context = ctx.ensure_object(dict)
     svc_device = services.get(context, Device)
@@ -79,15 +76,9 @@ def reset(
         console.success("PikeSquares Server has been shut down.")
 
 
-#@app.command(rich_help_panel="Control", short_help="Nuke installation")
-def uninstall(
-    ctx: typer.Context,
-    dry_run: Optional[bool] = typer.Option(
-        False,
-        help="Uninstall dry run"
-    )
-):
-    """ Delete the entire PikeSquares installation """
+# @app.command(rich_help_panel="Control", short_help="Nuke installation")
+def uninstall(ctx: typer.Context, dry_run: Optional[bool] = typer.Option(False, help="Uninstall dry run")):
+    """Delete the entire PikeSquares installation"""
 
     context = ctx.ensure_object(dict)
     svc_device = services.get(context, Device)
@@ -110,26 +101,29 @@ def info(
     try:
         device_stats = device.read_stats()
     except StatsReadError:
-        console.warning(f"""Device stats @ {device.stats_address} are unavailable.\nIs the PikeSquares Server running?""")
+        console.warning(
+            f"""Device stats @ {device.stats_address} are unavailable.\nIs the PikeSquares Server running?"""
+        )
         raise typer.Exit() from None
 
     logger.info(device_stats)
 
-    #vassals = stats_js.get("vassals", [])
-    #console.info(f"{len(vassals)} vassals running")
-    #for vs in vassals:
+    # vassals = stats_js.get("vassals", [])
+    # console.info(f"{len(vassals)} vassals running")
+    # for vs in vassals:
     #    vassal_id = vs.get("id")
     #    loyal = vs.get("loyal")
     #    ready = vs.get("ready")
     #    accepting = vs.get("accepting")
     #    console.info(f"{vassal_id=} {loyal=} {ready=} {accepting=}")
 
-#@app.command(rich_help_panel="Control", short_help="Write to master fifo")
-#def write_to_master_fifo(
-#    ctx: typer.Context, 
+
+# @app.command(rich_help_panel="Control", short_help="Write to master fifo")
+# def write_to_master_fifo(
+#    ctx: typer.Context,
 #    service_id: Annotated[str, typer.Option("--service-id", "-s", help="Service ID to send the command to")],
 #    command: Annotated[str, typer.Option("--command", "-c", help="Command to send master fifo.")],
-#):
+# ):
 #    obj = ctx.ensure_object(dict)
 #    conf = obj.get("conf")
 
@@ -138,8 +132,8 @@ def info(
 #    write_master_fifo(fifo_file, command)
 
 
-#@app.command(rich_help_panel="Control", short_help="Show logs of device")
-#def logs(ctx: typer.Context, entity: str = typer.Argument("device")):
+# @app.command(rich_help_panel="Control", short_help="Show logs of device")
+# def logs(ctx: typer.Context, entity: str = typer.Argument("device")):
 #    obj = ctx.ensure_object(dict)
 #    conf = obj.get("conf")
 
@@ -153,15 +147,14 @@ def info(
 #        )
 
 
-#@app.command(rich_help_panel="Control", short_help="Show status of device (running or stopped)")
-#def status(ctx: typer.Context):
+# @app.command(rich_help_panel="Control", short_help="Show status of device (running or stopped)")
+# def status(ctx: typer.Context):
 #    obj = ctx.ensure_object(dict)
 #    conf = obj.get("conf")
-    
+
 #    status = get_service_status(f"device", conf)
 #    if status == "running":
 #        log_func = console.success
 #    else:
 #        log_func = console.error
 #    log_func(f"Device is [b]{status}[/b]")
-

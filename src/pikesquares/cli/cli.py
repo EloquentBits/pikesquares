@@ -242,13 +242,15 @@ def uninstall(ctx: typer.Context, dry_run: bool = typer.Option(False, help="Unin
 
 
 @app.command(rich_help_panel="Control", short_help="Attach to the PikeSquares Server")
-def attach(
+@run_async
+async def attach(
     ctx: typer.Context,
 ):
     """Attach to PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    pc = services.get(context, ProcessCompose)
-    pc.attach()
+    pc = await services.aget(context, ProcessCompose)
+    logger.info(pc)
+    await pc.attach()
 
 
 @app.command(rich_help_panel="Control", short_help="Launch a preconfigured app")
@@ -449,6 +451,8 @@ async def up(
     # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
     """Launch PikeSquares Server"""
+
+    logger.info("running - pikesquares up")
 
     context = ctx.ensure_object(dict)
 
