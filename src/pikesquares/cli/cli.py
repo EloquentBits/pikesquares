@@ -11,6 +11,7 @@ import sentry_sdk
 # import structlog
 import structlog_sentry_logger
 import typer
+from aiopath import AsyncPath
 from dotenv import load_dotenv
 
 from pikesquares import __app_name__, __version__, services
@@ -108,7 +109,7 @@ app = typer.Typer(
 )
 
 
-from .commands import apps, control, devices, managed_services, projects, routers
+from .commands import apps, build, control, devices, managed_services, projects, routers
 
 app.add_typer(control.app)
 app.add_typer(apps.app, name="apps")
@@ -116,6 +117,7 @@ app.add_typer(routers.app, name="routers")
 app.add_typer(projects.app, name="projects")
 app.add_typer(devices.app, name="devices")
 app.add_typer(managed_services.app, name="services")
+app.add_typer(build.app, name="build")
 
 
 def _version_callback(value: bool) -> None:
@@ -198,6 +200,8 @@ async def main(
     """
 
     # logger.info(f"About to execute command: {ctx.invoked_subcommand}")
+    #
+
     is_root: bool = os.getuid() == 0
 
     # FIXME make sure to make an exception for --help
@@ -224,8 +228,12 @@ async def main(
     # context = services.init_context(ctx.ensure_object(dict))
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
-
     override_settings = {}
+
+    # check if locally built uwsgi binary is available
+    # uwsgi_bin_local = AsyncPath("/var/lib/pikesquares/scie-pikesquares/uwsgi/uwsgi")
+    # if await uwsgi_bin_local.exists():
+    #    override_settings = {"UWSGI_BIN": uwsgi_bin_local}
     try:
         await register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:
@@ -234,6 +242,18 @@ async def main(
         raise typer.Abort() from None
 
     conf = await services.aget(context, AppConfig)
+
+    if ctx.invoked_subcommand == "up":
+        if not await conf.UWSGI_BIN.exists():
+            (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
+            await build.build_uwsgi(conf)
+
+        required_plugins = ("sqlite3", "emperor_zeromq", "logfile")
+        for plugin in required_plugins:
+            plugin_path = conf.plugins_dir / f"{plugin}_plugin.so"
+            if not plugin_path.exists():
+                await build.build_plugin(conf, plugin)
+
     await init_db(context)
     device = await init_device(context)
     await init_process_compose(context, device)

@@ -218,7 +218,7 @@ class ProcessCompose(pydantic.BaseModel):
         raise PCDeviceUnavailableError()
 
 
-def register_process_compose(
+async def register_process_compose(
     context,
     conf: AppConfig,
 ):

@@ -240,7 +240,10 @@ class AppConfig(BaseSettings):
     run_dir: pydantic.DirectoryPath = pydantic.Field(
         default=AsyncPath("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR"
     )
-    UWSGI_BIN: Annotated[pydantic.FilePath, pydantic.Field()] | None = None
+    UWSGI_BIN: Annotated[
+        pydantic.FilePath,
+        pydantic.Field(default=AsyncPath("/var/lib/pikesquares/bin/uwsgi"), alias="PIKESQUARES_UWSGI_BIN"),
+    ]
 
     SCIE_BASE: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
     SCIE_BINDINGS: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None

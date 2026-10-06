@@ -18,7 +18,6 @@ from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ProcessCompose,
     ServiceUnavailableError,
-    register_process_compose,
 )
 from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
@@ -56,13 +55,13 @@ async def up(
     conf = await services.aget(context, AppConfig)
     process_compose = await services.aget(context, ProcessCompose)
 
-    if conf and not conf.pyapps_dir.exists():
-        logger.error(f"python apps directory @ {conf.pyapps_dir} is not available")
-        raise typer.Exit(code=1) from None
+    # if conf and not conf.pyapps_dir.exists():
+    #    logger.error(f"python apps directory @ {conf.pyapps_dir} is not available")
+    #    raise typer.Exit(code=1) from None
 
-    if conf and not conf.attached_daemons_dir.exists():
-        logger.error(f"attached daemons directory @ {conf.attached_daemons_dir} is not available")
-        raise typer.Exit(code=1) from None
+    # if conf and not conf.attached_daemons_dir.exists():
+    #    logger.error(f"attached daemons directory @ {conf.attached_daemons_dir} is not avai#lable")
+    #    raise typer.Exit(code=1) from None
 
     try:
         _ = await process_compose.ping_api("device")

@@ -7,9 +7,10 @@ from pathlib import Path
 import git
 import giturlparse
 import questionary
-
 import structlog
 import typer
+
+from pikesquares.cli.console import console
 
 from .validators import PathValidator, RepoAddressValidator
 
@@ -103,7 +104,7 @@ def venv_pip_install(venv_dir: Path, service_id: str, *args: str, find_links: st
 
 def prompt_base_dir(repo_name: str, custom_style: questionary.Style) -> Path:
     return questionary.path(
-            f"Choose a directory to clone your `{repo_name}` git repository into: ",
+        f"Choose a directory to clone your `{repo_name}` git repository into: ",
         default=os.getcwd(),
         only_directories=True,
         style=custom_style,
@@ -113,11 +114,11 @@ def prompt_base_dir(repo_name: str, custom_style: questionary.Style) -> Path:
 
 def prompt_repo_url(custom_style: questionary.Style) -> str:
     repo_url_q = questionary.text(
-            "Enter your app git repository url:",
-            default="",
-            instruction="""\nExamples:\n    https://host.xz/path/to/repo.git\n    ssh://host.xz/path/to/repo.git\n>>>""",
-            style=custom_style,
-            validate=RepoAddressValidator,
+        "Enter your app git repository url:",
+        default="",
+        instruction="""\nExamples:\n    https://host.xz/path/to/repo.git\n    ssh://host.xz/path/to/repo.git\n>>>""",
+        style=custom_style,
+        validate=RepoAddressValidator,
     )
     if not repo_url_q:
         raise typer.Exit()
@@ -161,7 +162,7 @@ def gather_repo_details(custom_style: questionary.Style) -> tuple[str, str, Path
 
 def provision_base_dir(custom_style):
     provider = questionary.select(
-            "Select the location of your app codebase: ",
+        "Select the location of your app codebase: ",
         choices=[
             "Git Repository",
             "Local Filesystem Directory",
@@ -179,13 +180,15 @@ def provision_base_dir(custom_style):
         raise typer.Exit()
 
     if provider == "Local Filesystem Directory":
-        return Path(questionary.path(
+        return Path(
+            questionary.path(
                 "Enter your app base directory: ",
-            default=os.getcwd(),
-            only_directories=True,
-            validate=PathValidator,
-            style=custom_style,
-        ).ask())
+                default=os.getcwd(),
+                only_directories=True,
+                validate=PathValidator,
+                style=custom_style,
+            ).ask()
+        )
 
     elif provider == "Git Repository":
 
@@ -195,27 +198,28 @@ def provision_base_dir(custom_style):
 
             def try_again_q(instruction):
                 return questionary.confirm(
-                        "Try entring a different repository url?",
-                        instruction=instruction,
-                        default=True,
-                        auto_enter=True,
-                        style=custom_style,
+                    "Try entring a different repository url?",
+                    instruction=instruction,
+                    default=True,
+                    auto_enter=True,
+                    style=custom_style,
                 )
-            #with console.status(f"cloning `{repo_name}` repository into `{clone_into_dir}`", spinner="earth"):
+
+            # with console.status(f"cloning `{repo_name}` repository into `{clone_into_dir}`", spinner="earth"):
             while not repo:
                 try:
-                    repo = git.Repo.clone_from(repo_url, clone_into_dir,  progress=CloneProgress())
+                    repo = git.Repo.clone_from(repo_url, clone_into_dir, progress=CloneProgress())
                 except git.GitCommandError as exc:
                     if "already exists and is not an empty directory" in exc.stderr:
                         if questionary.confirm(
-                                "Continue with this directory?",
-                                instruction=f"A git repository exists at {clone_into_dir}",
-                                default=True,
-                                auto_enter=True,
-                                style=custom_style,
-                                ).ask():
+                            "Continue with this directory?",
+                            instruction=f"A git repository exists at {clone_into_dir}",
+                            default=True,
+                            auto_enter=True,
+                            style=custom_style,
+                        ).ask():
                             break
-                        #base_dir = prompt_base_dir(repo_name, custom_style)
+                        # base_dir = prompt_base_dir(repo_name, custom_style)
                     elif "Repository not found" in exc.stderr:
                         if try_again_q(f"Unable to locate a git repository at {repo_url}").ask():
                             gather_repo_details_and_clone()
@@ -224,11 +228,13 @@ def provision_base_dir(custom_style):
                         console.warning(traceback.format_exc())
                         console.warning(f"{exc.stdout}")
                         console.warning(f"{exc.stderr}")
-                        if try_again_q(f"Unable to clone the provided repository url at {repo_url} into {clone_into_dir}").ask():
+                        if try_again_q(
+                            f"Unable to clone the provided repository url at {repo_url} into {clone_into_dir}"
+                        ).ask():
                             gather_repo_details_and_clone()
                         raise typer.Exit()
 
-            return clone_into_dir 
+            return clone_into_dir
 
         return gather_repo_details_and_clone()
 
@@ -237,6 +243,7 @@ def provision_base_dir(custom_style):
     else:
         console.warning("invalid app source")
         raise typer.Exit()
+
 
 """
 def get_project(

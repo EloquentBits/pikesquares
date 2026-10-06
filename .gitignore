@@ -28,7 +28,6 @@ src/pikesquares.egg-info/
 # Version file
 _version.py
 
-build
 pike-squares-*-*
 *.pex
 
