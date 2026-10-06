@@ -1,8 +1,9 @@
-import asyncio
 import atexit
 import grp
 import logging
 import os
+import sys
+import sysconfig
 from pathlib import Path
 from typing import Annotated
 
@@ -244,12 +245,39 @@ async def main(
     conf = await services.aget(context, AppConfig)
 
     if ctx.invoked_subcommand == "up":
-        if not await conf.UWSGI_BIN.exists():
+        platform = None
+        if sys.platform == "darwin":
+            platform = "macos"
+        elif sys.platform.startswith("linux"):
+            platform = "linux"
+        include_dir = AsyncPath(sysconfig.get_path("include"))
+        if include_dir is None:
+            raise typer.Exit(1)
+
+        if not (include_dir / "Python.h").exists():
+            inc = sysconfig.get_path("include")
+            console.warning("Python development header files are not installed.")
+            console.warning(f"Checked path: {os.path.join(inc, 'Python.h') if inc else 'N/A'}")
+            if platform == "linux":
+                console.info("install python3-dev package. i.e. sudo apt install python3-dev")
+            elif platform == "macos":
+                console.info("install python3-dev package. i.e. brew install python3-dev")
+            raise typer.Exit(1)
+
+        if not conf.UWSGI_BIN.exists():
             (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
             await build.build_uwsgi(conf)
 
         required_plugins = ("sqlite3", "emperor_zeromq", "logfile")
         for plugin in required_plugins:
+            if plugin == "sqlite3" and not (include_dir / "sqlite3.h").exists():
+                console.warning("sqlite3 development header files are not installed.")
+                if platform == "linux":
+                    console.info("install libsqlite3-dev package. i.e. sudo apt install libsqlite3-dev")
+                elif platform == "macos":
+                    console.info("install python3-dev package. i.e. brew install libsqlite3-dev")
+                raise typer.Exit(1)
+
             plugin_path = conf.plugins_dir / f"{plugin}_plugin.so"
             if not plugin_path.exists():
                 await build.build_plugin(conf, plugin)
