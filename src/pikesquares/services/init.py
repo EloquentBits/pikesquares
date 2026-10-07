@@ -129,8 +129,7 @@ async def init_device(context):
             console.error("device was not created")
             await uow.rollback()
             raise typer.Exit(1) from None
-        else:
-            await uow.commit()
+        await uow.commit()
 
     # pc = services.get(context, ProcessCompose)
 

@@ -1,27 +1,72 @@
 import json
+import sys
+import sysconfig
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
-import git
 import structlog
 import typer
-from aiopath import AsyncPath
 from packaging.version import Version
 from plumbum import ProcessExecutionError
-from plumbum import async_local as pl_local
+from plumbum import local as pl_local
 
 from pikesquares import services
-from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfig
 
 logger = structlog.getLogger(__name__)
 
 
-async def build_plugin(conf, name):
+class SCIERepoDoesNotExistError(Exception):
+    pass
 
-    scie_home = conf.data_dir / AsyncPath("scie-pikesquares")
-    uwsgi_src_home = scie_home / AsyncPath("uwsgi")
+
+class UWSGISourceFilesMissingError(Exception):
+    pass
+
+
+class PluginHeaderFileMissingError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+
+plugins = {
+    "sqlite3": {
+        "name": "sqlite3",
+        "header-filename": "sqlite3.h",
+        "error-message-hint-macos": "install python3-dev package. i.e. brew install libsqlite3-dev",
+        "error-message-hint-linux": "install libsqlite3-dev package. i.e. sudo apt install libsqlite3-dev",
+    },
+    "emperor_zeromq": {
+        "name": "emperor_zeromq",
+        "header-filename": "",
+        "error-message-hint-macos": "install libzmq package and development header files. i.e. brew install libsqlite3-dev",
+        "error-message-hint-linux": "install libzmq  package and development header files. i.e. sudo apt install libzmq5 libzmq3-dev",
+    },
+}
+
+
+def build_plugin(conf, name):
+
+    include_dir = Path(sysconfig.get_path("include"))
+    if name in plugins:
+        platform = None
+        if sys.platform == "darwin":
+            platform = "macos"
+        elif sys.platform.startswith("linux"):
+            platform = "linux"
+
+        print(f"{include_dir / plugins[name]['header-filename']}")
+
+        if not (include_dir / plugins[name]["header-filename"]).exists():
+            raise PluginHeaderFileMissingError(plugins[name]["error-message-hint-" + platform])
+
+    scie_home = conf.data_dir / Path("scie-pikesquares")
+    uwsgi_src_home = scie_home / Path("uwsgi")
+    if not uwsgi_src_home.exists():
+        raise UWSGISourceFilesMissingError()
     cwd = uwsgi_src_home
 
     cmd_env = {}
@@ -37,7 +82,7 @@ async def build_plugin(conf, name):
     console.info(f"Starting building the {name} uWSGI plugin")
 
     try:
-        result = await uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
+        result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
     except ProcessExecutionError as exc:
         """
         Stdout:       | using profile: buildconf/default.ini
@@ -68,74 +113,88 @@ async def build_plugin(conf, name):
 
     (uwsgi_src_home / f"{name}_plugin.so").rename(conf.plugins_dir / f"{name}_plugin.so")
 
-    if await conf.UWSGI_BIN.exists():
+    if conf.UWSGI_BIN.exists():
         console.info("Completed building the uWSGI binary.")
     else:
         console.info("Failed to build the uWSGI binary.")
 
 
-async def build_uwsgi(conf):
+def build_uwsgi(conf):
     repo_url = "https://github.com/EloquentBits/scie-pikesquares.git"
-    scie_home = conf.data_dir / AsyncPath("scie-pikesquares")
-    scie_home.mkdir(parents=True, exist_ok=True)
-    if not (scie_home / ".git").exists():
-        repo = clone(repo_url, scie_home, recurse_submodules=True)
-        logger.info(repo)
-    else:
-        logger.info("scie-pikesquares directory exists. not cloning.")
+    # scie_home = pl_local.path(conf.data_dir / Path("scie-pikesquares"))
+    with tempfile.TemporaryDirectory() as scie_home:
+        # pl_local.path(scie_home).chown("pikesquares", "pikesquares", recursive=True)
+        # if not (scie_home / ".git").exists():
+        # repo = clone(repo_url, scie_home, recurse_submodules=True)
+        # logger.info(repo)
+        # git clone https://github.com/EloquentBits/scie-pikesquares /var/lib/pikesquares/scie-pikesquares --recurse-submodules --depth 1
 
-    uwsgi_src_home = scie_home / AsyncPath("uwsgi")
-
-    # uv run uwsgiconfig.py --build nolang
-    cmd_env = {}
-    cmd_args = ["run", "uwsgiconfig.py", "--build", "nolang"]
-    if cmd_env:
-        pl_local.env.update(cmd_env)
-        logger.debug(f"{cmd_env=}")
-
-    # with pl_local.as_user(run_as_user):
-    console.info("Starting building the uWSGI binary")
-    # async with pl_local.cwd(str(uwsgi_src_home)):
-    uv = pl_local[str(conf.UV_BIN)]
-    try:
-        result = await uv.run(cmd_args, cwd=str(uwsgi_src_home), **{"env": cmd_env})
-    except ProcessExecutionError as exc:
-        for line in exc.stdout.split("\n"):
-            print(line)
-
-        if exc.stderr:
-            for line in exc.stderr.split("\n"):
+        cmd_env = {}
+        cmd_args = ["clone", repo_url, str(scie_home), "--recurse-submodules", "--depth", "1"]
+        if cmd_env:
+            pl_local.env.update(cmd_env)
+            logger.debug(f"{cmd_env=}")
+        git_cmd = pl_local["git"]
+        # with pl_local.as_user("pikesquares"):
+        try:
+            result = git_cmd.run(cmd_args, **{"env": cmd_env})
+        except ProcessExecutionError as exc:
+            for line in exc.stdout.split("\n"):
                 print(line)
-        return typer.Exit(code=1)
 
-    (uwsgi_src_home / "uwsgi").rename(conf.UWSGI_BIN)
+            if exc.stderr:
+                for line in exc.stderr.split("\n"):
+                    print(line)
+            return typer.Exit(code=1)
 
-    if await conf.UWSGI_BIN.exists():
-        console.info("Completed building the uWSGI binary.")
-    else:
-        console.info("Failed to build the uWSGI binary.")
+        # else:
+        #    logger.info("scie-pikesquares directory exists. not cloning.")
 
+        # if not scie_home.exists():
+        #    raise SCIERepoDoesNotExistError()
 
-class CloneProgress(git.RemoteProgress):
-    def update(self, op_code, cur_count, max_count=None, message=""):
-        # console.info(f"{op_code=} {cur_count=} {max_count=} {message=}")
-        if message:
-            console.info(f"Completed git clone {message}")
+        uwsgi_src_home = scie_home / Path("uwsgi")
+        # if not uwsgi_src_home.exists():
+        # if not pl_local.path(scie_home / Path("uwsgi")).exists():
+        #    raise UWSGISourceFilesMissingError()
+        # from plumbum.path.local import LocalPath
 
+        # uv run uwsgiconfig.py --build nolang
+        uwsgi_includes = [
+            # "/usr/lib/gcc/x86_64-linux-gnu/15/include",
+            # "/usr/local/include",
+            # "/usr/include/x86_64-linux-gnu",
+            # "/usr/include",
+        ]
+        cmd_env = {"UWSGI_INCLUDES": ",".join(uwsgi_includes)}
+        cmd_args = ["run", "uwsgiconfig.py", "--build", "nolang"]
+        if cmd_env:
+            pl_local.env.update(cmd_env)
+            logger.debug(f"{cmd_env=}")
 
-def clone(repo_url, clone_into_dir: Path, recurse_submodules=False) -> Path:
+        console.info("Starting building the uWSGI binary")
+        # async with pl_local.cwd(str(uwsgi_src_home)):
+        uv = pl_local[str(conf.UV_BIN)]
+        # with pl_local.as_user("pikesquares"):
+        try:
+            result = uv.run(cmd_args, cwd=str(uwsgi_src_home), **{"env": cmd_env})
+        except ProcessExecutionError as exc:
+            for line in exc.stdout.split("\n"):
+                print(line)
 
-    try:
-        repo = git.Repo.clone_from(
-            repo_url,
-            clone_into_dir,
-            recurse_submodules=recurse_submodules,
-            depth=1,
-            # progress=CloneProgress()
-        )
-        return repo
-    except git.GitCommandError as exc:
-        pass
+            if exc.stderr:
+                for line in exc.stderr.split("\n"):
+                    print(line)
+            return typer.Exit(code=1)
+
+        (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
+        # (uwsgi_src_home / "uwsgi").rename(conf.UWSGI_BIN)
+        pl_local.path(str(uwsgi_src_home / "uwsgi")).move(str(conf.data_dir / "bin"))
+
+        if pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists():
+            console.info("Completed building the uWSGI binary.")
+        else:
+            console.info("Failed to build the uWSGI binary.")
 
 
 app = typer.Typer()
@@ -145,17 +204,23 @@ app = typer.Typer()
 @app.command(
     # "new", hidden=True
 )
-@run_async
-async def uwsgi(
+def uwsgi(
     ctx: typer.Context,
 ):
     logger.info("building uWSGI binary")
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    await build_uwsgi(conf)
+    conf = services.get(context, AppConfig)
+
+    try:
+        build_uwsgi(conf)
+    except SCIERepoDoesNotExistError:
+        logger.error("unable to clone scie-pikesquares repo")
+
+    except UWSGISourceFilesMissingError:
+        logger.error("unable to build plugin. uWSGI source files missing")
 
 
-async def get_uv_python_installations(uv_bin, cwd):
+def get_uv_python_installations(uv_bin, cwd):
     """
     [{'key': 'cpython-3.14.3-linux-x86_64-gnu',
       'version': '3.14.3',
@@ -182,7 +247,7 @@ async def get_uv_python_installations(uv_bin, cwd):
     uv = pl_local[str(uv_bin)]
 
     try:
-        result = await uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
+        result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
         return json.loads(result.stdout)
     except ProcessExecutionError as exc:
         for line in exc.stdout.split("\n"):
@@ -199,7 +264,6 @@ async def get_uv_python_installations(uv_bin, cwd):
 @app.command(
     # "new", hidden=True
 )
-@run_async
 async def python_plugin(
     ctx: typer.Context,
     py_version: Annotated[
@@ -208,20 +272,20 @@ async def python_plugin(
 ):
 
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
+    conf = services.get(context, AppConfig)
 
-    scie_home = conf.data_dir / AsyncPath("scie-pikesquares")
-    uwsgi_src_home = scie_home / AsyncPath("uwsgi")
+    scie_home = conf.data_dir / Path("scie-pikesquares")
+    uwsgi_src_home = scie_home / Path("uwsgi")
     cwd = uwsgi_src_home
 
-    all_py_installs = await get_uv_python_installations(conf.UV_BIN, cwd)
+    all_py_installs = get_uv_python_installations(conf.UV_BIN, cwd)
 
     if not py_version:
         py_install = max(all_py_installs, key=lambda item: Version(item["version"]))
     else:
         py_install = next(filter(lambda x: x["version"] == py_version, all_py_installs))
     py_version = py_install.get(py_version)
-    py_bin_path = AsyncPath(py_install.get("path"))
+    py_bin_path = Path(py_install.get("path"))
     logger.info(f"building uWSGI Python plugin in {uwsgi_src_home}. {py_version} @ {str(py_bin_path)}")
 
     # uv run uwsgiconfig.py --plugin plugins/python
@@ -235,7 +299,7 @@ async def python_plugin(
     # with pl_local.as_user(run_as_user):
     uv = pl_local[str(uv_bin)]
     try:
-        result = await uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
+        result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
     except ProcessExecutionError as exc:
         for line in exc.stdout.split("\n"):
             print(line)
@@ -256,75 +320,69 @@ async def python_plugin(
 @app.command(
     # "new", hidden=True
 )
-@run_async
-async def sqlite3_plugin(
+def sqlite3_plugin(
     ctx: typer.Context,
 ):
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    await build_plugin(conf, "sqlite3")
+    conf = services.get(context, AppConfig)
+    build_plugin(conf, "sqlite3")
 
 
 @app.command(short_help="Build uWSGI emperor-zeromq plugin.\nAliases:[p] emperor-zeromq-plugin")
 @app.command(
     # "new", hidden=True
 )
-@run_async
-async def emperor_zeromq_plugin(
+def emperor_zeromq_plugin(
     ctx: typer.Context,
 ):
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    await build_plugin(conf, "emperor_zeromq")
+    conf = services.get(context, AppConfig)
+    build_plugin(conf, "emperor_zeromq")
 
 
 @app.command(short_help="Build uWSGI tuntap plugin.\nAliases:[p] tuntap-plugin")
 @app.command(
     # "new", hidden=True
 )
-@run_async
-async def tuntap_plugin(
+def tuntap_plugin(
     ctx: typer.Context,
 ):
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    await build_plugin(conf, "tuntap")
+    conf = services.get(context, AppConfig)
+    build_plugin(conf, "tuntap")
 
 
 @app.command(short_help="Build uWSGI pty plugin.\nAliases:[p] pty-plugin")
 @app.command(
     # "new", hidden=True
 )
-@run_async
-async def pty_plugin(
+def pty_plugin(
     ctx: typer.Context,
 ):
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    await build_plugin(conf, "pty")
+    conf = services.get(context, AppConfig)
+    build_plugin(conf, "pty")
 
 
 @app.command(short_help="Build uWSGI forkpty_router plugin.\nAliases:[p] forkpty-router-plugin")
 @app.command(
     # "new", hidden=True
 )
-@run_async
-async def forkpty_router_plugin(
+def forkpty_router_plugin(
     ctx: typer.Context,
 ):
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    await build_plugin(conf, "forkpty_router")
+    conf = services.get(context, AppConfig)
+    build_plugin(conf, "forkpty_router")
 
 
 @app.command(short_help="Build uWSGI logfile plugin.\nAliases:[p] logfile-plugin")
 @app.command(
     # "new", hidden=True
 )
-@run_async
-async def logfile_plugin(
+def logfile_plugin(
     ctx: typer.Context,
 ):
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    await build_plugin(conf, "logfile")
+    conf = services.get(context, AppConfig)
+    build_plugin(conf, "logfile")

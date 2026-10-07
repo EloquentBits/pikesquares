@@ -53,47 +53,48 @@ async def up(
     context = ctx.ensure_object(dict)
 
     conf = await services.aget(context, AppConfig)
-    process_compose = await services.aget(context, ProcessCompose)
+    if not context["run_foreground"]:
+        process_compose = await services.aget(context, ProcessCompose)
 
-    # if conf and not conf.pyapps_dir.exists():
-    #    logger.error(f"python apps directory @ {conf.pyapps_dir} is not available")
-    #    raise typer.Exit(code=1) from None
+        # if conf and not conf.pyapps_dir.exists():
+        #    logger.error(f"python apps directory @ {conf.pyapps_dir} is not available")
+        #    raise typer.Exit(code=1) from None
 
-    # if conf and not conf.attached_daemons_dir.exists():
-    #    logger.error(f"attached daemons directory @ {conf.attached_daemons_dir} is not avai#lable")
-    #    raise typer.Exit(code=1) from None
+        # if conf and not conf.attached_daemons_dir.exists():
+        #    logger.error(f"attached daemons directory @ {conf.attached_daemons_dir} is not avai#lable")
+        #    raise typer.Exit(code=1) from None
 
-    try:
-        _ = await process_compose.ping_api("device")
-        logger.info("process-compose is already running. not bringing it up now.")
-    except PCAPIUnavailableError:
-        logger.info("bringing up process-compose")
-        up_result = await process_compose.up()
-        if not up_result:
-            raise typer.Exit(code=0) from None
+        try:
+            _ = await process_compose.ping_api("device")
+            logger.info("process-compose is already running. not bringing it up now.")
+        except PCAPIUnavailableError:
+            logger.info("bringing up process-compose")
+            up_result = await process_compose.up()
+            if not up_result:
+                raise typer.Exit(code=0) from None
 
-    #######################
-    # process-compose processes
-    #    caddy, dnsmasq, device, api
-    try:
-        for name, process, messages in zip(
-            process_compose.config.processes.keys(),
-            process_compose.config.processes.values(),
-            process_compose.config.custom_messages.values(),
-            strict=True,
-        ):
-            try:
-                console.success(f"{messages.title_start} {process.description}")
-                process_stats = await process_compose.ping_api(name)
-                if process_stats.is_running and process_stats.status == "Running":
-                    console.success(f":heavy_check_mark:     {process.description}... Launched!")
-                else:
-                    console.warning(f":heavy_exclamation_mark:     {process.description} unable to launch.")
-            except PCAPIUnavailableError:
-                await asyncio.sleep(1)
-                continue
-    except (StopIteration, IndexError):
-        pass
+        #######################
+        # process-compose processes
+        #    caddy, dnsmasq, device, api
+        try:
+            for name, process, messages in zip(
+                process_compose.config.processes.keys(),
+                process_compose.config.processes.values(),
+                process_compose.config.custom_messages.values(),
+                strict=True,
+            ):
+                try:
+                    console.success(f"{messages.title_start} {process.description}")
+                    process_stats = await process_compose.ping_api(name)
+                    if process_stats.is_running and process_stats.status == "Running":
+                        console.success(f":heavy_check_mark:     {process.description}... Launched!")
+                    else:
+                        console.warning(f":heavy_exclamation_mark:     {process.description} unable to launch.")
+                except PCAPIUnavailableError:
+                    await asyncio.sleep(1)
+                    continue
+        except (StopIteration, IndexError):
+            pass
 
     #######################
     # emperor zeromq monitors

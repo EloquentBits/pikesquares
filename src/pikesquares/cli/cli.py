@@ -202,8 +202,17 @@ async def main(
 
     # logger.info(f"About to execute command: {ctx.invoked_subcommand}")
     #
+    run_foreground = True
 
     is_root: bool = os.getuid() == 0
+    platform = sys.platform
+    if platform == "darwin":
+        platform = "macos"
+    elif platform.startswith("linux"):
+        platform = "linux"
+    else:
+        console.error(f"unsupported platform {platform}")
+        raise typer.Exit(1)
 
     # FIXME make sure to make an exception for --help
     if ctx.invoked_subcommand in set(
@@ -229,6 +238,7 @@ async def main(
     # context = services.init_context(ctx.ensure_object(dict))
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
+    context["run_foreground"] = run_foreground
     override_settings = {}
 
     # check if locally built uwsgi binary is available
@@ -242,49 +252,62 @@ async def main(
         console.error("invalid config. giving up.")
         raise typer.Abort() from None
 
+    await init_db(context)
+
     conf = await services.aget(context, AppConfig)
 
     if ctx.invoked_subcommand == "up":
-        platform = None
-        if sys.platform == "darwin":
-            platform = "macos"
-        elif sys.platform.startswith("linux"):
-            platform = "linux"
-        include_dir = AsyncPath(sysconfig.get_path("include"))
-        if include_dir is None:
-            raise typer.Exit(1)
+        # include_dir = AsyncPath(sysconfig.get_path("include"))
+        # if include_dir is None:
+        #    raise typer.Exit(1)
 
-        if not (include_dir / "Python.h").exists():
-            inc = sysconfig.get_path("include")
-            console.warning("Python development header files are not installed.")
-            console.warning(f"Checked path: {os.path.join(inc, 'Python.h') if inc else 'N/A'}")
-            if platform == "linux":
-                console.info("install python3-dev package. i.e. sudo apt install python3-dev")
-            elif platform == "macos":
-                console.info("install python3-dev package. i.e. brew install python3-dev")
-            raise typer.Exit(1)
-
-        if not conf.UWSGI_BIN.exists():
+        # do this only before building the Python plugin
+        if 0:
+            if not (include_dir / "Python.h").exists():
+                inc = sysconfig.get_path("include")
+                console.warning("Python development header files are not installed.")
+                console.warning(f"Checked path: {os.path.join(inc, 'Python.h') if inc else 'N/A'}")
+                if platform == "linux":
+                    console.info("install python3-dev package. i.e. sudo apt install python3-dev")
+                elif platform == "macos":
+                    console.info("install python3-dev package. i.e. brew install python3-dev")
+                raise typer.Exit(1)
+        logger.info(f"{conf.UWSGI_BIN=}")
+        if not await conf.UWSGI_BIN.exists():
             (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
-            await build.build_uwsgi(conf)
+            try:
+                build.build_uwsgi(conf)
+            except build.SCIERepoDoesNotExistError:
+                logger.error("unable to clone scie-pikesquares repo")
+                raise typer.Exit(1)
+
+            except build.UWSGISourceFilesMissingError:
+                console.error("unable to build plugin. uWSGI source files missing")
+                raise typer.Exit(1)
 
         required_plugins = ("sqlite3", "emperor_zeromq", "logfile")
         for plugin in required_plugins:
-            if plugin == "sqlite3" and not (include_dir / "sqlite3.h").exists():
-                console.warning("sqlite3 development header files are not installed.")
-                if platform == "linux":
-                    console.info("install libsqlite3-dev package. i.e. sudo apt install libsqlite3-dev")
-                elif platform == "macos":
-                    console.info("install python3-dev package. i.e. brew install libsqlite3-dev")
-                raise typer.Exit(1)
-
             plugin_path = conf.plugins_dir / f"{plugin}_plugin.so"
             if not plugin_path.exists():
-                await build.build_plugin(conf, plugin)
+                try:
+                    await build.build_plugin(conf, plugin)
+                except build.PluginHeaderFileMissingError as exc:
+                    console.warning(f"{plugin} development header files are not installed.")
+                    console.info(exc.message)
+                    raise typer.Exit(1)
 
-    await init_db(context)
+                except build.UWSGISourceFilesMissingError:
+                    console.error("unable to build plugin. uWSGI source files missing")
+                    raise typer.Exit(1)
+
+    # cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
+    # sql = f"\"SELECT option_key,option_value FROM uwsgi_options WHERE machine_id='{machine_id}' ORDER BY sort_order_index\""
+
     device = await init_device(context)
-    await init_process_compose(context, device)
+
+    if not run_foreground:
+        await init_process_compose(context, device)
+
     await init_pluggy(context)
 
     if conf.SENTRY_DSN:

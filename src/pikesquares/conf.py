@@ -193,14 +193,14 @@ def ensure_system_path(
 
     is_root: bool = os.getuid() == 0
 
-    if not is_root and not Path(new_path).exists():
-        raise AppConfigError(f"{new_path} does not exist.") from None
+    # if not is_root and not Path(new_path).exists():
+    #    raise AppConfigError(f"{new_path} does not exist.") from None
 
     # local_path: async_local.LocalPath = await async_local.path(Path(new_path))
     if not new_path.exists():
         # Set the current numeric umask and return the previous umask.
         old_umask = os.umask(0o002)
-        os.setgid(grp.getgrnam("pikesquares")[2])
+        # os.setgid(grp.getgrnam("pikesquares")[2])
         try:
             if is_dir:
                 new_path.mkdir()
@@ -240,10 +240,10 @@ class AppConfig(BaseSettings):
     run_dir: pydantic.DirectoryPath = pydantic.Field(
         default=AsyncPath("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR"
     )
-    UWSGI_BIN: Annotated[
-        pydantic.FilePath,
-        pydantic.Field(default=AsyncPath("/var/lib/pikesquares/bin/uwsgi"), alias="PIKESQUARES_UWSGI_BIN"),
-    ]
+    # UWSGI_BIN: Annotated[
+    #    pydantic.FilePath,
+    #    pydantic.Field(default=AsyncPath("/var/lib/pikesquares/bin/uwsgi"), alias="PIKESQUARES_UWSGI_BIN"),
+    # ]
 
     SCIE_BASE: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
     SCIE_BINDINGS: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None

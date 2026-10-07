@@ -1,17 +1,14 @@
 import structlog
 
-
 from . import Section
 
 # from .routers import BaseRouterHttps
-
 
 
 logger = structlog.get_logger()
 
 
 class DeviceSection(Section):
-
     def __init__(self, device):
         super().__init__(
             name="uwsgi",  # uwsgi: [uwsgi] section header
@@ -89,9 +86,9 @@ class DeviceSection(Section):
         # if device.daemonize:
         #    self.main_process.daemonize(log_into=str(device.log_file))
 
-        #self.main_process.set_basic_params(
+        # self.main_process.set_basic_params(
         #    touch_reload=str(device.touch_reload_file),
-        #)
+        # )
 
         self.main_process.change_dir(to=device.data_dir)
 
@@ -126,10 +123,11 @@ class DeviceSection(Section):
         #    ["pikesquares.daemons.launch_standalone"],
         #    shared=False,
         # )
+        #
+        self._set("show-config", "true")
 
         self.logging.add_logger(self.logging.loggers.stdio())
         self.logging.add_logger(self.logging.loggers.file(filepath=str(device.log_file)))
-        self._set("show-config", "true")
 
         # self.logging.add_logger(
         #    self.logging.loggers.file(filepath=str(device.log_file))

@@ -3,19 +3,22 @@ from pathlib import Path
 from typing import Union
 
 import structlog
-
 from uwsgiconf.config import (
-    Section as _Section, 
-    TypeSection, 
     Configuration as _Configuration,
+)
+from uwsgiconf.config import (
+    Section as _Section,
+)
+from uwsgiconf.config import (
+    TypeSection,
+)
+from uwsgiconf.formatters import (
+    ArgsFormatter,
+    FormatterBase,
+    IniFormatter,
 )
 from uwsgiconf.typehints import Strlist
 from uwsgiconf.utils import listify
-from uwsgiconf.formatters import (
-    FormatterBase,
-    ArgsFormatter,
-    IniFormatter,
-)
 
 logger = structlog.get_logger()
 
@@ -45,18 +48,21 @@ class JSONFormatter(FormatterBase):
                     existing_plugins = existing_plugins.split(",")
                     existing_plugins.append(str(value).strip())
                     config[section_name][str(key)] = ",".join(existing_plugins)
-                    #p rint(config[section_name][str(key)])
+                    # p rint(config[section_name][str(key)])
             else:
                 config[section_name][str(key)] = str(value).strip()
 
         return json.dumps(config)
 
 
-FORMATTERS: dict[str, type[FormatterBase]] = {formatter.alias: formatter for formatter in (
-    ArgsFormatter,
-    IniFormatter,
-    JSONFormatter,
-)}
+FORMATTERS: dict[str, type[FormatterBase]] = {
+    formatter.alias: formatter
+    for formatter in (
+        ArgsFormatter,
+        IniFormatter,
+        JSONFormatter,
+    )
+}
 
 
 class Configuration(_Configuration):
@@ -88,18 +94,18 @@ class Configuration(_Configuration):
 
         """
         if filepath is None:
-            with NamedTemporaryFile(prefix=f'{self.alias}_', suffix='.ini', delete=False) as f:
+            with NamedTemporaryFile(prefix=f"{self.alias}_", suffix=".ini", delete=False) as f:
                 filepath = f.name
 
         else:
             filepath = Path(filepath).absolute()
 
             if filepath.is_dir():
-                filepath = filepath / f'{self.alias}.ini'
+                filepath = filepath / f"{self.alias}.ini"
 
         filepath = str(filepath)
 
-        with open(filepath, 'w') as target_file:
+        with open(filepath, "w") as target_file:
             target_file.write(self.format())
             target_file.flush()
 
@@ -107,7 +113,6 @@ class Configuration(_Configuration):
 
 
 class Section(_Section):
-
     def include(self, target: Union["Section", list["Section"], str, list[str]]) -> TypeSection:
         """Includes target contents into config.
 
@@ -171,8 +176,7 @@ class ManagedServiceSection(Section):
 """
 
 
-
-#class CronJobSection(Section):
+# class CronJobSection(Section):
 
 #    def _setup_environment_variables(self, env_vars):
 #        for key, value in env_vars.items():
@@ -187,7 +191,7 @@ class ManagedServiceSection(Section):
 #        if env_vars is not None:
 #            self._setup_environment_variables(env_vars)
 
-        # -15 -1 -1 -1 -1 - every 15 minute (minus X means */X, minus 1 means *)
+# -15 -1 -1 -1 -1 - every 15 minute (minus X means */X, minus 1 means *)
 #        self.master_process.add_cron_task(
 #            command,
 #            **kwargs
