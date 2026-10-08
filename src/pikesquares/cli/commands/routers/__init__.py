@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Annotated
 
 # from cuid import cuid
 import questionary
@@ -8,10 +9,9 @@ import structlog
 # import shutil
 import typer
 from tinydb import Query, TinyDB, where
-from typing_extensions import Annotated
 
 from pikesquares import get_first_available_port, services
-from pikesquares.cli.cli import run_async
+from pikesquares.cli.decorator import run_async
 from pikesquares.conf import AppConfig
 from pikesquares.domain import project
 from pikesquares.exceptions import StatsReadError
@@ -19,7 +19,6 @@ from pikesquares.service_layer.handlers.monitors import destroy_instance
 from pikesquares.service_layer.uow import UnitOfWork
 
 # from tests.unit_tests.service_layer_tests.conftest import project
-
 # from pikesquares.services.router import (
 #    https_router_up,
 #    https_routers_all,
@@ -73,7 +72,7 @@ async def list_(
     uow = await services.aget(context, UnitOfWork)
     device = context.get("device")
 
-    tuntap_routers = await uow.tuntap_routers.list()
+    tuntap_routers = uow.tuntap_routers.list()
     if not len(tuntap_routers):
         console.warning("No Routers were initialized, nothing to show!")
         raise typer.Exit()
@@ -89,7 +88,7 @@ async def list_(
         )
     console.print_response(routers_out, title=f"TunTap Routers count: {len(tuntap_routers)}", show_id=show_id)
     """
-    routers = await uow.routers.list()
+    routers = uow.routers.list()
     if not len(routers):
         console.warning("No Routers were initialized, nothing to show!")
         raise typer.Exit()
@@ -122,8 +121,8 @@ async def stop(
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
 
-    async with uow:
-        http_routers = await uow.http_routers.list()
+    with uow:
+        http_routers = uow.http_routers.list()
         # for router in http_routers:
         #     try:
         #         router_stats_available = bool(router.__class__.read_stats(router.stats_address))
@@ -136,10 +135,10 @@ async def stop(
             print(router_to_stop)
             r_addr = router_to_stop.split()[-1]
             print(r_addr)
-            router = await uow.http_routers.get_by_address(r_addr)
+            router = uow.http_routers.get_by_address(r_addr)
             if router:
-                project = await router.awaitable_attrs.project
-                project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+                project = router.project
+                project_zmq_monitor = project.zmq_monitor
                 project_zmq_monitor_address = project_zmq_monitor.zmq_address
                 print(project_zmq_monitor_address)
 
@@ -343,10 +342,10 @@ def delete(
 
     def get_router(addr):
         with TinyDB(f"{Path(conf.data_dir) / 'device-db.json'}") as db:
-            return db.table('routers').get(Query().address == addr)
+            return db.table("routers").get(Query().address == addr)
 
     with TinyDB(f"{Path(conf.data_dir) / 'device-db.json'}") as db:
-        routers_db = db.table('routers')
+        routers_db = db.table("routers")
         routers_all = routers_db.all()
         if not len(routers_all):
             console.info("no proxies available.")
@@ -377,7 +376,7 @@ def delete(
             #        file.unlink(missing_ok=true)
             #        console.info(f"deleted app run files @ {str(file)}")
 
-            routers_db.remove(where('service_id') == selected_router_cuid)
+            routers_db.remove(where("service_id") == selected_router_cuid)
             console.success(f"removed ssl proxy '{router_to_delete}' [{selected_router_cuid}]")
 
     """

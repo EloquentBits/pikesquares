@@ -119,7 +119,7 @@ async def provision_http_router(
             log_dir=str(project.log_dir),
             run_dir=str(project.run_dir),
         )
-        http_router = await uow.http_routers.add(http_router)
+        http_router = uow.http_routers.add(http_router)
         http_router_tuntap_device = await create_tuntap_device(
             uow,
             tuntap_router,
@@ -164,7 +164,7 @@ async def provision_tuntap_router(
                 log_dir=str(project.log_dir),
                 run_dir=str(project.run_dir),
             )
-            tuntap_router = await uow.tuntap_routers.add(tuntap_router)
+            tuntap_router = uow.tuntap_routers.add(tuntap_router)
             logger.info(f"created tuntap router with ip: {tuntap_router.ip}")
             return tuntap_router
     except Exception as exc:
@@ -186,7 +186,7 @@ async def create_tuntap_device(
             tuntap_router=tuntap_router,
             linked_service_id=linked_service_id,
         )
-        await uow.tuntap_devices.add(tuntap_device)
+        uow.tuntap_devices.add(tuntap_device)
     except Exception as exc:
         logger.error(f"unable to create tuntap device for service {linked_service_id}")
         raise exc
@@ -196,10 +196,10 @@ async def create_tuntap_device(
 async def http_router_ips(uow: UnitOfWork) -> list[str]:
     try:
         addresses = []
-        routers = await uow.http_routers.list()
+        routers = uow.http_routers.list()
         if routers:
             for router in routers:
-                device = await uow.tuntap_devices.\
+                device = uow.tuntap_devices.\
                     get_by_linked_service_id(router.service_id)
                 if device:
                     addresses.append(f"/pikesquares.dev/{device.ip}")
@@ -216,19 +216,19 @@ async def http_router_up(
     stats = None
     while not stats:
         try:
-            return await http_router.read_stats()
+            return http_router.read_stats()
         except tenacity.RetryError:
             break
 
     try:
-        project = await http_router.awaitable_attrs.project
-        tuntap_routers = await project.awaitable_attrs.tuntap_routers
-        #await uow.tuntap_routers.get_by_project_id(project.id)
+        project = http_router.project
+        tuntap_routers = project.tuntap_routers
+        #uow.tuntap_routers.get_by_project_id(project.id)
         tuntap_router = tuntap_routers[0]
         #http_router_iface = tuntap_router.ipv4_interface + 1
         #http_router_ip = str(http_router_iface.ip)
-        #http_router_tuntap_device  = await uow.tuntap_devices.get_by_ip(http_router_ip)
-        http_router_tuntap_device  = await uow.tuntap_devices.\
+        #http_router_tuntap_device  = uow.tuntap_devices.get_by_ip(http_router_ip)
+        http_router_tuntap_device  = uow.tuntap_devices.\
             get_by_linked_service_id(http_router.service_id)
 
         section = HttpRouterSection(http_router)
@@ -278,12 +278,12 @@ async def http_router_up(
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
 
-        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        project_zmq_monitor = project.zmq_monitor
         if not project_zmq_monitor:
             return False
         #print(section.as_configuration().format())
         #try:
-        #    _ = await project.read_stats()
+        #    _ = project.read_stats()
         #    return True
         #except tenacity.RetryError:
         #    logger.info(f"project is running. launching http router on {project_zmq_monitor.socket_address}")
@@ -303,6 +303,6 @@ async def http_router_up(
     stats = None
     while not stats:
         try:
-            return await http_router.read_stats()
+            return http_router.read_stats()
         except tenacity.RetryError:
             break

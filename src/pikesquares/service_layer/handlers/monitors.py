@@ -12,7 +12,7 @@ from pikesquares.service_layer.uow import UnitOfWork
 logger = structlog.getLogger()
 
 
-async def create_zmq_monitor(
+def create_zmq_monitor(
     uow: UnitOfWork,
     device: Device | None = None,
     project: Project | None = None,
@@ -27,7 +27,7 @@ async def create_zmq_monitor(
             create_kwargs["socket_address"] = str(project.zmq_monitor_socket)
         logger.info(f"creating zmq monitor @ {create_kwargs.get('socket_address')}")
         zmq_monitor = ZMQMonitor(**create_kwargs)
-        await uow.zmq_monitors.add(zmq_monitor)
+        uow.zmq_monitors.add(zmq_monitor)
         return zmq_monitor
     except Exception as exc:
         logger.error("unable to create zmq monitor")

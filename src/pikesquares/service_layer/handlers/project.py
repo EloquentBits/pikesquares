@@ -40,11 +40,11 @@ async def provision_project(
             log_dir=str(device.log_dir),
             run_dir=str(device.run_dir),
         )
-        project = await uow.projects.add(project)
+        project = uow.projects.add(project)
         logger.info(f"created project {project}")
 
         logger.info(f"creating project zmq monitor in project {project.service_id}")
-        project_zmq_monitor = await create_zmq_monitor(uow, project=project)
+        project_zmq_monitor = create_zmq_monitor(uow, project=project)
         logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
 
         logger.info(f"creating tuntap router for project {project.service_id}")
@@ -112,14 +112,14 @@ async def project_up(project: Project)  -> bool | None:
     stats = None
     while not stats:
         try:
-            return await project.read_stats()
+            return project.read_stats()
         except tenacity.RetryError:
             break
 
     try:
         section = ProjectSection(project)
 
-        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        project_zmq_monitor = project.zmq_monitor
         if project_zmq_monitor:
             section.empire.set_emperor_params(
                 vassals_home=project_zmq_monitor.uwsgi_zmq_address,
@@ -129,7 +129,7 @@ async def project_up(project: Project)  -> bool | None:
                 # pid_file=str((Path(conf.RUN_DIR) / f"{project.service_id}.pid").resolve()),
             )
         logger.info(project_zmq_monitor)
-        for tuntap_router in await project.awaitable_attrs.tuntap_routers:
+        for tuntap_router in project.tuntap_routers:
             router_cls = section.routing.routers.tuntap
             router = router_cls(
                 on=str(tuntap_router.socket_address),
@@ -172,14 +172,14 @@ async def project_up(project: Project)  -> bool | None:
         section._set("emperor-use-clone", "net")
 
         #try:
-        #    _ = await project.read_stats()
+        #    _ = project.read_stats()
         #    logger.info(f"{project.name} [{project.service_id}]. is already running!")
         #    return True
         #except StatsReadError:
         #    print(section.as_configuration().format())
 
-        device = await project.awaitable_attrs.device
-        device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
+        device = project.device
+        device_zmq_monitor = device.zmq_monitor
         device_zmq_monitor_address = device_zmq_monitor.zmq_address
         logger.info(f"launching project {project.name} {project.service_id} @ {device_zmq_monitor_address}")
         await create_or_restart_instance(
@@ -193,7 +193,7 @@ async def project_up(project: Project)  -> bool | None:
     stats = None
     while not stats:
         try:
-            return await project.read_stats()
+            return project.read_stats()
         except tenacity.RetryError:
             break
 
@@ -203,22 +203,22 @@ async def project_delete(
     uow: UnitOfWork,
 )  -> bool:
     try:
-        #project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
-        for tuntap_router in await project.awaitable_attrs.tuntap_routers:
-            await uow.tuntap_routers.delete(tuntap_router.id)
+        #project_zmq_monitor = project.zmq_monitor
+        for tuntap_router in project.tuntap_routers:
+            uow.tuntap_routers.delete(tuntap_router.id)
             logger.info(f"deleted tuntap router {tuntap_router.service_id}")
 
-        project_http_routers = await project.awaitable_attrs.http_routers
+        project_http_routers = project.http_routers
         for http_router in project_http_routers:
-            await uow.http_routers.delete(http_router.id)
+            uow.http_routers.delete(http_router.id)
             logger.info(f"deleted http router {http_router.service_id}")
 
-        project_attached_daemons = await project.awaitable_attrs.attached_daemons
+        project_attached_daemons = project.attached_daemons
         for attached_daemon in project_attached_daemons:
-            await uow.attached_daemons.delete(attached_daemon.id)
+            uow.attached_daemons.delete(attached_daemon.id)
             logger.info(f"deleted attached daemon {attached_daemon.name} {attached_daemon.service_id}")
 
-        await uow.projects.delete(project.id)
+        uow.projects.delete(project.id)
         logger.info(f"deleted project {project.name}")
 
     except Exception as exc:
@@ -231,19 +231,19 @@ async def project_down(project: "Project", uow: "UnitOfWork") -> bool:
     try:
 
         try:
-            _ = await project.read_stats()
+            _ = project.read_stats()
         except tenacity.RetryError:
             logger.info(f"Project {project.name} is not running")
             return False
 
 
-        machine_id = await project.__class__.read_machine_id()
-        device = await uow.devices.get_by_machine_id(machine_id)
+        machine_id = project.__class__.read_machine_id()
+        device = uow.devices.get_by_machine_id(machine_id)
         if not device:
             logger.error(f"unable to locate device by machine id {machine_id}")
             raise Exception(f"unable to locate device by machine id {machine_id}")
 
-        device_zmq_monitor = await device.awaitable_attrs.zmq_monitor
+        device_zmq_monitor = device.zmq_monitor
         device_zmq_monitor_address = device_zmq_monitor.zmq_address
         logger.info(f"stopping project {project.name} @ {device_zmq_monitor_address}")
         await destroy_instance(device_zmq_monitor_address, f"{project.service_id}.ini")

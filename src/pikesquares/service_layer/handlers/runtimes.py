@@ -22,17 +22,17 @@ async def provision_python_app_runtime(
     custom_style: questionary.Style
 ) -> PythonAppRuntime | None:
 
-    async with uow:
+    with uow:
         try:
-            runtime =  await uow.python_app_runtimes.get_by_version(version)
+            runtime =  uow.python_app_runtimes.get_by_version(version)
             if not runtime:
-                runtime = await uow.python_app_runtimes.add(PythonAppRuntime(version=version))
-                await uow.commit()
+                runtime = uow.python_app_runtimes.add(PythonAppRuntime(version=version))
+                uow.commit()
             return runtime
         except Exception as exc:
             logger.exception(exc)
             logger.info(f"failed provisioning Python App Runtime {version}")
-            await uow.rollback()
+            uow.rollback()
             raise exc
 
 async def provision_app_codebase(
@@ -87,11 +87,11 @@ async def provision_app_codebase(
     )
     app_pyvenv_dir = app_repo_dir / ".venv"
 
-    async with uow:
+    with uow:
         try:
-            app_codebase = await uow.python_app_codebases.get_by_root_dir(str(app_root_dir))
+            app_codebase = uow.python_app_codebases.get_by_root_dir(str(app_root_dir))
             if not app_codebase:
-                app_codebase = await uow.python_app_codebases.add(
+                app_codebase = uow.python_app_codebases.add(
                     PythonAppCodebase(
                         root_dir=str(app_root_dir),
                         repo_dir=str(app_repo_dir),
@@ -115,10 +115,10 @@ async def provision_app_codebase(
             logger.exception(exc)
             logger.info(f"failed provisioning Python App Codebase @ {app_root_dir}")
             print(traceback.format_exc())
-            await uow.rollback()
+            uow.rollback()
             raise exc
 
-        await uow.commit()
+        uow.commit()
 
     return app_codebase
 

@@ -17,9 +17,6 @@ import pydantic
 import structlog
 
 # from questionary import Style as QuestionaryStyle
-from aiopath import AsyncPath
-
-# from plumbum import async_local
 from pydantic import AnyUrl, BeforeValidator
 from pydantic_settings import (
     BaseSettings,
@@ -196,7 +193,6 @@ def ensure_system_path(
     # if not is_root and not Path(new_path).exists():
     #    raise AppConfigError(f"{new_path} does not exist.") from None
 
-    # local_path: async_local.LocalPath = await async_local.path(Path(new_path))
     if not new_path.exists():
         # Set the current numeric umask and return the previous umask.
         old_umask = os.umask(0o002)
@@ -226,23 +222,19 @@ class AppConfig(BaseSettings):
 
     # DEBUG: bool = False
     data_dir: pydantic.DirectoryPath = pydantic.Field(
-        default=AsyncPath("/var/lib/pikesquares"), alias="PIKESQUARES_DATA_DIR"
+        default=Path("/var/lib/pikesquares"), alias="PIKESQUARES_DATA_DIR"
     )
 
-    log_dir: pydantic.DirectoryPath = pydantic.Field(
-        default=AsyncPath("/var/log/pikesquares"), alias="PIKESQUARES_LOG_DIR"
-    )
+    log_dir: pydantic.DirectoryPath = pydantic.Field(default=Path("/var/log/pikesquares"), alias="PIKESQUARES_LOG_DIR")
 
     config_dir: pydantic.DirectoryPath = pydantic.Field(
-        default=AsyncPath("/etc/pikesquares"), alias="PIKESQUARES_CONFIG_DIR"
+        default=Path("/etc/pikesquares"), alias="PIKESQUARES_CONFIG_DIR"
     )
 
-    run_dir: pydantic.DirectoryPath = pydantic.Field(
-        default=AsyncPath("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR"
-    )
+    run_dir: pydantic.DirectoryPath = pydantic.Field(default=Path("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR")
     # UWSGI_BIN: Annotated[
     #    pydantic.FilePath,
-    #    pydantic.Field(default=AsyncPath("/var/lib/pikesquares/bin/uwsgi"), alias="PIKESQUARES_UWSGI_BIN"),
+    #    pydantic.Field(default=Path("/var/lib/pikesquares/bin/uwsgi"), alias="PIKESQUARES_UWSGI_BIN"),
     # ]
 
     SCIE_BASE: Annotated[pydantic.DirectoryPath, pydantic.Field()] | None = None
@@ -274,8 +266,13 @@ class AppConfig(BaseSettings):
 
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
-    def SQLALCHEMY_DATABASE_URI(self) -> str:
+    def SQLALCHEMY_DATABASE_URI_ASYNC(self) -> str:
         return f"sqlite+aiosqlite:///{self.db_path}"
+
+    @pydantic.computed_field  # type: ignore[prop-decorator]
+    @property
+    def SQLALCHEMY_DATABASE_URI(self) -> str:
+        return f"sqlite:///{self.db_path}"
 
     @pydantic.computed_field
     @property
@@ -399,7 +396,7 @@ class AppConfig(BaseSettings):
     #    )
 
 
-async def register_app_conf(
+def register_app_conf(
     context: dict,
     override_settings: dict,
 ):

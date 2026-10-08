@@ -1,5 +1,6 @@
+from pathlib import Path
+
 import apluggy as pluggy
-from aiopath import AsyncPath
 
 from pikesquares.domain.managed_services import AttachedDaemon
 
@@ -16,10 +17,10 @@ class AttachedDaemonHookSpec:
     """
 
     @hook_spec
-    async def create_data_dir(self, service_name: str) -> bool | None: ...
+    def create_data_dir(self, service_name: str) -> bool | None: ...
 
     @hook_spec(firstresult=False)
-    async def attached_daemon_collect_command_arguments(
+    def attached_daemon_collect_command_arguments(
         self,
         attached_daemon: AttachedDaemon,
         bind_ip: str,
@@ -27,7 +28,7 @@ class AttachedDaemonHookSpec:
     ) -> dict | None: ...
 
     @hook_spec(firstresult=False)
-    async def attached_daemon_ping(
+    def attached_daemon_ping(
         self,
         attached_daemon: AttachedDaemon,
         bind_ip: str,
@@ -35,7 +36,7 @@ class AttachedDaemonHookSpec:
     ) -> bool | None: ...
 
     @hook_spec(firstresult=False)
-    async def attached_daemon_stop(
+    def attached_daemon_stop(
         self,
         attached_daemon: AttachedDaemon,
         bind_ip: str,
@@ -58,7 +59,7 @@ class AppCodebaseHookSpec:
     """
 
     @hook_spec(firstresult=False)
-    async def get_repo_url(self, service_name: str) -> str: ...
+    def get_repo_url(self, service_name: str) -> str: ...
 
 
 class PythonAppCodebaseHookSpec:
@@ -67,19 +68,19 @@ class PythonAppCodebaseHookSpec:
     """
 
     @hook_spec(firstresult=False)
-    async def before_dependencies_install(
+    def before_dependencies_install(
         self,
         service_name: str,
-        uv_bin: AsyncPath,
-        repo_dir: AsyncPath,
+        uv_bin: Path,
+        repo_dir: Path,
     ) -> None: ...
 
     @hook_spec(firstresult=False)
-    async def after_dependencies_install(
+    def after_dependencies_install(
         self,
         service_name: str,
-        uv_bin: AsyncPath,
-        repo_dir: AsyncPath,
+        uv_bin: Path,
+        repo_dir: Path,
     ) -> None: ...
 
 
@@ -89,14 +90,14 @@ class WSGIPythonAppCodebaseHookSpec:
     """
 
     @hook_spec(firstresult=False)
-    async def get_wsgi_file(
+    def get_wsgi_file(
         self,
         service_name: str,
-        repo_dir: AsyncPath,
-    ) -> AsyncPath | None: ...
+        repo_dir: Path,
+    ) -> Path | None: ...
 
     @hook_spec(firstresult=False)
-    async def get_wsgi_module(
+    def get_wsgi_module(
         self,
         service_name: str,
     ) -> str | None: ...

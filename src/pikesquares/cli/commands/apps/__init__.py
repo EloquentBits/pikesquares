@@ -10,19 +10,30 @@ from typing import Optional
 import cuid
 import questionary
 import randomname
-from aiopath import AsyncPath
 import structlog
 import typer
+from aiopath import AsyncPath
 from cuid import cuid
-from typing_extensions import Annotated
-
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import (
     Progress,
 )
+from typing_extensions import Annotated
 
+from pikesquares import services
+from pikesquares.cli.console import (
+    HeaderDjangoChecks,
+    HeaderDjangoSettings,
+    make_layout,
+    make_progress,
+)
+from pikesquares.cli.decorator import run_async
+from pikesquares.conf import AppConfig
+from pikesquares.domain.project import Project
+from pikesquares.domain.router import HttpRouter
+from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.services.apps.exceptions import (
     DjangoCheckError,
     DjangoDiffSettingsError,
@@ -30,18 +41,6 @@ from pikesquares.services.apps.exceptions import (
     UvPipListError,
     UvSyncError,
 )
-from pikesquares.cli.console import (
-    HeaderDjangoChecks,
-    HeaderDjangoSettings,
-    make_layout,
-    make_progress,
-)
-from pikesquares import services
-from pikesquares.cli.cli import run_async
-from pikesquares.conf import AppConfig
-from pikesquares.domain.project import Project
-from pikesquares.domain.router import HttpRouter
-from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.services.data import Router, WsgiAppOptions
 
 from ...console import console
@@ -149,7 +148,6 @@ def create(
     if not app_name:
         raise typer.Exit()
 
-
     # app_project = get_project(
     #    db,
     #    conf,
@@ -157,7 +155,7 @@ def create(
     #    services.get(context, SandboxProject),
     #    custom_style,
     # )
-    #app_project = services.get(context, SandboxProject)
+    # app_project = services.get(context, SandboxProject)
     app_options["project_id"] = app_project.service_id
 
     # Runtime
@@ -395,7 +393,7 @@ async def init(
     app_path = "/home/jvved/dev/pikesquares-app-templates/django/bugsink"
     app_name = randomname.get_name().lower()
     project_name = "bugsink"
-    project = await uow.projects.get_by_name(project_name)
+    project = uow.projects.get_by_name(project_name)
     app_repo_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
     # pyvenv_dir = conf.pyvenvs_dir / service_id
     app_pyvenv_dir = app_repo_dir / ".venv"
@@ -715,9 +713,8 @@ async def init(
             raise typer.Exit() from None
         """
 
-
         uwsgi_plugins = ["tuntap"]
-        async with uow:
+        with uow:
             wsgi_app = await provision_wsgi_app(
                 app_name,
                 app_root_dir,
@@ -761,22 +758,21 @@ async def ls(
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
-    async with uow:
-        attached_daemons = await uow.attached_daemons.list()
+    with uow:
+        attached_daemons = uow.attached_daemons.list()
         for daemon in attached_daemons:
             try:
-                daemon_stats_available  = bool(daemon.__class__.read_stats(daemon.stats_address))
+                daemon_stats_available = bool(daemon.__class__.read_stats(daemon.stats_address))
             except StatsReadError:
                 daemon_stats_available = False
 
             console.info(
                 f"""{daemon.name} | \
 {daemon.service_id} | \
-{'Stats Up' if daemon_stats_available else 'Stats Down'} | \
+{"Stats Up" if daemon_stats_available else "Stats Down"} | \
 {Path(daemon.pid_file).read_text()}
                 """
             )
-
 
 
 @app.command(short_help="Show all apps in specific project.\nAliases:[i] apps, app list")
@@ -795,7 +791,6 @@ def ls_deprecated(
     # device_handler = obj.get("device-handler")
     custom_style = context.get("cli-style")
 
-
     db = services.get(context, TinyDB)
     # device_handler = services.get(obj, device.DeviceService)
 
@@ -812,11 +807,11 @@ def ls_deprecated(
     #    )
 
     def get_project_id(project):
-        return db.table('projects').get(Query().name == project)
+        return db.table("projects").get(Query().name == project)
 
     project_id = None
     if not project:
-        projects_db = db.table('projects')
+        projects_db = db.table("projects")
         project = questionary.select(
             "Select project: ",
             choices=[p.get("name") for p in projects_db.all()],
@@ -865,6 +860,8 @@ def delete(
     """
     obj = ctx.ensure_object(dict)
     custom_style = obj.get("cli-style")
+
+
 @app.command(short_help="Rebuild configs for an existing app by name or id\nAliases:[i] rebuild-config, rc")
 @app.command()
 def rebuild_config(

@@ -68,11 +68,11 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     # config["uwsgi"]["plugin"] = "emperor_zeromq"
     # self.config_json["uwsgi"]["spooler-import"] = "pikesquares.tasks.ensure_up"
 
-    async def get_uwsgi_options(self) -> list["DeviceUWSGIOption"]:
+    def get_uwsgi_options(self) -> list["DeviceUWSGIOption"]:
         try:
             uwsgi_options: list[DeviceUWSGIOption] = []
             section = DeviceSection(self)
-            device_zmq_monitor = await self.awaitable_attrs.zmq_monitor
+            device_zmq_monitor = self.zmq_monitor
             device_zmq_monitor_address = device_zmq_monitor.uwsgi_zmq_address
             section.empire.set_emperor_params(
                 vassals_home=device_zmq_monitor_address,
@@ -120,8 +120,8 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
     """
     async def sync_db_with_filesystem(self, uow: "UnitOfWork"):
 
-        routers = await uow.routers.get_by_device_id(self.id)
-        projects = await uow.projects.get_by_device_id(self.id)
+        routers = uow.routers.get_by_device_id(self.id)
+        projects = uow.projects.get_by_device_id(self.id)
         logger.debug(f"cleaning up stale project configs from filesystem. Found {len(projects)} projects")
         projects_dir = Path(self.config_dir) / "projects"
         project_configs = [str(p.service_config) for p in projects]
@@ -259,21 +259,21 @@ async def register_device_stats(
     # ) -> Device:
     #    device = target
     """
-    device.zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id) or await create_zmq_monitor(
+    device.zmq_monitor = uow.zmq_monitors.get_by_device_id(device.id) or create_zmq_monitor(
         uow, device=device
     )
     # if not uwsgi_options:
     for uwsgi_option in device.get_uwsgi_options():
-        await uow.uwsgi_options.add(uwsgi_option)
+        uow.uwsgi_options.add(uwsgi_option)
     """
 
     """
-        existing_options = await uow.uwsgi_options.list(device_id=device.id)
+        existing_options = uow.uwsgi_options.list(device_id=device.id)
         for uwsgi_option in device.build_uwsgi_options():
             #existing_options
             #if uwsgi_option.option_key
             #not in existing_options:
-            #    await uow.uwsgi_options.add(uwsgi_option)
+            #    uow.uwsgi_options.add(uwsgi_option)
         """
 
 

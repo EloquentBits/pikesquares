@@ -2,6 +2,7 @@ import asyncio
 import enum
 import errno
 import json
+import socket
 import traceback
 import uuid
 from datetime import (
@@ -19,7 +20,6 @@ from sqlalchemy import (
     DateTime,
     func,
 )
-from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlmodel import Field, SQLModel
 
 from pikesquares.exceptions import (
@@ -50,7 +50,7 @@ class TimeStampedBase(SQLModel):
     )
 
 
-class ServiceBase(AsyncAttrs, TimeStampedBase):
+class ServiceBase(TimeStampedBase):
     """Base SQL model class."""
 
     id: str = Field(
@@ -159,8 +159,8 @@ class ServiceBase(AsyncAttrs, TimeStampedBase):
         return section.as_configuration()
 
     @classmethod
-    async def read_machine_id(cls) -> str:
-        machine_id = await AsyncPath("/var/lib/dbus/machine-id").read_text(encoding="utf-8")
+    def read_machine_id(cls) -> str:
+        machine_id = Path("/var/lib/dbus/machine-id").read_text(encoding="utf-8")
         return machine_id.strip()
 
     @tenacity.retry(
@@ -176,7 +176,44 @@ class ServiceBase(AsyncAttrs, TimeStampedBase):
         stop=tenacity.stop_after_attempt(3),
         reraise=False,
     )
-    async def read_stats(self) -> dict | None:
+    def read_stats(self) -> dict | None:
+        """
+        read from uWSGI Stats Server socket
+        """
+        sock = None
+        logger.debug(f"reading stats from {self.stats_address}")
+        try:
+            js = ""
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(str(self.stats_address))
+            while True:
+                data = sock.recv(4096)
+                if len(data) < 1:
+                    break
+                js += data.decode("utf8", "ignore")
+            try:
+                return json.loads(js)
+            except json.JSONDecodeError:
+                logger.error(traceback.format_exc())
+                logger.debug(js)
+        except ConnectionRefusedError as e:
+            raise e
+        except FileNotFoundError as e:
+            raise e
+        except IOError as e:
+            if e.errno != errno.EINTR:
+                # uwsgi.log(f"socket @ {addr} not available")
+                pass
+            raise e
+        except Exception as exc:
+            if not isinstance(exc, tenacity.RetryError):
+                logger.exception(exc)
+            raise exc
+        finally:
+            if sock is not None:
+                sock.close()
+
+    async def read_stats_async(self) -> dict | None:
         """
         read from uWSGI Stats Server socket
         """
@@ -185,7 +222,7 @@ class ServiceBase(AsyncAttrs, TimeStampedBase):
         try:
             js = ""
             reader, writer = await asyncio.open_unix_connection(
-                path=AsyncPath(self.stats_address),
+                path=Path(self.stats_address),
             )
             while True:
                 data = await reader.read(4096)
@@ -360,5 +397,5 @@ async def main():
         print("giving up reading stats.")
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# if __name__ == "__main__":
+#    asyncio.run(main())

@@ -1,11 +1,13 @@
+from collections.abc import Iterator
+
 import apluggy as pluggy
 import structlog
 import typer
-from sqlmodel import SQLModel
+from sqlmodel import Session, SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from pikesquares import services
-from pikesquares.adapters.database import DatabaseSessionManager
+from pikesquares.adapters.database import AsyncDatabaseSessionManager, DatabaseSessionManager
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfig
 from pikesquares.domain.base import ServiceBase
@@ -20,11 +22,43 @@ from pikesquares.service_layer.uow import UnitOfWork
 logger = structlog.getLogger(__name__)
 
 
-async def init_db(context):
+def init_db(context):
 
     conf = services.get(context, AppConfig)
 
     sessionmanager = DatabaseSessionManager(conf.SQLALCHEMY_DATABASE_URI, {"echo": False})
+
+    def get_session() -> Iterator[Session]:
+        with sessionmanager.session() as session:
+            yield session
+
+    services.register_factory(context, Session, get_session)  # ping=lambda session: session.execute(text("SELECT 1")),
+    session = services.get(context, Session)
+
+    with sessionmanager.connect() as conn:
+        SQLModel.metadata.create_all(conn)
+
+        # async with sessionmanager._engine.begin() as conn:
+        #    await conn.run_sync(
+        #       lambda conn: SQLModel.metadata.create_all(conn)
+        #    )
+
+    # generate the version table, "stamping" it with the most recent rev:
+    # alembic_cfg = Config("/home/pk/dev/eqb/pikesquares/alembic.ini")
+    # command.stamp(alembic_cfg, "head")
+
+    def uow_factory():
+        with UnitOfWork(session=session) as uow:
+            yield uow
+
+    services.register_factory(context, UnitOfWork, uow_factory)
+
+
+async def init_db_async(context):
+
+    conf = services.get(context, AppConfig)
+
+    sessionmanager = AsyncDatabaseSessionManager(conf.SQLALCHEMY_DATABASE_URI, {"echo": False})
 
     async def get_session() -> AsyncSession:
         async with sessionmanager.session() as session:
@@ -92,17 +126,17 @@ async def init_db(context):
     """
 
 
-async def init_device(context):
+def init_device(context):
 
-    uow = await services.aget(context, UnitOfWork)
+    uow = services.get(context, UnitOfWork)
     conf = services.get(context, AppConfig)
 
-    async with uow:
+    with uow:
         try:
-            machine_id = await ServiceBase.read_machine_id()
-            device = await uow.devices.get_by_machine_id(machine_id)
+            machine_id = ServiceBase.read_machine_id()
+            device = uow.devices.get_by_machine_id(machine_id)
             if not device:
-                device = await provision_device(
+                device = provision_device(
                     uow,
                     create_kwargs={
                         "data_dir": str(conf.data_dir),
@@ -111,35 +145,35 @@ async def init_device(context):
                         "run_dir": str(conf.run_dir),
                     },
                 )
-                zmq_monitor = await create_zmq_monitor(uow, device=device)
+                zmq_monitor = create_zmq_monitor(uow, device=device)
                 if not zmq_monitor.socket_address:
                     console.error("device zmq monitor socket address was not provisioned")
                     raise typer.Exit(1)
                 logger.info(f"created device zmq_monitor @ {zmq_monitor.socket_address}")
 
-            uwsgi_options = await device.awaitable_attrs.uwsgi_options
+            uwsgi_options = device.uwsgi_options
             if not uwsgi_options:
-                for uwsgi_option in await device.get_uwsgi_options():
-                    await uow.uwsgi_options.add(uwsgi_option)
+                for uwsgi_option in device.get_uwsgi_options():
+                    uow.uwsgi_options.add(uwsgi_option)
 
             return device
 
         except Exception as exc:
             logger.exception(exc)
             console.error("device was not created")
-            await uow.rollback()
+            uow.rollback()
             raise typer.Exit(1) from None
-        await uow.commit()
+        uow.commit()
 
     # pc = services.get(context, ProcessCompose)
 
 
-async def init_process_compose(context, device):
-    uow = await services.aget(context, UnitOfWork)
-    await register_process_compose(context, device.machine_id, uow)
+def init_process_compose(context, device):
+    uow = services.get(context, UnitOfWork)
+    register_process_compose(context, device.machine_id, uow)
 
 
-async def init_pluggy(context):
+def init_pluggy(context):
     services.register_factory(
         context,
         pluggy.PluginManager,

@@ -1,16 +1,17 @@
 import contextlib
 import traceback
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Iterator
 
 import structlog
+from sqlalchemy import Connection, create_engine
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.orm.session import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
-
-# from sqlalchemy.orm import sessionmaker
+from sqlmodel.orm.session import Session
 
 # logger = logging.getLogger("uvicorn.error")
 # logger.setLevel(logging.DEBUG)
@@ -22,9 +23,64 @@ logger = structlog.get_logger()
 class DatabaseSessionManager:
     def __init__(self, host: str, engine_kwargs: dict[str, Any] = {}):
         connect_args = {"check_same_thread": False}
-        self._engine = create_async_engine(
-            host, connect_args=connect_args, **engine_kwargs
+        self._engine = create_engine(host, connect_args=connect_args, **engine_kwargs)
+        self._sessionmaker = sessionmaker(
+            autocommit=False,
+            bind=self._engine,
+            expire_on_commit=False,
+            class_=Session,
         )
+
+    def close(self):
+        if self._engine is None:
+            raise Exception("DatabaseSessionManager is not initialized")
+        self._engine.dispose()
+
+        self._engine = None
+        self._sessionmaker = None
+
+    @contextlib.contextmanager
+    def connect(self) -> Iterator[Connection]:
+        if self._engine is None:
+            raise Exception("DatabaseSessionManager is not initialized")
+
+        with self._engine.begin() as connection:
+            try:
+                yield connection
+            except Exception as exc:
+                traceback.format_exc()
+                logger.exception(exc)
+                connection.rollback()
+                raise
+
+    @contextlib.contextmanager
+    def session(self) -> Iterator[Session]:
+        if self._sessionmaker is None:
+            raise Exception("DatabaseSessionManager is not initialized")
+
+        session = self._sessionmaker()
+        try:
+            yield session
+        except Exception as exc:
+            traceback.format_exc()
+            logger.exception(exc)
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    # Used for testing
+    # async def create_all(self, connection: AsyncConnection):
+    #    await connection.run_sync(Base.metadata.create_all)
+
+    # async def drop_all(self, connection: AsyncConnection):
+    #    await connection.run_sync(Base.metadata.drop_all)
+
+
+class AsyncDatabaseSessionManager:
+    def __init__(self, host: str, engine_kwargs: dict[str, Any] = {}):
+        connect_args = {"check_same_thread": False}
+        self._engine = create_async_engine(host, connect_args=connect_args, **engine_kwargs)
         self._sessionmaker = async_sessionmaker(
             autocommit=False,
             bind=self._engine,
@@ -34,7 +90,7 @@ class DatabaseSessionManager:
 
     async def close(self):
         if self._engine is None:
-            raise Exception("DatabaseSessionManager is not initialized")
+            raise Exception("AsyncDatabaseSessionManager is not initialized")
         await self._engine.dispose()
 
         self._engine = None
@@ -43,7 +99,7 @@ class DatabaseSessionManager:
     @contextlib.asynccontextmanager
     async def connect(self) -> AsyncIterator[AsyncConnection]:
         if self._engine is None:
-            raise Exception("DatabaseSessionManager is not initialized")
+            raise Exception("AsyncDatabaseSessionManager is not initialized")
 
         async with self._engine.begin() as connection:
             try:

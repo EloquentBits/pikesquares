@@ -87,15 +87,15 @@ async def provision_wsgi_app(
         if not await root_dir.exists():
             raise RuntimeError(f"root dir @ {root_dir} does not exist.")
 
-        app_codebase = await uow.python_app_codebases.get_by_root_dir(str(root_dir))
+        app_codebase = uow.python_app_codebases.get_by_root_dir(str(root_dir))
         if not app_codebase:
             raise RuntimeError(f"unable to look up {name} app codebase.")
 
-        app_runtime = await uow.python_app_runtimes.get_by_version("3.12")
+        app_runtime = uow.python_app_runtimes.get_by_version("3.12")
         if not app_runtime:
             raise RuntimeError(f"unable to look up {name} app runtime")
 
-        project = await uow.projects.get_by_name(name)
+        project = uow.projects.get_by_name(name)
         if not project:
             raise RuntimeError(f"unable to look up {name} project")
 
@@ -121,9 +121,9 @@ async def provision_wsgi_app(
             wsgi_module=wsgi_module,
             venv_dir=app_codebase.venv_dir,
         )
-        await uow.wsgi_apps.add(wsgi_app)
+        uow.wsgi_apps.add(wsgi_app)
 
-        tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
+        tuntap_routers = uow.tuntap_routers.get_by_project_id(project.id)
         if tuntap_routers:
             ip = await tuntap_router_next_available_ip(tuntap_routers[0])
             wgsi_app_tuntap_device = await create_tuntap_device(
@@ -149,29 +149,29 @@ async def wsgi_app_up(
     stats = None
     while not stats:
         try:
-            return await wsgi_app.read_stats()
+            return wsgi_app.read_stats()
         except tenacity.RetryError:
             break
 
     try:
-        #wsgi_app = await uow.wsgi_apps.get_by_service_id(service_id)
+        #wsgi_app = uow.wsgi_apps.get_by_service_id(service_id)
         #if not wsgi_app:
         #    raise RuntimeError(f"unable to look up app by service id: {service_id}")
-        app_codebase = await wsgi_app.awaitable_attrs.python_app_codebase
-        #app_runtime = await wsgi_app.awaitable_attrs.python_app_runtime
-        project = await wsgi_app.awaitable_attrs.project
-        http_routers = await project.awaitable_attrs.http_routers
+        app_codebase = wsgi_app.python_app_codebase
+        #app_runtime = wsgi_app.python_app_runtime
+        project = wsgi_app.project
+        http_routers = project.http_routers
         if not http_routers:
             raise RuntimeError(f"could not locate http routers for project {project.name} [{project.id}]")
 
-        tuntap_routers = await project.awaitable_attrs.tuntap_routers
-        #tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
+        tuntap_routers = project.tuntap_routers
+        #tuntap_routers = uow.tuntap_routers.get_by_project_id(project.id)
         if not tuntap_routers:
             raise RuntimeError(f"could not locate tuntap routers for project {project.name} [{project.id}]")
 
         tuntap_router  = tuntap_routers[0]
 
-        wsgi_app_device = await uow.tuntap_devices.get_by_linked_service_id(wsgi_app.service_id)
+        wsgi_app_device = uow.tuntap_devices.get_by_linked_service_id(wsgi_app.service_id)
         http_router = http_routers[0]
 
         section = WsgiAppSection(wsgi_app)
@@ -256,13 +256,13 @@ async def wsgi_app_up(
         section._set("pythonpath", app_codebase.repo_dir)
 
         #try:
-        #    _ = await wsgi_app.read_stats()
+        #    _ = wsgi_app.read_stats()
         #except tenacity.RetryError:
         #    return False
 
         console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
         #print(section.as_configuration().format())
-        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        project_zmq_monitor = project.zmq_monitor
         project_zmq_monitor_address  = project_zmq_monitor.zmq_address
         #print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
 
@@ -280,7 +280,7 @@ async def wsgi_app_up(
     stats = None
     while not stats:
         try:
-            return await wsgi_app.read_stats()
+            return wsgi_app.read_stats()
         except tenacity.RetryError:
             break
 

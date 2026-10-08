@@ -9,9 +9,9 @@ from pikesquares.service_layer.uow import UnitOfWork
 logger = structlog.getLogger()
 
 
-async def provision_device(uow: UnitOfWork, create_kwargs: dict) -> Device:
+def provision_device(uow: UnitOfWork, create_kwargs: dict) -> Device:
     try:
-        machine_id = await Device.read_machine_id()
+        machine_id = Device.read_machine_id()
         if not machine_id:
             raise AppConfigError("unable to read the machine-id")
 
@@ -23,7 +23,7 @@ async def provision_device(uow: UnitOfWork, create_kwargs: dict) -> Device:
             title=randomname.get_name(),
             **create_kwargs,
         )
-        device = await uow.devices.add(device)
+        device = uow.devices.add(device)
         logger.info(f"provisioned new device with machine-id  {machine_id}")
     except Exception as exc:
         logger.info("failed provisioning device")

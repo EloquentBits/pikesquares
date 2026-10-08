@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import sysconfig
 import tempfile
@@ -173,7 +174,7 @@ def build_uwsgi(conf):
             logger.debug(f"{cmd_env=}")
 
         console.info("Starting building the uWSGI binary")
-        # async with pl_local.cwd(str(uwsgi_src_home)):
+        # with pl_local.cwd(str(uwsgi_src_home)):
         uv = pl_local[str(conf.UV_BIN)]
         # with pl_local.as_user("pikesquares"):
         try:
@@ -188,7 +189,7 @@ def build_uwsgi(conf):
             return typer.Exit(code=1)
 
         (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
-        # (uwsgi_src_home / "uwsgi").rename(conf.UWSGI_BIN)
+        os.remove(str(conf.data_dir / "bin/uwsgi"))
         pl_local.path(str(uwsgi_src_home / "uwsgi")).move(str(conf.data_dir / "bin"))
 
         if pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists():
@@ -264,7 +265,7 @@ def get_uv_python_installations(uv_bin, cwd):
 @app.command(
     # "new", hidden=True
 )
-async def python_plugin(
+def python_plugin(
     ctx: typer.Context,
     py_version: Annotated[
         str | None, typer.Option(help="Python interpreter version to build the uWSGI plugin with")
@@ -325,7 +326,12 @@ def sqlite3_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
-    build_plugin(conf, "sqlite3")
+    try:
+        build_plugin(conf, "sqlite3")
+    except PluginHeaderFileMissingError as exc:
+        console.warning("sqlite3_plugin development header files are not installed.")
+        console.info(exc.message)
+        raise typer.Exit(1) from None
 
 
 @app.command(short_help="Build uWSGI emperor-zeromq plugin.\nAliases:[p] emperor-zeromq-plugin")
@@ -337,7 +343,12 @@ def emperor_zeromq_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
-    build_plugin(conf, "emperor_zeromq")
+    try:
+        build_plugin(conf, "emperor_zeromq")
+    except PluginHeaderFileMissingError as exc:
+        console.warning("emperor_zeromq_plugin development header files are not installed.")
+        console.info(exc.message)
+        raise typer.Exit(1) from None
 
 
 @app.command(short_help="Build uWSGI tuntap plugin.\nAliases:[p] tuntap-plugin")
@@ -349,7 +360,12 @@ def tuntap_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
-    build_plugin(conf, "tuntap")
+    try:
+        build_plugin(conf, "tuntap")
+    except PluginHeaderFileMissingError as exc:
+        console.warning("plugin development header files are not installed.")
+        console.info(exc.message)
+        raise typer.Exit(1) from None
 
 
 @app.command(short_help="Build uWSGI pty plugin.\nAliases:[p] pty-plugin")
@@ -361,7 +377,12 @@ def pty_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
-    build_plugin(conf, "pty")
+    try:
+        build_plugin(conf, "pty")
+    except PluginHeaderFileMissingError as exc:
+        console.warning("plugin development header files are not installed.")
+        console.info(exc.message)
+        raise typer.Exit(1) from None
 
 
 @app.command(short_help="Build uWSGI forkpty_router plugin.\nAliases:[p] forkpty-router-plugin")
@@ -373,7 +394,12 @@ def forkpty_router_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
-    build_plugin(conf, "forkpty_router")
+    try:
+        build_plugin(conf, "forkpty_router")
+    except PluginHeaderFileMissingError as exc:
+        console.warning("plugin development header files are not installed.")
+        console.info(exc.message)
+        raise typer.Exit(1) from None
 
 
 @app.command(short_help="Build uWSGI logfile plugin.\nAliases:[p] logfile-plugin")
@@ -385,4 +411,9 @@ def logfile_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
-    build_plugin(conf, "logfile")
+    try:
+        build_plugin(conf, "logfile")
+    except PluginHeaderFileMissingError as exc:
+        console.warning("plugin development header files are not installed.")
+        console.info(exc.message)
+        raise typer.Exit(1) from None

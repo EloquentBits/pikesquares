@@ -30,7 +30,7 @@ async def provision_attached_daemon(
 
     daemon = None
     try:
-        daemons = await uow.attached_daemons.for_project_by_name(name, project.id)
+        daemons = uow.attached_daemons.for_project_by_name(name, project.id)
         if daemons:
             return daemons[0]
 
@@ -46,8 +46,8 @@ async def provision_attached_daemon(
             log_dir=str(project.log_dir),
             run_dir=str(project.run_dir),
         )
-        daemon = await uow.attached_daemons.add(daemon)
-        tuntap_routers = await uow.tuntap_routers.get_by_project_id(project.id)
+        daemon = uow.attached_daemons.add(daemon)
+        tuntap_routers = uow.tuntap_routers.get_by_project_id(project.id)
         if tuntap_routers:
             ip = await tuntap_router_next_available_ip(tuntap_routers[0])
             await create_tuntap_device(uow, tuntap_routers[0], ip, daemon.service_id)
@@ -69,14 +69,14 @@ async def attached_daemon_up(
         plugin_manager.register(DnsmasqAttachedDaemon)
         plugin_manager.register(RedisAttachedDaemon)
 
-        project = await attached_daemon.awaitable_attrs.project
-        tuntap_routers = await project.awaitable_attrs.tuntap_routers
+        project = attached_daemon.project
+        tuntap_routers = project.tuntap_routers
 
         if not tuntap_routers:
             raise Exception(f"could not locate tuntap routers for project {project.name} [{project.id}]")
 
         tuntap_router = tuntap_routers[0]
-        attached_daemon_device = await uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
+        attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
         if not attached_daemon_device:
             raise Exception(
                 f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}"
@@ -186,11 +186,11 @@ async def attached_daemon_up(
 
         section.master_process.attach_process(**cmd_args)
         try:
-            _ = await attached_daemon.read_stats()
+            _ = attached_daemon.read_stats()
             logger.info(f"Attached Daemon {attached_daemon.name} is already running")
         except tenacity.RetryError:
             # print(section.as_configuration().format())
-            project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+            project_zmq_monitor = project.zmq_monitor
             project_zmq_monitor_address = project_zmq_monitor.zmq_address
             logger.info(f"launching Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
             await create_or_restart_instance(
@@ -209,7 +209,7 @@ async def attached_daemon_down(
 ) -> bool:
     try:
         try:
-            _ = await attached_daemon.read_stats()
+            _ = attached_daemon.read_stats()
         except tenacity.RetryError:
             logger.info(f"Managed service {attached_daemon.name} is not running")
             return False
@@ -224,14 +224,14 @@ async def attached_daemon_down(
         else:
             logger.info(f"daemon ping filed. not stopping {attached_daemon.name}")
 
-        attached_daemon_device = await uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
+        attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
         if not attached_daemon_device:
             raise Exception(
                 f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}"
             )
 
-        project = await attached_daemon.awaitable_attrs.project
-        project_zmq_monitor = await project.awaitable_attrs.zmq_monitor
+        project = attached_daemon.project
+        project_zmq_monitor = project.zmq_monitor
         project_zmq_monitor_address = project_zmq_monitor.zmq_address
         logger.info(f"stopping attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
         await destroy_instance(project_zmq_monitor_address, f"{attached_daemon.service_id}.ini")

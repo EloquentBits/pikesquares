@@ -247,15 +247,15 @@ async def prompt_for_project(
     custom_style: questionary.Style
 ) -> Project | None:
 
-    machine_id = await ServiceBase.read_machine_id()
-    device = await uow.devices.get_by_machine_id(machine_id)
+    machine_id = ServiceBase.read_machine_id()
+    device = uow.devices.get_by_machine_id(machine_id)
     if not device:
         raise AppConfigError("no device found in context")
 
-    projects = await device.awaitable_attrs.projects
+    projects = device.projects
 
     if launch_service in set({"meshdb", "bugsink"}):
-        return await uow.projects.get_by_name(launch_service) or \
+        return uow.projects.get_by_name(launch_service) or \
             await provision_project(
                 launch_service,
                 device,
@@ -279,12 +279,12 @@ async def prompt_for_project(
 
         project = None
         if launch_into == "existing-project":
-            if not len(await device.awaitable_attrs.projects):
+            if not len(device.projects):
                 console.success("Appears there have been no projects created.")
                 raise typer.Exit(0) from None
 
             #project = await prompt_for_project(uow, custom_style)
-            #project = await uow.projects.get_by_service_id(project_service_id)
+            #project = uow.projects.get_by_service_id(project_service_id)
 
             if not len(projects):
                 return
@@ -296,7 +296,7 @@ async def prompt_for_project(
                     choices=[
                         questionary.Choice(
                             project.name, value=project.id
-                        ) for project in await device.awaitable_attrs.projects
+                        ) for project in device.projects
                     ],
                     style=custom_style,
                 ).unsafe_ask_async()
@@ -307,7 +307,7 @@ async def prompt_for_project(
                 console.warning("no project selected")
                 return
 
-            project = await uow.projects.get_by_id(selected_project_id)
+            project = uow.projects.get_by_id(selected_project_id)
             if not project:
                 console.warning(f"Unable to locate project by id {selected_project_id}")
                 return
@@ -327,14 +327,14 @@ async def prompt_for_attached_daemons(
     is_running: bool = True,
     ) -> list[AttachedDaemon] | None:
 
-    daemons = await project.awaitable_attrs.attached_daemons
+    daemons = project.attached_daemons
     if not daemons:
         console.success("Appears there have been no managed services created in this project yet.")
         return
 
     async def check_status(daemon: AttachedDaemon) -> str:
         try:
-            if bool(await daemon.read_stats()):
+            if bool(daemon.read_stats()):
                 return "running"
         except tenacity.RetryError:
             pass
@@ -361,7 +361,7 @@ async def prompt_for_attached_daemons(
             choices=choices,
             style=custom_style,
         ).unsafe_ask_async():
-            daemon = await uow.attached_daemons.get_by_id(daemon_id)
+            daemon = uow.attached_daemons.get_by_id(daemon_id)
             if daemon:
                 selected_daemons.append(daemon)
 

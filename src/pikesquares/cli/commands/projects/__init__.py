@@ -13,8 +13,8 @@ import typer
 #    get_service_status,
 # )
 from pikesquares import services
-from pikesquares.cli.cli import run_async
 from pikesquares.cli.console import console
+from pikesquares.cli.decorator import run_async
 from pikesquares.cli.validators import ServiceNameValidator
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.base import ServiceBase
@@ -70,8 +70,8 @@ async def create(
     uow = await services.aget(context, UnitOfWork)
     plugin_manager = await services.aget(context, pluggy.PluginManager)
 
-    machine_id = await ServiceBase.read_machine_id()
-    device = await uow.devices.get_by_machine_id(machine_id)
+    machine_id = ServiceBase.read_machine_id()
+    device = uow.devices.get_by_machine_id(machine_id)
 
     if not device:
         console.error(f"cli up: unable to locate device by machine id {machine_id}")
@@ -125,7 +125,7 @@ async def create(
 
         # process_compose = await services.aget(context, ProcessCompose)
         questionary.print(f"Provisioning project {name}")
-        async with uow:
+        with uow:
             try:
                 project = await provision_project(
                     name, device, plugin_manager, uow, selected_services=selected_services
@@ -138,7 +138,7 @@ async def create(
 
                 if await questionary.confirm(f"Launch {project.name}?").ask_async():
                     try:
-                        if not await project_up(project, project.awaitable_attrs.tuntap_routers, uow):
+                        if not await project_up(project):
                             console.error(f"Unable to launch project {project.name}")
                             raise typer.Exit(1)
                     # await process_compose.add_tail_log_process(project.name, project.log_file)
@@ -153,7 +153,7 @@ async def create(
                     console.info(f"Not launching {project.name}")
                     raise typer.Exit(0) from None
 
-                for http_router in await project.awaitable_attrs.http_routers or []:
+                for http_router in project.http_routers or []:
                     try:
                         http_router_up_result = await http_router_up(uow, http_router)
                         if http_router_up_result:
@@ -166,7 +166,7 @@ async def create(
                         console.warning(f"Unable to launch http router {http_router}")
                         raise typer.Exit(1) from None
 
-                for attached_daemon in await project.awaitable_attrs.attached_daemons or []:
+                for attached_daemon in project.attached_daemons or []:
                     if await attached_daemon_up(attached_daemon, uow, plugin_manager):
                         logger.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
                     logger.info(f"launched attached daemon for project {project.service_id}")
@@ -175,10 +175,10 @@ async def create(
                 logger.exception(exc)
                 console.print(traceback.format_exc())
                 console.warning(f"Unable to provision project {name}")
-                await uow.rollback()
+                uow.rollback()
                 raise typer.Exit(1) from None
 
-            await uow.commit()
+            uow.commit()
 
     if 0:
         name = project_name or console.ask(
@@ -193,7 +193,7 @@ async def create(
             if not device:
                 raise AppConfigError("no device found in context")
 
-            device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
+            device_zmq_monitor = uow.zmq_monitors.get_by_device_id(device.id)
             await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
             console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
         else:
@@ -218,20 +218,20 @@ async def stop(
     custom_style = context.get("cli-style")
     uow = await services.aget(context, UnitOfWork)
 
-    machine_id = await ServiceBase.read_machine_id()
-    device = await uow.devices.get_by_machine_id(machine_id)
+    machine_id = ServiceBase.read_machine_id()
+    device = uow.devices.get_by_machine_id(machine_id)
 
-    if not len(await device.awaitable_attrs.projects):
+    if not len(device.projects):
         console.success("Appears there have been no projects created yet.")
         raise typer.Exit(0)
 
-    async with uow:
+    with uow:
         try:
             selected_projects = await questionary.checkbox(
                 "Select a project to stop: ",
                 choices=[
                     questionary.Choice(project.name, value=project.id, checked=True)
-                    for project in await device.awaitable_attrs.projects
+                    for project in device.projects
                 ],
                 style=custom_style,
             ).unsafe_ask_async()
@@ -243,7 +243,7 @@ async def stop(
             if not project_id:
                 continue
 
-            for project in filter(lambda proj: proj.id == project_id, await device.awaitable_attrs.projects):
+            for project in filter(lambda proj: proj.id == project_id, device.projects):
                 if await project_down(project, uow):
                     console.info(f"stopped project {project.name}")
                 else:
@@ -269,28 +269,28 @@ async def list_(ctx: typer.Context, show_id: bool = False):
     conf = await services.aget(context, AppConfig)
     uow = await services.aget(context, UnitOfWork)
 
-    machine_id = await ServiceBase.read_machine_id()
-    async with uow:
-        device = await uow.devices.get_by_machine_id(machine_id)
+    machine_id = ServiceBase.read_machine_id()
+    with uow:
+        device = uow.devices.get_by_machine_id(machine_id)
         if not device:
             console.warning("unable to lookup device")
             raise typer.Exit(0)
 
-        if not len(await device.awaitable_attrs.projects):
+        if not len(device.projects):
             console.success("Appears there have been no projects created yet.")
             raise typer.Exit(0)
 
-    # device_zmq_monitor = await uow.zmq_monitors.get_by_device_id(device.id)
-    # zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+    # device_zmq_monitor = uow.zmq_monitors.get_by_device_id(device.id)
+    # zmq_monitor = uow.zmq_monitors.get_by_project_id(project.id)
 
-    projects = await uow.projects.list()
+    projects = uow.projects.list()
     if not len(projects):
         console.warning("No projects were initialized, nothing to show!")
         raise typer.Exit()
 
     projects_out = []
     try:
-        stats = await device.read_stats()
+        stats = device.read_stats()
         device_stats = DeviceStats(**stats)
     except tenacity.RetryError:
         console.error(f"Unable to read stats for device [{device.machine_id}]")
@@ -355,14 +355,14 @@ async def delete(
     custom_style = context.get("cli-style")
     uow = await services.aget(context, UnitOfWork)
 
-    machine_id = await ServiceBase.read_machine_id()
-    device = await uow.devices.get_by_machine_id(machine_id)
+    machine_id = ServiceBase.read_machine_id()
+    device = uow.devices.get_by_machine_id(machine_id)
 
-    if not len(await device.awaitable_attrs.projects):
+    if not len(device.projects):
         console.success("Appears there have been no projects created yet.")
         raise typer.Exit(0)
 
-    async with uow:
+    with uow:
         try:
             selected_projects = await questionary.checkbox(
                 "Existing projects: ",
@@ -372,7 +372,7 @@ async def delete(
                         value=project.id,
                         checked=True,
                     )
-                    for project in await device.awaitable_attrs.projects
+                    for project in device.projects
                 ],
                 style=custom_style,
             ).unsafe_ask_async()
@@ -384,7 +384,7 @@ async def delete(
             if not project_id:
                 continue
 
-            for project in filter(lambda proj: proj.id == project_id, await device.awaitable_attrs.projects):
+            for project in filter(lambda proj: proj.id == project_id, device.projects):
                 if await project_down(project, uow):
                     console.info(f"stopped project {project.name}")
                 else:
@@ -396,10 +396,10 @@ async def delete(
                 except Exception as exc:
                     logger.exception(exc)
                     console.error(f"Unable to delete project {project.name}")
-                    await uow.rollback()
+                    uow.rollback()
                     continue
                 else:
-                    await uow.commit()
+                    uow.commit()
 
     # projects_choices = {
     #    k.get('name'): (k.get('cuid'), k.get('path'))

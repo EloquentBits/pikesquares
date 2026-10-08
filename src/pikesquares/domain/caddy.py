@@ -136,7 +136,7 @@ async def register_caddy_process(context: dict) -> None:
             raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
 
         # await AsyncPath(conf.caddy_config_path).write_text(caddy_config_initial)
-        routers = await uow.http_routers.list()
+        routers = uow.http_routers.list()
         # if routers:
         with open(conf.caddy_config_path, "r+") as caddy_config:
             # vhost_key = "*.pikesquares.dev"

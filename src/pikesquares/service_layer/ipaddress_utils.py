@@ -13,7 +13,7 @@ async def tuntap_router_next_available_ip(
     tuntap_router: "TuntapRouter",
 ) -> IPv4Interface:
 
-    device_ips = [d.ip for d in await tuntap_router.awaitable_attrs.tuntap_devices]
+    device_ips = [d.ip for d in tuntap_router.tuntap_devices]
     if device_ips:
         max_ip = max(device_ips)
     else:
@@ -22,7 +22,7 @@ async def tuntap_router_next_available_ip(
 
 
 async def get_tuntap_router_networks(uow: UnitOfWork):
-    tuntap_routers = await uow.tuntap_routers.list()
+    tuntap_routers = uow.tuntap_routers.list()
     return [
         IPv4Interface(f"{router.ip}/{router.netmask}").network
         for router in tuntap_routers

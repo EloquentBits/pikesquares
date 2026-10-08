@@ -99,17 +99,17 @@ async def up(
     #######################
     # emperor zeromq monitors
     uow = await services.aget(context, UnitOfWork)
-    machine_id = await ServiceBase.read_machine_id()
-    device = await uow.devices.get_by_machine_id(machine_id)
+    machine_id = ServiceBase.read_machine_id()
+    device = uow.devices.get_by_machine_id(machine_id)
     if not device:
         console.error(f"cli up: unable to locate device by machine id {machine_id}")
         raise typer.Exit(code=0) from None
 
-    async with uow:
-        projects = await device.awaitable_attrs.projects
+    with uow:
+        projects = device.projects
         for project in projects:
             try:
-                if await project_up(project) or not await project.read_stats():
+                if await project_up(project) or not project.read_stats():
                     console.success(f":heavy_check_mark:     Launched project [{project.name}]. Done!")
                     # await process_compose.add_tail_log_process(project.name, project.log_file)
             except tenacity.RetryError:
@@ -120,7 +120,7 @@ async def up(
                 console.warning(f"Project {project.name} has not launched. Giving up.")
                 continue
 
-            project_http_routers = await project.awaitable_attrs.http_routers
+            project_http_routers = project.http_routers
             for http_router in project_http_routers:
                 http_router_up_result = await http_router_up(uow, http_router)
                 if http_router_up_result:
@@ -287,8 +287,8 @@ async def launch(
     uow = await services.aget(context, UnitOfWork)
     plugin_manager = await services.aget(context, pluggy.PluginManager)
 
-    machine_id = await ServiceBase.read_machine_id()
-    device = await uow.devices.get_by_machine_id(machine_id)
+    machine_id = ServiceBase.read_machine_id()
+    device = uow.devices.get_by_machine_id(machine_id)
     if not device:
         console.error(f"cli launch: unable to locate device by machine id {machine_id}")
         raise typer.Exit(code=0) from None
@@ -297,7 +297,7 @@ async def launch(
     #    vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
     #    print(vassal_stats)
     # except StopIteration:
-    #    project_zmq_monitor = await uow.zmq_monitors.get_by_project_id(project.id)
+    #    project_zmq_monitor = uow.zmq_monitors.get_by_project_id(project.id)
     #    vassals_home = project_zmq_monitor.uwsgi_zmq_address
     #    await project.up(device_zmq_monitor, vassals_home, tuntap_router)
     #
@@ -314,7 +314,7 @@ async def launch(
         console.error(f"Unable to launch project {project.name}")
         raise typer.Exit(code=0) from None
 
-    http_routers = await project.awaitable_attrs.http_routers or []
+    http_routers = project.http_routers or []
     if not http_routers:
         console.error(f"Unable to locate an http router for project {project.name}")
         raise typer.Exit(code=0) from None
@@ -358,7 +358,7 @@ async def launch(
             console.error(f"unable to provision the {launch_service} runtime.")
             raise typer.Exit(code=0) from None
 
-        async with uow:
+        with uow:
             try:
                 wsgi_app = await provision_wsgi_app(
                     launch_service, AsyncPath(python_app_codebase.root_dir), uow, plugin_manager
@@ -371,10 +371,10 @@ async def launch(
 
             except Exception as exc:
                 logger.exception(exc)
-                await uow.rollback()
+                uow.rollback()
                 console.error(f"unable to provision the {launch_service} app.")
                 raise typer.Exit(code=0) from None
-            await uow.commit()
+            uow.commit()
 
     elif launch_service in ["postgres", "redis"]:
         attached_daemon_name = launch_service
@@ -382,7 +382,7 @@ async def launch(
             console.warning("no project selected. exiting")
             raise typer.Exit()
 
-        # attached_daemons = await uow.attached_daemons.list()
+        # attached_daemons = uow.attached_daemons.list()
         # for daemon in attached_daemons:
         #    logger.info(daemon)
         # attached_daemon_choices = [d.service_id for d in attached_daemons]
@@ -403,7 +403,7 @@ async def launch(
                 plugin_manager,
             )
             if attached_daemon:
-                attached_daemon_device = await uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
+                attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
 
                 await attached_daemon_up(
                     attached_daemon,
@@ -419,11 +419,11 @@ async def launch(
                         console.error(f"{attached_daemon_name} ping failed.")
         except Exception as exc:
             logger.exception(exc)
-            await uow.rollback()
+            uow.rollback()
             console.error(f"unable to provision the {launch_service} app.")
             raise typer.Exit(code=0) from None
 
-        await uow.commit()
+        uow.commit()
 
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")

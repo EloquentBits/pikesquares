@@ -12,11 +12,10 @@ import sentry_sdk
 # import structlog
 import structlog_sentry_logger
 import typer
-from aiopath import AsyncPath
 from dotenv import load_dotenv
+from plumbum import local as pl_local
 
 from pikesquares import __app_name__, __version__, services
-from pikesquares.cli.decorator import run_async
 from pikesquares.conf import (
     AppConfig,
     AppConfigError,
@@ -53,7 +52,12 @@ logging.basicConfig(
     # stream=sys.stdout,
     format="%(message)s",
 )
-for import_lib in ["svcs", "asyncio", "aiosqlite", "plumbum"]:
+for import_lib in [
+    "svcs",
+    "asyncio",
+    "aiosqlite",
+    # "plumbum"
+]:
     warn_logger = logging.getLogger(import_lib)
     warn_logger.setLevel(logging.WARNING)
 
@@ -128,8 +132,7 @@ def _version_callback(value: bool) -> None:
 
 
 @app.callback()
-@run_async
-async def main(
+def main(
     ctx: typer.Context,
     version: str | None = typer.Option(
         None,
@@ -242,22 +245,22 @@ async def main(
     override_settings = {}
 
     # check if locally built uwsgi binary is available
-    # uwsgi_bin_local = AsyncPath("/var/lib/pikesquares/scie-pikesquares/uwsgi/uwsgi")
-    # if await uwsgi_bin_local.exists():
+    # uwsgi_bin_local = Path("/var/lib/pikesquares/scie-pikesquares/uwsgi/uwsgi")
+    # if uwsgi_bin_local.exists():
     #    override_settings = {"UWSGI_BIN": uwsgi_bin_local}
     try:
-        await register_app_conf(context, override_settings)
+        register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:
         logger.error(app_conf_error)
         console.error("invalid config. giving up.")
         raise typer.Abort() from None
 
-    await init_db(context)
+    init_db(context)
 
-    conf = await services.aget(context, AppConfig)
+    conf = services.get(context, AppConfig)
 
     if ctx.invoked_subcommand == "up":
-        # include_dir = AsyncPath(sysconfig.get_path("include"))
+        # include_dir = Path(sysconfig.get_path("include"))
         # if include_dir is None:
         #    raise typer.Exit(1)
 
@@ -272,43 +275,43 @@ async def main(
                 elif platform == "macos":
                     console.info("install python3-dev package. i.e. brew install python3-dev")
                 raise typer.Exit(1)
-        logger.info(f"{conf.UWSGI_BIN=}")
-        if not await conf.UWSGI_BIN.exists():
+
+        if pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists():
             (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
             try:
                 build.build_uwsgi(conf)
             except build.SCIERepoDoesNotExistError:
                 logger.error("unable to clone scie-pikesquares repo")
-                raise typer.Exit(1)
+                raise typer.Exit(1) from None
 
             except build.UWSGISourceFilesMissingError:
                 console.error("unable to build plugin. uWSGI source files missing")
-                raise typer.Exit(1)
+                raise typer.Exit(1) from None
 
         required_plugins = ("sqlite3", "emperor_zeromq", "logfile")
         for plugin in required_plugins:
             plugin_path = conf.plugins_dir / f"{plugin}_plugin.so"
             if not plugin_path.exists():
                 try:
-                    await build.build_plugin(conf, plugin)
+                    build.build_plugin(conf, plugin)
                 except build.PluginHeaderFileMissingError as exc:
                     console.warning(f"{plugin} development header files are not installed.")
                     console.info(exc.message)
-                    raise typer.Exit(1)
+                    raise typer.Exit(1) from None
 
                 except build.UWSGISourceFilesMissingError:
                     console.error("unable to build plugin. uWSGI source files missing")
-                    raise typer.Exit(1)
+                    raise typer.Exit(1) from None
 
     # cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
     # sql = f"\"SELECT option_key,option_value FROM uwsgi_options WHERE machine_id='{machine_id}' ORDER BY sort_order_index\""
 
-    device = await init_device(context)
+    device = init_device(context)
 
     if not run_foreground:
-        await init_process_compose(context, device)
+        init_process_compose(context, device)
 
-    await init_pluggy(context)
+    init_pluggy(context)
 
     if conf.SENTRY_DSN:
         sentry_sdk.init(
