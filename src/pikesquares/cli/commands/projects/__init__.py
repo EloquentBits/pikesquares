@@ -14,7 +14,6 @@ import typer
 # )
 from pikesquares import services
 from pikesquares.cli.console import console
-from pikesquares.cli.decorator import run_async
 from pikesquares.cli.validators import ServiceNameValidator
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.domain.base import ServiceBase
@@ -124,58 +123,57 @@ def create(
 
         # process_compose = services.aget(context, ProcessCompose)
         questionary.print(f"Provisioning project {name}")
-        with uow:
-            try:
-                project = provision_project(name, device, plugin_manager, uow, selected_services=selected_services)
-                console.success(f":heavy_check_mark:     Provisioned {name}")
+        try:
+            project = provision_project(name, device, plugin_manager, uow, selected_services=selected_services)
+            console.success(f":heavy_check_mark:     Provisioned {name}")
 
-                if not project:
-                    console.warning(f"missing project {name}")
-                    raise typer.Exit(1) from None
-
-                if questionary.confirm(f"Launch {project.name}?").ask():
-                    try:
-                        if not project_up(project, project.tuntap_routers, uow):
-                            console.error(f"Unable to launch project {project.name}")
-                            raise typer.Exit(1)
-                    # process_compose.add_tail_log_process(project.name, project.log_file)
-                    except Exception as exc:
-                        logger.exception(exc)
-                        console.print(traceback.format_exc())
-                        console.warning(f"Unable to launch project {name}")
-                        raise typer.Exit(1) from None
-
-                    console.success(f":heavy_check_mark:     Launched project {name}")
-                else:
-                    console.info(f"Not launching {project.name}")
-                    raise typer.Exit(0) from None
-
-                for http_router in project.http_routers or []:
-                    try:
-                        http_router_up_result = http_router_up(uow, http_router)
-                        if http_router_up_result:
-                            console.success(":heavy_check_mark:     Launching http router.. Done!")
-                            console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-                            # process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
-                    except Exception as exc:
-                        logger.exception(exc)
-                        console.print(traceback.format_exc())
-                        console.warning(f"Unable to launch http router {http_router}")
-                        raise typer.Exit(1) from None
-
-                for attached_daemon in project.attached_daemons or []:
-                    if attached_daemon_up(attached_daemon, uow, plugin_manager):
-                        logger.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
-                    logger.info(f"launched attached daemon for project {project.service_id}")
-
-            except Exception as exc:
-                logger.exception(exc)
-                console.print(traceback.format_exc())
-                console.warning(f"Unable to provision project {name}")
-                uow.rollback()
+            if not project:
+                console.warning(f"missing project {name}")
                 raise typer.Exit(1) from None
 
-            uow.commit()
+            if questionary.confirm(f"Launch {project.name}?").ask():
+                try:
+                    if not project_up(project, project.tuntap_routers, uow):
+                        console.error(f"Unable to launch project {project.name}")
+                        raise typer.Exit(1)
+                # process_compose.add_tail_log_process(project.name, project.log_file)
+                except Exception as exc:
+                    logger.exception(exc)
+                    console.print(traceback.format_exc())
+                    console.warning(f"Unable to launch project {name}")
+                    raise typer.Exit(1) from None
+
+                console.success(f":heavy_check_mark:     Launched project {name}")
+            else:
+                console.info(f"Not launching {project.name}")
+                raise typer.Exit(0) from None
+
+            for http_router in project.http_routers or []:
+                try:
+                    http_router_up_result = http_router_up(uow, http_router)
+                    if http_router_up_result:
+                        console.success(":heavy_check_mark:     Launching http router.. Done!")
+                        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+                        # process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+                except Exception as exc:
+                    logger.exception(exc)
+                    console.print(traceback.format_exc())
+                    console.warning(f"Unable to launch http router {http_router}")
+                    raise typer.Exit(1) from None
+
+            for attached_daemon in project.attached_daemons or []:
+                if attached_daemon_up(attached_daemon, uow, plugin_manager):
+                    logger.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
+                logger.info(f"launched attached daemon for project {project.service_id}")
+
+        except Exception as exc:
+            logger.exception(exc)
+            console.print(traceback.format_exc())
+            console.warning(f"Unable to provision project {name}")
+            uow.rollback()
+            raise typer.Exit(1) from None
+
+        uow.commit()
 
     if 0:
         name = project_name or console.ask(
@@ -221,29 +219,26 @@ def stop(
         console.success("Appears there have been no projects created yet.")
         raise typer.Exit(0)
 
-    with uow:
-        try:
-            selected_projects = questionary.checkbox(
-                "Select a project to stop: ",
-                choices=[
-                    questionary.Choice(project.name, value=project.id, checked=True) for project in device.projects
-                ],
-                style=custom_style,
-            ).unsafe_ask()
-        except KeyboardInterrupt:
-            console.info("selection cancelled.")
-            raise typer.Exit(0) from None
+    try:
+        selected_projects = questionary.checkbox(
+            "Select a project to stop: ",
+            choices=[questionary.Choice(project.name, value=project.id, checked=True) for project in device.projects],
+            style=custom_style,
+        ).unsafe_ask()
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None
 
-        for project_id in selected_projects:
-            if not project_id:
+    for project_id in selected_projects:
+        if not project_id:
+            continue
+
+        for project in filter(lambda proj: proj.id == project_id, device.projects):
+            if project_down(project, uow):
+                console.info(f"stopped project {project.name}")
+            else:
+                console.warning(f"unable to stop project {project.name}")
                 continue
-
-            for project in filter(lambda proj: proj.id == project_id, device.projects):
-                if project_down(project, uow):
-                    console.info(f"stopped project {project.name}")
-                else:
-                    console.warning(f"unable to stop project {project.name}")
-                    continue
 
 
 @app.command(
@@ -264,15 +259,14 @@ def list_(ctx: typer.Context, show_id: bool = False):
     uow = services.get(context, UnitOfWork)
 
     machine_id = ServiceBase.read_machine_id()
-    with uow:
-        device = uow.devices.get_by_machine_id(machine_id)
-        if not device:
-            console.warning("unable to lookup device")
-            raise typer.Exit(0)
+    device = uow.devices.get_by_machine_id(machine_id)
+    if not device:
+        console.warning("unable to lookup device")
+        raise typer.Exit(0)
 
-        if not len(device.projects):
-            console.success("Appears there have been no projects created yet.")
-            raise typer.Exit(0)
+    if not len(device.projects):
+        console.success("Appears there have been no projects created yet.")
+        raise typer.Exit(0)
 
     # device_zmq_monitor = uow.zmq_monitors.get_by_device_id(device.id)
     # zmq_monitor = uow.zmq_monitors.get_by_project_id(project.id)
@@ -328,7 +322,7 @@ def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
             project_log_file.read_text(), status_bar_format=f"{project_log_file.resolve()} (status: {status})"
         )
     else:
-        nonsole.error(
+        console.error(
             f"Error:\nLog file {project_log_file} not exists!", hint=f"Check the device log file for possible errors"
         )
 
@@ -355,44 +349,43 @@ def delete(
         console.success("Appears there have been no projects created yet.")
         raise typer.Exit(0)
 
-    with uow:
-        try:
-            selected_projects = questionary.checkbox(
-                "Existing projects: ",
-                choices=[
-                    questionary.Choice(
-                        f"{project.name} [{project.service_id}]",
-                        value=project.id,
-                        checked=True,
-                    )
-                    for project in device.projects
-                ],
-                style=custom_style,
-            ).unsafe_ask()
-        except KeyboardInterrupt:
-            console.info("selection cancelled.")
-            raise typer.Exit(0) from None
+    try:
+        selected_projects = questionary.checkbox(
+            "Existing projects: ",
+            choices=[
+                questionary.Choice(
+                    f"{project.name} [{project.service_id}]",
+                    value=project.id,
+                    checked=True,
+                )
+                for project in device.projects
+            ],
+            style=custom_style,
+        ).unsafe_ask()
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None
 
-        for project_id in selected_projects:
-            if not project_id:
+    for project_id in selected_projects:
+        if not project_id:
+            continue
+
+        for project in filter(lambda proj: proj.id == project_id, device.projects):
+            if project_down(project, uow):
+                console.info(f"stopped project {project.name}")
+            else:
+                console.warning(f"unable to stop project {project.name}")
                 continue
 
-            for project in filter(lambda proj: proj.id == project_id, device.projects):
-                if project_down(project, uow):
-                    console.info(f"stopped project {project.name}")
-                else:
-                    console.warning(f"unable to stop project {project.name}")
-                    continue
-
-                try:
-                    project_delete(project, uow)
-                except Exception as exc:
-                    logger.exception(exc)
-                    console.error(f"Unable to delete project {project.name}")
-                    uow.rollback()
-                    continue
-                else:
-                    uow.commit()
+            try:
+                project_delete(project, uow)
+            except Exception as exc:
+                logger.exception(exc)
+                console.error(f"Unable to delete project {project.name}")
+                uow.rollback()
+                continue
+            else:
+                uow.commit()
 
     # projects_choices = {
     #    k.get('name'): (k.get('cuid'), k.get('path'))

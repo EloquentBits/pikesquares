@@ -20,18 +20,17 @@ def provision_python_app_runtime(
     version: str, uow: UnitOfWork, custom_style: questionary.Style
 ) -> PythonAppRuntime | None:
 
-    with uow:
-        try:
-            runtime = uow.python_app_runtimes.get_by_version(version)
-            if not runtime:
-                runtime = uow.python_app_runtimes.add(PythonAppRuntime(version=version))
-                uow.commit()
-            return runtime
-        except Exception as exc:
-            logger.exception(exc)
-            logger.info(f"failed provisioning Python App Runtime {version}")
-            uow.rollback()
-            raise exc
+    try:
+        runtime = uow.python_app_runtimes.get_by_version(version)
+        if not runtime:
+            runtime = uow.python_app_runtimes.add(PythonAppRuntime(version=version))
+            uow.commit()
+        return runtime
+    except Exception as exc:
+        logger.exception(exc)
+        logger.info(f"failed provisioning Python App Runtime {version}")
+        uow.rollback()
+        raise exc
 
 
 def provision_app_codebase(
@@ -86,38 +85,37 @@ def provision_app_codebase(
     )
     app_pyvenv_dir = app_repo_dir / ".venv"
 
-    with uow:
-        try:
-            app_codebase = uow.python_app_codebases.get_by_root_dir(str(app_root_dir))
-            if not app_codebase:
-                app_codebase = uow.python_app_codebases.add(
-                    PythonAppCodebase(
-                        root_dir=str(app_root_dir),
-                        repo_dir=str(app_repo_dir),
-                        repo_git_url=repo_git_url,
-                        venv_dir=str(app_pyvenv_dir),
-                        editable_mode=editable_mode,
-                        uv_bin=str(uv_bin),
-                    )
+    try:
+        app_codebase = uow.python_app_codebases.get_by_root_dir(str(app_root_dir))
+        if not app_codebase:
+            app_codebase = uow.python_app_codebases.add(
+                PythonAppCodebase(
+                    root_dir=str(app_root_dir),
+                    repo_dir=str(app_repo_dir),
+                    repo_git_url=repo_git_url,
+                    venv_dir=str(app_pyvenv_dir),
+                    editable_mode=editable_mode,
+                    uv_bin=str(uv_bin),
                 )
-                logger.info(f"created App Codebase @ {app_root_dir}")
+            )
+            logger.info(f"created App Codebase @ {app_root_dir}")
 
-            if not app_codebase.dependencies_validate():
-                raise RuntimeError("validating dependencies failed")
+        if not app_codebase.dependencies_validate():
+            raise RuntimeError("validating dependencies failed")
 
-            logger.info(f"Successfully validated {service_name} dependencies")
+        logger.info(f"Successfully validated {service_name} dependencies")
 
-            if not app_codebase.dependencies_install(service_name, plugin_manager):
-                raise RuntimeError("installing dependencies failed")
+        if not app_codebase.dependencies_install(service_name, plugin_manager):
+            raise RuntimeError("installing dependencies failed")
 
-        except Exception as exc:
-            logger.exception(exc)
-            logger.info(f"failed provisioning Python App Codebase @ {app_root_dir}")
-            print(traceback.format_exc())
-            uow.rollback()
-            raise exc
+    except Exception as exc:
+        logger.exception(exc)
+        logger.info(f"failed provisioning Python App Codebase @ {app_root_dir}")
+        print(traceback.format_exc())
+        uow.rollback()
+        raise exc
 
-        uow.commit()
+    uow.commit()
 
     return app_codebase
 

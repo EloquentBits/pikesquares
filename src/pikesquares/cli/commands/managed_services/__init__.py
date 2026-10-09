@@ -9,7 +9,6 @@ from pluggy import PluginManager
 
 from pikesquares import services
 from pikesquares.cli.console import console
-from pikesquares.cli.decorator import run_async
 from pikesquares.conf import AppConfig
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.service_layer.handlers.attached_daemon import (
@@ -56,59 +55,56 @@ def list_(ctx: typer.Context):
     uow = services.get(context, UnitOfWork)
 
     try:
-        with uow:
-            machine_id = AttachedDaemon.read_machine_id()
-            device = uow.devices.get_by_machine_id(machine_id)
-            if not device:
-                raise RuntimeError("no device found")
+        machine_id = AttachedDaemon.read_machine_id()
+        device = uow.devices.get_by_machine_id(machine_id)
+        if not device:
+            raise RuntimeError("no device found")
 
-            projects = device.projects
-            if not len(device.projects):
-                console.success("Appears there have been no projects created.")
-                raise typer.Exit(0) from None
+        projects = device.projects
+        if not len(device.projects):
+            console.success("Appears there have been no projects created.")
+            raise typer.Exit(0) from None
 
+        try:
+            if not len(projects):
+                return
+            elif len(projects) == 1:
+                return projects[0]
+
+            selected_project_id = questionary.select(
+                "Select an existing project: ",
+                choices=[questionary.Choice(project.name, value=project.id) for project in device.projects],
+                style=custom_style,
+            ).unsafe_ask()
+        except KeyboardInterrupt:
+            console.info("selection cancelled.")
+            raise typer.Exit(0) from None
+
+        if not selected_project_id:
+            console.warning("no project selected")
+            return
+
+        project = uow.projects.get_by_id(selected_project_id)
+        if not project:
+            console.warning(f"Unable to locate project by id {selected_project_id}")
+            return
+
+        attached_daemons = project.attached_daemons
+        if not attached_daemons:
+            console.success(f"Appears there are no managed services in project {project.name} [{project.service_id}].")
+            raise typer.Exit(0) from None
+
+        def check_vassal_state(daemon: AttachedDaemon) -> str:
             try:
-                if not len(projects):
-                    return
-                elif len(projects) == 1:
-                    return projects[0]
+                if bool(daemon.read_stats()):
+                    return "running"
+            except tenacity.RetryError:
+                pass
+            return "stopped"
 
-                selected_project_id = questionary.select(
-                    "Select an existing project: ",
-                    choices=[questionary.Choice(project.name, value=project.id) for project in device.projects],
-                    style=custom_style,
-                ).unsafe_ask()
-            except KeyboardInterrupt:
-                console.info("selection cancelled.")
-                raise typer.Exit(0) from None
-
-            if not selected_project_id:
-                console.warning("no project selected")
-                return
-
-            project = uow.projects.get_by_id(selected_project_id)
-            if not project:
-                console.warning(f"Unable to locate project by id {selected_project_id}")
-                return
-
-            attached_daemons = project.attached_daemons
-            if not attached_daemons:
-                console.success(
-                    f"Appears there are no managed services in project {project.name} [{project.service_id}]."
-                )
-                raise typer.Exit(0) from None
-
-            def check_vassal_state(daemon: AttachedDaemon) -> str:
-                try:
-                    if bool(daemon.read_stats()):
-                        return "running"
-                except tenacity.RetryError:
-                    pass
-                return "stopped"
-
-            # plugin_manager = services.get(context, PluginManager)
-            for attached_daemon in attached_daemons:
-                """
+        # plugin_manager = services.get(context, PluginManager)
+        for attached_daemon in attached_daemons:
+            """
                 daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
                 if not daemon_conf:
                     logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
@@ -129,16 +125,16 @@ def list_(ctx: typer.Context):
                     plugin_manager.register(plugin_instance)
 
                 """
-                vassal_state = "running"  # check_vassal_state(attached_daemon)
-                if vassal_state == "running":
-                    daemon_ping = True  # plugin_manager.hook.ping()
-                else:
-                    daemon_ping = False
-                console.info(
-                    f"{attached_daemon.name} - {attached_daemon.service_id} - Vassal: {vassal_state} - Daemon Ping: {'Up' if daemon_ping else 'Down'}"
-                )
+            vassal_state = "running"  # check_vassal_state(attached_daemon)
+            if vassal_state == "running":
+                daemon_ping = True  # plugin_manager.hook.ping()
+            else:
+                daemon_ping = False
+            console.info(
+                f"{attached_daemon.name} - {attached_daemon.service_id} - Vassal: {vassal_state} - Daemon Ping: {'Up' if daemon_ping else 'Down'}"
+            )
 
-                # plugin_manager.unregister(plugin_instance)
+            # plugin_manager.unregister(plugin_instance)
 
     except Exception as exc:
         logger.error(exc)
@@ -163,59 +159,56 @@ def start(
     uow = services.get(context, UnitOfWork)
     plugin_manager = services.get(context, pluggy.PluginManager)
     try:
-        with uow:
+        try:
+            project = prompt_for_project(uow, custom_style)
+            if not project:
+                console.warning("unable to retrieve project")
+                raise typer.Exit(0) from None
+            attached_daemons = prompt_for_attached_daemons(
+                uow,
+                project,
+                custom_style,
+                is_running=False,
+            )
+        except KeyboardInterrupt:
+            console.info("selection cancelled.")
+            raise typer.Exit(0) from None
+
+        if not attached_daemons:
+            console.success("Appears there are no stopped managed services in this project.")
+            raise typer.Exit(0) from None
+
+        plugin_manager = services.get(context, PluginManager)
+        for attached_daemon in attached_daemons:
             try:
-                project = prompt_for_project(uow, custom_style)
-                if not project:
-                    console.warning("unable to retrieve project")
-                    raise typer.Exit(0) from None
-                attached_daemons = prompt_for_attached_daemons(
-                    uow,
-                    project,
-                    custom_style,
-                    is_running=False,
+                daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
+                if not daemon_conf:
+                    logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
+                    raise typer.Exit(1) from None
+                plugin_class = daemon_conf.get("class")
+                if not plugin_class:
+                    logger.error(f"unable to lookup {attached_daemon.name} class in config")
+                    continue
+
+                attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
+
+                plugin_instance = plugin_class(
+                    daemon_service=attached_daemon,
+                    bind_ip=str(attached_daemon_device.ip),
                 )
-            except KeyboardInterrupt:
-                console.info("selection cancelled.")
-                raise typer.Exit(0) from None
-
-            if not attached_daemons:
-                console.success("Appears there are no stopped managed services in this project.")
-                raise typer.Exit(0) from None
-
-            plugin_manager = services.get(context, PluginManager)
-            for attached_daemon in attached_daemons:
-                try:
-                    daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
-                    if not daemon_conf:
-                        logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
-                        raise typer.Exit(1) from None
-                    plugin_class = daemon_conf.get("class")
-                    if not plugin_class:
-                        logger.error(f"unable to lookup {attached_daemon.name} class in config")
-                        continue
-
-                    attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
-
-                    plugin_instance = plugin_class(
-                        daemon_service=attached_daemon,
-                        bind_ip=str(attached_daemon_device.ip),
-                    )
-                    if attached_daemon_device:
-                        plugin_manager.register(plugin_instance)
-                    if attached_daemon_up(
-                        attached_daemon,
-                        plugin_manager,
-                        uow,
-                        create_data_dir=daemon_conf.get("create_data_dir"),
-                    ):
-                        console.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
-                    plugin_manager.unregister(plugin_instance)
-                except Exception as exc:
-                    logger.error(exc)
-                    console.error(
-                        f"failed to stop managed service {attached_daemon.name} [{attached_daemon.service_id}]"
-                    )
+                if attached_daemon_device:
+                    plugin_manager.register(plugin_instance)
+                if attached_daemon_up(
+                    attached_daemon,
+                    plugin_manager,
+                    uow,
+                    create_data_dir=daemon_conf.get("create_data_dir"),
+                ):
+                    console.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
+                plugin_manager.unregister(plugin_instance)
+            except Exception as exc:
+                logger.error(exc)
+                console.error(f"failed to stop managed service {attached_daemon.name} [{attached_daemon.service_id}]")
 
     except Exception as exc:
         logger.error(exc)
@@ -240,56 +233,53 @@ def stop(
     uow = services.get(context, UnitOfWork)
 
     try:
-        with uow:
-            project = prompt_for_project(uow, custom_style)
-            if not project:
-                console.warning("unable to retrieve project")
-                raise typer.Exit(0) from None
+        project = prompt_for_project(uow, custom_style)
+        if not project:
+            console.warning("unable to retrieve project")
+            raise typer.Exit(0) from None
 
-            attached_daemons = prompt_for_attached_daemons(
-                uow,
-                project,
-                custom_style,
-                is_running=True,
-            )
-            if not attached_daemons:
-                console.success("Appears there have been no Managed Services created in this project yet.")
-                raise typer.Exit(0) from None
+        attached_daemons = prompt_for_attached_daemons(
+            uow,
+            project,
+            custom_style,
+            is_running=True,
+        )
+        if not attached_daemons:
+            console.success("Appears there have been no Managed Services created in this project yet.")
+            raise typer.Exit(0) from None
 
-            plugin_manager = services.aget(context, PluginManager)
-            for attached_daemon in attached_daemons:
-                try:
-                    daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
-                    if not daemon_conf:
-                        logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
-                        raise typer.Exit(1) from None
-                    plugin_class = daemon_conf.get("class")
-                    if not plugin_class:
-                        logger.error(f"unable to lookup {attached_daemon.name} class in config")
-                        continue
+        plugin_manager = services.get(context, PluginManager)
+        for attached_daemon in attached_daemons:
+            try:
+                daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
+                if not daemon_conf:
+                    logger.error(f"unable to lookup attached daemon plugin {attached_daemon.name}")
+                    raise typer.Exit(1) from None
+                plugin_class = daemon_conf.get("class")
+                if not plugin_class:
+                    logger.error(f"unable to lookup {attached_daemon.name} class in config")
+                    continue
 
-                    attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
+                attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
 
-                    plugin_instance = plugin_class(
-                        daemon_service=attached_daemon,
-                        bind_ip=str(attached_daemon_device.ip),
-                    )
-                    if attached_daemon_device:
-                        plugin_manager.register(plugin_instance)
+                plugin_instance = plugin_class(
+                    daemon_service=attached_daemon,
+                    bind_ip=str(attached_daemon_device.ip),
+                )
+                if attached_daemon_device:
+                    plugin_manager.register(plugin_instance)
 
-                    if attached_daemon_down(
-                        attached_daemon,
-                        plugin_manager,
-                        uow,
-                    ):
-                        console.info(f"stopped managed service {attached_daemon.name} {attached_daemon.service_id}")
-                    plugin_manager.unregister(plugin_instance)
-                except Exception as exc:
-                    logger.error(exc)
-                    print(traceback.format_exc())
-                    console.error(
-                        f"failed to stop managed service {attached_daemon.name} [{attached_daemon.service_id}]"
-                    )
+                if attached_daemon_down(
+                    attached_daemon,
+                    plugin_manager,
+                    uow,
+                ):
+                    console.info(f"stopped managed service {attached_daemon.name} {attached_daemon.service_id}")
+                plugin_manager.unregister(plugin_instance)
+            except Exception as exc:
+                logger.error(exc)
+                print(traceback.format_exc())
+                console.error(f"failed to stop managed service {attached_daemon.name} [{attached_daemon.service_id}]")
     except Exception as exc:
         logger.error(exc)
         print(traceback.format_exc())

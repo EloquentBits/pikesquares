@@ -373,6 +373,8 @@ def register_device_process(context: dict, machine_id: str) -> None:
         #        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {sqlite_plugin_path}") from None
         #
         conf = svcs_container.get(AppConfig)
+        # this command is run *through a shell* by process-compose, so the query must
+        # stay double-quoted (the shell strips the quotes and keeps the SQL as one arg)
         cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
         sql = f"\"SELECT option_key,option_value FROM uwsgi_options WHERE machine_id='{machine_id}' ORDER BY sort_order_index\""
         process = Process(

@@ -13,7 +13,6 @@ import sentry_sdk
 import structlog_sentry_logger
 import typer
 from dotenv import load_dotenv
-from plumbum import local as pl_local
 
 from pikesquares import __app_name__, __version__, services
 from pikesquares.conf import (
@@ -278,8 +277,6 @@ def main(
                 raise typer.Exit(1)
 
         build.build_uwsgi_deps(conf)
-    # cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
-    # sql = f"\"SELECT option_key,option_value FROM uwsgi_options WHERE machine_id='{machine_id}' ORDER BY sort_order_index\""
 
     device = init_device(context)
 

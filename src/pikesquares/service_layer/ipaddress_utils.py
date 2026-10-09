@@ -1,15 +1,14 @@
-
-import structlog
 from ipaddress import IPv4Interface, IPv4Network
+
 import netifaces
+import structlog
 
 from pikesquares.service_layer.uow import UnitOfWork
-
 
 logger = structlog.getLogger()
 
 
-async def tuntap_router_next_available_ip(
+def tuntap_router_next_available_ip(
     tuntap_router: "TuntapRouter",
 ) -> IPv4Interface:
 
@@ -21,18 +20,15 @@ async def tuntap_router_next_available_ip(
     return IPv4Interface(f"{max_ip}/{tuntap_router.netmask}") + 1
 
 
-async def get_tuntap_router_networks(uow: UnitOfWork):
+def get_tuntap_router_networks(uow: UnitOfWork):
     tuntap_routers = uow.tuntap_routers.list()
-    return [
-        IPv4Interface(f"{router.ip}/{router.netmask}").network
-        for router in tuntap_routers
-    ]
+    return [IPv4Interface(f"{router.ip}/{router.netmask}").network for router in tuntap_routers]
 
-async def range_free_ip(existing_networks: list[IPv4Network]) -> int:
+
+def range_free_ip(existing_networks: list[IPv4Network]) -> int:
 
     if existing_networks:
         return int(str(existing_networks[0]).split(".")[2])
-
 
     used_subnets = set()
     for iface in netifaces.interfaces():
@@ -48,7 +44,7 @@ async def range_free_ip(existing_networks: list[IPv4Network]) -> int:
             logger.exception(exc)
             continue
 
-    #import ipdb;ipdb.set_trace()
+    # import ipdb;ipdb.set_trace()
     for start in [1, 100, 200]:
         collision = False
         end = 100 if start == 1 else 200 if start == 100 else 256
@@ -62,17 +58,17 @@ async def range_free_ip(existing_networks: list[IPv4Network]) -> int:
 
     raise RuntimeError("No available subnet range found (checked 172.28.1-255)")
 
-async def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
-    existing_networks = await get_tuntap_router_networks(uow) or []
-    logger.debug(f"Looking for available subnet for tuntap router. "
-                 f"{len(existing_networks)} existing subnets")
 
-    start = await range_free_ip(existing_networks)
+def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
+    existing_networks = get_tuntap_router_networks(uow) or []
+    logger.debug(f"Looking for available subnet for tuntap router. {len(existing_networks)} existing subnets")
+
+    start = range_free_ip(existing_networks)
     end = min(start + 100, 256)
     for i in range(start, end):
         n = IPv4Network(f"172.28.{i}.0/24")
 
-        #if not any([not n.compare_networks(en) != 0 for en in existing_networks]):
+        # if not any([not n.compare_networks(en) != 0 for en in existing_networks]):
         #    logger.debug(f"found a subnet {n} for new tuntap router")
 
         if all(n != en for en in existing_networks):
@@ -80,4 +76,3 @@ async def tuntap_router_next_available_network(uow: UnitOfWork) -> IPv4Network:
             return n
 
     raise RuntimeError("Unable to locate a free subnet for the tuntap router.")
-

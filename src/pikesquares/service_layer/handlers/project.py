@@ -10,7 +10,7 @@ from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import TuntapRouter
 from pikesquares.presets.project import ProjectSection
-from pikesquares.service_layer.handlers.attached_daemon import attached_daemon_up, provision_attached_daemon
+from pikesquares.service_layer.handlers.attached_daemon import provision_attached_daemon
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor, destroy_instance
 from pikesquares.service_layer.handlers.routers import (
     provision_http_router,
@@ -19,6 +19,42 @@ from pikesquares.service_layer.handlers.routers import (
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
+
+
+def get_nat_interfaces() -> list[str]:
+
+    PHYSICAL_PREFIXES = (
+        "en",
+        "wl",
+        "et",
+        "ww",
+    )  # https://www.freedesktop.org/software/systemd/man/latest/systemd.net-naming-scheme.html
+    AF_LINK = 17  # MAC
+    AF_INET = 2  # IPv4
+
+    def is_physical(name: str) -> bool:
+        return name.startswith(PHYSICAL_PREFIXES)
+
+    nat_interfaces = []
+
+    for iface in netifaces.interfaces():
+        if not is_physical(iface):
+            continue
+
+        try:
+            addr_info = netifaces.ifaddresses(iface)
+
+            has_ipv4 = AF_INET in addr_info and any("addr" in entry for entry in addr_info[AF_INET])
+
+            has_mac = AF_LINK in addr_info and any("addr" in entry for entry in addr_info[AF_LINK])
+
+            if has_ipv4 and has_mac:
+                nat_interfaces.append(iface)
+
+        except Exception as e:
+            logger.error(f"Error processing interface {iface}: {e}")
+
+    return nat_interfaces
 
 
 def provision_project(
@@ -72,42 +108,6 @@ def provision_project(
         raise exc
 
     return project
-
-
-def get_nat_interfaces() -> list[str]:
-
-    PHYSICAL_PREFIXES = (
-        "en",
-        "wl",
-        "et",
-        "ww",
-    )  # https://www.freedesktop.org/software/systemd/man/latest/systemd.net-naming-scheme.html
-    AF_LINK = 17  # MAC
-    AF_INET = 2  # IPv4
-
-    def is_physical(name: str) -> bool:
-        return name.startswith(PHYSICAL_PREFIXES)
-
-    nat_interfaces = []
-
-    for iface in netifaces.interfaces():
-        if not is_physical(iface):
-            continue
-
-        try:
-            addr_info = netifaces.ifaddresses(iface)
-
-            has_ipv4 = AF_INET in addr_info and any("addr" in entry for entry in addr_info[AF_INET])
-
-            has_mac = AF_LINK in addr_info and any("addr" in entry for entry in addr_info[AF_LINK])
-
-            if has_ipv4 and has_mac:
-                nat_interfaces.append(iface)
-
-        except Exception as e:
-            logger.error(f"Error processing interface {iface}: {e}")
-
-    return nat_interfaces
 
 
 def project_up(project: Project) -> bool | None:

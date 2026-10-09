@@ -7,7 +7,6 @@ import structlog
 # from pathlib import Path
 # from typing import Any
 import zmq
-import zmq.asyncio
 
 # from sqlalchemy_utils import ChoiceType
 from sqlmodel import (
@@ -100,7 +99,7 @@ class ZMQMonitor(AppMonitorBase, table=True):
         return f"zmq://{self.zmq_address}"
 
     def create_or_restart_instance(self, name: str, model) -> None:
-        ctx = zmq.asyncio.Context()
+        ctx = zmq.Context()
         sock = ctx.socket(zmq.PUSH)
         if self.zmq_address:
             logger.info(
@@ -113,7 +112,7 @@ class ZMQMonitor(AppMonitorBase, table=True):
             logger.info(f"{model.__class__.__name__} no zmq socket found @ {self.socket_address}")
 
     def destroy_instance(self, name: str, model) -> None:
-        ctx = zmq.asyncio.Context()
+        ctx = zmq.Context()
         sock = ctx.socket(zmq.PUSH)
         if self.zmq_address:
             sock.connect(self.zmq_address)

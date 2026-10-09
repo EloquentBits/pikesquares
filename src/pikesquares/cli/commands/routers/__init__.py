@@ -118,33 +118,32 @@ def stop(
     conf = services.get(context, AppConfig)
     uow = services.get(context, UnitOfWork)
 
-    with uow:
-        http_routers = uow.http_routers.list()
-        # for router in http_routers:
-        #     try:
-        #         router_stats_available = bool(router.__class__.read_stats(router.stats_address))
-        #     except StatsReadError:
-        #         router_stats_available = False
-        for router_to_stop in questionary.checkbox(
-            f"Select the proxy(s) to stop?",
-            choices=[f"{r.service_id} {r.address}" for r in http_routers],
-        ).ask():
-            print(router_to_stop)
-            r_addr = router_to_stop.split()[-1]
-            print(r_addr)
-            router = uow.http_routers.get_by_address(r_addr)
-            if router:
-                project = router.project
-                project_zmq_monitor = project.zmq_monitor
-                project_zmq_monitor_address = project_zmq_monitor.zmq_address
-                print(project_zmq_monitor_address)
+    http_routers = uow.http_routers.list()
+    # for router in http_routers:
+    #     try:
+    #         router_stats_available = bool(router.__class__.read_stats(router.stats_address))
+    #     except StatsReadError:
+    #         router_stats_available = False
+    for router_to_stop in questionary.checkbox(
+        f"Select the proxy(s) to stop?",
+        choices=[f"{r.service_id} {r.address}" for r in http_routers],
+    ).ask():
+        print(router_to_stop)
+        r_addr = router_to_stop.split()[-1]
+        print(r_addr)
+        router = uow.http_routers.get_by_address(r_addr)
+        if router:
+            project = router.project
+            project_zmq_monitor = project.zmq_monitor
+            project_zmq_monitor_address = project_zmq_monitor.zmq_address
+            print(project_zmq_monitor_address)
 
-                destroy_instance(project_zmq_monitor_address, f"{router.service_id}.ini")
+            destroy_instance(project_zmq_monitor_address, f"{router.service_id}.ini")
 
-            try:
-                router_stats_available = bool(router.__class__.read_stats(router.stats_address))
-            except StatsReadError:
-                router_stats_available = False
+        try:
+            router_stats_available = bool(router.__class__.read_stats(router.stats_address))
+        except StatsReadError:
+            router_stats_available = False
 
         # selected_router_cuid = router(router_to_stop).get("service_id")
         # console.info(f"selected proxy to stop: {selected_router_cuid=}")

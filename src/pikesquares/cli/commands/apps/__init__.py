@@ -1,11 +1,10 @@
 import shutil
 import tempfile
 import time
-import traceback
 from enum import Enum
 from glob import glob
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 import cuid
 import questionary
@@ -18,7 +17,6 @@ from rich.panel import Panel
 from rich.progress import (
     Progress,
 )
-from typing_extensions import Annotated
 
 from pikesquares import services
 from pikesquares.cli.console import (
@@ -28,9 +26,8 @@ from pikesquares.cli.console import (
     make_progress,
 )
 from pikesquares.conf import AppConfig
-from pikesquares.domain.project import Project
-from pikesquares.domain.router import HttpRouter
 from pikesquares.domain.wsgi_app import WsgiApp
+from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.exceptions import (
     DjangoCheckError,
     DjangoDiffSettingsError,
@@ -709,16 +706,15 @@ def init(
         """
 
         uwsgi_plugins = ["tuntap"]
-        with uow:
-            wsgi_app = provision_wsgi_app(
-                app_name,
-                app_root_dir,
-                app_repo_dir,
-                app_pyvenv_dir,
-                conf.UV_BIN,
-                uow,
-                project,
-            )
+        wsgi_app = provision_wsgi_app(
+            app_name,
+            app_root_dir,
+            app_repo_dir,
+            app_pyvenv_dir,
+            conf.UV_BIN,
+            uow,
+            project,
+        )
         if default_project:
             # proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"
             wsgi_app.zmq_monitor_create_instance()
@@ -752,21 +748,20 @@ def ls(
         console.error("unable to locate device in app context")
         raise typer.Exit(code=0) from None
 
-    with uow:
-        attached_daemons = uow.attached_daemons.list()
-        for daemon in attached_daemons:
-            try:
-                daemon_stats_available = bool(daemon.__class__.read_stats(daemon.stats_address))
-            except StatsReadError:
-                daemon_stats_available = False
+    attached_daemons = uow.attached_daemons.list()
+    for daemon in attached_daemons:
+        try:
+            daemon_stats_available = bool(daemon.__class__.read_stats(daemon.stats_address))
+        except StatsReadError:
+            daemon_stats_available = False
 
-            console.info(
-                f"""{daemon.name} | \
+        console.info(
+            f"""{daemon.name} | \
 {daemon.service_id} | \
 {"Stats Up" if daemon_stats_available else "Stats Down"} | \
 {Path(daemon.pid_file).read_text()}
-                """
-            )
+            """
+        )
 
 
 @app.command(short_help="Show all apps in specific project.\nAliases:[i] apps, app list")

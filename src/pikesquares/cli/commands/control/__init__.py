@@ -7,7 +7,8 @@ import questionary
 import structlog
 import tenacity
 import typer
-from plumbum import ProcessExecutionError
+from plumbum import FG, ProcessExecutionError
+from plumbum import local as pl_local
 
 from pikesquares import services
 from pikesquares.cli.console import console
@@ -93,35 +94,87 @@ def up(
                     continue
         except (StopIteration, IndexError):
             pass
+    else:
+        uow = services.get(context, UnitOfWork)
+        machine_id = ServiceBase.read_machine_id()
+        logger.info(f"{machine_id=}")
+        device = uow.devices.get_by_machine_id(machine_id)
+        if not device:
+            console.error(f"cli up: unable to locate device by machine id {machine_id}")
+            raise typer.Exit(code=0) from None
 
-    uow = services.get(context, UnitOfWork)
-    machine_id = ServiceBase.read_machine_id()
-    device = uow.devices.get_by_machine_id(machine_id)
-    if not device:
-        console.error(f"cli up: unable to locate device by machine id {machine_id}")
-        raise typer.Exit(code=0) from None
+        cmd_env = {}
+        # build the machine_id predicate with char() so the query contains no
+        # single quotes (keeps it trivially embeddable in a shell-quoted command)
+        machine_id_chars = ",".join(str(b) for b in machine_id.encode())
+        sql = (
+            "SELECT option_key,option_value FROM uwsgi_options "
+            f"WHERE machine_id=char({machine_id_chars}) "
+            "ORDER BY sort_order_index"
+        )
+        logger.info(sql)
 
-    projects = device.projects
-    for project in projects:
+        if cmd_env:
+            pl_local.env.update(cmd_env)
+            logger.debug(f"{cmd_env=}")
+
+        # with pl_local.as_user(run_as_user):
+        # uv = pl_local[str(conf.UV_BIN)]
+        uwsgi_bin = pl_local[str(conf.data_dir / "bin/uwsgi")]
+        uwsgi_bin_cmd = uwsgi_bin[
+            "--show-config", "--plugin", str(conf.sqlite_plugin), "--sqlite", ":".join([str(conf.db_path), sql])
+        ]
+
+        # cwd = pl_local.path(str(conf.data_dir))
+        console.info("Starting uWSGI Emperor")
+        uwsgi_bin_cmd & FG()
+
+        """
         try:
-            if project_up(project) or not project.read_stats():
-                console.success(f":heavy_check_mark:     Launched project [{project.name}]. Done!")
-                # process_compose.add_tail_log_process(project.name, project.log_file)
-        except tenacity.RetryError:
-            console.warning(f"Project {project.name} has not launched. Giving up.")
-            continue
-        except Exception as exc:
-            logger.exception(exc)
-            console.warning(f"Project {project.name} has not launched. Giving up.")
-            continue
+            result = uwsgi_bin.run_fg(
+                cmd_args,
+                cwd=str(cwd),
+                **{"env": cmd_env}
+            )
+        except ProcessExecutionError as exc:
+            for line in exc.stdout.split("\n"):
+                print(line)
 
-        project_http_routers = project.http_routers
-        for http_router in project_http_routers:
-            http_router_up_result = http_router_up(uow, http_router)
-            if http_router_up_result:
-                console.success(":heavy_check_mark:     Launching http router.. Done!")
-                console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-                # process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+            if exc.stderr:
+                logger.debug("start uWSGI Emperor -  errors:")
+                for line in exc.stderr.split("\n"):
+                    print(line)
+
+            # if "#*** python plugin built and available in ./python_plugin.so ***" not in result.stdout:
+            #    logger.error(f"unable to build the uWSIG python plugin for Python {py_version}")
+            #    raise typer.Exit()
+
+            return typer.Exit(code=1)
+        """
+
+        """
+        projects = device.projects
+        for project in projects:
+            try:
+                if project_up(project) or not project.read_stats():
+                    console.success(f":heavy_check_mark:     Launched project [{project.name}]. Done!")
+                    # process_compose.add_tail_log_process(project.name, project.log_file)
+            except tenacity.RetryError:
+                console.warning(f"Project {project.name} has not launched. Giving up.")
+                continue
+            except Exception as exc:
+                logger.exception(exc)
+                console.warning(f"Project {project.name} has not launched. Giving up.")
+                continue
+
+            project_http_routers = project.http_routers
+            for http_router in project_http_routers:
+                http_router_up_result = http_router_up(uow, http_router)
+                if http_router_up_result:
+                    console.success(":heavy_check_mark:     Launching http router.. Done!")
+                    console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+                    # process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+        """
 
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")

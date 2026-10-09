@@ -120,9 +120,9 @@ class UnitOfWorkBase(ABC):
     def __enter__(self):
         return self
 
-    # @abstractmethod
-    # async def __aexit__(self, exc_type, exc_value, traceback):
-    #    raise NotImplementedError()
+    @abstractmethod
+    def __exit__(self, exc_type, exc_value, traceback):
+        raise NotImplementedError()
 
     @abstractmethod
     def commit(self):
@@ -158,7 +158,7 @@ class UnitOfWork(UnitOfWorkBase):
         self.python_app_codebases = PythonAppCodebaseRepository(self._session)
         return super().__enter__()
 
-    def __exit__(self, *args):
+    def __exit__(self, exc_type, exc_value, traceback):
         self._session.close()
 
     def commit(self):
