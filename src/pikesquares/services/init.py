@@ -131,39 +131,38 @@ def init_device(context):
     uow = services.get(context, UnitOfWork)
     conf = services.get(context, AppConfig)
 
-    with uow:
-        try:
-            machine_id = ServiceBase.read_machine_id()
-            device = uow.devices.get_by_machine_id(machine_id)
-            if not device:
-                device = provision_device(
-                    uow,
-                    create_kwargs={
-                        "data_dir": str(conf.data_dir),
-                        "config_dir": str(conf.config_dir),
-                        "log_dir": str(conf.log_dir),
-                        "run_dir": str(conf.run_dir),
-                    },
-                )
-                zmq_monitor = create_zmq_monitor(uow, device=device)
-                if not zmq_monitor.socket_address:
-                    console.error("device zmq monitor socket address was not provisioned")
-                    raise typer.Exit(1)
-                logger.info(f"created device zmq_monitor @ {zmq_monitor.socket_address}")
+    try:
+        machine_id = ServiceBase.read_machine_id()
+        device = uow.devices.get_by_machine_id(machine_id)
+        if not device:
+            device = provision_device(
+                uow,
+                create_kwargs={
+                    "data_dir": str(conf.data_dir),
+                    "config_dir": str(conf.config_dir),
+                    "log_dir": str(conf.log_dir),
+                    "run_dir": str(conf.run_dir),
+                },
+            )
+            zmq_monitor = create_zmq_monitor(uow, device=device)
+            if not zmq_monitor.socket_address:
+                console.error("device zmq monitor socket address was not provisioned")
+                raise typer.Exit(1)
+            logger.info(f"created device zmq_monitor @ {zmq_monitor.socket_address}")
 
-            uwsgi_options = device.uwsgi_options
-            if not uwsgi_options:
-                for uwsgi_option in device.get_uwsgi_options():
-                    uow.uwsgi_options.add(uwsgi_option)
+        uwsgi_options = device.uwsgi_options
+        if not uwsgi_options:
+            for uwsgi_option in device.get_uwsgi_options():
+                uow.uwsgi_options.add(uwsgi_option)
 
-            return device
-
-        except Exception as exc:
-            logger.exception(exc)
-            console.error("device was not created")
-            uow.rollback()
-            raise typer.Exit(1) from None
         uow.commit()
+        return device
+
+    except Exception as exc:
+        logger.exception(exc)
+        console.error("device was not created")
+        uow.rollback()
+        raise typer.Exit(1) from None
 
     # pc = services.get(context, ProcessCompose)
 

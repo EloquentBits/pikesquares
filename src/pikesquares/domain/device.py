@@ -84,7 +84,7 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
                 uwsgi_option = DeviceUWSGIOption(
                     option_key=key.key,
                     option_value=str(value).strip(),
-                    device=self,
+                    device_id=self.id,
                     machine_id=self.machine_id,
                 )
                 uwsgi_options.append(uwsgi_option)
