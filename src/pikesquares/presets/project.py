@@ -1,6 +1,7 @@
 # from pathlib import Path
+from pathlib import Path
+
 import structlog
-from aiopath import AsyncPath
 
 from . import Section
 
@@ -8,7 +9,6 @@ logger = structlog.get_logger()
 
 
 class ProjectSection(Section):
-
     def __init__(self, project):
         super().__init__(
             name="uwsgi",  # uwsgi: [uwsgi] section header
@@ -29,7 +29,7 @@ class ProjectSection(Section):
         self.master_process.set_basic_params(
             enable=True,
             no_orphans=True,
-            fifo_file=str(AsyncPath(self.project.master_fifo_file)),
+            fifo_file=str(Path(self.project.master_fifo_file)),
         )  # uwsgi: master = true
         self.main_process.set_basic_params(
             vacuum=True,

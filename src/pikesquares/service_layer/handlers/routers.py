@@ -19,7 +19,7 @@ from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
 
-#caddy_config_initial = """{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.dev": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.dev"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
+# caddy_config_initial = """{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.dev": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.dev"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
 
 caddy_config_initial = """
 {
@@ -70,7 +70,6 @@ caddy_config_initial = """
 def edit_caddy_config(caddy_config_path: Path):
 
     with open(caddy_config_path, "r+") as caddy_config:
-
         vhost_key = "*.pikesquares.dev"
 
         # data = json.load(caddy_config)
@@ -88,15 +87,15 @@ def edit_caddy_config(caddy_config_path: Path):
         upstream_address = upstreams[0].get("dial")
 
         if upstream_address != f"{http_router_ip}:{http_router_port}":
-            data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0][
-                "dial"
-            ] = f"{http_router_ip}:{http_router_port}"
+            data["apps"]["http"]["servers"][vhost_key]["routes"][0]["handle"][0]["upstreams"][0]["dial"] = (
+                f"{http_router_ip}:{http_router_port}"
+            )
             caddy_config.seek(0)
             json.dump(data, caddy_config)
             caddy_config.truncate()
 
 
-async def provision_http_router(
+def provision_http_router(
     uow: UnitOfWork,
     project: Project,
     tuntap_router: TuntapRouter,
@@ -106,7 +105,7 @@ async def provision_http_router(
 ) -> HttpRouter:
 
     try:
-        http_router_ip = await tuntap_router_next_available_ip(tuntap_router)
+        http_router_ip = tuntap_router_next_available_ip(tuntap_router)
         http_router = HttpRouter(
             service_id=f"http-router-{cuid.slug()}",
             run_as_uid=run_as_uid,
@@ -120,7 +119,7 @@ async def provision_http_router(
             run_dir=str(project.run_dir),
         )
         http_router = uow.http_routers.add(http_router)
-        http_router_tuntap_device = await create_tuntap_device(
+        http_router_tuntap_device = create_tuntap_device(
             uow,
             tuntap_router,
             http_router_ip,
@@ -134,14 +133,14 @@ async def provision_http_router(
     return http_router
 
 
-async def provision_tuntap_router(
+def provision_tuntap_router(
     uow: UnitOfWork,
     project: Project,
 ) -> TuntapRouter | None:
 
     try:
-        new_network = await tuntap_router_next_available_network(uow)
-        existing_networks = await get_tuntap_router_networks(uow) or []
+        new_network = tuntap_router_next_available_network(uow)
+        existing_networks = get_tuntap_router_networks(uow) or []
         if any([not new_network.compare_networks(en) != 0 for en in existing_networks]):
             raise Exception(f"subnet {new_network} already taken ")
 
@@ -153,7 +152,7 @@ async def provision_tuntap_router(
         else:
             service_slug = cuid.slug()
             tuntap_router = TuntapRouter(
-                service_id=f"psq-{service_slug}" ,
+                service_id=f"psq-{service_slug}",
                 name=f"tuntap-{service_slug}",
                 project=project,
                 uwsgi_plugins="tuntap",
@@ -172,7 +171,8 @@ async def provision_tuntap_router(
         print(exc)
         raise exc
 
-async def create_tuntap_device(
+
+def create_tuntap_device(
     uow: UnitOfWork,
     tuntap_router: TuntapRouter,
     ip: IPv4Interface,
@@ -180,7 +180,7 @@ async def create_tuntap_device(
 ) -> TuntapDevice:
     try:
         tuntap_device = TuntapDevice(
-            name=f"psq-{cuid.slug()}" ,
+            name=f"psq-{cuid.slug()}",
             ip=str(ip.ip),
             netmask=str(tuntap_router.netmask),
             tuntap_router=tuntap_router,
@@ -193,14 +193,14 @@ async def create_tuntap_device(
 
     return tuntap_device
 
-async def http_router_ips(uow: UnitOfWork) -> list[str]:
+
+def http_router_ips(uow: UnitOfWork) -> list[str]:
     try:
         addresses = []
         routers = uow.http_routers.list()
         if routers:
             for router in routers:
-                device = uow.tuntap_devices.\
-                    get_by_linked_service_id(router.service_id)
+                device = uow.tuntap_devices.get_by_linked_service_id(router.service_id)
                 if device:
                     addresses.append(f"/pikesquares.dev/{device.ip}")
         return addresses
@@ -208,10 +208,11 @@ async def http_router_ips(uow: UnitOfWork) -> list[str]:
     except Exception as exc:
         raise exc
 
-async def http_router_up(
-        uow: UnitOfWork,
-        http_router: HttpRouter,
-    ) -> bool | None:
+
+def http_router_up(
+    uow: UnitOfWork,
+    http_router: HttpRouter,
+) -> bool | None:
 
     stats = None
     while not stats:
@@ -223,13 +224,12 @@ async def http_router_up(
     try:
         project = http_router.project
         tuntap_routers = project.tuntap_routers
-        #uow.tuntap_routers.get_by_project_id(project.id)
+        # uow.tuntap_routers.get_by_project_id(project.id)
         tuntap_router = tuntap_routers[0]
-        #http_router_iface = tuntap_router.ipv4_interface + 1
-        #http_router_ip = str(http_router_iface.ip)
-        #http_router_tuntap_device  = uow.tuntap_devices.get_by_ip(http_router_ip)
-        http_router_tuntap_device  = uow.tuntap_devices.\
-            get_by_linked_service_id(http_router.service_id)
+        # http_router_iface = tuntap_router.ipv4_interface + 1
+        # http_router_ip = str(http_router_iface.ip)
+        # http_router_tuntap_device  = uow.tuntap_devices.get_by_ip(http_router_ip)
+        http_router_tuntap_device = uow.tuntap_devices.get_by_linked_service_id(http_router.service_id)
 
         section = HttpRouterSection(http_router)
         section._set("jailed", "true")
@@ -237,32 +237,31 @@ async def http_router_up(
             device_name=http_router_tuntap_device.name,
             socket=tuntap_router.socket_address,
         )
-        #.device_add_rule(
+        # .device_add_rule(
         #    direction="in",
         #    action="route",
         #    src=tuntap_router.ip,
         #    dst=http_router_tuntap_device.ip,
         #    target="10.20.30.40:5060",
-        #)
+        # )
         section.routing.use_router(router_tuntap)
 
-        #; bring up loopback
-        #exec-as-root = ifconfig lo up
+        # ; bring up loopback
+        # exec-as-root = ifconfig lo up
         section.main_process.run_command_on_event(
             command="ifconfig lo up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         # bring up interface uwsgi0
-        #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
+        # exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
         section.main_process.run_command_on_event(
             command=f"ifconfig {http_router_tuntap_device.name} {http_router_tuntap_device.ip} netmask {http_router_tuntap_device.netmask} up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         # and set the default gateway
-        #exec-as-root = route add default gw 192.168.0.1
+        # exec-as-root = route add default gw 192.168.0.1
         section.main_process.run_command_on_event(
-            command=f"route add default gw {tuntap_router.ip}",
-            phase=section.main_process.phases.PRIV_DROP_PRE
+            command=f"route add default gw {tuntap_router.ip}", phase=section.main_process.phases.PRIV_DROP_PRE
         )
         section.main_process.run_command_on_event(
             command=f"ping -c 1 {tuntap_router.ip}",
@@ -281,18 +280,18 @@ async def http_router_up(
         project_zmq_monitor = project.zmq_monitor
         if not project_zmq_monitor:
             return False
-        #print(section.as_configuration().format())
-        #try:
+        # print(section.as_configuration().format())
+        # try:
         #    _ = project.read_stats()
         #    return True
-        #except tenacity.RetryError:
+        # except tenacity.RetryError:
         #    logger.info(f"project is running. launching http router on {project_zmq_monitor.socket_address}")
 
-        #assert await \
-        #    AsyncPath(project_zmq_monitor.socket_address).exists() and \
-        #    await AsyncPath(project_zmq_monitor.socket_address).is_socket(), f"{project_zmq_monitor.socket_address} not available"
+        # assert \
+        #    Path(project_zmq_monitor.socket_address).exists() and \
+        #    Path(project_zmq_monitor.socket_address).is_socket(), f"{project_zmq_monitor.socket_address} not available"
 
-        await create_or_restart_instance(
+        create_or_restart_instance(
             project_zmq_monitor.zmq_address,
             f"{http_router.service_id}.ini",
             section.as_configuration().format(do_print=False),

@@ -43,7 +43,6 @@ class TuntapDevice(TimeStampedBase, table=True):
 
     __tablename__ = "tuntap_devices"
 
-
     id: str = Field(
         primary_key=True,
         default_factory=lambda: str(uuid.uuid4()),
@@ -67,7 +66,6 @@ class TuntapDevice(TimeStampedBase, table=True):
 
 
 class HttpRouter(ServiceBase, table=True):
-
     __tablename__ = "project_http_routers"
 
     address: str | None = Field(default=None, max_length=100)
@@ -78,9 +76,9 @@ class HttpRouter(ServiceBase, table=True):
     def subscription_server_address(self) -> Path:
         return Path(self.run_dir) / f"{self.service_id}-subscriptions.sock"
 
-        #subscription_server_address = \
+        # subscription_server_address = \
         #    f"{http_router_ip}:{get_first_available_port(port=5700)}"
-            #AsyncPath(device.run_dir) / "subscriptions" / "http"
+        # Path(device.run_dir) / "subscriptions" / "http"
 
     @property
     def uwsgi_config_section_class(self) -> HttpRouterSection | HttpsRouterSection:
@@ -88,7 +86,7 @@ class HttpRouter(ServiceBase, table=True):
             return HttpsRouterSection
         return HttpRouterSection
 
-    async def up(self, tuntap_router, http_router_tuntap_device, zmq_monitor):
+    def up(self, tuntap_router, http_router_tuntap_device, zmq_monitor):
 
         from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 
@@ -98,32 +96,31 @@ class HttpRouter(ServiceBase, table=True):
             device_name=http_router_tuntap_device.name,
             socket=tuntap_router.socket,
         )
-        #.device_add_rule(
+        # .device_add_rule(
         #    direction="in",
         #    action="route",
         #    src=tuntap_router.ip,
         #    dst=http_router_tuntap_device.ip,
         #    target="10.20.30.40:5060",
-        #)
+        # )
         section.routing.use_router(router_tuntap)
 
-        #; bring up loopback
-        #exec-as-root = ifconfig lo up
+        # ; bring up loopback
+        # exec-as-root = ifconfig lo up
         section.main_process.run_command_on_event(
             command="ifconfig lo up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         # bring up interface uwsgi0
-        #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
+        # exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
         section.main_process.run_command_on_event(
             command=f"ifconfig {http_router_tuntap_device.name} {http_router_tuntap_device.ip} netmask {http_router_tuntap_device.netmask} up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
         # and set the default gateway
-        #exec-as-root = route add default gw 192.168.0.1
+        # exec-as-root = route add default gw 192.168.0.1
         section.main_process.run_command_on_event(
-            command=f"route add default gw {tuntap_router.ip}",
-            phase=section.main_process.phases.PRIV_DROP_PRE
+            command=f"route add default gw {tuntap_router.ip}", phase=section.main_process.phases.PRIV_DROP_PRE
         )
         section.main_process.run_command_on_event(
             command=f"ping -c 1 {tuntap_router.ip}",
@@ -132,16 +129,15 @@ class HttpRouter(ServiceBase, table=True):
 
         print(section.as_configuration().format())
 
-        await create_or_restart_instance(
+        create_or_restart_instance(
             zmq_monitor.zmq_address,
             f"{self.service_id}.ini",
             section.as_configuration().format(do_print=True),
         )
 
-
     def get_uwsgi_config(self):
         section = self.uwsgi_config_section_class(self)
-        
+
         """
         ; we need it as the vassal have no way to know it is jailed
         ; without it post_jail plugin hook would be never executed
@@ -150,39 +146,43 @@ class HttpRouter(ServiceBase, table=True):
         tuntap-device = uwsgi0 ../run/tuntap.socket
         """
 
-        #tuntap_router_socket_address
+        # tuntap_router_socket_address
         if 0:
             section._set("jailed", "true")
 
             # http_router_cma30m5zj0002ljj1hh1hqsm4
             network_device_name = f"psq-router-{self.service_id.split('_')[-1][:5]}"
 
-            router = RouterTunTap().device_connect(
-                device_name=network_device_name,
-                socket="/tmp/tuntap.socket",
-            ).device_add_rule(
-                direction="in",
-                action="route",
-                src="192.168.0.1",
-                dst="192.168.0.2",
-                target="10.20.30.40:5060",
+            router = (
+                RouterTunTap()
+                .device_connect(
+                    device_name=network_device_name,
+                    socket="/tmp/tuntap.socket",
+                )
+                .device_add_rule(
+                    direction="in",
+                    action="route",
+                    src="192.168.0.1",
+                    dst="192.168.0.2",
+                    target="10.20.30.40:5060",
+                )
             )
             section.routing.use_router(router)
 
-            #; bring up loopback
-            #exec-as-root = ifconfig lo up
+            # ; bring up loopback
+            # exec-as-root = ifconfig lo up
             section.main_process.run_command_on_event(
                 command="ifconfig lo up",
                 phase=section.main_process.phases.PRIV_DROP_PRE,
             )
             # bring up interface uwsgi0
-            #exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
+            # exec-as-root = ifconfig uwsgi0 192.168.0.2 netmask 255.255.255.0 up
             section.main_process.run_command_on_event(
                 command=f"ifconfig {network_device_name} 192.168.0.1 netmask 255.255.255.0 up",
                 phase=section.main_process.phases.PRIV_DROP_PRE,
             )
             # and set the default gateway
-            #exec-as-root = route add default gw 192.168.0.1
+            # exec-as-root = route add default gw 192.168.0.1
             section.main_process.run_command_on_event(
                 command="route add default gw 192.168.0.1",
                 phase=section.main_process.phases.PRIV_DROP_PRE,
@@ -193,7 +193,7 @@ class HttpRouter(ServiceBase, table=True):
                 phase=section.main_process.phases.PRIV_DROP_PRE,
             )
             # ping something to register
-            #exec-as-root = ping -c 1 192.168.0.1
+            # exec-as-root = ping -c 1 192.168.0.1
         return super().get_uwsgi_config(zmq_monitor=zmq_monitor, tuntap_router=tuntap_router)
 
     # @pydantic.computed_field
@@ -211,7 +211,7 @@ class HttpRouter(ServiceBase, table=True):
                 pass
 
     """
-    https_router = await uow.routers.get_by_name("default-https-router")
+    https_router = uow.routers.get_by_name("default-https-router")
     if not https_router:
         https_router = BaseRouter(
             service_id=f"https_router_{cuid()}",
@@ -220,8 +220,8 @@ class HttpRouter(ServiceBase, table=True):
             subscription_server_address=f"127.0.0.1:{get_first_available_port(port=5600)}",
             **create_kwargs,
         )
-        await uow.routers.add(https_router)
-        await uow.commit()
+        uow.routers.add(https_router)
+        uow.commit()
         logger.debug(f"Created {https_router=}")
     else:
         logger.debug(f"Using existing http router {https_router=}")

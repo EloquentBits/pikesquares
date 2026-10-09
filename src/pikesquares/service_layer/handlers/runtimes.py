@@ -1,9 +1,9 @@
 import traceback
+from pathlib import Path
 
-import apluggy as pluggy
+import pluggy
 import questionary
 import structlog
-from aiopath import AsyncPath
 
 from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.domain.runtime import PythonAppCodebase
@@ -16,15 +16,13 @@ from .prompt_utils import gather_repo_details_and_clone
 logger = structlog.getLogger()
 
 
-async def provision_python_app_runtime(
-    version: str,
-    uow: UnitOfWork,
-    custom_style: questionary.Style
+def provision_python_app_runtime(
+    version: str, uow: UnitOfWork, custom_style: questionary.Style
 ) -> PythonAppRuntime | None:
 
     with uow:
         try:
-            runtime =  uow.python_app_runtimes.get_by_version(version)
+            runtime = uow.python_app_runtimes.get_by_version(version)
             if not runtime:
                 runtime = uow.python_app_runtimes.add(PythonAppRuntime(version=version))
                 uow.commit()
@@ -35,50 +33,51 @@ async def provision_python_app_runtime(
             uow.rollback()
             raise exc
 
-async def provision_app_codebase(
+
+def provision_app_codebase(
     service_name: str,
     plugin_manager: pluggy.PluginManager,
-    pyapps_dir: AsyncPath,
-    uv_bin: AsyncPath,
+    pyapps_dir: Path,
+    uv_bin: Path,
     uow: UnitOfWork,
     custom_style: questionary.Style,
 ) -> PythonAppCodebase | None:
     """
-      set app root dir
-      set app repo dir
-      clone repo into app repo dir
+    set app root dir
+    set app repo dir
+    clone repo into app repo dir
 
-      provision venv
-        set venv dir
-        validate deps
-        install deps
+    provision venv
+      set venv dir
+      validate deps
+      install deps
     """
     app_name = service_name
     app_codebase = None
-    app_root_dir=None
-    app_repo_dir=None
-    editable_mode=True
+    app_root_dir = None
+    app_repo_dir = None
+    editable_mode = True
 
     plugin_manager.register(Bugsink())
     plugin_manager.register(Meshdb())
 
-    repo_git_urls: list[str] = await plugin_manager.ahook.get_repo_url(
+    repo_git_urls: list[str] = plugin_manager.hook.get_repo_url(
         service_name=service_name,
     )
-    app_root_dir = AsyncPath(pyapps_dir) / app_name
+    app_root_dir = Path(pyapps_dir) / app_name
     """
     if not app_name:
-        app_name = await questionary.text(
+        app_name = questionary.text(
             "Choose a name for your app: ",
             default=randomname.get_name().lower(),
             style=custom_style,
             #validate=NameValidator,
-        ).ask_async()
+        ).ask()
     """
     if app_root_dir:
-        await app_root_dir.mkdir(exist_ok=True)
+        app_root_dir.mkdir(exist_ok=True)
 
-    app_repo_dir, repo_git_url = await gather_repo_details_and_clone(
+    app_repo_dir, repo_git_url = gather_repo_details_and_clone(
         app_name,
         next(filter(lambda x: x, repo_git_urls)),
         app_root_dir,
@@ -103,12 +102,12 @@ async def provision_app_codebase(
                 )
                 logger.info(f"created App Codebase @ {app_root_dir}")
 
-            if not await app_codebase.dependencies_validate():
+            if not app_codebase.dependencies_validate():
                 raise RuntimeError("validating dependencies failed")
 
             logger.info(f"Successfully validated {service_name} dependencies")
 
-            if not await app_codebase.dependencies_install(service_name, plugin_manager):
+            if not app_codebase.dependencies_install(service_name, plugin_manager):
                 raise RuntimeError("installing dependencies failed")
 
         except Exception as exc:
@@ -121,6 +120,7 @@ async def provision_app_codebase(
         uow.commit()
 
     return app_codebase
+
 
 """
 def git_clone(repo_url: str, clone_into_dir: Path):

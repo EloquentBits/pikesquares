@@ -34,15 +34,15 @@ def create_zmq_monitor(
         raise exc
 
 
-async def create_or_restart_instance(zmq_monitor_address: str, name: str, uwsgi_config: str) -> None:
+def create_or_restart_instance(zmq_monitor_address: str, name: str, uwsgi_config: str) -> None:
     ctx = zmq.asyncio.Context()
     sock = ctx.socket(zmq.PUSH)
     sock.connect(zmq_monitor_address)
-    await sock.send_multipart([b"touch", name.encode(), uwsgi_config.encode()])
+    sock.send_multipart([b"touch", name.encode(), uwsgi_config.encode()])
 
 
-async def destroy_instance(zmq_monitor_address: str, name: str) -> None:
+def destroy_instance(zmq_monitor_address: str, name: str) -> None:
     ctx = zmq.asyncio.Context()
     sock = ctx.socket(zmq.PUSH)
     sock.connect(zmq_monitor_address)
-    await sock.send_multipart([b"destroy", name.encode()])
+    sock.send_multipart([b"destroy", name.encode()])

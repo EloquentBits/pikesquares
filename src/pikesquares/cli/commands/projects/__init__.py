@@ -2,7 +2,7 @@ import traceback
 from pathlib import Path
 from typing import Optional
 
-import apluggy as pluggy
+import pluggy
 import questionary
 import randomname
 import structlog

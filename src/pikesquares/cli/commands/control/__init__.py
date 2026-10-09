@@ -1,17 +1,16 @@
-import asyncio
 import os
+import time
+from pathlib import Path
 
-import apluggy as pluggy
+import pluggy
 import questionary
 import structlog
 import tenacity
 import typer
-from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
 
 from pikesquares import services
 from pikesquares.cli.console import console
-from pikesquares.cli.decorator import run_async
 from pikesquares.conf import AppConfig
 from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.process_compose import (
@@ -41,8 +40,7 @@ app = typer.Typer()
 
 
 @app.command(rich_help_panel="Control", short_help="Launch the PikeSquares Server (if stopped)")
-@run_async
-async def up(
+def up(
     ctx: typer.Context,
     # foreground: Annotated[bool, typer.Option(help="Run in foreground.")] = True
 ):
@@ -52,9 +50,9 @@ async def up(
 
     context = ctx.ensure_object(dict)
 
-    conf = await services.aget(context, AppConfig)
+    conf = services.get(context, AppConfig)
     if not context["run_foreground"]:
-        process_compose = await services.aget(context, ProcessCompose)
+        process_compose = services.get(context, ProcessCompose)
 
         # if conf and not conf.pyapps_dir.exists():
         #    logger.error(f"python apps directory @ {conf.pyapps_dir} is not available")
@@ -65,11 +63,11 @@ async def up(
         #    raise typer.Exit(code=1) from None
 
         try:
-            _ = await process_compose.ping_api("device")
+            _ = process_compose.ping_api("device")
             logger.info("process-compose is already running. not bringing it up now.")
         except PCAPIUnavailableError:
             logger.info("bringing up process-compose")
-            up_result = await process_compose.up()
+            up_result = process_compose.up()
             if not up_result:
                 raise typer.Exit(code=0) from None
 
@@ -85,48 +83,45 @@ async def up(
             ):
                 try:
                     console.success(f"{messages.title_start} {process.description}")
-                    process_stats = await process_compose.ping_api(name)
+                    process_stats = process_compose.ping_api(name)
                     if process_stats.is_running and process_stats.status == "Running":
                         console.success(f":heavy_check_mark:     {process.description}... Launched!")
                     else:
                         console.warning(f":heavy_exclamation_mark:     {process.description} unable to launch.")
                 except PCAPIUnavailableError:
-                    await asyncio.sleep(1)
+                    time.sleep(1)
                     continue
         except (StopIteration, IndexError):
             pass
 
-    #######################
-    # emperor zeromq monitors
-    uow = await services.aget(context, UnitOfWork)
+    uow = services.get(context, UnitOfWork)
     machine_id = ServiceBase.read_machine_id()
     device = uow.devices.get_by_machine_id(machine_id)
     if not device:
         console.error(f"cli up: unable to locate device by machine id {machine_id}")
         raise typer.Exit(code=0) from None
 
-    with uow:
-        projects = device.projects
-        for project in projects:
-            try:
-                if await project_up(project) or not project.read_stats():
-                    console.success(f":heavy_check_mark:     Launched project [{project.name}]. Done!")
-                    # await process_compose.add_tail_log_process(project.name, project.log_file)
-            except tenacity.RetryError:
-                console.warning(f"Project {project.name} has not launched. Giving up.")
-                continue
-            except Exception as exc:
-                logger.exception(exc)
-                console.warning(f"Project {project.name} has not launched. Giving up.")
-                continue
+    projects = device.projects
+    for project in projects:
+        try:
+            if project_up(project) or not project.read_stats():
+                console.success(f":heavy_check_mark:     Launched project [{project.name}]. Done!")
+                # process_compose.add_tail_log_process(project.name, project.log_file)
+        except tenacity.RetryError:
+            console.warning(f"Project {project.name} has not launched. Giving up.")
+            continue
+        except Exception as exc:
+            logger.exception(exc)
+            console.warning(f"Project {project.name} has not launched. Giving up.")
+            continue
 
-            project_http_routers = project.http_routers
-            for http_router in project_http_routers:
-                http_router_up_result = await http_router_up(uow, http_router)
-                if http_router_up_result:
-                    console.success(":heavy_check_mark:     Launching http router.. Done!")
-                    console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-                    # await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+        project_http_routers = project.http_routers
+        for http_router in project_http_routers:
+            http_router_up_result = http_router_up(uow, http_router)
+            if http_router_up_result:
+                console.success(":heavy_check_mark:     Launching http router.. Done!")
+                console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+                # process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
 
     console.success()
     console.success("PikeSquares API is available at: http://127.0.0.1:9000")
@@ -137,16 +132,15 @@ async def up(
 
 
 @app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
-@run_async
-async def down(
+def down(
     ctx: typer.Context,
 ):
     """Stop the PikeSquares Server"""
 
     context = ctx.ensure_object(dict)
-    pc = await services.aget(context, ProcessCompose)
+    pc = services.get(context, ProcessCompose)
     try:
-        retcode, stdout, stderr = await pc.down()
+        retcode, stdout, stderr = pc.down()
         if retcode != 0:
             console.log(retcode, stdout, stderr)
             raise typer.Exit(code=1) from None
@@ -262,20 +256,18 @@ def uninstall(ctx: typer.Context, dry_run: bool = typer.Option(False, help="Unin
 
 
 @app.command(rich_help_panel="Control", short_help="Attach to the PikeSquares Server")
-@run_async
-async def attach(
+def attach(
     ctx: typer.Context,
 ):
     """Attach to PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    pc = await services.aget(context, ProcessCompose)
+    pc = services.get(context, ProcessCompose)
     logger.info(pc)
-    await pc.attach()
+    pc.attach()
 
 
 @app.command(rich_help_panel="Control", short_help="Launch a preconfigured app")
-@run_async
-async def launch(
+def launch(
     ctx: typer.Context,
 ):
     """Launch a preconfigured app or managed, self-hosted service"""
@@ -283,9 +275,9 @@ async def launch(
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
 
-    conf = await services.aget(context, AppConfig)
-    uow = await services.aget(context, UnitOfWork)
-    plugin_manager = await services.aget(context, pluggy.PluginManager)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
+    plugin_manager = services.get(context, pluggy.PluginManager)
 
     machine_id = ServiceBase.read_machine_id()
     device = uow.devices.get_by_machine_id(machine_id)
@@ -299,18 +291,18 @@ async def launch(
     # except StopIteration:
     #    project_zmq_monitor = uow.zmq_monitors.get_by_project_id(project.id)
     #    vassals_home = project_zmq_monitor.uwsgi_zmq_address
-    #    await project.up(device_zmq_monitor, vassals_home, tuntap_router)
+    #    project.up(device_zmq_monitor, vassals_home, tuntap_router)
     #
     #
     # launch_service_preconfigured: Literal["bugsink", "meshdb"]
     # launch_service_wsgi: Literal["python-wsgi-git"]
-    launch_service = await prompt_for_launch_service(uow, custom_style)
-    project = await prompt_for_project(launch_service, uow, plugin_manager, custom_style)
+    launch_service = prompt_for_launch_service(uow, custom_style)
+    project = prompt_for_project(launch_service, uow, plugin_manager, custom_style)
     if not project:
         console.error(f"cli launch: unable to select or provision project")
         raise typer.Exit(code=0) from None
 
-    if not await project_up(project):
+    if not project_up(project):
         console.error(f"Unable to launch project {project.name}")
         raise typer.Exit(code=0) from None
 
@@ -319,12 +311,12 @@ async def launch(
         console.error(f"Unable to locate an http router for project {project.name}")
         raise typer.Exit(code=0) from None
 
-    if not await http_router_up(uow, http_routers[0]):
+    if not http_router_up(uow, http_routers[0]):
         console.error(f"Unable to launch http router for project {project.name}")
         raise typer.Exit(code=0) from None
 
     if launch_service in ["python-wsgi-git", "bugsink", "meshdb"]:
-        # app_runtime_plugin_manager = await services.aget(context, AppRuntimePluginManager)
+        # app_runtime_plugin_manager = services.get(context, AppRuntimePluginManager)
         # daemon_conf = conf.attached_daemon_plugins.get(launch_service)
         # if not daemon_conf:
         #    logger.error(f"unable to lookup attached daemon plugin {launch_service}")
@@ -341,12 +333,12 @@ async def launch(
         python_app_runtime = None
         wsgi_app = None
         try:
-            python_app_runtime = await provision_python_app_runtime(runtime_version, uow, custom_style)
-            python_app_codebase = await provision_app_codebase(
+            python_app_runtime = provision_python_app_runtime(runtime_version, uow, custom_style)
+            python_app_codebase = provision_app_codebase(
                 launch_service,
                 plugin_manager,
-                AsyncPath(conf.pyapps_dir),
-                AsyncPath(str(conf.UV_BIN)),
+                Path(conf.pyapps_dir),
+                Path(str(conf.UV_BIN)),
                 uow,
                 custom_style,
             )
@@ -358,23 +350,20 @@ async def launch(
             console.error(f"unable to provision the {launch_service} runtime.")
             raise typer.Exit(code=0) from None
 
-        with uow:
-            try:
-                wsgi_app = await provision_wsgi_app(
-                    launch_service, AsyncPath(python_app_codebase.root_dir), uow, plugin_manager
-                )
-                if not wsgi_app:
-                    console.error(f"unable to provision the {launch_service} app.")
-                    raise typer.Exit(code=0) from None
-
-                await wsgi_app_up(wsgi_app, uow, console)
-
-            except Exception as exc:
-                logger.exception(exc)
-                uow.rollback()
+        try:
+            wsgi_app = provision_wsgi_app(launch_service, Path(python_app_codebase.root_dir), uow, plugin_manager)
+            if not wsgi_app:
                 console.error(f"unable to provision the {launch_service} app.")
                 raise typer.Exit(code=0) from None
-            uow.commit()
+
+            wsgi_app_up(wsgi_app, uow, console)
+
+        except Exception as exc:
+            logger.exception(exc)
+            uow.rollback()
+            console.error(f"unable to provision the {launch_service} app.")
+            raise typer.Exit(code=0) from None
+        uow.commit()
 
     elif launch_service in ["postgres", "redis"]:
         attached_daemon_name = launch_service
@@ -396,7 +385,7 @@ async def launch(
         #    raise typer.Exit(1) from None
         attached_daemon = None
         try:
-            attached_daemon = await provision_attached_daemon(
+            attached_daemon = provision_attached_daemon(
                 attached_daemon_name,
                 project,
                 uow,
@@ -405,7 +394,7 @@ async def launch(
             if attached_daemon:
                 attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
 
-                await attached_daemon_up(
+                attached_daemon_up(
                     attached_daemon,
                     uow,
                     plugin_manager,
@@ -427,13 +416,12 @@ async def launch(
 
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")
-@run_async
-async def info(
+def info(
     ctx: typer.Context,
 ):
     """Info on the PikeSquares Server"""
     context = ctx.ensure_object(dict)
-    process_compose = await services.aget(context, ProcessCompose)
+    process_compose = services.get(context, ProcessCompose)
     processes = [
         ("device", "device manager"),
         ("caddy", "reverse proxy"),
@@ -442,7 +430,7 @@ async def info(
     ]
     for process in processes:
         try:
-            stats = await process_compose.ping_api(process[0])
+            stats = process_compose.ping_api(process[0])
             logger.debug(f"{process[0]} {stats=}")
 
             if stats.status == "Running":
@@ -458,7 +446,7 @@ async def info(
         # pikesquares.domain.process_compose.DNSMASQProcess
         svc_name = svc.name.split(".")[-1]
         try:
-            await svc.aping()
+            svc.ping()
             # console.success(f":heavy_check_mark:     {svc_name} \[svcs] is running")
         except ServiceUnavailableError:
             console.warning(f":heavy_exclamation_mark:     {svc_name} is not running.")

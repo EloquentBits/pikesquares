@@ -1,5 +1,6 @@
+from pathlib import Path
+
 import structlog
-from aiopath import AsyncPath
 
 from pikesquares.exceptions import UvCommandExecutionError
 from pikesquares.hooks.markers import hook_impl
@@ -8,15 +9,10 @@ from pikesquares.service_layer.uv import uv_cmd
 logger = structlog.getLogger()
 
 
-async def uv_run_cmd(
-    uv_bin: AsyncPath,
-    chdir: AsyncPath,
-    cmd_args: list[str],
-    cmd_env: dict | None = None
-) -> tuple[str, str, str]:
+def uv_run_cmd(uv_bin: Path, chdir: Path, cmd_args: list[str], cmd_env: dict | None = None) -> tuple[str, str, str]:
     try:
-        retcode, stdout, stderr = await uv_cmd(
-            AsyncPath(uv_bin),
+        retcode, stdout, stderr = uv_cmd(
+            Path(uv_bin),
             [
                 "run",
                 "--verbose",
@@ -36,28 +32,27 @@ async def uv_run_cmd(
 
 
 class Bugsink:
-
     @hook_impl
-    async def get_repo_url(self, service_name: str) -> str | None:
+    def get_repo_url(self, service_name: str) -> str | None:
         logger.debug(f"Bugsink: get_repo_url: {service_name=}")
         if service_name == "bugsink":
             return "https://github.com/bugsink/bugsink.git"
 
     @hook_impl
-    async def get_wsgi_file(
-            self,
-            service_name: str,
-            repo_dir: AsyncPath,
-    ) -> AsyncPath | None:
+    def get_wsgi_file(
+        self,
+        service_name: str,
+        repo_dir: Path,
+    ) -> Path | None:
         if service_name != "bugsink":
             return
 
         return repo_dir / "bugsink" / "wsgi.py"
 
     @hook_impl
-    async def get_wsgi_module(
-            self,
-            service_name: str,
+    def get_wsgi_module(
+        self,
+        service_name: str,
     ) -> str | None:
         if service_name != "bugsink":
             return
@@ -65,11 +60,11 @@ class Bugsink:
         return "application"
 
     @hook_impl
-    async def before_dependencies_install(
+    def before_dependencies_install(
         self,
         service_name: str,
-        uv_bin: AsyncPath,
-        repo_dir: AsyncPath,
+        uv_bin: Path,
+        repo_dir: Path,
     ) -> None:
         if service_name != "bugsink":
             return
@@ -77,11 +72,11 @@ class Bugsink:
         logger.info("Bugsink before_dependencies_install")
 
     @hook_impl
-    async def after_dependencies_install(
+    def after_dependencies_install(
         self,
         service_name: str,
-        uv_bin: AsyncPath,
-        repo_dir: AsyncPath,
+        uv_bin: Path,
+        repo_dir: Path,
     ) -> bool:
         if service_name != "bugsink":
             return False
@@ -127,9 +122,7 @@ class Bugsink:
             "WARNING",
         ]
 
-        #uv run bugsink-runsnappea
-
-
+        # uv run bugsink-runsnappea
 
         for cmd_args in (
             cmd_create_conf,
@@ -140,17 +133,12 @@ class Bugsink:
         ):
             cmd_env = None
             if "createsuperuser" in cmd_args:
-                 cmd_env = {
+                cmd_env = {
                     "DJANGO_SUPERUSER_USERNAME": "admin",
                     "DJANGO_SUPERUSER_PASSWORD": "secret",
                 }
             try:
-                retcode, stdout, stderr  = await uv_run_cmd(
-                    uv_bin=uv_bin,
-                    chdir=repo_dir,
-                    cmd_args=cmd_args,
-                    cmd_env=cmd_env
-                )
+                retcode, stdout, stderr = uv_run_cmd(uv_bin=uv_bin, chdir=repo_dir, cmd_args=cmd_args, cmd_env=cmd_env)
                 if "createsuperuser" in cmd_args:
                     if stdout.strip() != "Superuser created successfully.":
                         raise RuntimeError("bugsink-manage unable to create a Superuser")
@@ -161,17 +149,17 @@ class Bugsink:
         return True
 
         #    /new
-        #csrfmiddlewaretoken PIym56UZ7PBxq2htBU1JZzMgri5yJhivqgI6ifF4HmGIlRvzpwTLuA6qQhz17SjH
-        #team 464d797d-55c2-4e78-8489-eb7dbf7c09e4
-        #name test
-        #visibility 99
-        #retention_max_event_count 10000
-        #action invite
-        #uv run bugsink-manage shell <<EOF
+        # csrfmiddlewaretoken PIym56UZ7PBxq2htBU1JZzMgri5yJhivqgI6ifF4HmGIlRvzpwTLuA6qQhz17SjH
+        # team 464d797d-55c2-4e78-8489-eb7dbf7c09e4
+        # name test
+        # visibility 99
+        # retention_max_event_count 10000
+        # action invite
+        # uv run bugsink-manage shell <<EOF
 
-        #from projects.models import Project
-        #from teams.models import Team
-        #t = Team.objects.first()
-        #p1 = Project.objects.create(team=Team.objects.first(), name="123123123", visibility=99, retention_max_event_count=10000)
-        #EOF
-        #print(p1.sentry_key)
+        # from projects.models import Project
+        # from teams.models import Team
+        # t = Team.objects.first()
+        # p1 = Project.objects.create(team=Team.objects.first(), name="123123123", visibility=99, retention_max_event_count=10000)
+        # EOF
+        # print(p1.sentry_key)

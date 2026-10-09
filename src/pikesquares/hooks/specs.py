@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import apluggy as pluggy
+import pluggy
 
 from pikesquares.domain.managed_services import AttachedDaemon
 

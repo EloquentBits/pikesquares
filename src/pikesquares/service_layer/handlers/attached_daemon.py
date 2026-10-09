@@ -1,8 +1,8 @@
 import traceback
 from pathlib import Path
 
-import apluggy as pluggy
 import cuid
+import pluggy
 import structlog
 import tenacity
 from uwsgiconf.config import Section
@@ -19,7 +19,7 @@ from pikesquares.service_layer.uow import UnitOfWork
 logger = structlog.getLogger()
 
 
-async def provision_attached_daemon(
+def provision_attached_daemon(
     name: str,
     project: Project,
     uow: UnitOfWork,
@@ -49,8 +49,8 @@ async def provision_attached_daemon(
         daemon = uow.attached_daemons.add(daemon)
         tuntap_routers = uow.tuntap_routers.get_by_project_id(project.id)
         if tuntap_routers:
-            ip = await tuntap_router_next_available_ip(tuntap_routers[0])
-            await create_tuntap_device(uow, tuntap_routers[0], ip, daemon.service_id)
+            ip = tuntap_router_next_available_ip(tuntap_routers[0])
+            create_tuntap_device(uow, tuntap_routers[0], ip, daemon.service_id)
     except Exception as exc:
         logger.info(f"failed provisioning attached daemon {name}")
         logger.exception(exc)
@@ -60,7 +60,7 @@ async def provision_attached_daemon(
     return daemon
 
 
-async def attached_daemon_up(
+def attached_daemon_up(
     attached_daemon: AttachedDaemon,
     uow: UnitOfWork,
     plugin_manager: pluggy.PluginManager,
@@ -82,7 +82,7 @@ async def attached_daemon_up(
                 f"could not locate tuntap device for attached daemon {attached_daemon.name} {attached_daemon.service_id}"
             )
 
-        cmd_args = await plugin_manager.ahook.attached_daemon_collect_command_arguments(
+        cmd_args = plugin_manager.hook.attached_daemon_collect_command_arguments(
             attached_daemon=attached_daemon,
             bind_ip=attached_daemon_device.ip,
         )
@@ -110,7 +110,7 @@ async def attached_daemon_up(
             search_dirs=[str(attached_daemon.plugins_dir)],
         )
 
-        if await plugin_manager.ahook.create_data_dir(service_name=attached_daemon.name):
+        if plugin_manager.hook.create_data_dir(service_name=attached_daemon.name):
             # section._set("if-not-dir", f"{attached_daemon.daemon_data_dir}")
             section.main_process.run_command_on_event(
                 command=f"mkdir -p {attached_daemon.daemon_data_dir}",
@@ -193,7 +193,7 @@ async def attached_daemon_up(
             project_zmq_monitor = project.zmq_monitor
             project_zmq_monitor_address = project_zmq_monitor.zmq_address
             logger.info(f"launching Attached Daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
-            await create_or_restart_instance(
+            create_or_restart_instance(
                 project_zmq_monitor_address,
                 f"{attached_daemon.service_id}.ini",
                 section.as_configuration().format(do_print=True),
@@ -202,7 +202,7 @@ async def attached_daemon_up(
         raise exc
 
 
-async def attached_daemon_down(
+def attached_daemon_down(
     attached_daemon: AttachedDaemon,
     plugin_manager: pluggy.PluginManager,
     uow: "UnitOfWork",
@@ -214,9 +214,9 @@ async def attached_daemon_down(
             logger.info(f"Managed service {attached_daemon.name} is not running")
             return False
 
-        if await plugin_manager.ahook.attached_daemon_ping():
+        if plugin_manager.hook.attached_daemon_ping():
             logger.info(f"stopping {attached_daemon.name} [{attached_daemon.service_id}]")
-            stop_result = await plugin_manager.ahook.stop()
+            stop_result = plugin_manager.hook.stop()
             if stop_result:
                 logger.info(f"stopped {attached_daemon.name} [{attached_daemon.service_id}]")
             else:
@@ -234,7 +234,7 @@ async def attached_daemon_down(
         project_zmq_monitor = project.zmq_monitor
         project_zmq_monitor_address = project_zmq_monitor.zmq_address
         logger.info(f"stopping attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
-        await destroy_instance(project_zmq_monitor_address, f"{attached_daemon.service_id}.ini")
+        destroy_instance(project_zmq_monitor_address, f"{attached_daemon.service_id}.ini")
         logger.info(f"stopped attached daemon {attached_daemon.name} @ {project_zmq_monitor_address}")
 
     except Exception as exc:

@@ -1,18 +1,16 @@
-
+import re
 import shutil
 import traceback
 import uuid
 from pathlib import Path
 
 import aiofiles
-import apluggy as pluggy
 import giturlparse
+import pluggy
 import pydantic
 import structlog
 import toml
-from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
-from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlmodel import Field, Relationship
 
 from pikesquares.domain.base import TimeStampedBase
@@ -31,7 +29,6 @@ from pikesquares.service_layer.uv import (
 )
 
 logger = structlog.getLogger()
-
 
 
 PY_MATCH_FILES: set[str] = set(
@@ -54,10 +51,10 @@ PY_TMP_DIR_IGNORE_PATTERNS: set[str] = set(
         ".venv",
         "tests",
         "__pycache__",
-        #".gitignore",
-        #".git",
-        #"README*",
-        #"LICENSE",
+        # ".gitignore",
+        # ".git",
+        # "README*",
+        # "LICENSE",
     }
 )
 py_runtime_emoji: str = ":snake:"
@@ -75,7 +72,6 @@ class DjangoCheckMessages(pydantic.BaseModel):
 
 
 class DjangoSettings(pydantic.BaseModel):
-
     # SETTINGS_MODULE = 'mysite.settings'
     # WSGI_APPLICATION = 'mysite.wsgi.application'
     # DATABASES = {'default':
@@ -113,9 +109,7 @@ class DjangoSettings(pydantic.BaseModel):
         ]
 
 
-
-
-class AppRuntime(AsyncAttrs, TimeStampedBase):
+class AppRuntime(TimeStampedBase):
     """Base App Runtime SQL model class."""
 
     id: str = Field(
@@ -130,9 +124,7 @@ class AppRuntime(AsyncAttrs, TimeStampedBase):
         arbitrary_types_allowed = True
 
 
-
-class BaseAppCodebase(AsyncAttrs, TimeStampedBase):
-
+class BaseAppCodebase(TimeStampedBase):
     id: str = Field(
         primary_key=True,
         default_factory=lambda: str(uuid.uuid4()),
@@ -150,32 +142,27 @@ class BaseAppCodebase(AsyncAttrs, TimeStampedBase):
 
 
 class PythonAppCodebase(BaseAppCodebase, table=True):
-
     __tablename__ = "python_app_codebases"
 
     uv_bin: str = Field(max_length=255)
     wsgi_apps: list["WsgiApp"] = Relationship(back_populates="python_app_codebase")
 
-    async def get_files(self) -> set[AsyncPath]:
-        all_files: set[AsyncPath] = set()
+    def get_files(self) -> set[Path]:
+        all_files: set[Path] = set()
         for ext in PY_MATCH_FILES:
             try:
-                all_files.add(
-                    next(
-                        await AsyncPath(self.repo_dir).glob(ext)
-                    )
-                )
+                all_files.add(next(Path(self.repo_dir).glob(ext)))
             except StopIteration:
                 continue
         return all_files
 
-    async def get_top_level_files(self) -> set[AsyncPath]:
-        return await self.get_files()
+    async def get_top_level_files(self) -> set[Path]:
+        return self.get_files()
 
     async def top_level_file_names(self) -> set[str]:
-        return {f.name for f in await self.get_top_level_files()}
+        return {f.name for f in self.get_top_level_files()}
 
-    async def check_cleanup(self, app_tmp_dir: AsyncPath) -> None:
+    async def check_cleanup(self, app_tmp_dir: Path) -> None:
         try:
             shutil.rmtree(app_tmp_dir)
         except OSError:
@@ -183,14 +170,14 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
 
     async def detect_version(self) -> str:
         try:
-            version_file = AsyncPath(self.app_repo_dir) / ".python-version"
-            _ver = await version_file.read_text()
+            version_file = Path(self.app_repo_dir) / ".python-version"
+            _ver = version_file.read_text()
             return _ver.strip()
         except FileNotFoundError:
             return "3.12"
 
     async def read_pyproject_toml(self):
-        with open(AsyncPath(self.root_dir) / "pyproject.toml", "r") as f:
+        with open(Path(self.root_dir) / "pyproject.toml", "r") as f:
             config = toml.load(f)
             deps = config["project"]["dependencies"]
             print("[pikesquares] located deps in pyproject.toml")
@@ -209,9 +196,9 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         """
 
         async with aiofiles.tempfile.TemporaryDirectory() as tmp_dir:
-            app_tmp_dir = AsyncPath(tmp_dir)
+            app_tmp_dir = Path(tmp_dir)
             logger.info(f"created a tmp dir {app_tmp_dir}")
-            #filename = os.path.join(d, "file.ext")
+            # filename = os.path.join(d, "file.ext")
             shutil.copytree(
                 self.root_dir,
                 app_tmp_dir,
@@ -223,20 +210,20 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             logger.info(f"{app_root_dir=}")
             try:
                 logger.info(f"installing deps into tmp dir {app_root_dir}")
-                await uv_dependencies_install(
-                    uv_bin=AsyncPath(self.uv_bin),
+                uv_dependencies_install(
+                    uv_bin=Path(self.uv_bin),
                     venv=app_root_dir / ".venv",
                     repo_dir=app_root_dir,
                 )
                 logger.info(f"installed deps into tmp dir {app_root_dir}")
             except (UvSyncError, UvPipInstallError):
                 logger.error("installing dependencies failed.")
-                #await self.check_cleanup(app_tmp_dir)
+                # self.check_cleanup(app_tmp_dir)
                 return
 
             if 0:
                 try:
-                    dependencies_count = len(await uv_dependencies_list(AsyncPath(self.uv_bin)))
+                    dependencies_count = len(uv_dependencies_list(Path(self.uv_bin)))
                     logger.info(f"{dependencies_count} dependencies detected")
                 except UvPipListError as exc:
                     logger.error(exc)
@@ -246,56 +233,52 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
 
     async def dependencies_install(self, service_name, plugin_manager: pluggy.PluginManager) -> bool | None:
 
-        await plugin_manager.ahook.\
-            before_dependencies_install(
-                service_name=service_name,
-                uv_bin=AsyncPath(self.uv_bin),
-                repo_dir=AsyncPath(self.repo_dir),
-            )
+        plugin_manager.hook.before_dependencies_install(
+            service_name=service_name,
+            uv_bin=Path(self.uv_bin),
+            repo_dir=Path(self.repo_dir),
+        )
         try:
-            if not await AsyncPath(self.venv_dir).exists():
+            if not Path(self.venv_dir).exists():
                 logger.info(f"installing deps into dir {self.repo_dir}")
-                await uv_dependencies_install(
-                    uv_bin=AsyncPath(self.uv_bin),
-                    venv=AsyncPath(self.venv_dir),
-                    repo_dir=AsyncPath(self.repo_dir),
+                uv_dependencies_install(
+                    uv_bin=Path(self.uv_bin),
+                    venv=Path(self.venv_dir),
+                    repo_dir=Path(self.repo_dir),
                 )
                 logger.info(f"installed deps into dir {self.repo_dir}")
             else:
                 logger.info(f"skipping installing deps into dir {self.repo_dir}")
         except (UvSyncError, UvPipInstallError):
             logger.error("installing dependencies failed.")
-            #await self.check_cleanup(app_tmp_dir)
+            # self.check_cleanup(app_tmp_dir)
 
-        await plugin_manager.ahook.\
-            after_dependencies_install(
-                service_name=service_name,
-                uv_bin=AsyncPath(self.uv_bin),
-                repo_dir=AsyncPath(self.repo_dir),
+        plugin_manager.hook.after_dependencies_install(
+            service_name=service_name,
+            uv_bin=Path(self.uv_bin),
+            repo_dir=Path(self.repo_dir),
         )
 
         return True
 
-
-
     """
     async def init(
         self,
-        venv: AsyncPath,
+        venv: Path,
         check: bool = True,
     ) -> bool:
         logger.debug("[pikesquares] PythonRuntime.init")
         if check:
-            app_tmp_dir = AsyncPath(
+            app_tmp_dir = Path(
                 tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app")
             )
             try:
-                await self.check(app_tmp_dir)
+                self.check(app_tmp_dir)
             except (PythonRuntimeCheckError, PythonRuntimeDjangoCheckError):
                 logger.error("[pikesquares] -- PythonRuntimeCheckError --")
                 raise PythonRuntimeInitError("Python Runtime check failed")
 
-            await self.check_cleanup(app_tmp_dir)
+            self.check_cleanup(app_tmp_dir)
 
         cmd_env = {
             # "UV_CACHE_DIR": str(conf.pv_cache_dir),
@@ -309,7 +292,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
     """
     def check(
         self,
-        app_tmp_dir: AsyncPath,
+        app_tmp_dir: Path,
     ) -> bool:
         # copy project to tmp dir at $TMPDIR
         logger.debug("[pikesquares] PythonRuntime.check")
@@ -323,7 +306,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns(*list(PY_IGNORE_PATTERNS)),
         )
-        for p in await AsyncPath(app_tmp_dir).iterdir():
+        for p in Path(app_tmp_dir).iterdir():
             logger.debug(p)
 
         cmd_env = {}
@@ -333,12 +316,12 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             self.install_dependencies(venv=venv, app_tmp_dir=app_tmp_dir)
         except (UvSyncError, UvPipInstallError):
             logger.error("installing dependencies failed.")
-            await self.check_cleanup(app_tmp_dir)
+            self.check_cleanup(app_tmp_dir)
             raise PythonRuntimeCheckError("uv install dependencies failed.")
         return True
         """
 
-    async def is_django(self, app_repo_dir: AsyncPath) -> bool:
+    async def is_django(self, app_repo_dir: Path) -> bool:
         py_django_files: set[str] = set(
             {
                 "urls.py",
@@ -349,10 +332,8 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         )
         all_files = []
         for filename in py_django_files:
-            all_django_files = await AsyncPath(app_repo_dir).glob(f"**/{filename}")
-            all_files.extend(
-                list(filter(lambda f: ".venv" not in Path(f).parts, all_django_files))
-            )
+            all_django_files = Path(app_repo_dir).glob(f"**/{filename}")
+            all_files.extend(list(filter(lambda f: ".venv" not in Path(f).parts, all_django_files)))
         # for f in all_files:
         #    print(f)
         return bool(len(all_files))
@@ -369,7 +350,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
     """
     async def create_venv(
         self,
-        venv: AsyncPath,
+        venv: Path,
         cmd_env: dict | None = None,
         ) -> None:
         logger.info("Creating Python virtual environment")
@@ -379,7 +360,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         cmd_args = []
 
         try:
-            retcode, stdout, stderr = await uv_cmd(
+            retcode, stdout, stderr = uv_cmd(
                 [
                   *cmd_args,
                  "venv",
@@ -397,32 +378,28 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             raise UvSyncError(f"`uv venv` unable to create venv in {venv}")
     """
 
-    def run_app_init_command(
-        self,
-        cmd_args: list[str],
-        cmd_env: dict | None = None
-        ) -> tuple[str, str, str]:
+    def run_app_init_command(self, cmd_args: list[str], cmd_env: dict | None = None) -> tuple[str, str, str]:
 
         logger.info(f"failed: uv run {' '.join(cmd_args)}")
         try:
             retcode, stdout, stderr = uv_cmd(
-                AsyncPath(self.uv_bin),
+                Path(self.uv_bin),
                 [
                     "run",
                     "--verbose",
                     "--python",
                     "/usr/bin/python3",
-                    "--color", "never",
+                    "--color",
+                    "never",
                     *cmd_args,
                 ],
                 cmd_env=cmd_env,
-                chdir=AsyncPath(self.repo_dir),
+                chdir=Path(self.repo_dir),
             )
             return retcode, stdout, stderr
         except ProcessExecutionError as exc:
             logger.exception(exc)
             raise UvCommandExecutionError(f"uv run {' '.join(cmd_args)}")
-
 
     """
     def check(self, app_tmp_dir: Path) -> bool:
@@ -447,7 +424,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
     async def django_check(
         self,
         cmd_env: dict | None = None,
-        app_tmp_dir: AsyncPath | None = None,
+        app_tmp_dir: Path | None = None,
     ) -> DjangoCheckMessages:
         chdir = str(app_tmp_dir) or self.root_dir
         logger.info(f"[pikesquares] run django check in {str(chdir)}")
@@ -457,8 +434,8 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         # uv run python -c "from django.conf import settings ; print(settings.WSGI_APPLICATION)"
         cmd_args = ["run", "manage.py", "check"]
         try:
-            retcode, stdout, stderr = await uv_cmd(
-                AsyncPath(self.uv_bin),
+            retcode, stdout, stderr = uv_cmd(
+                Path(self.uv_bin),
                 cmd_args,
                 cmd_env,
                 chdir=chdir,
@@ -520,14 +497,14 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
     async def django_diffsettings(
         self,
         cmd_env: dict | None = None,
-        app_tmp_dir: AsyncPath | None = None,
+        app_tmp_dir: Path | None = None,
     ) -> DjangoSettings:
         logger.info("[pikesquares] django diffsettings")
         cmd_args = ["run", "manage.py", "diffsettings"]
         chdir = str(app_tmp_dir) or self.root_dir
         try:
-            retcode, stdout, stderr = await uv_cmd(
-                AsyncPath(self.uv_bin),
+            retcode, stdout, stderr = uv_cmd(
+                Path(self.uv_bin),
                 cmd_args,
                 cmd_env,
                 chdir=chdir,
@@ -536,7 +513,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             for line in stdout.splitlines():
                 for fld in DjangoSettings.model_fields.keys():
                     if fld.upper() in line:
-                        match = re.search(fr"{fld.upper()}\s*=\s*['\"](.*?)['\"]", line)
+                        match = re.search(rf"{fld.upper()}\s*=\s*['\"](.*?)['\"]", line)
                         if match:
                             dj_settings[fld] = match.group(1)
                         else:
@@ -549,4 +526,3 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
 
         except UvCommandExecutionError:
             raise DjangoDiffSettingsError(f"[pikesquares] UvExecError: unable to run django diffsettings in {chdir}")
-

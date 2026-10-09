@@ -1,9 +1,9 @@
+from pathlib import Path
 from string import Template
 
 import structlog
-from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
-from plumbum import async_local as pl_local
+from plumbum import local as pl_local
 
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.hooks.markers import hook_impl
@@ -12,14 +12,14 @@ logger = structlog.getLogger()
 
 
 class RedisAttachedDaemon:
-    async def get_daemon_bin(self) -> AsyncPath:
-        return AsyncPath("/usr/bin/redis-server")
+    def get_daemon_bin(self) -> Path:
+        return Path("/usr/bin/redis-server")
 
-    async def get_daemon_cli_bin(self) -> AsyncPath:
-        return AsyncPath("/usr/bin/redis-cli")
+    def get_daemon_cli_bin(self) -> Path:
+        return Path("/usr/bin/redis-cli")
 
     @hook_impl
-    async def create_data_dir(self, service_name: str) -> bool | None:
+    def create_data_dir(self, service_name: str) -> bool | None:
         if service_name != "dnsmasq":
             return
         return True
@@ -28,7 +28,7 @@ class RedisAttachedDaemon:
     #   redis-cli config get dir
 
     @hook_impl
-    async def attached_daemon_collect_command_arguments(
+    def attached_daemon_collect_command_arguments(
         self,
         attached_daemon: AttachedDaemon,
         bind_ip: str,
@@ -41,13 +41,12 @@ class RedisAttachedDaemon:
             "$bin --pidfile $pidfile --logfile $logfile --dir $dir --bind $bind_ip --port $bind_port --daemonize no --protected-mode no"
         ).substitute(
             {
-                "bin": str(await self.get_daemon_bin()),
+                "bin": str(self.get_daemon_bin()),
                 "bind_port": bind_port,
                 "bind_ip": bind_ip,
                 "dir": str(attached_daemon.daemon_data_dir),
                 "logfile": str(
-                    AsyncPath(attached_daemon.log_dir)
-                    / f"{attached_daemon.name}-server-{attached_daemon.service_id}.log"
+                    Path(attached_daemon.log_dir) / f"{attached_daemon.name}-server-{attached_daemon.service_id}.log"
                 ),
                 "pidfile": str(attached_daemon.pid_file),
             }
@@ -72,7 +71,7 @@ class RedisAttachedDaemon:
         }
 
     @hook_impl
-    async def attached_daemon_ping(
+    def attached_daemon_ping(
         self,
         attached_daemon: AttachedDaemon,
         bind_ip: str,
@@ -86,8 +85,8 @@ class RedisAttachedDaemon:
         cmd_args = ["-h", bind_ip, "-p", bind_port, "--raw", "incr", "ping"]
         logger.info(cmd_args)
         try:
-            async with pl_local.cwd(attached_daemon.daemon_data_dir):
-                retcode, stdout, stderr = pl_local[str(await self.get_daemon_cli_bin())].run(cmd_args)
+            with pl_local.cwd(attached_daemon.daemon_data_dir):
+                retcode, stdout, stderr = pl_local[str(self.get_daemon_cli_bin())].run(cmd_args)
                 if int(retcode) != 0:
                     logger.debug(f"{retcode=}")
                     logger.debug(f"{stdout=}")
@@ -99,7 +98,7 @@ class RedisAttachedDaemon:
             raise
 
     @hook_impl
-    async def attached_daemon_stop(
+    def attached_daemon_stop(
         self,
         attached_daemon: AttachedDaemon,
         bind_ip: str,
@@ -112,7 +111,7 @@ class RedisAttachedDaemon:
             return
 
         cmd_args = ["-h", bind_ip, "-p", bind_port, "shutdown"]
-        if not await AsyncPath(attached_daemon.daemon_data_dir).exists():
+        if not Path(attached_daemon.daemon_data_dir).exists():
             logger.info(f"{attached_daemon.service_id} data directory missing")
             return False
         try:

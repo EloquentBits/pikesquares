@@ -15,7 +15,6 @@ from pathlib import Path
 import pydantic
 import structlog
 import tenacity
-from aiopath import AsyncPath
 from sqlalchemy import (
     DateTime,
     func,
@@ -352,7 +351,7 @@ async def main():
             try:
                 js = ""
                 reader, writer = await asyncio.open_unix_connection(
-                    path=AsyncPath(self.stats_address),
+                    path=Path(self.stats_address),
                 )
                 while True:
                     data = await reader.read(4096)

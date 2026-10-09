@@ -1,5 +1,4 @@
-import apluggy as pluggy
+import pluggy
 
-hook_spec = pluggy.HookspecMarker("pikesquares" )
-hook_impl = pluggy.HookimplMarker("pikesquares" )
-
+hook_spec = pluggy.HookspecMarker("pikesquares")
+hook_impl = pluggy.HookimplMarker("pikesquares")

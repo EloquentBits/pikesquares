@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 
-import apluggy as pluggy
+import pluggy
 import structlog
 import typer
 from sqlmodel import Session, SQLModel
@@ -154,8 +154,7 @@ def init_device(context):
         if not uwsgi_options:
             for uwsgi_option in device.get_uwsgi_options():
                 uow.uwsgi_options.add(uwsgi_option)
-
-        uow.commit()
+            uow.commit()
         return device
 
     except Exception as exc:

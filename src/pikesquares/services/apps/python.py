@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pydantic
 import structlog
-from aiopath import AsyncPath
 
 from . import BaseLanguageRuntime
 from .exceptions import (
@@ -54,10 +53,10 @@ class PythonRuntime(BaseLanguageRuntime, UVMixin):
         return []
 
     @pydantic.computed_field
-    async def version(self) -> str:
+    def version(self) -> str:
         try:
-            version_file = AsyncPath(self.app_repo_dir) / ".python-version"
-            _ver = await version_file.read_text()
+            version_file = Path(self.app_repo_dir) / ".python-version"
+            _ver = version_file.read_text()
             return _ver.strip()
         except FileNotFoundError:
             return "3.12"

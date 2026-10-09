@@ -1,14 +1,13 @@
 import grp
 import json
 import os
-from asyncio import sleep
 from enum import Enum
 from pathlib import Path
+from time import sleep
 from typing import Annotated, NewType
 
 import pydantic
 import structlog
-from aiopath import AsyncPath
 from plumbum import ProcessExecutionError
 from pydantic_yaml import to_yaml_str
 from svcs.exceptions import ServiceNotFoundError
@@ -137,18 +136,18 @@ class ProcessCompose(ManagedServiceBase):
     def __str__(self) -> str:
         return self.__repr__()
 
-    async def write_config_to_disk(self) -> None:
+    def write_config_to_disk(self) -> None:
         if self.daemon_config:
-            await AsyncPath(self.daemon_config).write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
+            Path(self.daemon_config).write_text(to_yaml_str(self.config, exclude={"custom_messages"}))
 
-    async def add_tail_log_process(self, name: str, logfile: Path) -> None:
+    def add_tail_log_process(self, name: str, logfile: Path) -> None:
         """
         create a process compose process that tails the service log file
         """
 
         if not logfile.exists():
             logger.info(f"{logfile} does not exist yet. sleeping")
-            await sleep(5)
+            sleep(5)
 
         if not logfile.exists():
             logger.info(f"{logfile} does not exist yet. giving up")
@@ -164,11 +163,11 @@ class ProcessCompose(ManagedServiceBase):
             #    http_get=ReadinessProbeHttpGet()
             # ),
         )
-        await self.reload()
+        self.reload()
 
-    async def reload(self):
+    def reload(self):
         """docket-compose project update"""
-        await self.write_config_to_disk()
+        self.write_config_to_disk()
         logger.info("new config. reloading process compose")
         try:
             self.cmd_args.insert(0, "project")
@@ -181,17 +180,17 @@ class ProcessCompose(ManagedServiceBase):
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    async def up(self) -> bool | tuple[str, str, str]:
+    def up(self) -> bool | tuple[str, str, str]:
         # always write config to dist before starting
         #
-        await self.write_config_to_disk()
+        self.write_config_to_disk()
 
         # Set the current numeric umask and return the previous umask.
         old_umask = os.umask(0o002)
         os.setgid(grp.getgrnam("pikesquares")[2])
         try:
             logger.info("calling process compose up cmd")
-            return await self.cmd(
+            return self.cmd(
                 [
                     "up",
                     "--config",
@@ -210,12 +209,12 @@ class ProcessCompose(ManagedServiceBase):
         finally:
             os.umask(old_umask)
 
-    async def down(self) -> tuple[str, str, str]:
-        if self.daemon_socket and not await AsyncPath(self.daemon_socket).exists():
+    def down(self) -> tuple[str, str, str]:
+        if self.daemon_socket and not Path(self.daemon_socket).exists():
             raise PCAPIUnavailableError()
 
         try:
-            return await self.cmd(
+            return self.cmd(
                 ["down", *self.cmd_args],
                 cmd_env=self.cmd_env,
             )
@@ -223,14 +222,14 @@ class ProcessCompose(ManagedServiceBase):
             logger.error(exc)
             return exc.retcode, exc.stdout, exc.stderr
 
-    async def attach(self) -> tuple[str, str, str]:
+    def attach(self) -> tuple[str, str, str]:
         logger.info("attaching to process-compose")
         logger.info(self.cmd_args)
         if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError()
 
         try:
-            return await self.cmd(
+            return self.cmd(
                 ["attach", *self.cmd_args],
                 cmd_env=self.cmd_env,
             )
@@ -242,13 +241,13 @@ class ProcessCompose(ManagedServiceBase):
         if self.daemon_socket and not self.daemon_socket.exists():
             raise PCAPIUnavailableError("unable to reach Process Compose API")
 
-    async def ping_api(self, process_name: str) -> ProcessStats:
-        if self.daemon_socket and not await AsyncPath(self.daemon_socket).exists():
+    def ping_api(self, process_name: str) -> ProcessStats:
+        if self.daemon_socket and not Path(self.daemon_socket).exists():
             raise PCAPIUnavailableError("unable to reach Process Compose API")
 
         try:
             cmd_args = ["process", "list", "--output", "json"]
-            _, stdout, _ = await self.cmd(cmd_args + self.cmd_args, cmd_env=self.cmd_env)
+            _, stdout, _ = self.cmd(cmd_args + self.cmd_args, cmd_env=self.cmd_env)
         except ProcessExecutionError as exc:
             logger.error(exc)
             raise PCAPIUnavailableError("unable to reach Process Compose API")
@@ -268,12 +267,12 @@ CaddyProcess = NewType("CaddyProcess", Process)
 # DeviceProcessMessages = NewType("DeviceProcessMessages", ProcessMessages)
 
 
-async def process_compose_ping(pc: ProcessCompose):
+def process_compose_ping(pc: ProcessCompose):
     # raise ServiceUnavailableError("process compose down")
     return True
 
 
-async def register_process_compose(
+def register_process_compose(
     context: dict,
     machine_id: str,
     uow: UnitOfWork,
@@ -285,38 +284,38 @@ async def register_process_compose(
     from pikesquares.domain.dnsmasq import register_dnsmasq_process
 
     svcs_container = context["svcs_container"]
-    conf = await svcs_container.aget(AppConfig)
+    conf = svcs_container.get(AppConfig)
 
-    await register_device_process(context, machine_id)
-    http_router_addresses = await http_router_ips(uow)
+    register_device_process(context, machine_id)
+    http_router_addresses = http_router_ips(uow)
     if http_router_addresses:
-        await register_dnsmasq_process(context, addresses=http_router_addresses)
+        register_dnsmasq_process(context, addresses=http_router_addresses)
 
     routers = uow.http_routers.list()
     if routers:
-        await register_caddy_process(context)
+        register_caddy_process(context)
 
-    # await register_api_process(context)
-    await register_device_stats(context)
+    # register_api_process(context)
+    register_device_stats(context)
     pc_processes = {}
     pc_msgs = {}
     try:
-        pc_processes["device"], pc_msgs["device"] = await svcs_container.aget(DeviceProcess)
+        pc_processes["device"], pc_msgs["device"] = svcs_container.get(DeviceProcess)
     except ServiceNotFoundError:
         pass
 
     try:
-        pc_processes["caddy"], pc_msgs["caddy"] = await svcs_container.aget(CaddyProcess)
+        pc_processes["caddy"], pc_msgs["caddy"] = svcs_container.get(CaddyProcess)
     except ServiceNotFoundError:
         pass
 
     try:
-        pc_processes["dnsmasq"], pc_msgs["dnsmasq"] = await svcs_container.aget(DNSMASQProcess)
+        pc_processes["dnsmasq"], pc_msgs["dnsmasq"] = svcs_container.get(DNSMASQProcess)
     except ServiceNotFoundError:
         pass
 
     try:
-        pc_processes["api"], pc_msgs["api"] = await svcs_container.aget(APIProcess)
+        pc_processes["api"], pc_msgs["api"] = svcs_container.get(APIProcess)
     except ServiceNotFoundError:
         pass
 
@@ -337,7 +336,7 @@ async def register_process_compose(
         "uv_bin": conf.UV_BIN,
     }
 
-    async def process_compose_factory() -> ProcessCompose:
+    def process_compose_factory() -> ProcessCompose:
         return ProcessCompose(**pc_kwargs)
 
     services.register_factory(
@@ -345,7 +344,7 @@ async def register_process_compose(
         ProcessCompose,
         process_compose_factory,
         ping=process_compose_ping,
-        # ping=svc: await svc.ping(),
+        # ping=svc: svc.ping(),
     )
 
 
@@ -354,26 +353,26 @@ def device_close():
     # logger.debug("device closed")
 
 
-async def device_ping(device_data: tuple[DeviceProcess, ProcessMessages]):
+def device_ping(device_data: tuple[DeviceProcess, ProcessMessages]):
     process, msgs = device_data
     # raise ServiceUnavailableError("dnsmasq down")
     return True
 
 
-async def register_device_process(context: dict, machine_id: str) -> None:
+def register_device_process(context: dict, machine_id: str) -> None:
     """register device"""
 
-    async def device_process_factory(svcs_container) -> tuple[Process, ProcessMessages] | None:
+    def device_process_factory(svcs_container) -> tuple[Process, ProcessMessages] | None:
         """device process-compose process"""
 
-        # if not AsyncPath(conf.sqlite_plugin_path).exists():
+        # if not Path(conf.sqlite_plugin_path).exists():
         #    sqlite_plugin_alt = os.environ.get("PIKESQUARES_SQLITE_PLUGIN")
-        #    if sqlite_plugin_alt and AsyncPath(sqlite_plugin_alt).exists():
-        #        sqlite_plugin_path = AsyncPath(sqlite_plugin_alt)
+        #    if sqlite_plugin_alt and Path(sqlite_plugin_alt).exists():
+        #        sqlite_plugin_path = Path(sqlite_plugin_alt)
         #    else:
         #        raise AppConfigError(f"unable locate sqlite uWSGI plugin @ {sqlite_plugin_path}") from None
         #
-        conf = await svcs_container.aget(AppConfig)
+        conf = svcs_container.get(AppConfig)
         cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
         sql = f"\"SELECT option_key,option_value FROM uwsgi_options WHERE machine_id='{machine_id}' ORDER BY sort_order_index\""
         process = Process(
@@ -407,19 +406,19 @@ def api_close():
     # logger.debug("api closed")
 
 
-async def api_ping(api_data: tuple[APIProcess, ProcessMessages]):
+def api_ping(api_data: tuple[APIProcess, ProcessMessages]):
     process, msgs = api_data
     # raise ServiceUnavailableError("dnsmasq down")
     return True
 
 
-async def register_api_process(context: dict) -> None:
+def register_api_process(context: dict) -> None:
     """register api"""
 
-    async def api_process_factory(svcs_container) -> tuple[APIProcess, ProcessMessages]:
+    def api_process_factory(svcs_container) -> tuple[APIProcess, ProcessMessages]:
         """FastAPI process-compose process"""
 
-        conf = await svcs_container.aget(AppConfig)
+        conf = svcs_container.get(AppConfig)
         api_port = 9544
         # cmd = f"{conf.UV_BIN} run fastapi dev --port {api_port} src/pikesquares/app/main.py"
         cmd = f"{conf.UV_BIN} run uvicorn pikesquares.app.main:app --host 0.0.0.0 --port {api_port}"

@@ -1,9 +1,10 @@
-import apluggy as pluggy
+from pathlib import Path
+
 import cuid
 import netifaces
+import pluggy
 import structlog
 import tenacity
-from aiopath import AsyncPath
 
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
@@ -20,12 +21,12 @@ from pikesquares.service_layer.uow import UnitOfWork
 logger = structlog.getLogger()
 
 
-async def provision_project(
+def provision_project(
     name: str,
     device: Device,
     plugin_manager: pluggy.PluginManager,
     uow: UnitOfWork,
-    selected_services: list[str] | None = None
+    selected_services: list[str] | None = None,
 ) -> Project | None:
 
     selected_services = selected_services or []
@@ -48,23 +49,21 @@ async def provision_project(
         logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
 
         logger.info(f"creating tuntap router for project {project.service_id}")
-        tuntap_router = await provision_tuntap_router(uow, project)
+        tuntap_router = provision_tuntap_router(uow, project)
         logger.info(f"created tuntap router @ {project.name}")
 
         if tuntap_router and "http-router" in selected_services:
             logger.info(f"creating http router for project {project.service_id}")
-            _ = await provision_http_router(uow, project, tuntap_router)
+            _ = provision_http_router(uow, project, tuntap_router)
             logger.info(f"created http router for project {project.service_id}")
 
         if tuntap_router and "dnsmasq" in selected_services:
             logger.info(f"creating attached daemon dnsmasq for project {project.service_id}")
-            attached_daemon = await provision_attached_daemon(
-                "dnsmasq", project, uow, plugin_manager
-            )
+            attached_daemon = provision_attached_daemon("dnsmasq", project, uow, plugin_manager)
             logger.info(f"created attached daemon {attached_daemon.name} for project {project.service_id}")
         # if "dir-monitor" in selected_services:
-        #    if not await AsyncPath(project.apps_dir).exists():
-        #        await AsyncPath(project.apps_dir).mkdir(parents=True, exist_ok=True)
+        #    if not Path(project.apps_dir).exists():
+        #        Path(project.apps_dir).mkdir(parents=True, exist_ok=True)
         #    uwsgi_config = project.write_uwsgi_config()
         #    logger.debug(f"wrote config to file: {uwsgi_config}")
 
@@ -74,11 +73,17 @@ async def provision_project(
 
     return project
 
-async def get_nat_interfaces() -> list[str]:
 
-    PHYSICAL_PREFIXES = ('en', 'wl', 'et', 'ww') # https://www.freedesktop.org/software/systemd/man/latest/systemd.net-naming-scheme.html
+def get_nat_interfaces() -> list[str]:
+
+    PHYSICAL_PREFIXES = (
+        "en",
+        "wl",
+        "et",
+        "ww",
+    )  # https://www.freedesktop.org/software/systemd/man/latest/systemd.net-naming-scheme.html
     AF_LINK = 17  # MAC
-    AF_INET = 2   # IPv4
+    AF_INET = 2  # IPv4
 
     def is_physical(name: str) -> bool:
         return name.startswith(PHYSICAL_PREFIXES)
@@ -92,13 +97,9 @@ async def get_nat_interfaces() -> list[str]:
         try:
             addr_info = netifaces.ifaddresses(iface)
 
-            has_ipv4 = AF_INET in addr_info and any(
-                "addr" in entry for entry in addr_info[AF_INET]
-            )
+            has_ipv4 = AF_INET in addr_info and any("addr" in entry for entry in addr_info[AF_INET])
 
-            has_mac = AF_LINK in addr_info and any(
-                "addr" in entry for entry in addr_info[AF_LINK]
-            )
+            has_mac = AF_LINK in addr_info and any("addr" in entry for entry in addr_info[AF_LINK])
 
             if has_ipv4 and has_mac:
                 nat_interfaces.append(iface)
@@ -108,7 +109,8 @@ async def get_nat_interfaces() -> list[str]:
 
     return nat_interfaces
 
-async def project_up(project: Project)  -> bool | None:
+
+def project_up(project: Project) -> bool | None:
     stats = None
     while not stats:
         try:
@@ -134,16 +136,24 @@ async def project_up(project: Project)  -> bool | None:
             router = router_cls(
                 on=str(tuntap_router.socket_address),
                 device=tuntap_router.name,
-                stats_server=str(AsyncPath(
-                    tuntap_router.run_dir) / f"{tuntap_router.service_id}-stats.sock"
-                ),
+                stats_server=str(Path(tuntap_router.run_dir) / f"{tuntap_router.service_id}-stats.sock"),
             )
-            router.add_firewall_rule(direction="out", action="allow", src=str(tuntap_router.ipv4_network), dst=tuntap_router.ip)
-            router.add_firewall_rule(direction="out", action="deny", src=str(tuntap_router.ipv4_network), dst=str(tuntap_router.ipv4_network))
-            router.add_firewall_rule(direction="out", action="allow", src=str(tuntap_router.ipv4_network), dst="0.0.0.0")
+            router.add_firewall_rule(
+                direction="out", action="allow", src=str(tuntap_router.ipv4_network), dst=tuntap_router.ip
+            )
+            router.add_firewall_rule(
+                direction="out", action="deny", src=str(tuntap_router.ipv4_network), dst=str(tuntap_router.ipv4_network)
+            )
+            router.add_firewall_rule(
+                direction="out", action="allow", src=str(tuntap_router.ipv4_network), dst="0.0.0.0"
+            )
             router.add_firewall_rule(direction="out", action="deny")
-            router.add_firewall_rule(direction="in", action="allow", src=tuntap_router.ip, dst=str(tuntap_router.ipv4_network))
-            router.add_firewall_rule(direction="in", action="deny", src=str(tuntap_router.ipv4_network), dst=str(tuntap_router.ipv4_network))
+            router.add_firewall_rule(
+                direction="in", action="allow", src=tuntap_router.ip, dst=str(tuntap_router.ipv4_network)
+            )
+            router.add_firewall_rule(
+                direction="in", action="deny", src=str(tuntap_router.ipv4_network), dst=str(tuntap_router.ipv4_network)
+            )
             router.add_firewall_rule(direction="in", action="allow", src="0.0.0.0", dst=str(tuntap_router.ipv4_network))
             router.add_firewall_rule(direction="in", action="deny")
             section.routing.use_router(router)
@@ -157,7 +167,7 @@ async def project_up(project: Project)  -> bool | None:
             section.main_process.run_command_on_event(
                 command="iptables -t nat -F", phase=section.main_process.phases.PRIV_DROP_PRE
             )
-            nat_interfaces = await get_nat_interfaces()
+            nat_interfaces = get_nat_interfaces()
             for nat_interface in nat_interfaces:
                 section.main_process.run_command_on_event(
                     command=f"iptables -t nat -A POSTROUTING -o {nat_interface} -j MASQUERADE",
@@ -171,18 +181,18 @@ async def project_up(project: Project)  -> bool | None:
         # fs,pid,ipc,uts,net
         section._set("emperor-use-clone", "net")
 
-        #try:
+        # try:
         #    _ = project.read_stats()
         #    logger.info(f"{project.name} [{project.service_id}]. is already running!")
         #    return True
-        #except StatsReadError:
+        # except StatsReadError:
         #    print(section.as_configuration().format())
 
         device = project.device
         device_zmq_monitor = device.zmq_monitor
         device_zmq_monitor_address = device_zmq_monitor.zmq_address
         logger.info(f"launching project {project.name} {project.service_id} @ {device_zmq_monitor_address}")
-        await create_or_restart_instance(
+        create_or_restart_instance(
             device_zmq_monitor_address,
             f"{project.service_id}.ini",
             section.as_configuration().format(do_print=True),
@@ -198,12 +208,12 @@ async def project_up(project: Project)  -> bool | None:
             break
 
 
-async def project_delete(
+def project_delete(
     project: Project,
     uow: UnitOfWork,
-)  -> bool:
+) -> bool:
     try:
-        #project_zmq_monitor = project.zmq_monitor
+        # project_zmq_monitor = project.zmq_monitor
         for tuntap_router in project.tuntap_routers:
             uow.tuntap_routers.delete(tuntap_router.id)
             logger.info(f"deleted tuntap router {tuntap_router.service_id}")
@@ -227,15 +237,13 @@ async def project_delete(
     return True
 
 
-async def project_down(project: "Project", uow: "UnitOfWork") -> bool:
+def project_down(project: "Project", uow: "UnitOfWork") -> bool:
     try:
-
         try:
             _ = project.read_stats()
         except tenacity.RetryError:
             logger.info(f"Project {project.name} is not running")
             return False
-
 
         machine_id = project.__class__.read_machine_id()
         device = uow.devices.get_by_machine_id(machine_id)
@@ -246,7 +254,7 @@ async def project_down(project: "Project", uow: "UnitOfWork") -> bool:
         device_zmq_monitor = device.zmq_monitor
         device_zmq_monitor_address = device_zmq_monitor.zmq_address
         logger.info(f"stopping project {project.name} @ {device_zmq_monitor_address}")
-        await destroy_instance(device_zmq_monitor_address, f"{project.service_id}.ini")
+        destroy_instance(device_zmq_monitor_address, f"{project.service_id}.ini")
         logger.info(f"stopped project {project.name} @ {device_zmq_monitor_address}")
 
         return True
@@ -254,4 +262,5 @@ async def project_down(project: "Project", uow: "UnitOfWork") -> bool:
     except Exception as exc:
         raise exc
 
-#/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/pikesquares/attached-daemons/postgres-ne021zr stop
+
+# /usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/pikesquares/attached-daemons/postgres-ne021zr stop

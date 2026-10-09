@@ -1,12 +1,10 @@
+from pathlib import Path
+
 import structlog
-
-from aiopath import AsyncPath
-
 from uwsgiconf.options.routing_routers import RouterHttp as _RouterHttp
-from uwsgiconf.utils import filter_locals, KeyValue
+from uwsgiconf.utils import KeyValue, filter_locals
 
 from . import Section
-
 
 logger = structlog.get_logger()
 
@@ -78,14 +76,14 @@ class RouterHttps(_RouterHttp):
 
         """
         on = KeyValue(
-            filter_locals(locals(), drop=['session_context', 'forward_to']),
-            aliases={'on': 'addr', 'use_spdy': 'spdy'},
-            bool_keys=['use_spdy'],
+            filter_locals(locals(), drop=["session_context", "forward_to"]),
+            aliases={"on": "addr", "use_spdy": "spdy"},
+            bool_keys=["use_spdy"],
         )
 
         super().__init__(on, forward_to=forward_to)
 
-        self._set_aliased('session-context', session_context)
+        self._set_aliased("session-context", session_context)
 
 
 class HttpsRouterSection(Section):
@@ -431,7 +429,7 @@ class TunTapRouterSection(Section):
         self.router = router_cls(
             on=router.socket_address,
             device=router.name,
-            stats_server=str(AsyncPath(self.router.run_dir) / f"tuntap-{router.name}-stats.sock"),
+            stats_server=str(Path(self.router.run_dir) / f"tuntap-{router.name}-stats.sock"),
         )
 
         self.router.add_firewall_rule(direction="out", action="allow", src="192.168.34.0/24", dst=router.ip)
@@ -463,7 +461,7 @@ class TunTapRouterSection(Section):
             phase=self.main_process.phases.PRIV_DROP_PRE,
         )
         # force vassals to be created in a new network namespace
-        #section._set("emperor-use-clone", "net")
+        # section._set("emperor-use-clone", "net")
 
         self.logging.set_file_params(owner="true")
         # self.logging.log_into("%(emperor_logs_dir)/%n.http-router.log", before_priv_drop=False)

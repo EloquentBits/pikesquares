@@ -1,7 +1,7 @@
+from pathlib import Path
 from string import Template
 
 import structlog
-from aiopath import AsyncPath
 
 from pikesquares.domain.managed_services import AttachedDaemon
 
@@ -12,18 +12,18 @@ logger = structlog.getLogger()
 
 
 class DnsmasqAttachedDaemon:
-    async def get_daemon_bin(self) -> AsyncPath:
-        return AsyncPath("/usr/sbin/dnsmasq")
+    def get_daemon_bin(self) -> Path:
+        return Path("/usr/sbin/dnsmasq")
 
     @hook_impl
-    async def create_data_dir(self, service_name: str) -> bool | None:
+    def create_data_dir(self, service_name: str) -> bool | None:
         if service_name != "dnsmasq":
             return
 
         return False
 
     @hook_impl
-    async def attached_daemon_collect_command_arguments(
+    def attached_daemon_collect_command_arguments(
         self,
         attached_daemon: AttachedDaemon,
         bind_ip: str,
@@ -40,7 +40,7 @@ class DnsmasqAttachedDaemon:
             "$bin --conf-file=/dev/null --keep-in-foreground --log-queries  --port=$bind_port --listen-address=$bind_ip --pid-file=$pidfile --no-resolv --user=pikesquares --group=pikesquares"
         ).substitute(
             {
-                "bin": str(await self.get_daemon_bin()),
+                "bin": str(self.get_daemon_bin()),
                 "bind_port": str(bind_port),
                 "bind_ip": bind_ip,
                 # "logfile": str(attached_daemon.log_file),
@@ -48,7 +48,7 @@ class DnsmasqAttachedDaemon:
             }
         )
 
-        # http_router_addresses = await http_router_ips(uow)
+        # http_router_addresses = http_router_ips(uow)
         # if http_router_addresses:
         #    for addr in http_router_addresses:
         #        cmd = cmd + f" --address {addr}"

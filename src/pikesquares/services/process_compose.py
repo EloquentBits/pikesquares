@@ -6,7 +6,7 @@ from pathlib import Path
 import pydantic
 import structlog
 from plumbum import ProcessExecutionError
-from plumbum import async_local as pl_local
+from plumbum import local as pl_local
 
 from pikesquares import is_port_open
 from pikesquares.cli.console import console
@@ -120,7 +120,7 @@ class ProcessCompose(pydantic.BaseModel):
         logger.error(compl.stderr.decode())
         logger.debug(compl.stdout.decode())
 
-    async def pc_cmd(
+    def pc_cmd(
         self,
         cmd_args: list[str],
         # run_as_user: str = "pikesquares",
@@ -149,12 +149,12 @@ class ProcessCompose(pydantic.BaseModel):
 
         try:
             if cmd_env:
-                await pl_local.env.update(cmd_env)
+                pl_local.env.update(cmd_env)
                 logger.debug(f"{cmd_env=}")
 
             # with pl_local.as_user(run_as_user):
-            with await pl_local.cwd(chdir or self.conf.data_dir):
-                pc = await pl_local[str(self.conf.PROCESS_COMPOSE_BIN)]
+            with pl_local.cwd(chdir or self.conf.data_dir):
+                pc = pl_local[str(self.conf.PROCESS_COMPOSE_BIN)]
                 retcode, stdout, stderr = pc.run(cmd_args, **{"env": cmd_env})
                 logger.debug(f"[pikesquares] pc_cmd: {retcode=}")
                 logger.debug(f"[pikesquares] pc_cmd: {stdout=}")
@@ -180,7 +180,7 @@ class ProcessCompose(pydantic.BaseModel):
         if not self.socket_address.exists():
             raise PCAPIUnavailableError()
 
-    async def ping_api(self) -> bool:
+    def ping_api(self) -> bool:
         logger.debug("process compose - ping api")
         if not self.socket_address.exists():
             logger.info(f"process compose socket file does not exist {self.socket_address}")
@@ -198,8 +198,8 @@ class ProcessCompose(pydantic.BaseModel):
                 "json",
             ]
             logger.debug(cmd_args)
-            # retcode, stdout, stderr = await self.pc_cmd(cmd_args)
-            result = await self.pc_cmd(cmd_args)
+            # retcode, stdout, stderr = self.pc_cmd(cmd_args)
+            result = self.pc_cmd(cmd_args)
             logger.debug(result)
             js = json.loads(result.stdout)
             try:
@@ -218,7 +218,7 @@ class ProcessCompose(pydantic.BaseModel):
         raise PCDeviceUnavailableError()
 
 
-async def register_process_compose(
+def register_process_compose(
     context,
     conf: AppConfig,
 ):

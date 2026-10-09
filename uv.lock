@@ -152,18 +152,6 @@ wheels = [
 ]
 
 [[package]]
-name = "apluggy"
-version = "1.1.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pluggy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b8/e8/a597d779a3fbb5e4628bf54d90df72471e76e42fce922da816847e2dc206/apluggy-1.1.2.tar.gz", hash = "sha256:421700438e6f3f47d284a5a3bb5d3f2369c70e9165f89f3785d09493a8f5db73", size = 26477, upload-time = "2025-11-20T20:46:13.923Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/28/01d0136b3e8acace61711b56a309637e78f7e6faa39e9a88661c8da489d1/apluggy-1.1.2-py3-none-any.whl", hash = "sha256:18c4c0c631fe9d98be65375c6e73de3bc4b881a39a88bd6b48dd683c91f18e0b", size = 11883, upload-time = "2025-11-20T20:46:12.439Z" },
-]
-
-[[package]]
 name = "app-paths"
 version = "0.0.8"
 source = { registry = "https://pypi.org/simple" }
@@ -1111,10 +1099,8 @@ source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
     { name = "aiohttp" },
-    { name = "aiopath" },
     { name = "aiosqlite" },
     { name = "alembic" },
-    { name = "apluggy" },
     { name = "app-paths" },
     { name = "asgi-lifespan" },
     { name = "cuid" },
@@ -1171,10 +1157,8 @@ dev = [
 requires-dist = [
     { name = "aiofiles", specifier = ">=24.1.0" },
     { name = "aiohttp", specifier = ">=3.11.13" },
-    { name = "aiopath", specifier = ">=0.7.7" },
     { name = "aiosqlite", specifier = ">=0.21.0" },
     { name = "alembic", specifier = ">=1.14.1" },
-    { name = "apluggy", specifier = ">=1.1.2" },
     { name = "app-paths", specifier = ">=0.0.8" },
     { name = "asgi-lifespan", specifier = ">=2.1.0" },
     { name = "cuid", specifier = ">=0.4" },

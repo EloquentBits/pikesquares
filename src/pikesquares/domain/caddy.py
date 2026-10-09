@@ -1,8 +1,8 @@
 import json
+from pathlib import Path
 
 import pydantic
 import structlog
-from aiopath import AsyncPath
 
 from pikesquares import caddy_client, services
 from pikesquares.conf import AppConfig, AppConfigError
@@ -116,26 +116,26 @@ def caddy_close():
     # logger.debug("caddy closed")
 
 
-async def caddy_ping(caddy_data: tuple[CaddyProcess, ProcessMessages]):
+def caddy_ping(caddy_data: tuple[CaddyProcess, ProcessMessages]):
     process, msgs = caddy_data
     # raise ServiceUnavailableError("dnsmasq down")
     return True
 
 
-async def register_caddy_process(context: dict) -> None:
+def register_caddy_process(context: dict) -> None:
     """register caddy"""
 
     # caddy
-    async def caddy_process_factory(svcs_container) -> tuple[CaddyProcess, ProcessMessages]:
+    def caddy_process_factory(svcs_container) -> tuple[CaddyProcess, ProcessMessages]:
         """Caddy process-compose process"""
 
-        conf = await svcs_container.aget(AppConfig)
-        uow = await svcs_container.aget(UnitOfWork)
+        conf = svcs_container.get(AppConfig)
+        uow = svcs_container.get(UnitOfWork)
 
-        if conf.CADDY_BIN and not await AsyncPath(conf.CADDY_BIN).exists():
+        if conf.CADDY_BIN and not Path(conf.CADDY_BIN).exists():
             raise AppConfigError(f"unable locate caddy binary @ {conf.CADDY_BIN}") from None
 
-        # await AsyncPath(conf.caddy_config_path).write_text(caddy_config_initial)
+        # Path(conf.caddy_config_path).write_text(caddy_config_initial)
         routers = uow.http_routers.list()
         # if routers:
         with open(conf.caddy_config_path, "r+") as caddy_config:
