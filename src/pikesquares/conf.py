@@ -1,4 +1,3 @@
-import grp
 import json
 import os
 import pwd

@@ -54,8 +54,7 @@ app = typer.Typer()
 @app.command(
     # "new", hidden=True
 )
-@run_async
-async def create(
+def create(
     ctx: typer.Context,
     project_name: Optional[str] = typer.Argument("", help="New project name"),
 ):
@@ -66,9 +65,9 @@ async def create(
     """
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
-    conf = await services.aget(context, AppConfig)
-    uow = await services.aget(context, UnitOfWork)
-    plugin_manager = await services.aget(context, pluggy.PluginManager)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
+    plugin_manager = services.get(context, pluggy.PluginManager)
 
     machine_id = ServiceBase.read_machine_id()
     device = uow.devices.get_by_machine_id(machine_id)
@@ -82,11 +81,11 @@ async def create(
     #    second = questionary.select("Select item", choices=["item1", "item2", "item3"])
     # ).ask()
 
-    project_src = await questionary.select(
+    project_src = questionary.select(
         "Provision project from: ",
         choices=["Preconfigured template", "Empty project"],
         style=custom_style,
-    ).ask_async()
+    ).ask()
     if not project_src:
         raise typer.Exit(0)
 
@@ -96,17 +95,17 @@ async def create(
     # )
 
     if project_src == "Empty project":
-        name = await questionary.text(
+        name = questionary.text(
             "Choose a name for your project: ",
             default=randomname.get_name().lower(),
             style=custom_style,
             # validate=NameValidator,
-        ).ask_async()
+        ).ask()
         if not name:
             raise typer.Exit(0)
 
         try:
-            selected_services = await questionary.checkbox(
+            selected_services = questionary.checkbox(
                 "Provision services: ",
                 choices=[
                     questionary.Choice("HTTP Router", value="http-router", checked=False),
@@ -118,30 +117,28 @@ async def create(
                     questionary.Choice("DIR Monitor", value="dir-monitor", disabled="coming soon"),
                 ],
                 style=custom_style,
-            ).unsafe_ask_async()
+            ).unsafe_ask()
         except KeyboardInterrupt:
             console.info("selection cancelled.")
             raise typer.Exit(0) from None
 
-        # process_compose = await services.aget(context, ProcessCompose)
+        # process_compose = services.aget(context, ProcessCompose)
         questionary.print(f"Provisioning project {name}")
         with uow:
             try:
-                project = await provision_project(
-                    name, device, plugin_manager, uow, selected_services=selected_services
-                )
+                project = provision_project(name, device, plugin_manager, uow, selected_services=selected_services)
                 console.success(f":heavy_check_mark:     Provisioned {name}")
 
                 if not project:
                     console.warning(f"missing project {name}")
                     raise typer.Exit(1) from None
 
-                if await questionary.confirm(f"Launch {project.name}?").ask_async():
+                if questionary.confirm(f"Launch {project.name}?").ask():
                     try:
-                        if not await project_up(project):
+                        if not project_up(project, project.tuntap_routers, uow):
                             console.error(f"Unable to launch project {project.name}")
                             raise typer.Exit(1)
-                    # await process_compose.add_tail_log_process(project.name, project.log_file)
+                    # process_compose.add_tail_log_process(project.name, project.log_file)
                     except Exception as exc:
                         logger.exception(exc)
                         console.print(traceback.format_exc())
@@ -155,11 +152,11 @@ async def create(
 
                 for http_router in project.http_routers or []:
                     try:
-                        http_router_up_result = await http_router_up(uow, http_router)
+                        http_router_up_result = http_router_up(uow, http_router)
                         if http_router_up_result:
                             console.success(":heavy_check_mark:     Launching http router.. Done!")
                             console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-                            # await process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+                            # process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
                     except Exception as exc:
                         logger.exception(exc)
                         console.print(traceback.format_exc())
@@ -167,7 +164,7 @@ async def create(
                         raise typer.Exit(1) from None
 
                 for attached_daemon in project.attached_daemons or []:
-                    if await attached_daemon_up(attached_daemon, uow, plugin_manager):
+                    if attached_daemon_up(attached_daemon, uow, plugin_manager):
                         logger.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
                     logger.info(f"launched attached daemon for project {project.service_id}")
 
@@ -186,7 +183,7 @@ async def create(
             default=randomname.get_name(),
             validators=[ServiceNameValidator],
         )
-        project = await provision_project(name, context, uow)
+        project = provision_project(name, context, uow)
         if project:
             console.success(f":heavy_check_mark:     Project '{project.name}' was successfully created!")
             device = context.get("device")
@@ -194,7 +191,7 @@ async def create(
                 raise AppConfigError("no device found in context")
 
             device_zmq_monitor = uow.zmq_monitors.get_by_device_id(device.id)
-            await device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
+            device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
             console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
         else:
             console.warning("Failed to create a Project")
@@ -204,8 +201,7 @@ async def create(
 @app.command(
     # "stop", hidden=True
 )
-@run_async
-async def stop(
+def stop(
     ctx: typer.Context,
     name: str | None = typer.Argument("", help="Project name"),
 ):
@@ -216,7 +212,7 @@ async def stop(
     """
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
-    uow = await services.aget(context, UnitOfWork)
+    uow = services.get(context, UnitOfWork)
 
     machine_id = ServiceBase.read_machine_id()
     device = uow.devices.get_by_machine_id(machine_id)
@@ -227,14 +223,13 @@ async def stop(
 
     with uow:
         try:
-            selected_projects = await questionary.checkbox(
+            selected_projects = questionary.checkbox(
                 "Select a project to stop: ",
                 choices=[
-                    questionary.Choice(project.name, value=project.id, checked=True)
-                    for project in device.projects
+                    questionary.Choice(project.name, value=project.id, checked=True) for project in device.projects
                 ],
                 style=custom_style,
-            ).unsafe_ask_async()
+            ).unsafe_ask()
         except KeyboardInterrupt:
             console.info("selection cancelled.")
             raise typer.Exit(0) from None
@@ -244,7 +239,7 @@ async def stop(
                 continue
 
             for project in filter(lambda proj: proj.id == project_id, device.projects):
-                if await project_down(project, uow):
+                if project_down(project, uow):
                     console.info(f"stopped project {project.name}")
                 else:
                     console.warning(f"unable to stop project {project.name}")
@@ -258,16 +253,15 @@ async def stop(
 )
 # @app.command("proj", rich_help_panel="Show", hidden=True)
 @app.command("list")
-@run_async
-async def list_(ctx: typer.Context, show_id: bool = False):
+def list_(ctx: typer.Context, show_id: bool = False):
     """
     Show all projects on current device
 
     Aliases:[i] projects, projects list
     """
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    uow = await services.aget(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
 
     machine_id = ServiceBase.read_machine_id()
     with uow:
@@ -341,8 +335,7 @@ def logs(ctx: typer.Context, project_id: Optional[str] = typer.Argument("")):
 
 @app.command(short_help="Delete existing project by name or id\nAliases:[i] delete, rm")
 @app.command("rm", hidden=True)
-@run_async
-async def delete(
+def delete(
     ctx: typer.Context,
     project_name: Optional[str] = typer.Argument("", help="Name of project to remove"),
 ):
@@ -353,7 +346,7 @@ async def delete(
     """
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
-    uow = await services.aget(context, UnitOfWork)
+    uow = services.get(context, UnitOfWork)
 
     machine_id = ServiceBase.read_machine_id()
     device = uow.devices.get_by_machine_id(machine_id)
@@ -364,7 +357,7 @@ async def delete(
 
     with uow:
         try:
-            selected_projects = await questionary.checkbox(
+            selected_projects = questionary.checkbox(
                 "Existing projects: ",
                 choices=[
                     questionary.Choice(
@@ -375,7 +368,7 @@ async def delete(
                     for project in device.projects
                 ],
                 style=custom_style,
-            ).unsafe_ask_async()
+            ).unsafe_ask()
         except KeyboardInterrupt:
             console.info("selection cancelled.")
             raise typer.Exit(0) from None
@@ -385,14 +378,14 @@ async def delete(
                 continue
 
             for project in filter(lambda proj: proj.id == project_id, device.projects):
-                if await project_down(project, uow):
+                if project_down(project, uow):
                     console.info(f"stopped project {project.name}")
                 else:
                     console.warning(f"unable to stop project {project.name}")
                     continue
 
                 try:
-                    await project_delete(project, uow)
+                    project_delete(project, uow)
                 except Exception as exc:
                     logger.exception(exc)
                     console.error(f"Unable to delete project {project.name}")

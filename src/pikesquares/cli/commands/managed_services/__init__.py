@@ -28,8 +28,7 @@ app = typer.Typer()
 
 
 @app.command(short_help="Create new managed service\nAliases: [i] create, new")
-@run_async
-async def create(
+def create(
     ctx: typer.Context,
     project: str | None = typer.Option("", "--in", "--in-project", help="Name or id of project to add new service to"),
     name: Annotated[str, typer.Option("--name", "-n", help="service name")] = "",
@@ -45,8 +44,7 @@ async def create(
 
 @app.command(short_help="List running managed services \nAliases:[s] list")
 @app.command("list")
-@run_async
-async def list_(ctx: typer.Context):
+def list_(ctx: typer.Context):
     """
     List managed services
 
@@ -54,8 +52,8 @@ async def list_(ctx: typer.Context):
     """
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
-    conf = await services.aget(context, AppConfig)
-    uow = await services.aget(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
 
     try:
         with uow:
@@ -75,14 +73,11 @@ async def list_(ctx: typer.Context):
                 elif len(projects) == 1:
                     return projects[0]
 
-                selected_project_id = await questionary.select(
+                selected_project_id = questionary.select(
                     "Select an existing project: ",
-                    choices=[
-                        questionary.Choice(project.name, value=project.id)
-                        for project in device.projects
-                    ],
+                    choices=[questionary.Choice(project.name, value=project.id) for project in device.projects],
                     style=custom_style,
-                ).unsafe_ask_async()
+                ).unsafe_ask()
             except KeyboardInterrupt:
                 console.info("selection cancelled.")
                 raise typer.Exit(0) from None
@@ -103,7 +98,7 @@ async def list_(ctx: typer.Context):
                 )
                 raise typer.Exit(0) from None
 
-            async def check_vassal_state(daemon: AttachedDaemon) -> str:
+            def check_vassal_state(daemon: AttachedDaemon) -> str:
                 try:
                     if bool(daemon.read_stats()):
                         return "running"
@@ -111,7 +106,7 @@ async def list_(ctx: typer.Context):
                     pass
                 return "stopped"
 
-            # plugin_manager = await services.aget(context, PluginManager)
+            # plugin_manager = services.get(context, PluginManager)
             for attached_daemon in attached_daemons:
                 """
                 daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
@@ -134,7 +129,7 @@ async def list_(ctx: typer.Context):
                     plugin_manager.register(plugin_instance)
 
                 """
-                vassal_state = "running"  # await check_vassal_state(attached_daemon)
+                vassal_state = "running"  # check_vassal_state(attached_daemon)
                 if vassal_state == "running":
                     daemon_ping = True  # plugin_manager.hook.ping()
                 else:
@@ -152,8 +147,7 @@ async def list_(ctx: typer.Context):
 
 
 @app.command(short_help="Start running managed service \nAliases:[s] start")
-@run_async
-async def start(
+def start(
     ctx: typer.Context,
     service_name: str | None = typer.Argument("", help="Name of managed service to start"),
 ):
@@ -165,17 +159,17 @@ async def start(
     """
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
-    conf = await services.aget(context, AppConfig)
-    uow = await services.aget(context, UnitOfWork)
-    plugin_manager = await services.aget(context, pluggy.PluginManager)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
+    plugin_manager = services.get(context, pluggy.PluginManager)
     try:
         with uow:
             try:
-                project = await prompt_for_project(uow, custom_style)
+                project = prompt_for_project(uow, custom_style)
                 if not project:
                     console.warning("unable to retrieve project")
                     raise typer.Exit(0) from None
-                attached_daemons = await prompt_for_attached_daemons(
+                attached_daemons = prompt_for_attached_daemons(
                     uow,
                     project,
                     custom_style,
@@ -189,7 +183,7 @@ async def start(
                 console.success("Appears there are no stopped managed services in this project.")
                 raise typer.Exit(0) from None
 
-            plugin_manager = await services.aget(context, PluginManager)
+            plugin_manager = services.get(context, PluginManager)
             for attached_daemon in attached_daemons:
                 try:
                     daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
@@ -201,9 +195,7 @@ async def start(
                         logger.error(f"unable to lookup {attached_daemon.name} class in config")
                         continue
 
-                    attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(
-                        attached_daemon.service_id
-                    )
+                    attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
 
                     plugin_instance = plugin_class(
                         daemon_service=attached_daemon,
@@ -211,7 +203,7 @@ async def start(
                     )
                     if attached_daemon_device:
                         plugin_manager.register(plugin_instance)
-                    if await attached_daemon_up(
+                    if attached_daemon_up(
                         attached_daemon,
                         plugin_manager,
                         uow,
@@ -232,8 +224,7 @@ async def start(
 
 
 @app.command(short_help="Stop running managed service \nAliases:[s] stop")
-@run_async
-async def stop(
+def stop(
     ctx: typer.Context,
     service_name: str | None = typer.Argument("", help="Name of managed service to stop"),
 ):
@@ -245,17 +236,17 @@ async def stop(
     """
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
-    conf = await services.aget(context, AppConfig)
-    uow = await services.aget(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
 
     try:
         with uow:
-            project = await prompt_for_project(uow, custom_style)
+            project = prompt_for_project(uow, custom_style)
             if not project:
                 console.warning("unable to retrieve project")
                 raise typer.Exit(0) from None
 
-            attached_daemons = await prompt_for_attached_daemons(
+            attached_daemons = prompt_for_attached_daemons(
                 uow,
                 project,
                 custom_style,
@@ -265,7 +256,7 @@ async def stop(
                 console.success("Appears there have been no Managed Services created in this project yet.")
                 raise typer.Exit(0) from None
 
-            plugin_manager = await services.aget(context, PluginManager)
+            plugin_manager = services.aget(context, PluginManager)
             for attached_daemon in attached_daemons:
                 try:
                     daemon_conf = conf.attached_daemon_plugins.get(attached_daemon.name)
@@ -277,9 +268,7 @@ async def stop(
                         logger.error(f"unable to lookup {attached_daemon.name} class in config")
                         continue
 
-                    attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(
-                        attached_daemon.service_id
-                    )
+                    attached_daemon_device = uow.tuntap_devices.get_by_linked_service_id(attached_daemon.service_id)
 
                     plugin_instance = plugin_class(
                         daemon_service=attached_daemon,
@@ -288,7 +277,7 @@ async def stop(
                     if attached_daemon_device:
                         plugin_manager.register(plugin_instance)
 
-                    if await attached_daemon_down(
+                    if attached_daemon_down(
                         attached_daemon,
                         plugin_manager,
                         uow,

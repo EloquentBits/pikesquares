@@ -224,19 +224,20 @@ def main(
             "down",
         }
     ):
-        if not is_root:
-            console.info("Please start server as root user. `sudo pikesquares up`")
-            raise typer.Exit()
+        if 0:
+            if not is_root:
+                console.info("Please start server as root user. `sudo pikesquares up`")
+                raise typer.Exit()
 
-        # continue running as `pikesquares` group
-        try:
-            os.setgid(grp.getgrnam("pikesquares")[2])
-        except IndexError:
-            # TODO
-            # create pikesquares user and group
-            # sudo useradd pikesquares --user-group --home-dir /var/lib/pikesquares
-            console.error("could not locate `pikesquares` group. Please create one to continue.")
-            raise typer.Abort() from None
+            # continue running as `pikesquares` group
+            try:
+                os.setgid(grp.getgrnam("pikesquares")[2])
+            except IndexError:
+                # TODO
+                # create pikesquares user and group
+                # sudo useradd pikesquares --user-group --home-dir /var/lib/pikesquares
+                console.error("could not locate `pikesquares` group. Please create one to continue.")
+                raise typer.Abort() from None
 
     # context = services.init_context(ctx.ensure_object(dict))
     context = services.init_app(ctx.ensure_object(dict))
@@ -276,33 +277,7 @@ def main(
                     console.info("install python3-dev package. i.e. brew install python3-dev")
                 raise typer.Exit(1)
 
-        if pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists():
-            (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
-            try:
-                build.build_uwsgi(conf)
-            except build.SCIERepoDoesNotExistError:
-                logger.error("unable to clone scie-pikesquares repo")
-                raise typer.Exit(1) from None
-
-            except build.UWSGISourceFilesMissingError:
-                console.error("unable to build plugin. uWSGI source files missing")
-                raise typer.Exit(1) from None
-
-        required_plugins = ("sqlite3", "emperor_zeromq", "logfile")
-        for plugin in required_plugins:
-            plugin_path = conf.plugins_dir / f"{plugin}_plugin.so"
-            if not plugin_path.exists():
-                try:
-                    build.build_plugin(conf, plugin)
-                except build.PluginHeaderFileMissingError as exc:
-                    console.warning(f"{plugin} development header files are not installed.")
-                    console.info(exc.message)
-                    raise typer.Exit(1) from None
-
-                except build.UWSGISourceFilesMissingError:
-                    console.error("unable to build plugin. uWSGI source files missing")
-                    raise typer.Exit(1) from None
-
+        build.build_uwsgi_deps(conf)
     # cmd = f"{conf.UWSGI_BIN} --show-config --plugin {str(conf.sqlite_plugin)} --sqlite {str(conf.db_path)}:"
     # sql = f"\"SELECT option_key,option_value FROM uwsgi_options WHERE machine_id='{machine_id}' ORDER BY sort_order_index\""
 

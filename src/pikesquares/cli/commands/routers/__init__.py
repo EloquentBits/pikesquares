@@ -11,7 +11,6 @@ import typer
 from tinydb import Query, TinyDB, where
 
 from pikesquares import get_first_available_port, services
-from pikesquares.cli.decorator import run_async
 from pikesquares.conf import AppConfig
 from pikesquares.domain import project
 from pikesquares.exceptions import StatsReadError
@@ -56,8 +55,7 @@ app = typer.Typer()
 
 @app.command("routers", rich_help_panel="Show", short_help="Show all routers.\nAliases:[i] routers, routers list")
 @app.command("list")
-@run_async
-async def list_(
+def list_(
     ctx: typer.Context,
     show_id: bool = False,
 ):
@@ -68,8 +66,8 @@ async def list_(
     """
 
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    uow = await services.aget(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
     device = context.get("device")
 
     tuntap_routers = uow.tuntap_routers.list()
@@ -108,8 +106,7 @@ async def list_(
 
 @app.command("stop", hidden=True)
 @app.command(short_help="Stop router\nAliases:[i] stop")
-@run_async
-async def stop(
+def stop(
     ctx: typer.Context, router_address: Annotated[str, typer.Option("--router-address", help="router to remove")] = ""
 ):
     """
@@ -118,8 +115,8 @@ async def stop(
     """
 
     context = ctx.ensure_object(dict)
-    conf = await services.aget(context, AppConfig)
-    uow = await services.aget(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
 
     with uow:
         http_routers = uow.http_routers.list()
@@ -128,10 +125,10 @@ async def stop(
         #         router_stats_available = bool(router.__class__.read_stats(router.stats_address))
         #     except StatsReadError:
         #         router_stats_available = False
-        for router_to_stop in await questionary.checkbox(
+        for router_to_stop in questionary.checkbox(
             f"Select the proxy(s) to stop?",
             choices=[f"{r.service_id} {r.address}" for r in http_routers],
-        ).ask_async():
+        ).ask():
             print(router_to_stop)
             r_addr = router_to_stop.split()[-1]
             print(r_addr)
@@ -142,7 +139,7 @@ async def stop(
                 project_zmq_monitor_address = project_zmq_monitor.zmq_address
                 print(project_zmq_monitor_address)
 
-                await destroy_instance(project_zmq_monitor_address, f"{router.service_id}.ini")
+                destroy_instance(project_zmq_monitor_address, f"{router.service_id}.ini")
 
             try:
                 router_stats_available = bool(router.__class__.read_stats(router.stats_address))

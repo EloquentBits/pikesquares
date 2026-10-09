@@ -12,8 +12,6 @@ import questionary
 import randomname
 import structlog
 import typer
-from aiopath import AsyncPath
-from cuid import cuid
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
@@ -29,7 +27,6 @@ from pikesquares.cli.console import (
     make_layout,
     make_progress,
 )
-from pikesquares.cli.decorator import run_async
 from pikesquares.conf import AppConfig
 from pikesquares.domain.project import Project
 from pikesquares.domain.router import HttpRouter
@@ -324,11 +321,10 @@ def create(
 
 
 @app.command(rich_help_panel="Control", short_help="Initialize a project")
-@run_async
-async def init(
+def init(
     ctx: typer.Context,
     app_root_dir: Annotated[
-        AsyncPath | None,
+        Path | None,
         typer.Option(
             "--root-dir",
             "-d",
@@ -347,7 +343,7 @@ async def init(
     custom_style = context.get("cli-style")
     conf = services.get(context, AppConfig)
     default_project = context.get("default-project")
-    uow = await services.aget(context, UnitOfWork)
+    uow = services.get(context, UnitOfWork)
     # db = services.get(context, TinyDB)
 
     # uv init djangotutorial
@@ -359,17 +355,17 @@ async def init(
     # https://github.com/healthchecks/healthchecks
 
     if not app_root_dir:
-        current_dir = await AsyncPath().cwd()
-        app_root_dir = AsyncPath(
-            await questionary.path(
+        current_dir = Path().cwd()
+        app_root_dir = Path(
+            questionary.path(
                 "Enter the location of your project/app root directory:",
                 default=str(current_dir),
                 only_directories=True,
                 style=custom_style,
-            ).ask_async()
+            ).ask()
         )
 
-    if not await AsyncPath(app_root_dir).exists():
+    if not Path(app_root_dir).exists():
         console.warning(f"Project root directory does not exist: {str(app_root_dir)}")
         raise typer.Exit(code=1)
 
@@ -394,7 +390,7 @@ async def init(
     app_name = randomname.get_name().lower()
     project_name = "bugsink"
     project = uow.projects.get_by_name(project_name)
-    app_repo_dir = AsyncPath(conf.pyapps_dir) / app_name / app_name
+    app_repo_dir = Path(conf.pyapps_dir) / app_name / app_name
     # pyvenv_dir = conf.pyvenvs_dir / service_id
     app_pyvenv_dir = app_repo_dir / ".venv"
 
@@ -553,24 +549,23 @@ async def init(
     }
     with Live(layout, console=console, auto_refresh=True) as live:
         while not overall_progress.finished:
-            await asyncio.sleep(0.1)
+            sleep(0.1)
             for task in progress.tasks:
                 if not task.finished:
                     if task.id == detect_dependencies_task:
-                        # asynctempfile
-                        app_tmp_dir = AsyncPath(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
+                        app_tmp_dir = Path(tempfile.mkdtemp(prefix="pikesquares_", suffix="_py_app"))
                         shutil.copytree(
                             runtime.app_root_dir,
                             app_tmp_dir,
                             dirs_exist_ok=True,
                             ignore=shutil.ignore_patterns(*list(runtime.PY_IGNORE_PATTERNS)),
                         )
-                        # for p in AsyncPath(app_tmp_dir).iterdir():
+                        # for p in Path(app_tmp_dir).iterdir():
                         #    logger.debug(p)
 
                     if task.id < 2:
                         progress.start_task(task.id)
-                        await asyncio.sleep(0.5)
+                        sleep(0.5)
                         progress.update(
                             task.id,
                             completed=1,
@@ -595,7 +590,7 @@ async def init(
                     else:
                         progress.update(task.id, visible=True, refresh=True)
                         progress.start_task(task.id)
-                        await asyncio.sleep(0.5)
+                        sleep(0.5)
 
                     description_done = None
 
@@ -715,7 +710,7 @@ async def init(
 
         uwsgi_plugins = ["tuntap"]
         with uow:
-            wsgi_app = await provision_wsgi_app(
+            wsgi_app = provision_wsgi_app(
                 app_name,
                 app_root_dir,
                 app_repo_dir,
@@ -726,7 +721,7 @@ async def init(
             )
         if default_project:
             # proj_zmq_addr = f"{default_project.monitor_zmq_ip}:{default_project.monitor_zmq_port}"
-            await wsgi_app.zmq_monitor_create_instance()
+            wsgi_app.zmq_monitor_create_instance()
             console.success(f":heavy_check_mark:     Launching wsgi app {app_name}.. Done!")
             console.print("[bold green]WSGI App has been provisioned.")
 
@@ -736,8 +731,7 @@ async def init(
 
 
 @app.command(short_help="Show all apps in specific project.\nAliases:[i] apps, app list")
-@run_async
-async def ls(
+def ls(
     ctx: typer.Context,
     project: str = typer.Argument("", help="Project name"),
     show_id: bool = False,
@@ -751,8 +745,8 @@ async def ls(
     # device_handler = obj.get("device-handler")
     custom_style = context.get("cli-style")
 
-    conf = await services.aget(context, AppConfig)
-    uow = await services.aget(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
     device = context.get("device")
     if not device:
         console.error("unable to locate device in app context")
