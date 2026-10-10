@@ -259,6 +259,8 @@ class AppConfig(BaseSettings):
     SENTRY_DSN: pydantic.HttpUrl | None = None
     daemonize: bool = False
 
+    required_plugins: tuple = ("sqlite3", "emperor_zeromq", "logfile")
+
     # to override api_settings:
     # export my_prefix_api_settings='{"foo": "x", "apple": 1}'
     # api_settings: APISettings = APISettings()

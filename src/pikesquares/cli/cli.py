@@ -3,7 +3,6 @@ import grp
 import logging
 import os
 import sys
-import sysconfig
 from pathlib import Path
 from typing import Annotated
 
@@ -13,6 +12,7 @@ import sentry_sdk
 import structlog_sentry_logger
 import typer
 from dotenv import load_dotenv
+from plumbum import local as pl_local
 
 from pikesquares import __app_name__, __version__, services
 from pikesquares.conf import (
@@ -260,23 +260,11 @@ def main(
     conf = services.get(context, AppConfig)
 
     if ctx.invoked_subcommand == "up":
-        # include_dir = Path(sysconfig.get_path("include"))
-        # if include_dir is None:
-        #    raise typer.Exit(1)
-
-        # do this only before building the Python plugin
-        if 0:
-            if not (include_dir / "Python.h").exists():
-                inc = sysconfig.get_path("include")
-                console.warning("Python development header files are not installed.")
-                console.warning(f"Checked path: {os.path.join(inc, 'Python.h') if inc else 'N/A'}")
-                if platform == "linux":
-                    console.info("install python3-dev package. i.e. sudo apt install python3-dev")
-                elif platform == "macos":
-                    console.info("install python3-dev package. i.e. brew install python3-dev")
-                raise typer.Exit(1)
-
-        build.build_uwsgi_deps(conf)
+        if not pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists() or list(
+            filter(lambda plugin: not (conf.plugins_dir / f"{plugin}_plugin.so").exists(), conf.required_plugins)
+        ):
+            (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
+            build.build_uwsgi_deps(conf)
 
     device = init_device(context)
 

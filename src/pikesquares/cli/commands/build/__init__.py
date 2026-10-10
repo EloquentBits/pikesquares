@@ -33,23 +33,9 @@ class PluginHeaderFileMissingError(Exception):
         super().__init__(self.message)
 
 
-def build_uwsgi_deps(conf):
+def clone_repo(scie_home):
 
-    if not pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists():
-        (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
-        try:
-            build_uwsgi(conf)
-        except SCIERepoDoesNotExistError:
-            logger.error("unable to clone scie-pikesquares repo")
-            raise typer.Exit(1) from None
-
-        except UWSGISourceFilesMissingError:
-            console.error("unable to build plugin. uWSGI source files missing")
-            raise typer.Exit(1) from None
-
-    """
-    scie_home = conf.data_dir / Path("scie-pikesquares")
-    if not scie_home.exists()
+    repo_url = "https://github.com/EloquentBits/scie-pikesquares.git"
     cmd_env = {}
     cmd_args = ["clone", repo_url, str(scie_home), "--recurse-submodules", "--depth", "1"]
     if cmd_env:
@@ -67,22 +53,35 @@ def build_uwsgi_deps(conf):
             for line in exc.stderr.split("\n"):
                 print(line)
         return typer.Exit(code=1)
-    """
 
-    required_plugins = ("sqlite3", "emperor_zeromq", "logfile")
-    for plugin in required_plugins:
-        plugin_path = conf.plugins_dir / f"{plugin}_plugin.so"
-        if not plugin_path.exists():
-            try:
-                build_plugin(conf, plugin)
-            except PluginHeaderFileMissingError as exc:
-                console.warning(f"{plugin} development header files are not installed.")
-                console.info(exc.message)
-                raise typer.Exit(1) from None
 
-            except UWSGISourceFilesMissingError:
-                console.error("unable to build plugin. uWSGI source files missing")
-                raise typer.Exit(1) from None
+def build_uwsgi_deps(conf):
+
+    with tempfile.TemporaryDirectory() as scie_home:
+        clone_repo(scie_home)
+        try:
+            build_uwsgi(conf, scie_home)
+        except SCIERepoDoesNotExistError:
+            logger.error("unable to clone scie-pikesquares repo")
+            raise typer.Exit(1) from None
+
+        except UWSGISourceFilesMissingError:
+            console.error("unable to build plugin. uWSGI source files missing")
+            raise typer.Exit(1) from None
+
+        for plugin in conf.required_plugins:
+            plugin_path = conf.plugins_dir / f"{plugin}_plugin.so"
+            if not plugin_path.exists():
+                try:
+                    build_plugin(conf, plugin, scie_home)
+                except PluginHeaderFileMissingError as exc:
+                    console.warning(f"{plugin} development header files are not installed.")
+                    console.info(exc.message)
+                    raise typer.Exit(1) from None
+
+                except UWSGISourceFilesMissingError:
+                    console.error("unable to build plugin. uWSGI source files missing")
+                    raise typer.Exit(1) from None
 
 
 plugins = {
@@ -101,8 +100,8 @@ plugins = {
 }
 
 
-def build_plugin(conf, name):
-
+def build_plugin(conf, name, scie_home):
+    """
     include_dir = Path(sysconfig.get_path("include"))
     if name in plugins:
         platform = None
@@ -114,8 +113,9 @@ def build_plugin(conf, name):
         # print(f"{include_dir / plugins[name]['header-filename']}")
         # if not (include_dir / plugins[name]["header-filename"]).exists():
         #    raise PluginHeaderFileMissingError(plugins[name]["error-message-hint-" + platform])
+    """
 
-    scie_home = conf.data_dir / Path("scie-pikesquares")
+    # scie_home = conf.data_dir / Path("scie-pikesquares")
     uwsgi_src_home = scie_home / Path("uwsgi")
     if not uwsgi_src_home.exists():
         raise UWSGISourceFilesMissingError()
@@ -137,17 +137,6 @@ def build_plugin(conf, name):
     try:
         result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
     except ProcessExecutionError as exc:
-        """
-        Stdout:       | using profile: buildconf/default.ini
-                    | detected include path: ['/usr/lib/gcc/x86_64-linux-gnu/14/include', '/usr/local/include', '/usr/include/x86_64-linux-gnu', '/usr/include']
-                    | *** uWSGI building and linking plugin plugins/emperor_zeromq ***
-                    | [cc -pthread] ./emperor_zeromq_plugin.so
-                    | *** unable to build emperor_zeromq plugin ***
-        Stderr:       | plugins/emperor_zeromq/emperor_zeromq.c:56:10: fatal error: zmq.h: No such file or directory
-                    |    56 | #include <zmq.h>
-                    |       |          ^~~~~~~
-                    | compilation terminated.
-        """
         for line in exc.stdout.split("\n"):
             print(line)
 
@@ -156,13 +145,7 @@ def build_plugin(conf, name):
             for line in exc.stderr.split("\n"):
                 print(line)
 
-        # if "#*** python plugin built and available in ./python_plugin.so ***" not in result.stdout:
-        #    logger.error(f"unable to build the uWSIG python plugin for Python {py_version}")
-        #    raise typer.Exit()
-
         return typer.Exit(code=1)
-
-    # logger.debug(f"done building {name} plugin - {result.returncode=}")
 
     (uwsgi_src_home / f"{name}_plugin.so").rename(conf.plugins_dir / f"{name}_plugin.so")
     if (conf.plugins_dir / f"{name}_plugin.so").exists():
@@ -171,82 +154,43 @@ def build_plugin(conf, name):
         console.info(f"Failed to build the uWSGI {name} plugin.")
 
 
-def build_uwsgi(conf):
-    repo_url = "https://github.com/EloquentBits/scie-pikesquares.git"
-    # scie_home = pl_local.path(conf.data_dir / Path("scie-pikesquares"))
-    with tempfile.TemporaryDirectory() as scie_home:
-        # pl_local.path(scie_home).chown("pikesquares", "pikesquares", recursive=True)
-        # if not (scie_home / ".git").exists():
-        # repo = clone(repo_url, scie_home, recurse_submodules=True)
-        # logger.info(repo)
-        # git clone https://github.com/EloquentBits/scie-pikesquares /var/lib/pikesquares/scie-pikesquares --recurse-submodules --depth 1
+def build_uwsgi(conf, scie_home) -> typer.Exit | None:
+    if not Path(scie_home).exists():
+        raise SCIERepoDoesNotExistError()
 
-        cmd_env = {}
-        cmd_args = ["clone", repo_url, str(scie_home), "--recurse-submodules", "--depth", "1"]
-        if cmd_env:
-            pl_local.env.update(cmd_env)
-            logger.debug(f"{cmd_env=}")
-        git_cmd = pl_local["git"]
-        # with pl_local.as_user("pikesquares"):
-        try:
-            result = git_cmd.run(cmd_args, **{"env": cmd_env})
-        except ProcessExecutionError as exc:
-            for line in exc.stdout.split("\n"):
+    uwsgi_src_home = scie_home / Path("uwsgi")
+    if not pl_local.path(scie_home / Path("uwsgi")).exists():
+        raise UWSGISourceFilesMissingError()
+
+    cmd_env = {}
+    cmd_args = ["run", "uwsgiconfig.py", "--build", "nolang"]
+    if cmd_env:
+        pl_local.env.update(cmd_env)
+        logger.debug(f"{cmd_env=}")
+
+    console.info("Starting building the uWSGI binary")
+    # with pl_local.cwd(str(uwsgi_src_home)):
+    uv = pl_local[str(conf.UV_BIN)]
+    # with pl_local.as_user("pikesquares"):
+    try:
+        result = uv.run(cmd_args, cwd=str(uwsgi_src_home), **{"env": cmd_env})
+    except ProcessExecutionError as exc:
+        for line in exc.stdout.split("\n"):
+            print(line)
+
+        if exc.stderr:
+            for line in exc.stderr.split("\n"):
                 print(line)
+        return typer.Exit(code=1)
 
-            if exc.stderr:
-                for line in exc.stderr.split("\n"):
-                    print(line)
-            return typer.Exit(code=1)
+    # (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
+    # os.remove(str(conf.data_dir / "bin/uwsgi"))
+    pl_local.path(str(uwsgi_src_home / "uwsgi")).move(str(conf.data_dir / "bin"))
 
-        # else:
-        #    logger.info("scie-pikesquares directory exists. not cloning.")
-
-        # if not scie_home.exists():
-        #    raise SCIERepoDoesNotExistError()
-
-        uwsgi_src_home = scie_home / Path("uwsgi")
-        # if not uwsgi_src_home.exists():
-        # if not pl_local.path(scie_home / Path("uwsgi")).exists():
-        #    raise UWSGISourceFilesMissingError()
-        # from plumbum.path.local import LocalPath
-
-        # uv run uwsgiconfig.py --build nolang
-        uwsgi_includes = [
-            # "/usr/lib/gcc/x86_64-linux-gnu/15/include",
-            # "/usr/local/include",
-            # "/usr/include/x86_64-linux-gnu",
-            # "/usr/include",
-        ]
-        cmd_env = {"UWSGI_INCLUDES": ",".join(uwsgi_includes)}
-        cmd_args = ["run", "uwsgiconfig.py", "--build", "nolang"]
-        if cmd_env:
-            pl_local.env.update(cmd_env)
-            logger.debug(f"{cmd_env=}")
-
-        console.info("Starting building the uWSGI binary")
-        # with pl_local.cwd(str(uwsgi_src_home)):
-        uv = pl_local[str(conf.UV_BIN)]
-        # with pl_local.as_user("pikesquares"):
-        try:
-            result = uv.run(cmd_args, cwd=str(uwsgi_src_home), **{"env": cmd_env})
-        except ProcessExecutionError as exc:
-            for line in exc.stdout.split("\n"):
-                print(line)
-
-            if exc.stderr:
-                for line in exc.stderr.split("\n"):
-                    print(line)
-            return typer.Exit(code=1)
-
-        (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
-        os.remove(str(conf.data_dir / "bin/uwsgi"))
-        pl_local.path(str(uwsgi_src_home / "uwsgi")).move(str(conf.data_dir / "bin"))
-
-        if pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists():
-            console.info("Completed building the uWSGI binary.")
-        else:
-            console.info("Failed to build the uWSGI binary.")
+    if pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists():
+        console.info("Completed building the uWSGI binary.")
+    else:
+        console.info("Failed to build the uWSGI binary.")
 
 
 app = typer.Typer()
@@ -263,13 +207,15 @@ def uwsgi(
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
 
-    try:
-        build_uwsgi(conf)
-    except SCIERepoDoesNotExistError:
-        logger.error("unable to clone scie-pikesquares repo")
+    with tempfile.TemporaryDirectory() as scie_home:
+        clone_repo(scie_home)
+        try:
+            build_uwsgi(conf, scie_home)
+        except SCIERepoDoesNotExistError:
+            logger.error("unable to clone scie-pikesquares repo")
 
-    except UWSGISourceFilesMissingError:
-        logger.error("unable to build plugin. uWSGI source files missing")
+        except UWSGISourceFilesMissingError:
+            logger.error("unable to build plugin. uWSGI source files missing")
 
 
 def get_uv_python_installations(uv_bin, cwd):
@@ -322,6 +268,18 @@ def python_plugin(
         str | None, typer.Option(help="Python interpreter version to build the uWSGI plugin with")
     ] = None,
 ):
+    """
+    # do this only before building the Python plugin
+    if not (include_dir / "Python.h").exists():
+        inc = sysconfig.get_path("include")
+        console.warning("Python development header files are not installed.")
+        console.warning(f"Checked path: {os.path.join(inc, 'Python.h') if inc else 'N/A'}")
+        if platform == "linux":
+            console.info("install python3-dev package. i.e. sudo apt install python3-dev")
+        elif platform == "macos":
+            console.info("install python3-dev package. i.e. brew install python3-dev")
+        raise typer.Exit(1)
+    """
 
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
@@ -377,12 +335,15 @@ def sqlite3_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
-    try:
-        build_plugin(conf, "sqlite3")
-    except PluginHeaderFileMissingError as exc:
-        console.warning("sqlite3_plugin development header files are not installed.")
-        console.info(exc.message)
-        raise typer.Exit(1) from None
+
+    with tempfile.TemporaryDirectory() as scie_home:
+        clone_repo(scie_home)
+        try:
+            build_plugin(conf, "sqlite3", scie_home)
+        except PluginHeaderFileMissingError as exc:
+            console.warning("sqlite3_plugin development header files are not installed.")
+            console.info(exc.message)
+            raise typer.Exit(1) from None
 
 
 @app.command(short_help="Build uWSGI emperor-zeromq plugin.\nAliases:[p] emperor-zeromq-plugin")
@@ -394,8 +355,10 @@ def emperor_zeromq_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
+    with tempfile.TemporaryDirectory() as scie_home:
+        clone_repo(scie_home)
     try:
-        build_plugin(conf, "emperor_zeromq")
+        build_plugin(conf, "emperor_zeromq", scie_home)
     except PluginHeaderFileMissingError as exc:
         console.warning("emperor_zeromq_plugin development header files are not installed.")
         console.info(exc.message)
@@ -411,8 +374,10 @@ def tuntap_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
+    with tempfile.TemporaryDirectory() as scie_home:
+        clone_repo(scie_home)
     try:
-        build_plugin(conf, "tuntap")
+        build_plugin(conf, "tuntap", scie_home)
     except PluginHeaderFileMissingError as exc:
         console.warning("plugin development header files are not installed.")
         console.info(exc.message)
@@ -428,8 +393,10 @@ def pty_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
+    with tempfile.TemporaryDirectory() as scie_home:
+        clone_repo(scie_home)
     try:
-        build_plugin(conf, "pty")
+        build_plugin(conf, "pty", scie_home)
     except PluginHeaderFileMissingError as exc:
         console.warning("plugin development header files are not installed.")
         console.info(exc.message)
@@ -445,8 +412,10 @@ def forkpty_router_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
+    with tempfile.TemporaryDirectory() as scie_home:
+        clone_repo(scie_home)
     try:
-        build_plugin(conf, "forkpty_router")
+        build_plugin(conf, "forkpty_router", scie_home)
     except PluginHeaderFileMissingError as exc:
         console.warning("plugin development header files are not installed.")
         console.info(exc.message)
@@ -462,8 +431,10 @@ def logfile_plugin(
 ):
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
+    with tempfile.TemporaryDirectory() as scie_home:
+        clone_repo(scie_home)
     try:
-        build_plugin(conf, "logfile")
+        build_plugin(conf, "logfile", scie_home)
     except PluginHeaderFileMissingError as exc:
         console.warning("plugin development header files are not installed.")
         console.info(exc.message)
