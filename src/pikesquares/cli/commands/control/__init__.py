@@ -184,141 +184,6 @@ def up(
     console.success("🚀 PikeSquares Server is up and running. 🚀")
 
 
-@app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
-def down(
-    ctx: typer.Context,
-):
-    """Stop the PikeSquares Server"""
-
-    context = ctx.ensure_object(dict)
-    pc = services.get(context, ProcessCompose)
-    try:
-        retcode, stdout, stderr = pc.down()
-        if retcode != 0:
-            console.log(retcode, stdout, stderr)
-            raise typer.Exit(code=1) from None
-        elif retcode == 0:
-            console.success("🚀 PikeSquares Server has been shut down.")
-    except ProcessExecutionError as process_exec_error:
-        console.error(process_exec_error)
-        console.error("PikeSquares Server was unable to shut down.")
-        raise typer.Exit(code=1) from None
-    except PCAPIUnavailableError:
-        console.info("🚀 PikeSquares Server is not running at the moment.")
-        raise typer.Exit(code=0) from None
-
-    # try:
-    #    pc.ping()
-    #    console.info("Shutting down PikeSquares Server.")
-    #    pc.down()
-    # except process_compose.PCAPIUnavailableError:
-    #    pass
-    # except process_compose.PCDeviceUnavailableError:
-    #    pass  # device.up()
-
-
-@app.command(rich_help_panel="Control", short_help="Reset device")
-def reset(
-    ctx: typer.Context,
-    shutdown: str | None = typer.Option("", "--shutdown", help="Shutdown PikeSquares server after reset."),
-):
-    """Reset PikeSquares Installation"""
-
-    is_root: bool = os.getuid() == 0
-    if not is_root:
-        console.info("Please attempt to reset the installation as root user.")
-        raise typer.Exit()
-
-    if not questionary.confirm("Reset PikeSquares Installation?").ask():
-        raise typer.Exit()
-
-    context = ctx.ensure_object(dict)
-    device = context.get("device")
-    if not device:
-        raise typer.Exit()
-
-    if all(
-        [
-            device.get_service_status() == "running",
-            shutdown or questionary.confirm("Shutdown PikeSquares Server").ask(),
-        ]
-    ):
-        # device.stop()
-        # down(ctx)
-        pass
-
-    if questionary.confirm("Drop db tables?").ask():
-        # device.drop_db_tables()
-        console.info("dropped db")
-
-    if questionary.confirm("Delete all configs and logs?").ask():
-        # device.delete_configs()
-        console.info("deleted configs and logs")
-
-
-@app.command(rich_help_panel="Control", short_help="Nuke installation")
-def uninstall(ctx: typer.Context, dry_run: bool = typer.Option(False, help="Uninstall dry run")):
-    """Delete the entire PikeSquares installation"""
-
-    context = ctx.ensure_object(dict)
-    # device= services.HandlerFactory.make_handler("Device")(services.Device(service_id="device"))
-    # device.uninstall(dry_run=dry_run)
-    console.info("PikeSquares has been uninstalled.")
-
-
-# @app.command(rich_help_panel="Control", short_help="Write to master fifo")
-# def write_to_master_fifo(
-#    ctx: typer.Context,
-#    service_id: Annotated[str, typer.Option("--service-id", "-s", help="Service ID to send the command to")],
-#    command: Annotated[str, typer.Option("--command", "-c", help="Command to send master fifo.")],
-# ):
-#    obj = ctx.ensure_object(dict)
-#    conf = obj.get("conf")
-
-#    service_id = service_id or "device"
-#    fifo_file = Path(conf.RUN_DIR) / f"{service_id}-master-fifo"
-#    write_master_fifo(fifo_file, command)
-
-
-# @app.command(rich_help_panel="Control", short_help="Show logs of device")
-# def logs(ctx: typer.Context, entity: str = typer.Argument("device")):
-#    obj = ctx.ensure_object(dict)
-#    conf = obj.get("conf")
-
-#    status = get_service_status(f"{entity}-emperor", conf)
-
-#    log_file = Path(conf.LOG_DIR) / f"{entity}.log"
-#    if log_file.exists() and log_file.is_file():
-#        console.pager(
-#            log_file.read_text(),
-#            status_bar_format=f"{log_file.resolve()} (status: {status})"
-#        )
-
-
-# @app.command(rich_help_panel="Control", short_help="Show status of device (running or stopped)")
-# def status(ctx: typer.Context):
-#    obj = ctx.ensure_object(dict)
-#    conf = obj.get("conf")
-
-#    status = get_service_status(f"device", conf)
-#    if status == "running":
-#        log_func = console.success
-#    else:
-#        log_func = console.error
-#    log_func(f"Device is [b]{status}[/b]")
-
-
-@app.command(rich_help_panel="Control", short_help="Attach to the PikeSquares Server")
-def attach(
-    ctx: typer.Context,
-):
-    """Attach to PikeSquares Server"""
-    context = ctx.ensure_object(dict)
-    pc = services.get(context, ProcessCompose)
-    logger.info(pc)
-    pc.attach()
-
-
 @app.command(rich_help_panel="Control", short_help="Launch a preconfigured app")
 def launch(
     ctx: typer.Context,
@@ -466,6 +331,141 @@ def launch(
             raise typer.Exit(code=0) from None
 
         uow.commit()
+
+
+@app.command(rich_help_panel="Control", short_help="Stop the PikeSquares Server (if running)")
+def down(
+    ctx: typer.Context,
+):
+    """Stop the PikeSquares Server"""
+
+    context = ctx.ensure_object(dict)
+    pc = services.get(context, ProcessCompose)
+    try:
+        retcode, stdout, stderr = pc.down()
+        if retcode != 0:
+            console.log(retcode, stdout, stderr)
+            raise typer.Exit(code=1) from None
+        elif retcode == 0:
+            console.success("🚀 PikeSquares Server has been shut down.")
+    except ProcessExecutionError as process_exec_error:
+        console.error(process_exec_error)
+        console.error("PikeSquares Server was unable to shut down.")
+        raise typer.Exit(code=1) from None
+    except PCAPIUnavailableError:
+        console.info("🚀 PikeSquares Server is not running at the moment.")
+        raise typer.Exit(code=0) from None
+
+    # try:
+    #    pc.ping()
+    #    console.info("Shutting down PikeSquares Server.")
+    #    pc.down()
+    # except process_compose.PCAPIUnavailableError:
+    #    pass
+    # except process_compose.PCDeviceUnavailableError:
+    #    pass  # device.up()
+
+
+@app.command(rich_help_panel="Control", short_help="Reset device")
+def reset(
+    ctx: typer.Context,
+    shutdown: str | None = typer.Option("", "--shutdown", help="Shutdown PikeSquares server after reset."),
+):
+    """Reset PikeSquares Installation"""
+
+    is_root: bool = os.getuid() == 0
+    if not is_root:
+        console.info("Please attempt to reset the installation as root user.")
+        raise typer.Exit()
+
+    if not questionary.confirm("Reset PikeSquares Installation?").ask():
+        raise typer.Exit()
+
+    context = ctx.ensure_object(dict)
+    device = context.get("device")
+    if not device:
+        raise typer.Exit()
+
+    if all(
+        [
+            device.get_service_status() == "running",
+            shutdown or questionary.confirm("Shutdown PikeSquares Server").ask(),
+        ]
+    ):
+        # device.stop()
+        # down(ctx)
+        pass
+
+    if questionary.confirm("Drop db tables?").ask():
+        # device.drop_db_tables()
+        console.info("dropped db")
+
+    if questionary.confirm("Delete all configs and logs?").ask():
+        # device.delete_configs()
+        console.info("deleted configs and logs")
+
+
+@app.command(rich_help_panel="Control", short_help="Nuke installation")
+def uninstall(ctx: typer.Context, dry_run: bool = typer.Option(False, help="Uninstall dry run")):
+    """Delete the entire PikeSquares installation"""
+
+    context = ctx.ensure_object(dict)
+    # device= services.HandlerFactory.make_handler("Device")(services.Device(service_id="device"))
+    # device.uninstall(dry_run=dry_run)
+    console.info("PikeSquares has been uninstalled.")
+
+
+# @app.command(rich_help_panel="Control", short_help="Write to master fifo")
+# def write_to_master_fifo(
+#    ctx: typer.Context,
+#    service_id: Annotated[str, typer.Option("--service-id", "-s", help="Service ID to send the command to")],
+#    command: Annotated[str, typer.Option("--command", "-c", help="Command to send master fifo.")],
+# ):
+#    obj = ctx.ensure_object(dict)
+#    conf = obj.get("conf")
+
+#    service_id = service_id or "device"
+#    fifo_file = Path(conf.RUN_DIR) / f"{service_id}-master-fifo"
+#    write_master_fifo(fifo_file, command)
+
+
+# @app.command(rich_help_panel="Control", short_help="Show logs of device")
+# def logs(ctx: typer.Context, entity: str = typer.Argument("device")):
+#    obj = ctx.ensure_object(dict)
+#    conf = obj.get("conf")
+
+#    status = get_service_status(f"{entity}-emperor", conf)
+
+#    log_file = Path(conf.LOG_DIR) / f"{entity}.log"
+#    if log_file.exists() and log_file.is_file():
+#        console.pager(
+#            log_file.read_text(),
+#            status_bar_format=f"{log_file.resolve()} (status: {status})"
+#        )
+
+
+# @app.command(rich_help_panel="Control", short_help="Show status of device (running or stopped)")
+# def status(ctx: typer.Context):
+#    obj = ctx.ensure_object(dict)
+#    conf = obj.get("conf")
+
+#    status = get_service_status(f"device", conf)
+#    if status == "running":
+#        log_func = console.success
+#    else:
+#        log_func = console.error
+#    log_func(f"Device is [b]{status}[/b]")
+
+
+@app.command(rich_help_panel="Control", short_help="Attach to the PikeSquares Server")
+def attach(
+    ctx: typer.Context,
+):
+    """Attach to PikeSquares Server"""
+    context = ctx.ensure_object(dict)
+    pc = services.get(context, ProcessCompose)
+    logger.info(pc)
+    pc.attach()
 
 
 @app.command(rich_help_panel="Control", short_help="Info on the PikeSquares Server")

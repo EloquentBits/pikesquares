@@ -221,16 +221,20 @@ class AppConfig(BaseSettings):
 
     # DEBUG: bool = False
     data_dir: pydantic.DirectoryPath = pydantic.Field(
-        default=Path("/var/lib/pikesquares"), alias="PIKESQUARES_DATA_DIR"
+        default=Path.home() / ".pikesquares", alias="PIKESQUARES_DATA_DIR"
     )
 
-    log_dir: pydantic.DirectoryPath = pydantic.Field(default=Path("/var/log/pikesquares"), alias="PIKESQUARES_LOG_DIR")
+    log_dir: pydantic.DirectoryPath = pydantic.Field(
+        default=Path.home() / ".pikesquares/log", alias="PIKESQUARES_LOG_DIR"
+    )
 
     config_dir: pydantic.DirectoryPath = pydantic.Field(
-        default=Path("/etc/pikesquares"), alias="PIKESQUARES_CONFIG_DIR"
+        default=Path.home() / ".pikesquares/etc", alias="PIKESQUARES_CONFIG_DIR"
     )
 
-    run_dir: pydantic.DirectoryPath = pydantic.Field(default=Path("/var/run/pikesquares"), alias="PIKESQUARES_RUN_DIR")
+    run_dir: pydantic.DirectoryPath = pydantic.Field(
+        default=Path.home() / ".pikesquares/run", alias="PIKESQUARES_RUN_DIR"
+    )
     # UWSGI_BIN: Annotated[
     #    pydantic.FilePath,
     #    pydantic.Field(default=Path("/var/lib/pikesquares/bin/uwsgi"), alias="PIKESQUARES_UWSGI_BIN"),

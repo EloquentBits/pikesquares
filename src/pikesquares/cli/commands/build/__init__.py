@@ -147,7 +147,9 @@ def build_plugin(conf, name, scie_home):
 
         return typer.Exit(code=1)
 
-    (uwsgi_src_home / f"{name}_plugin.so").rename(conf.plugins_dir / f"{name}_plugin.so")
+    logger.info(f"{conf.plugins_dir=}")
+    # (uwsgi_src_home / f"{name}_plugin.so").rename(conf.plugins_dir / f"{name}_plugin.so")
+    pl_local.path(uwsgi_src_home).joinpath(f"{name}_plugin.so").move(conf.plugins_dir / f"{name}_plugin.so")
     if (conf.plugins_dir / f"{name}_plugin.so").exists():
         console.info(f"Completed building the uWSGI {name} plugin.")
     else:

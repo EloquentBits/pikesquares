@@ -12,6 +12,7 @@ import sentry_sdk
 import structlog_sentry_logger
 import typer
 from dotenv import load_dotenv
+from plumbum import CommandNotFound
 from plumbum import local as pl_local
 
 from pikesquares import __app_name__, __version__, services
@@ -242,12 +243,45 @@ def main(
     context = services.init_app(ctx.ensure_object(dict))
     context["cli-style"] = console.custom_style_dope
     context["run_foreground"] = run_foreground
-    override_settings = {}
 
-    # check if locally built uwsgi binary is available
-    # uwsgi_bin_local = Path("/var/lib/pikesquares/scie-pikesquares/uwsgi/uwsgi")
-    # if uwsgi_bin_local.exists():
-    #    override_settings = {"UWSGI_BIN": uwsgi_bin_local}
+    try:
+        uv_cmd = pl_local.which("uv")
+    except CommandNotFound:
+        console.error("unable to locate uv command.")
+        raise typer.Abort() from None
+
+    override_settings = {"UV_BIN": uv_cmd}
+
+    """
+    home_dir = pl_local.env.home
+    if not is_root:
+        if not all([home_dir, home_dir.exists()]):
+            console.error("unable to locate user home directory")
+            raise typer.Abort() from None
+
+        if not data_dir:
+            data_dir = home_dir.joinpath(".pikesquares")
+            if not all([data_dir, data_dir.exists()]):
+                data_dir.mkdir(parents=True, exist_ok=True)
+            override_settings["data_dir"] = data_dir
+        if not config_dir:
+            config_dir = home_dir.joinpath(".pikesquares", "etc")
+            if not all([config_dir, config_dir.exists()]):
+                config_dir.mkdir(parents=True, exist_ok=True)
+            override_settings["config_dir"] = config_dir
+        if not log_dir:
+            log_dir = home_dir.joinpath(".pikesquares", "log")
+            if not all([log_dir, log_dir.exists()]):
+                log_dir.mkdir(parents=True, exist_ok=True)
+            override_settings["config_dir"] = log_dir
+        if not run_dir:
+            run_dir = home_dir.joinpath(".pikesquares", "run")
+            if not all([run_dir, run_dir.exists()]):
+                run_dir.mkdir(parents=True, exist_ok=True)
+            override_settings["run_dir"] = run_dir
+    print(override_settings)
+    """
+
     try:
         register_app_conf(context, override_settings)
     except AppConfigError as app_conf_error:
@@ -258,6 +292,8 @@ def main(
     init_db(context)
 
     conf = services.get(context, AppConfig)
+
+    logger.info(f"{conf.data_dir=} {conf.config_dir=} {conf.run_dir=} {conf.log_dir=}")
 
     if ctx.invoked_subcommand == "up":
         if not pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists() or list(
