@@ -9,13 +9,9 @@ from pikesquares.service_layer.uow import UnitOfWork
 logger = structlog.getLogger()
 
 
-def provision_device(uow: UnitOfWork, create_kwargs: dict) -> Device:
+def provision_device(machine_id: str, uow: UnitOfWork, create_kwargs: dict) -> Device:
     try:
-        machine_id = Device.read_machine_id()
-        if not machine_id:
-            raise AppConfigError("unable to read the machine-id")
-
-        logger.info(f"provisioning new device with machine-id  {machine_id}")
+        logger.info(f"provisioning new device with machine-id {machine_id}")
         device = Device(
             service_id=f"device-{cuid.slug()}",
             uwsgi_plugins="emperor_zeromq",

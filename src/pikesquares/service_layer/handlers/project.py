@@ -237,19 +237,13 @@ def project_delete(
     return True
 
 
-def project_down(project: "Project", uow: "UnitOfWork") -> bool:
+def project_down(device: "Device", project: "Project") -> bool:
     try:
         try:
             _ = project.read_stats()
         except tenacity.RetryError:
             logger.info(f"Project {project.name} is not running")
             return False
-
-        machine_id = project.__class__.read_machine_id()
-        device = uow.devices.get_by_machine_id(machine_id)
-        if not device:
-            logger.error(f"unable to locate device by machine id {machine_id}")
-            raise Exception(f"unable to locate device by machine id {machine_id}")
 
         device_zmq_monitor = device.zmq_monitor
         device_zmq_monitor_address = device_zmq_monitor.zmq_address

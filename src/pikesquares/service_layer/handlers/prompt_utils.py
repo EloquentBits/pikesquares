@@ -234,10 +234,13 @@ def gather_repo_details_and_clone(
 
 
 def prompt_for_project(
-    launch_service: str, uow: UnitOfWork, plugin_manager: pluggy.PluginManager, custom_style: questionary.Style
+    machine_id: str,
+    launch_service: str,
+    uow: UnitOfWork,
+    plugin_manager: pluggy.PluginManager,
+    custom_style: questionary.Style,
 ) -> Project | None:
 
-    machine_id = ServiceBase.read_machine_id()
     device = uow.devices.get_by_machine_id(machine_id)
     if not device:
         raise AppConfigError("no device found in context")

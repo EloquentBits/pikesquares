@@ -132,10 +132,10 @@ def init_device(context):
     conf = services.get(context, AppConfig)
 
     try:
-        machine_id = Device.read_machine_id()
-        device = uow.devices.get_by_machine_id(machine_id)
+        device = uow.devices.get_by_machine_id(conf.machine_id)
         if not device:
             device = provision_device(
+                conf.machine_id,
                 uow,
                 create_kwargs={
                     "data_dir": str(conf.data_dir),

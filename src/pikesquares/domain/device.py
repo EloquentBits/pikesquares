@@ -1,5 +1,4 @@
 import os
-import re
 import shutil
 import sys
 import uuid
@@ -46,24 +45,6 @@ class Device(ServiceBase, DevicePKIMixin, table=True):
 
     # async def delete_config_from_filesystem(self) -> None:
     #   await AsyncPath(self.service_config).unlink()
-
-    @classmethod
-    def read_machine_id(cls) -> str:
-        # macos-arm64
-        # linux-x86_64
-
-        os_name = "macos" if os.uname().sysname.lower() == "darwin" else "linux"
-        platform = f"{os_name}-{os.uname().machine}"
-        if platform.startswith("macos"):
-            pass
-        elif platform.startswith("linux"):
-            MACHINE_ID_RE = re.compile(r"\A[0-9a-fA-F]{32}\Z")
-            machine_id = Path("/var/lib/dbus/machine-id").read_text(encoding="utf-8").strip()
-            if not MACHINE_ID_RE.match(machine_id):
-                raise ValueError(f"unexpected machine-id format: {machine_id!r}")
-            return machine_id
-        else:
-            raise ValueError(f"unable to read machine uuid for {platform}")
 
     @property
     def uwsgi_config_section_class(self) -> DeviceSection:

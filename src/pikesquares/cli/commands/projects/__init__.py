@@ -68,11 +68,10 @@ def create(
     uow = services.get(context, UnitOfWork)
     plugin_manager = services.get(context, pluggy.PluginManager)
 
-    machine_id = ServiceBase.read_machine_id()
-    device = uow.devices.get_by_machine_id(machine_id)
+    device = uow.devices.get_by_machine_id(conf.machine_id)
 
     if not device:
-        console.error(f"cli up: unable to locate device by machine id {machine_id}")
+        console.error(f"cli up: unable to locate device by machine id {conf.machine_id}")
         raise typer.Exit(code=0) from None
 
     # answers = questionary.form(
@@ -211,9 +210,9 @@ def stop(
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
     uow = services.get(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
 
-    machine_id = ServiceBase.read_machine_id()
-    device = uow.devices.get_by_machine_id(machine_id)
+    device = uow.devices.get_by_machine_id(conf.machine_id)
 
     if not len(device.projects):
         console.success("Appears there have been no projects created yet.")
@@ -258,8 +257,7 @@ def list_(ctx: typer.Context, show_id: bool = False):
     conf = services.get(context, AppConfig)
     uow = services.get(context, UnitOfWork)
 
-    machine_id = ServiceBase.read_machine_id()
-    device = uow.devices.get_by_machine_id(machine_id)
+    device = uow.devices.get_by_machine_id(conf.machine_id)
     if not device:
         console.warning("unable to lookup device")
         raise typer.Exit(0)
@@ -281,7 +279,7 @@ def list_(ctx: typer.Context, show_id: bool = False):
         stats = device.read_stats()
         device_stats = DeviceStats(**stats)
     except tenacity.RetryError:
-        console.error(f"Unable to read stats for device [{device.machine_id}]")
+        console.error(f"Unable to read stats for device [{conf.machine_id}]")
         raise typer.Exit(0) from None
 
     if not device_stats:
@@ -341,9 +339,9 @@ def delete(
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
     uow = services.get(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
 
-    machine_id = ServiceBase.read_machine_id()
-    device = uow.devices.get_by_machine_id(machine_id)
+    device = uow.devices.get_by_machine_id(conf.machine_id)
 
     if not len(device.projects):
         console.success("Appears there have been no projects created yet.")
@@ -371,7 +369,7 @@ def delete(
             continue
 
         for project in filter(lambda proj: proj.id == project_id, device.projects):
-            if project_down(project, uow):
+            if project_down(device, project):
                 console.info(f"stopped project {project.name}")
             else:
                 console.warning(f"unable to stop project {project.name}")

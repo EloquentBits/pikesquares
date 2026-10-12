@@ -1,7 +1,9 @@
 import json
 import os
 import pwd
+import re
 import secrets
+import sys
 
 # import warnings
 from pathlib import Path
@@ -340,6 +342,34 @@ class AppConfig(BaseSettings):
         ensure_system_path(path)
         return path
 
+    @pydantic.computed_field
+    @property
+    def platform(self) -> str:
+        os_name = "macos" if os.uname().sysname.lower() == "darwin" else "linux"
+        platform = f"{os_name}-{os.uname().machine}"
+        if platform.startswith("macos"):
+            return "macos"
+        elif platform.startswith("linux"):
+            return "linux"
+
+        raise ValueError(f"{platform} not supported")
+
+    @pydantic.computed_field
+    @property
+    def machine_id(self) -> str:
+        # macos-arm64
+        # linux-x86_64
+        if self.platform == "linux":
+            MACHINE_ID_RE = re.compile(r"\A[0-9a-fA-F]{32}\Z")
+            machine_id = Path("/var/lib/dbus/machine-id").read_text(encoding="utf-8").strip()
+            if not MACHINE_ID_RE.match(machine_id):
+                raise ValueError(f"unexpected machine-id format: {machine_id!r}")
+            return machine_id
+        if self.platform == "macos":
+            return ""
+
+        raise ValueError(f"unable to read machine uuid for {platform}")
+
     # @property
     # def preconfigured_app_plugins(self):
     #     return {
@@ -411,8 +441,6 @@ def register_app_conf(
         except pydantic.ValidationError as exc:
             logger.error(exc)
             # raise AppConfigError("invalid config. giving up.")
-            import sys
-
             sys.exit(1)
 
     register_factory(context, AppConfig, conf_factory)

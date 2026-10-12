@@ -55,8 +55,7 @@ def list_(ctx: typer.Context):
     uow = services.get(context, UnitOfWork)
 
     try:
-        machine_id = AttachedDaemon.read_machine_id()
-        device = uow.devices.get_by_machine_id(machine_id)
+        device = uow.devices.get_by_machine_id(conf.machine_id)
         if not device:
             raise RuntimeError("no device found")
 

@@ -96,17 +96,15 @@ def up(
             pass
     else:
         uow = services.get(context, UnitOfWork)
-        machine_id = Device.read_machine_id()
-        logger.info(f"{machine_id=}")
-        device = uow.devices.get_by_machine_id(machine_id)
+        device = uow.devices.get_by_machine_id(conf.machine_id)
         if not device:
-            console.error(f"cli up: unable to locate device by machine id {machine_id}")
+            console.error(f"cli up: unable to locate device by machine id {conf.machine_id}")
             raise typer.Exit(code=0) from None
 
         cmd_env = {}
         # build the machine_id predicate with char() so the query contains no
         # single quotes (keeps it trivially embeddable in a shell-quoted command)
-        machine_id_chars = ",".join(str(b) for b in machine_id.encode())
+        machine_id_chars = ",".join(str(b) for b in conf.machine_id.encode())
         sql = (
             "SELECT option_key,option_value FROM uwsgi_options "
             f"WHERE machine_id=char({machine_id_chars}) "
@@ -197,10 +195,9 @@ def launch(
     uow = services.get(context, UnitOfWork)
     plugin_manager = services.get(context, pluggy.PluginManager)
 
-    machine_id = Device.read_machine_id()
-    device = uow.devices.get_by_machine_id(machine_id)
+    device = uow.devices.get_by_machine_id(conf.machine_id)
     if not device:
-        console.error(f"cli launch: unable to locate device by machine id {machine_id}")
+        console.error(f"cli launch: unable to locate device by machine id {conf.machine_id}")
         raise typer.Exit(code=0) from None
 
     # try:
@@ -215,7 +212,7 @@ def launch(
     # launch_service_preconfigured: Literal["bugsink", "meshdb"]
     # launch_service_wsgi: Literal["python-wsgi-git"]
     launch_service = prompt_for_launch_service(uow, custom_style)
-    project = prompt_for_project(launch_service, uow, plugin_manager, custom_style)
+    project = prompt_for_project(conf.machine_id, launch_service, uow, plugin_manager, custom_style)
     if not project:
         console.error(f"cli launch: unable to select or provision project")
         raise typer.Exit(code=0) from None
