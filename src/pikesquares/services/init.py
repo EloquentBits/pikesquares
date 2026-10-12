@@ -10,7 +10,7 @@ from pikesquares import services
 from pikesquares.adapters.database import AsyncDatabaseSessionManager, DatabaseSessionManager
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfig
-from pikesquares.domain.base import ServiceBase
+from pikesquares.domain.device import Device
 from pikesquares.domain.process_compose import (
     register_process_compose,
 )
@@ -132,7 +132,7 @@ def init_device(context):
     conf = services.get(context, AppConfig)
 
     try:
-        machine_id = ServiceBase.read_machine_id()
+        machine_id = Device.read_machine_id()
         device = uow.devices.get_by_machine_id(machine_id)
         if not device:
             device = provision_device(

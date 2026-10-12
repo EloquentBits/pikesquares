@@ -2,7 +2,6 @@ import asyncio
 import enum
 import errno
 import json
-import re
 import socket
 import traceback
 import uuid
@@ -28,9 +27,6 @@ from pikesquares.exceptions import (
 )
 
 logger = structlog.getLogger()
-
-
-MACHINE_ID_RE = re.compile(r"\A[0-9a-fA-F]{32}\Z")
 
 
 def enum_values(enum_class: type[enum.Enum]) -> list:
@@ -160,13 +156,6 @@ class ServiceBase(TimeStampedBase):
     def get_uwsgi_config(self) -> str:
         section = self.uwsgi_config_section_class(self)
         return section.as_configuration()
-
-    @classmethod
-    def read_machine_id(cls) -> str:
-        machine_id = Path("/var/lib/dbus/machine-id").read_text(encoding="utf-8").strip()
-        if not MACHINE_ID_RE.match(machine_id):
-            raise ValueError(f"unexpected machine-id format: {machine_id!r}")
-        return machine_id
 
     @tenacity.retry(
         retry=tenacity.retry_if_exception_type(

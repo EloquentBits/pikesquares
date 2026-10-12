@@ -13,7 +13,7 @@ from plumbum import local as pl_local
 from pikesquares import services
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfig
-from pikesquares.domain.base import ServiceBase
+from pikesquares.domain.device import Device
 from pikesquares.domain.process_compose import (
     PCAPIUnavailableError,
     ProcessCompose,
@@ -96,7 +96,7 @@ def up(
             pass
     else:
         uow = services.get(context, UnitOfWork)
-        machine_id = ServiceBase.read_machine_id()
+        machine_id = Device.read_machine_id()
         logger.info(f"{machine_id=}")
         device = uow.devices.get_by_machine_id(machine_id)
         if not device:
@@ -197,7 +197,7 @@ def launch(
     uow = services.get(context, UnitOfWork)
     plugin_manager = services.get(context, pluggy.PluginManager)
 
-    machine_id = ServiceBase.read_machine_id()
+    machine_id = Device.read_machine_id()
     device = uow.devices.get_by_machine_id(machine_id)
     if not device:
         console.error(f"cli launch: unable to locate device by machine id {machine_id}")
