@@ -211,8 +211,38 @@ def launch(
     #
     # launch_service_preconfigured: Literal["bugsink", "meshdb"]
     # launch_service_wsgi: Literal["python-wsgi-git"]
-    launch_service = prompt_for_launch_service(uow, custom_style)
-    project = prompt_for_project(conf.machine_id, launch_service, uow, plugin_manager, custom_style)
+    #
+
+    launch_service_choices = [
+        questionary.Choice("Python/WSGI (new app)", value="python-wsgi-new"),
+        questionary.Choice("Python/WSGI (from git repo)", value="python-wsgi-git"),
+        questionary.Separator(),
+        # questionary.Choice("Django (empty)", value="python-wsgi-django"),
+        # questionary.Choice("Flask (empty)", value="python-wsgi-flask"),
+        # questionary.Separator(),
+        questionary.Choice("Bugsink (Django)", value="bugsink"),
+        questionary.Choice("MeshDB (Django)", value="meshdb"),
+        questionary.Separator(),
+        questionary.Choice("PostgreSQL", value="postgres"),
+        questionary.Choice("Redis", value="redis"),
+        questionary.Separator(),
+        questionary.Choice("ruby/Rack", disabled="coming soon"),
+        questionary.Choice("PHP", disabled="coming soon"),
+        questionary.Choice("perl/PSGI", disabled="coming soon"),
+    ]
+
+    try:
+        launch_service = prompt_for_launch_service(launch_service_choices, custom_style)
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None
+
+    try:
+        project = prompt_for_project(conf.machine_id, launch_service, uow, plugin_manager, custom_style)
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None
+
     if not project:
         console.error(f"cli launch: unable to select or provision project")
         raise typer.Exit(code=0) from None

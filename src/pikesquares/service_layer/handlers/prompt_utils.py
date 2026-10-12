@@ -3,7 +3,6 @@ import traceback
 from pathlib import Path
 
 import git
-import giturlparse
 import pluggy
 import questionary
 import structlog
@@ -12,22 +11,13 @@ import typer
 
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfigError
-from pikesquares.domain.base import ServiceBase
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.project import Project
 from pikesquares.service_layer.handlers.project import provision_project
+from pikesquares.service_layer.handlers.prompt_validators import PathValidator, RepoAddressValidator
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
-
-
-class NameValidator(questionary.Validator):
-    def validate(self, document):
-        if len(document.text) == 0:
-            raise questionary.ValidationError(
-                message="Please enter a value",
-                cursor_position=len(document.text),
-            )
 
 
 # def get_repo_name_from_url(repo_url):
@@ -39,65 +29,15 @@ class NameValidator(questionary.Validator):
 #            return matcher.group(1)
 
 
-class RepoAddressValidator(questionary.Validator):
-    def validate(self, document):
-        if len(document.text) == 0:
-            raise questionary.ValidationError(
-                message="Please enter a repo url",
-                cursor_position=len(document.text),
-            )
+def prompt_for_launch_service(launch_service_choices, custom_style) -> str | None:
 
-        if not giturlparse.validate(document.text):
-            raise questionary.ValidationError(
-                message="Please enter a valid repo url",
-                cursor_position=len(document.text),
-            )
+    launch_service = questionary.select(
+        "Select an app or a managed, self-hosted service to launch: ",
+        launch_service_choices,
+        style=custom_style,
+    ).unsafe_ask()
 
-
-class PathValidator(questionary.Validator):
-    def validate(self, document):
-        if len(document.text) == 0:
-            raise questionary.ValidationError(
-                message="Please enter a value",
-                cursor_position=len(document.text),
-            )
-        if not Path(document.text).exists():
-            raise questionary.ValidationError(
-                message="Please enter an existing directory to clone your git repository into",
-                cursor_position=len(document.text),
-            )
-
-
-def prompt_for_launch_service(uow: UnitOfWork, custom_style) -> str | None:
-
-    try:
-        launch_service = questionary.select(
-            "Select an app or a managed, self-hosted service to launch: ",
-            choices=[
-                questionary.Choice("Python/WSGI (new app)", value="python-wsgi-new"),
-                questionary.Choice("Python/WSGI (from git repo)", value="python-wsgi-git"),
-                questionary.Separator(),
-                # questionary.Choice("Django (empty)", value="python-wsgi-django"),
-                # questionary.Choice("Flask (empty)", value="python-wsgi-flask"),
-                # questionary.Separator(),
-                questionary.Choice("Bugsink (Django)", value="bugsink"),
-                questionary.Choice("MeshDB (Django)", value="meshdb"),
-                questionary.Separator(),
-                questionary.Choice("PostgreSQL", value="postgres"),
-                questionary.Choice("Redis", value="redis"),
-                questionary.Separator(),
-                questionary.Choice("ruby/Rack", disabled="coming soon"),
-                questionary.Choice("PHP", disabled="coming soon"),
-                questionary.Choice("perl/PSGI", disabled="coming soon"),
-            ],
-            style=custom_style,
-        ).unsafe_ask()
-
-        return launch_service
-
-    except KeyboardInterrupt:
-        console.info("selection cancelled.")
-        raise typer.Exit(0) from None
+    return launch_service
 
 
 def prompt_base_dir(repo_name: str, custom_style: questionary.Style) -> Path:
@@ -247,49 +187,44 @@ def prompt_for_project(
 
     projects = device.projects
 
-    if launch_service in set({"meshdb", "bugsink"}):
-        return uow.projects.get_by_name(launch_service) or provision_project(
-            launch_service, device, plugin_manager, uow, selected_services=["http-router"]
-        )
-    elif launch_service == "python-wsgi-git":
-        try:
-            launch_into = questionary.select(
-                "Launch into an existing project or create a new project: ",
-                choices=[
-                    questionary.Choice("Existing Project", value="existing-project"),
-                    questionary.Choice("Create Project", value="create-project"),
-                ],
-                style=custom_style,
-            ).unsafe_ask()
-        except KeyboardInterrupt:
-            console.info("selection cancelled.")
-            raise typer.Exit(0) from None
+    if not len(device.projects):
+        console.success("Appears there have been no projects created yet.")
 
-        project = None
+    # if launch_service in set({"meshdb", "bugsink"}):
+    #    return uow.projects.get_by_name(launch_service) or provision_project(
+    #        launch_service, device, plugin_manager, uow, selected_services=["http-router"]
+    #    )
+    # elif launch_service == "python-wsgi-git":
+
+    if len(device.projects) >= 1:
+        launch_into = questionary.select(
+            "Launch into an existing project or create a new project: ",
+            choices=[
+                questionary.Choice("Existing Project", value="existing-project"),
+                questionary.Choice("Create Project", value="create-project"),
+            ],
+            style=custom_style,
+        ).unsafe_ask()
+
         if launch_into == "existing-project":
-            if not len(device.projects):
-                console.success("Appears there have been no projects created.")
-                raise typer.Exit(0) from None
-
+            project = None
             # project = prompt_for_project(uow, custom_style)
             # project = uow.projects.get_by_service_id(project_service_id)
-
             if not len(projects):
                 return
             elif len(projects) == 1:
                 return projects[0]
-            try:
-                selected_project_id = questionary.select(
-                    "Select an existing project: ",
-                    choices=[questionary.Choice(project.name, value=project.id) for project in device.projects],
-                    style=custom_style,
-                ).unsafe_ask()
-            except KeyboardInterrupt as exc:
-                raise exc
+
+            selected_project_id = questionary.select(
+                "Select an existing project: ",
+                choices=[questionary.Choice(project.name, value=project.id) for project in device.projects],
+                style=custom_style,
+            ).unsafe_ask()
 
             if not selected_project_id:
                 console.warning("no project selected")
-                return
+                console.info("selection cancelled.")
+                raise typer.Exit(0) from None
 
             project = uow.projects.get_by_id(selected_project_id)
             if not project:
@@ -297,11 +232,10 @@ def prompt_for_project(
                 return
 
             return project
-
             print(f"launching into project {project}")
 
-        elif launch_into == "create-project":
-            pass
+    # elif launch_into == "create-project":
+    #    pass
 
 
 def prompt_for_attached_daemons(

@@ -16,7 +16,6 @@ from pikesquares import services
 from pikesquares.cli.console import console
 from pikesquares.cli.validators import ServiceNameValidator
 from pikesquares.conf import AppConfig, AppConfigError
-from pikesquares.domain.base import ServiceBase
 from pikesquares.service_layer.handlers.attached_daemon import attached_daemon_up
 
 # from pikesquares.domain.process_compose import ProcessCompose
