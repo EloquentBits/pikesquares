@@ -60,18 +60,17 @@ def get_nat_interfaces() -> list[str]:
 def provision_project(
     name: str,
     device: Device,
-    plugin_manager: pluggy.PluginManager,
     uow: UnitOfWork,
-    selected_services: list[str] | None = None,
+    uwsgi_plugins: list[str] | None = None,
 ) -> Project | None:
 
-    selected_services = selected_services or []
     try:
         project = Project(
             service_id=f"proj-{cuid.slug()}",
             name=name,
             device=device,
-            uwsgi_plugins="emperor_zeromq;tuntap",
+            uwsgi_plugins=";".join(uwsgi_plugins) if uwsgi_plugins else "",
+            # uwsgi_plugins="emperor_zeromq;tuntap",
             data_dir=str(device.data_dir),
             config_dir=str(device.config_dir),
             log_dir=str(device.log_dir),
@@ -79,35 +78,11 @@ def provision_project(
         )
         project = uow.projects.add(project)
         logger.info(f"created project {project}")
-
-        logger.info(f"creating project zmq monitor in project {project.service_id}")
-        project_zmq_monitor = create_zmq_monitor(uow, project=project)
-        logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
-
-        logger.info(f"creating tuntap router for project {project.service_id}")
-        tuntap_router = provision_tuntap_router(uow, project)
-        logger.info(f"created tuntap router @ {project.name}")
-
-        if tuntap_router and "http-router" in selected_services:
-            logger.info(f"creating http router for project {project.service_id}")
-            _ = provision_http_router(uow, project, tuntap_router)
-            logger.info(f"created http router for project {project.service_id}")
-
-        if tuntap_router and "dnsmasq" in selected_services:
-            logger.info(f"creating attached daemon dnsmasq for project {project.service_id}")
-            attached_daemon = provision_attached_daemon("dnsmasq", project, uow, plugin_manager)
-            logger.info(f"created attached daemon {attached_daemon.name} for project {project.service_id}")
-        # if "dir-monitor" in selected_services:
-        #    if not Path(project.apps_dir).exists():
-        #        Path(project.apps_dir).mkdir(parents=True, exist_ok=True)
-        #    uwsgi_config = project.write_uwsgi_config()
-        #    logger.debug(f"wrote config to file: {uwsgi_config}")
+        return project
 
     except Exception as exc:
         logger.info(f"failed provisioning project {name}")
         raise exc
-
-    return project
 
 
 def project_up(project: Project) -> bool | None:

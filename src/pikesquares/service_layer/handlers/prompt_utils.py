@@ -182,13 +182,28 @@ def prompt_for_project(
 ) -> Project | None:
 
     device = uow.devices.get_by_machine_id(machine_id)
+    project = None
     if not device:
         raise AppConfigError("no device found in context")
 
     projects = device.projects
+    project_choices = []
+    project_choices = [questionary.Choice(project.name, value=project.id) for project in projects]
+    if project_choices:
+        (questionary.Separator(),)
+    project_choices.append(questionary.Choice("Create new project", value="new-project"))
 
-    if not len(device.projects):
-        console.success("Appears there have been no projects created yet.")
+    selected_project_id = questionary.select(
+        "Select an existing project or create a new one: ",
+        choices=project_choices,
+        style=custom_style,
+    ).unsafe_ask()
+
+    if selected_project_id != "new-project":
+        project = uow.projects.get_by_id(selected_project_id)
+
+    # if not len(device.projects):
+    #    console.success("Appears there have been no projects created yet.")
 
     # if launch_service in set({"meshdb", "bugsink"}):
     #    return uow.projects.get_by_name(launch_service) or provision_project(
@@ -196,6 +211,7 @@ def prompt_for_project(
     #    )
     # elif launch_service == "python-wsgi-git":
 
+    """
     if len(device.projects) >= 1:
         launch_into = questionary.select(
             "Launch into an existing project or create a new project: ",
@@ -233,9 +249,7 @@ def prompt_for_project(
 
             return project
             print(f"launching into project {project}")
-
-    # elif launch_into == "create-project":
-    #    pass
+    """
 
 
 def prompt_for_attached_daemons(
@@ -284,3 +298,23 @@ def prompt_for_attached_daemons(
 
     except Exception as exc:
         raise exc
+
+
+def prompt_for_service(custom_style):
+    try:
+        return questionary.checkbox(
+            "Provision services: ",
+            choices=[
+                questionary.Choice("HTTP Router", value="http-router", checked=True),
+                questionary.Choice("TunTap Router", value="tuntap-router", checked=True),
+                questionary.Choice("dnsmasq", value="dnsmasq", checked=True),
+                questionary.Choice("Forkpty Router", value="forkpty-router", disabled="coming soon"),
+                questionary.Separator(),
+                questionary.Choice("ZMQ Monitor", value="zmq-monitor", checked=True),
+                questionary.Choice("DIR Monitor", value="dir-monitor", disabled="coming soon"),
+            ],
+            style=custom_style,
+        ).unsafe_ask()
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None

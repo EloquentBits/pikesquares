@@ -10,7 +10,7 @@ from pikesquares import services
 from pikesquares.adapters.database import AsyncDatabaseSessionManager, DatabaseSessionManager
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfig
-from pikesquares.domain.device import Device
+from pikesquares.domain.device import register_device_stats
 from pikesquares.domain.process_compose import (
     register_process_compose,
 )
@@ -155,6 +155,9 @@ def init_device(context):
             for uwsgi_option in device.get_uwsgi_options():
                 uow.uwsgi_options.add(uwsgi_option)
             uow.commit()
+
+        register_device_stats(context)
+
         return device
 
     except Exception as exc:

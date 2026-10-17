@@ -17,6 +17,7 @@ from pikesquares.cli.console import console
 from pikesquares.cli.validators import ServiceNameValidator
 from pikesquares.conf import AppConfig, AppConfigError
 from pikesquares.service_layer.handlers.attached_daemon import attached_daemon_up
+from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor, destroy_instance
 
 # from pikesquares.domain.process_compose import ProcessCompose
 from pikesquares.service_layer.handlers.project import (
@@ -25,7 +26,11 @@ from pikesquares.service_layer.handlers.project import (
     project_up,
     provision_project,
 )
-from pikesquares.service_layer.handlers.routers import http_router_up
+from pikesquares.service_layer.handlers.routers import (
+    http_router_up,
+    provision_http_router,
+    provision_tuntap_router,
+)
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.data import DeviceStats
 
@@ -80,7 +85,10 @@ def create(
 
     project_src = questionary.select(
         "Provision project from: ",
-        choices=["Preconfigured template", "Empty project"],
+        choices=[
+            questionary.Choice("Empty project", value="empty-project"),
+            questionary.Choice("Preconfigured template", disabled="coming soon"),
+        ],
         style=custom_style,
     ).ask()
     if not project_src:
@@ -91,7 +99,7 @@ def create(
     # style="bold italic fg:darkred"
     # )
 
-    if project_src == "Empty project":
+    if project_src == "empty-project":
         name = questionary.text(
             "Choose a name for your project: ",
             default=randomname.get_name().lower(),
@@ -101,50 +109,59 @@ def create(
         if not name:
             raise typer.Exit(0)
 
-        try:
-            selected_services = questionary.checkbox(
-                "Provision services: ",
-                choices=[
-                    questionary.Choice("HTTP Router", value="http-router", checked=False),
-                    questionary.Choice("TunTap Router", value="tuntap-router", checked=True),
-                    questionary.Choice("dnsmasq", value="dnsmasq", checked=True),
-                    questionary.Choice("Forkpty Router", value="forkpty-router", disabled="coming soon"),
-                    questionary.Separator(),
-                    questionary.Choice("ZMQ Monitor", value="zmq-monitor", checked=True),
-                    questionary.Choice("DIR Monitor", value="dir-monitor", disabled="coming soon"),
-                ],
-                style=custom_style,
-            ).unsafe_ask()
-        except KeyboardInterrupt:
-            console.info("selection cancelled.")
-            raise typer.Exit(0) from None
+        # prompt_for_service(custom_style)
 
         # process_compose = services.aget(context, ProcessCompose)
         questionary.print(f"Provisioning project {name}")
         try:
-            project = provision_project(name, device, plugin_manager, uow, selected_services=selected_services)
-            console.success(f":heavy_check_mark:     Provisioned {name}")
+            project = provision_project(name, device, uow, uwsgi_plugins=["emperor_zeromq"])
 
             if not project:
                 console.warning(f"missing project {name}")
                 raise typer.Exit(1) from None
 
-            if questionary.confirm(f"Launch {project.name}?").ask():
-                try:
-                    if not project_up(project, project.tuntap_routers, uow):
-                        console.error(f"Unable to launch project {project.name}")
-                        raise typer.Exit(1)
-                # process_compose.add_tail_log_process(project.name, project.log_file)
-                except Exception as exc:
-                    logger.exception(exc)
-                    console.print(traceback.format_exc())
-                    console.warning(f"Unable to launch project {name}")
-                    raise typer.Exit(1) from None
+            console.success(f":heavy_check_mark:     Provisioned {name}")
 
-                console.success(f":heavy_check_mark:     Launched project {name}")
-            else:
-                console.info(f"Not launching {project.name}")
-                raise typer.Exit(0) from None
+            logger.info(f"creating project zmq monitor in project {project.service_id}")
+            project_zmq_monitor = create_zmq_monitor(uow, project=project)
+            logger.info(f"created project zmq monitor @ {project_zmq_monitor.socket_address}")
+
+            """
+            logger.info(f"creating tuntap router for project {project.service_id}")
+            tuntap_router = provision_tuntap_router(uow, project)
+            logger.info(f"created tuntap router {tuntap_router} @ {project.name}")
+
+            logger.info(f"creating http router for project {project.service_id}")
+            _ = provision_http_router(uow, project, tuntap_router)
+            logger.info(f"created http router for project {project.service_id}")
+
+            logger.info(f"creating attached daemon dnsmasq for project {project.service_id}")
+            attached_daemon = provision_attached_daemon("dnsmasq", project, uow, plugin_manager)
+            logger.info(f"created attached daemon {attached_daemon.name} for project {project.service_id}")
+            # if "dir-monitor" in selected_services:
+            #    if not Path(project.apps_dir).exists():
+            #        Path(project.apps_dir).mkdir(parents=True, exist_ok=True)
+            #    uwsgi_config = project.write_uwsgi_config()
+            #    logger.debug(f"wrote config to file: {uwsgi_config}")
+            """
+
+            # if questionary.confirm(f"Launch {project.name}?").ask():
+            # try:
+            if device.ping_stats() and not project_up(project):
+                console.error(f"Unable to launch project {project.name}")
+                raise typer.Exit(1)
+            # process_compose.add_tail_log_process(project.name, project.log_file)
+            # except Exception as exc:
+            #    logger.exception(exc)
+            #    console.print(traceback.format_exc())
+            #    console.warning(f"Unable to launch project {name}")
+            #    raise typer.Exit(1) from None
+
+            console.success(f":heavy_check_mark:     Launched project {name}")
+
+            # else:
+            #    console.info(f"Not launching {project.name}")
+            #    raise typer.Exit(0) from None
 
             for http_router in project.http_routers or []:
                 try:
@@ -175,7 +192,7 @@ def create(
 
     if 0:
         name = project_name or console.ask(
-            "Please submit a project name or hit the Enter key to proceed with  a random value",
+            "Enter a project name or hit the Enter key to proceed with  a random value",
             default=randomname.get_name(),
             validators=[ServiceNameValidator],
         )

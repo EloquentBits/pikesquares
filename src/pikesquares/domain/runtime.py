@@ -1,10 +1,10 @@
 import re
 import shutil
+import tempfile
 import traceback
 import uuid
 from pathlib import Path
 
-import aiofiles
 import giturlparse
 import pluggy
 import pydantic
@@ -156,19 +156,19 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
                 continue
         return all_files
 
-    async def get_top_level_files(self) -> set[Path]:
+    def get_top_level_files(self) -> set[Path]:
         return self.get_files()
 
-    async def top_level_file_names(self) -> set[str]:
+    def top_level_file_names(self) -> set[str]:
         return {f.name for f in self.get_top_level_files()}
 
-    async def check_cleanup(self, app_tmp_dir: Path) -> None:
+    def check_cleanup(self, app_tmp_dir: Path) -> None:
         try:
             shutil.rmtree(app_tmp_dir)
         except OSError:
             logger.error(f"unable to delete tmp dir @ {str(app_tmp_dir)}")
 
-    async def detect_version(self) -> str:
+    def detect_version(self) -> str:
         try:
             version_file = Path(self.app_repo_dir) / ".python-version"
             _ver = version_file.read_text()
@@ -176,7 +176,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         except FileNotFoundError:
             return "3.12"
 
-    async def read_pyproject_toml(self):
+    def read_pyproject_toml(self):
         with open(Path(self.root_dir) / "pyproject.toml", "r") as f:
             config = toml.load(f)
             deps = config["project"]["dependencies"]
@@ -190,12 +190,12 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             return giturl.name
         raise ValueError(f"invalid git repo url {self.repo_git_url}")
 
-    async def dependencies_validate(self) -> bool | None:
+    def dependencies_validate(self) -> bool | None:
         """
         copy repo into a temporary directory and attempt to run `uv sync`
         """
 
-        async with aiofiles.tempfile.TemporaryDirectory() as tmp_dir:
+        with tempfile.TemporaryDirectory() as tmp_dir:
             app_tmp_dir = Path(tmp_dir)
             logger.info(f"created a tmp dir {app_tmp_dir}")
             # filename = os.path.join(d, "file.ext")
@@ -231,7 +231,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
 
             return True
 
-    async def dependencies_install(self, service_name, plugin_manager: pluggy.PluginManager) -> bool | None:
+    def dependencies_install(self, service_name, plugin_manager: pluggy.PluginManager) -> bool | None:
 
         plugin_manager.hook.before_dependencies_install(
             service_name=service_name,
@@ -262,7 +262,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         return True
 
     """
-    async def init(
+    def init(
         self,
         venv: Path,
         check: bool = True,
@@ -321,7 +321,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         return True
         """
 
-    async def is_django(self, app_repo_dir: Path) -> bool:
+    def is_django(self, app_repo_dir: Path) -> bool:
         py_django_files: set[str] = set(
             {
                 "urls.py",
@@ -348,7 +348,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         # os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ecomproject.settings')
 
     """
-    async def create_venv(
+    def create_venv(
         self,
         venv: Path,
         cmd_env: dict | None = None,
@@ -421,7 +421,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         return False
     """
 
-    async def django_check(
+    def django_check(
         self,
         cmd_env: dict | None = None,
         app_tmp_dir: Path | None = None,
@@ -494,7 +494,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         logger.info(f"django check completed. no errors.: {retcode=} {stdout=} {stderr=}")
         return dj_msgs
 
-    async def django_diffsettings(
+    def django_diffsettings(
         self,
         cmd_env: dict | None = None,
         app_tmp_dir: Path | None = None,

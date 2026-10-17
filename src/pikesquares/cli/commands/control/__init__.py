@@ -290,6 +290,7 @@ def launch(
             if not python_app_codebase:
                 console.error(f"unable to provision the {launch_service} runtime.")
                 raise typer.Exit(code=0) from None
+            uow.commit()
         except Exception as exc:
             logger.exception(exc)
             console.error(f"unable to provision the {launch_service} runtime.")
@@ -302,13 +303,13 @@ def launch(
                 raise typer.Exit(code=0) from None
 
             wsgi_app_up(wsgi_app, uow, console)
+            uow.commit()
 
         except Exception as exc:
             logger.exception(exc)
             uow.rollback()
             console.error(f"unable to provision the {launch_service} app.")
             raise typer.Exit(code=0) from None
-        uow.commit()
 
     elif launch_service in ["postgres", "redis"]:
         attached_daemon_name = launch_service

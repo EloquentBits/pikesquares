@@ -230,11 +230,11 @@ async def ping_device_stats(device_stats: DeviceStats):
         return False
 
 
-async def register_device_stats(
+def register_device_stats(
     context: dict,
 ) -> None:
 
-    async def device_stats_factory():
+    def device_stats_factory():
         device = context.get("device")
         if device:
             return device.read_stats()

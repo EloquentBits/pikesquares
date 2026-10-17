@@ -377,13 +377,14 @@ def tuntap_plugin(
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
     with tempfile.TemporaryDirectory() as scie_home:
+        logger.info(f"tuntap plugin: {scie_home=} {scie_home=}")
         clone_repo(scie_home)
-    try:
-        build_plugin(conf, "tuntap", scie_home)
-    except PluginHeaderFileMissingError as exc:
-        console.warning("plugin development header files are not installed.")
-        console.info(exc.message)
-        raise typer.Exit(1) from None
+        try:
+            build_plugin(conf, "tuntap", scie_home)
+        except PluginHeaderFileMissingError as exc:
+            console.warning("plugin development header files are not installed.")
+            console.info(exc.message)
+            raise typer.Exit(1) from None
 
 
 @app.command(short_help="Build uWSGI pty plugin.\nAliases:[p] pty-plugin")
@@ -416,12 +417,12 @@ def forkpty_router_plugin(
     conf = services.get(context, AppConfig)
     with tempfile.TemporaryDirectory() as scie_home:
         clone_repo(scie_home)
-    try:
-        build_plugin(conf, "forkpty_router", scie_home)
-    except PluginHeaderFileMissingError as exc:
-        console.warning("plugin development header files are not installed.")
-        console.info(exc.message)
-        raise typer.Exit(1) from None
+        try:
+            build_plugin(conf, "forkpty_router", scie_home)
+        except PluginHeaderFileMissingError as exc:
+            console.warning("plugin development header files are not installed.")
+            console.info(exc.message)
+            raise typer.Exit(1) from None
 
 
 @app.command(short_help="Build uWSGI logfile plugin.\nAliases:[p] logfile-plugin")
@@ -435,9 +436,9 @@ def logfile_plugin(
     conf = services.get(context, AppConfig)
     with tempfile.TemporaryDirectory() as scie_home:
         clone_repo(scie_home)
-    try:
-        build_plugin(conf, "logfile", scie_home)
-    except PluginHeaderFileMissingError as exc:
-        console.warning("plugin development header files are not installed.")
-        console.info(exc.message)
-        raise typer.Exit(1) from None
+        try:
+            build_plugin(conf, "logfile", scie_home)
+        except PluginHeaderFileMissingError as exc:
+            console.warning("plugin development header files are not installed.")
+            console.info(exc.message)
+            raise typer.Exit(1) from None
