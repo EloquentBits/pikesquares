@@ -85,11 +85,6 @@ async def init_db_async(context):
 
     services.register_factory(context, UnitOfWork, uow_factory)
 
-    # plugin_manager = await services.aget(context, pluggy.PluginManager)
-    # plugin_manager.register(
-    #    PythonRuntimePlugin(),
-    # )
-
     """
     def attached_daemon_plugin_manager_factory():
         pm = PluginManager("attached-daemon")

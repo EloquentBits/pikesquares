@@ -11,10 +11,13 @@ import typer
 from packaging.version import Version
 from plumbum import ProcessExecutionError
 from plumbum import local as pl_local
+from plumbum.path.utils import move
 
 from pikesquares import services
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfig
+
+# from pikesquares.service_layer.handlers.runtimes import get_uv_python_installations
 
 logger = structlog.getLogger(__name__)
 
@@ -131,9 +134,7 @@ def build_plugin(conf, name, scie_home):
 
     # with pl_local.as_user(run_as_user):
     uv = pl_local[str(conf.UV_BIN)]
-
     console.info(f"Starting building the {name} uWSGI plugin")
-
     try:
         result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
     except ProcessExecutionError as exc:
@@ -150,6 +151,7 @@ def build_plugin(conf, name, scie_home):
     logger.info(f"{conf.plugins_dir=}")
     # (uwsgi_src_home / f"{name}_plugin.so").rename(conf.plugins_dir / f"{name}_plugin.so")
     pl_local.path(uwsgi_src_home).joinpath(f"{name}_plugin.so").move(conf.plugins_dir / f"{name}_plugin.so")
+
     if (conf.plugins_dir / f"{name}_plugin.so").exists():
         console.info(f"Completed building the uWSGI {name} plugin.")
     else:
@@ -187,7 +189,8 @@ def build_uwsgi(conf, scie_home) -> typer.Exit | None:
 
     # (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
     # os.remove(str(conf.data_dir / "bin/uwsgi"))
-    pl_local.path(str(uwsgi_src_home / "uwsgi")).move(str(conf.data_dir / "bin"))
+    # pl_local.path(str(uwsgi_src_home / "uwsgi")).move(str(conf.data_dir / "bin"))
+    move(uwsgi_src_home / "uwsgi", conf.data_dir / "bin")
 
     if pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists():
         console.info("Completed building the uWSGI binary.")
@@ -220,46 +223,6 @@ def uwsgi(
             logger.error("unable to build plugin. uWSGI source files missing")
 
 
-def get_uv_python_installations(uv_bin, cwd):
-    """
-    [{'key': 'cpython-3.14.3-linux-x86_64-gnu',
-      'version': '3.14.3',
-      'version_parts': {'major': 3, 'minor': 14, 'patch': 3},
-      'path': '/home/pk/.local/share/uv/python/cpython-3.14-linux-x86_64-gnu/bin/python3.14',
-      'symlink': None,
-      'url': None,
-      'os': 'linux',
-      'variant': 'default',
-      'implementation': 'cpython',
-      'arch': 'x86_64',
-      'libc': 'gnu'},
-    ]
-    """
-
-    # uv run uwsgiconfig.py --build nolang
-    cmd_env = {}
-    cmd_args = ["python", "list", "--only-installed", "--output-format", "json"]
-    if cmd_env:
-        pl_local.env.update(cmd_env)
-        logger.debug(f"{cmd_env=}")
-
-    # with pl_local.as_user(run_as_user):
-    uv = pl_local[str(uv_bin)]
-
-    try:
-        result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
-        return json.loads(result.stdout)
-    except ProcessExecutionError as exc:
-        for line in exc.stdout.split("\n"):
-            print(line)
-
-        if exc.stderr:
-            for line in exc.stderr.split("\n"):
-                print(line)
-
-        return typer.Exit(code=1)
-
-
 @app.command(short_help="Build uWSGI Python plugin.\nAliases:[p] python-plugin")
 @app.command(
     # "new", hidden=True
@@ -286,11 +249,14 @@ def python_plugin(
     context = ctx.ensure_object(dict)
     conf = services.get(context, AppConfig)
 
-    scie_home = conf.data_dir / Path("scie-pikesquares")
-    uwsgi_src_home = scie_home / Path("uwsgi")
-    cwd = uwsgi_src_home
+    # scie_home = conf.data_dir / Path("scie-pikesquares")
+    # uwsgi_src_home = scie_home / Path("uwsgi")
+    # cwd = uwsgi_src_home
 
-    all_py_installs = get_uv_python_installations(conf.UV_BIN, cwd)
+    all_py_installs = get_uv_python_installations(
+        conf.UV_BIN,
+        # cwd
+    )
 
     if not py_version:
         py_install = max(all_py_installs, key=lambda item: Version(item["version"]))
@@ -298,7 +264,7 @@ def python_plugin(
         py_install = next(filter(lambda x: x["version"] == py_version, all_py_installs))
     py_version = py_install.get(py_version)
     py_bin_path = Path(py_install.get("path"))
-    logger.info(f"building uWSGI Python plugin in {uwsgi_src_home}. {py_version} @ {str(py_bin_path)}")
+    logger.info(f"building uWSGI Python plugin in {uwsgi_src_home}. {py_version} @ {py_bin_path}")
 
     # uv run uwsgiconfig.py --plugin plugins/python
 
@@ -309,7 +275,8 @@ def python_plugin(
         logger.debug(f"{cmd_env=}")
 
     # with pl_local.as_user(run_as_user):
-    uv = pl_local[str(uv_bin)]
+    uv = pl_local[str(conf.UV_BIN)]
+
     try:
         result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
     except ProcessExecutionError as exc:

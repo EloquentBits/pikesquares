@@ -118,6 +118,8 @@ class AppRuntime(TimeStampedBase):
         max_length=36,
     )
     version: str = Field(max_length=25)
+    lang: str = Field(max_length=25)
+    implementation: str = Field(max_length=25)
 
     class Config:
         populate_by_name = True

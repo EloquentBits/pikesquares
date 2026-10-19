@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Annotated
 
+import pluggy
 import sentry_sdk
 
 # import structlog
@@ -16,14 +17,15 @@ from plumbum import CommandNotFound
 from plumbum import local as pl_local
 
 from pikesquares import __app_name__, __version__, services
+from pikesquares.cli.commands import apps, build, control, devices, managed_services, projects, routers, runtimes
+from pikesquares.cli.console import console
 from pikesquares.conf import (
     AppConfig,
     AppConfigError,
     register_app_conf,
 )
+from pikesquares.domain.python_runtime import PythonRuntimePlugin
 from pikesquares.services.init import init_db, init_device, init_pluggy, init_process_compose
-
-from .console import console
 
 LOG_FILE = "app.log"
 
@@ -114,8 +116,6 @@ app = typer.Typer(
 )
 
 
-from .commands import apps, build, control, devices, managed_services, projects, routers
-
 app.add_typer(control.app)
 app.add_typer(apps.app, name="apps")
 app.add_typer(routers.app, name="routers")
@@ -123,6 +123,7 @@ app.add_typer(projects.app, name="projects")
 app.add_typer(devices.app, name="devices")
 app.add_typer(managed_services.app, name="services")
 app.add_typer(build.app, name="build")
+app.add_typer(runtimes.app, name="runtimes")
 
 
 def _version_callback(value: bool) -> None:
@@ -308,6 +309,12 @@ def main(
         init_process_compose(context, device)
 
     init_pluggy(context)
+
+    plugin_manager = services.get(context, pluggy.PluginManager)
+    plugin_manager.register(
+        PythonRuntimePlugin(),
+    )
+    logger.info("registered PythonRuntimePlugin")
 
     if conf.SENTRY_DSN:
         sentry_sdk.init(

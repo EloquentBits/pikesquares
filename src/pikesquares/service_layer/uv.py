@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import structlog
-from plumbum import ProcessExecutionError
+from plumbum import CommandNotFound, LocalPath, ProcessExecutionError
 from plumbum import local as pl_local
 
 from pikesquares.exceptions import (
@@ -13,6 +13,90 @@ from pikesquares.exceptions import (
 )
 
 logger = structlog.getLogger()
+
+"""
+
+    uv = pl_local[str(conf.UV_BIN)]
+    try:
+        result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
+    except ProcessExecutionError as exc:
+        for line in exc.stdout.split("\n"):
+            print(line)
+
+        if exc.stderr:
+            logger.debug(f"building {name} plugin -  errors:")
+            for line in exc.stderr.split("\n"):
+                print(line)
+
+"""
+
+
+def which_uv() -> LocalPath:
+
+    try:
+        return pl_local.which("uv")
+    except CommandNotFound:
+        logger.error("unable to locate uv command.")
+
+
+def list_installed_python_versions(
+    uv_bin: LocalPath | Path | None = None,
+    only_installed: bool = False,
+    only_downloads: bool = False,
+    # cwd
+):
+    """
+    [{'key': 'cpython-3.14.3-linux-x86_64-gnu',
+      'version': '3.14.3',
+      'version_parts': {'major': 3, 'minor': 14, 'patch': 3},
+      'path': '/home/pk/.local/share/uv/python/cpython-3.14-linux-x86_64-gnu/bin/python3.14',
+      'symlink': None,
+      'url': None,
+      'os': 'linux',
+      'variant': 'default',
+      'implementation': 'cpython',
+      'arch': 'x86_64',
+      'libc': 'gnu'},
+    ]
+    """
+    uv_bin = uv_bin or which_uv()
+    cmd_env = {}
+    cmd_args = [
+        "python",
+        "list",
+        "--only-installed" if only_installed else "",
+        "--only-downloads" if only_downloads else "",
+        "--output-format",
+        "json",
+    ]
+    if cmd_env:
+        pl_local.env.update(cmd_env)
+        logger.debug(f"{cmd_env=}")
+    cmd_args = list(filter(lambda x: x != "", cmd_args))
+    logger.info(cmd_args)
+    uv = pl_local[str(uv_bin)]
+    error_msg = f"uv run {' '.join(cmd_args)}"
+    try:
+        result = uv.run(
+            cmd_args,
+            # cwd=str(cwd),
+            **{"env": cmd_env},
+        )
+        logger.info(result)
+        if result[0] == 0:
+            return json.loads(result[1])
+        else:
+            error_msg = f"uv run {' '.join(cmd_args)} error: {result[2]}"
+            raise UvCommandExecutionError(error_msg)
+
+    except ProcessExecutionError as exc:
+        for line in exc.stdout.split("\n"):
+            print(line)
+
+        if exc.stderr:
+            for line in exc.stderr.split("\n"):
+                print(line)
+        raise UvCommandExecutionError(error_msg)
 
 
 def uv_cmd(
@@ -70,6 +154,19 @@ def uv_dependencies_install(
     # if "uv.lock" and "pyproject.toml" in self.top_level_file_names:
     #    logger.info("installing dependencies from uv.lock")
     assert repo_dir.exists(), f"repo dir {repo_dir} does not exist"
+
+    uv = pl_local[str(conf.UV_BIN)]
+    try:
+        result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
+    except ProcessExecutionError as exc:
+        for line in exc.stdout.split("\n"):
+            print(line)
+
+        if exc.stderr:
+            logger.debug(f"building {name} plugin -  errors:")
+            for line in exc.stderr.split("\n"):
+                print(line)
+
     try:
         retcode, stdout, stderr = uv_cmd(
             Path(uv_bin),

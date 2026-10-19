@@ -1,9 +1,12 @@
+import json
 import traceback
 from pathlib import Path
 
 import pluggy
 import questionary
 import structlog
+from plumbum import ProcessExecutionError
+from plumbum import local as pl_local
 
 from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.domain.runtime import PythonAppCodebase
@@ -16,14 +19,15 @@ from .prompt_utils import gather_repo_details_and_clone
 logger = structlog.getLogger()
 
 
-def provision_python_app_runtime(
-    version: str, uow: UnitOfWork, custom_style: questionary.Style
-) -> PythonAppRuntime | None:
-
+def provision_python_app_runtime(version: tuple[str, str, str], uow: UnitOfWork) -> PythonAppRuntime | None:
+    # (version, path, implementation)
+    logger.info(f"provisioning {version[1]} {version[2]} ")
     try:
-        runtime = uow.python_app_runtimes.get_by_version(version)
+        runtime = uow.python_app_runtimes.get_by_version(version[0], "Python", version[2])
         if not runtime:
-            runtime = uow.python_app_runtimes.add(PythonAppRuntime(version=version))
+            runtime = uow.python_app_runtimes.add(
+                PythonAppRuntime(version=version[0], lang="Python", implementation=version[2])
+            )
             uow.commit()
         return runtime
     except Exception as exc:

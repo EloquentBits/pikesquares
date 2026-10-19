@@ -53,7 +53,7 @@ class AppRuntimeHookSpec:
     def app_runtime_prompt_for_version(self) -> str: ...
 
 
-class AppCodebaseHookSpec:
+class BaseAppCodebaseHookSpec:
     """
     App Codebase Hook Specification
     """
@@ -107,7 +107,7 @@ def plugin_manager_factory():
     pm = pluggy.PluginManager("pikesquares")
     pm.add_hookspecs(AttachedDaemonHookSpec)
     pm.add_hookspecs(AppRuntimeHookSpec)
-    pm.add_hookspecs(AppCodebaseHookSpec)
+    pm.add_hookspecs(BaseAppCodebaseHookSpec)
     pm.add_hookspecs(PythonAppCodebaseHookSpec)
     pm.add_hookspecs(WSGIPythonAppCodebaseHookSpec)
     return pm

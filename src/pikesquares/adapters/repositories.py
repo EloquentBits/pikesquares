@@ -29,6 +29,7 @@ logger = structlog.get_logger()
 
 T = TypeVar("T", bound=ServiceBase)
 
+
 class GenericRepository(Generic[T], ABC):
     """Generic base repository."""
 
@@ -138,8 +139,7 @@ class GenericSqlRepository(GenericRepository[T], ABC):
             return obj
 
     def get_by_service_id(self, service_id: str) -> T | None:
-        stmt = select(self._model_cls).\
-            where(self._model_cls.service_id == service_id)
+        stmt = select(self._model_cls).where(self._model_cls.service_id == service_id)
         results = self._session.exec(stmt)
         if results:
             obj = results.one_or_none()
@@ -232,16 +232,17 @@ class DeviceUWSGIOptionsRepository(GenericSqlRepository[DeviceUWSGIOption], Devi
         if results:
             return results.all()
 
-
     """Project repository."""
-class ProjectReposityBase(GenericRepository[Project], ABC):
 
+
+class ProjectReposityBase(GenericRepository[Project], ABC):
     @abstractmethod
     def get_by_name(self, name: str) -> Project | None:
         raise NotImplementedError()
 
     def get_by_device_id(self, device_id: str) -> Sequence[Project] | None:
         raise NotImplementedError()
+
 
 class ProjectRepository(GenericSqlRepository[Project], ProjectReposityBase):
     def __init__(self, session: Session) -> None:
@@ -300,7 +301,6 @@ class HttpRouterRepository(GenericSqlRepository[HttpRouter], HttpRouterRepositor
         if results:
             obj = results.first()
             return obj
-
 
 
 class WsgiAppReposityBase(GenericRepository[WsgiApp], ABC):
@@ -369,7 +369,6 @@ class ZMQMonitorRepository(GenericSqlRepository[ZMQMonitor], ZMQMonitorRepositor
     ##        return results.all()
 
 
-
 class TuntapRouterRepositoryBase(GenericRepository[TuntapRouter], ABC):
     """TuntapRouter repository."""
 
@@ -394,10 +393,7 @@ class TuntapRouterRepository(GenericSqlRepository[TuntapRouter], TuntapRouterRep
             return obj
 
     def get_by_project_id(self, project_id: str) -> Sequence[TuntapRouter] | None:
-        stmt = (
-            select(TuntapRouter)
-            .where(TuntapRouter.project_id == project_id)
-        )
+        stmt = select(TuntapRouter).where(TuntapRouter.project_id == project_id)
         results = self._session.exec(stmt)
         if results:
             return results.all()
@@ -429,8 +425,8 @@ class TuntapDeviceRepositoryBase(GenericRepository[TuntapDevice], ABC):
     def get_by_linked_service_id(self, linked_service_id: str) -> TuntapDevice | None:
         raise NotImplementedError()
 
-class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRepositoryBase):
 
+class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRepositoryBase):
     def __init__(self, session: Session) -> None:
         super().__init__(session, TuntapDevice)
 
@@ -442,10 +438,7 @@ class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRep
             return obj
 
     def get_by_tuntap_router_id(self, tuntap_router_id: str) -> Sequence[TuntapDevice] | None:
-        stmt = (
-            select(TuntapDevice)
-            .where(TuntapDevice.tuntap_router_id == tuntap_router_id)
-        )
+        stmt = select(TuntapDevice).where(TuntapDevice.tuntap_router_id == tuntap_router_id)
         results = self._session.exec(stmt)
         if results:
             return results.all()
@@ -464,7 +457,8 @@ class TuntapDeviceRepository(GenericSqlRepository[TuntapDevice], TuntapDeviceRep
             obj = results.first()
             return obj
 
-#ZMQMonitorRepository = NewType("ZMQMonitorRepository", ZMQMonitorRepositoryBase)
+
+# ZMQMonitorRepository = NewType("ZMQMonitorRepository", ZMQMonitorRepositoryBase)
 
 
 class AttachedDaemonRepositoryBase(GenericRepository[AttachedDaemon], ABC):
@@ -492,7 +486,7 @@ class PythonAppRuntimeRepositoryBase(GenericRepository[PythonAppRuntime], ABC):
     """PythonAppRuntime repository."""
 
     @abstractmethod
-    def get_by_version(self, version: str) -> PythonAppRuntime | None:
+    def get_by_version(self, version: str, lang: str, implementation: str) -> PythonAppRuntime | None:
         raise NotImplementedError()
 
 
@@ -500,14 +494,17 @@ class PythonAppRuntimeRepository(GenericSqlRepository[PythonAppRuntime], PythonA
     def __init__(self, session: Session) -> None:
         super().__init__(session, PythonAppRuntime)
 
-    def get_by_version(self, version: str) -> PythonAppRuntime | None:
+    def get_by_version(self, version: str, lang: str, implementation: str) -> PythonAppRuntime | None:
         stmt = select(PythonAppRuntime).where(
             PythonAppRuntime.version == version,
+            PythonAppRuntime.lang == lang,
+            PythonAppRuntime.implementation == implementation,
         )
         results = self._session.exec(stmt)
         if results:
             obj = results.first()
             return obj
+
 
 class PythonAppCodebaseRepositoryBase(GenericRepository[PythonAppCodebase], ABC):
     """PythonAppCodebase repository."""
