@@ -5,8 +5,6 @@ from pathlib import Path
 import pluggy
 import questionary
 import structlog
-from plumbum import ProcessExecutionError
-from plumbum import local as pl_local
 
 from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.domain.runtime import PythonAppCodebase

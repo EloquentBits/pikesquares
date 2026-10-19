@@ -7,7 +7,12 @@ from sqlmodel import Relationship
 from pikesquares.domain.runtime import AppRuntime
 from pikesquares.exceptions import UvCommandExecutionError
 from pikesquares.hooks.markers import hook_impl
-from pikesquares.service_layer.uv import list_installed_python_versions, which_uv
+from pikesquares.service_layer.uv import (
+    build_python_plugin,
+    install_python_version,
+    list_installed_python_versions,
+    which_uv,
+)
 
 logger = structlog.getLogger()
 
@@ -18,6 +23,29 @@ class PythonAppRuntime(AppRuntime, table=True):
     __tablename__ = "python_app_runtimes"
 
     wsgi_apps: list["WsgiApp"] = Relationship(back_populates="python_app_runtime")
+
+    @classmethod
+    def build_uwsgi_python_plugin(
+        cls,
+        py_bin: Path | None = None,
+        scie_home: Path | None = None,
+        uv_bin: Path | None = None,
+    ):
+        # if not py_version:
+        #    py_install = max(all_py_installs, key=lambda item: Version(item["version"]))
+        # else:
+        #    py_install = next(filter(lambda x: x["version"] == py_version, all_py_installs))
+        # py_version = py_install.get(py_version)
+        # py_bin_path = Path(py_install.get("path"))
+        # logger.info(f"building uWSGI Python plugin in {uwsgi_src_home}. {py_version} @ {py_bin_path}")
+        build_python_plugin(py_bin, scie_home=scie_home, uv_bin=uv_bin)
+
+    @classmethod
+    def install(cls, version: str, uv_bin: Path | None = None):
+        result = install_python_version(version, uv_bin)
+
+        logger.info(f"installed python {version}")
+        logger.info(result)
 
     @classmethod
     def only_installed(cls, uv_bin: Path | None = None):

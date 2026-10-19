@@ -1,90 +1,27 @@
-import json
-import os
-import sys
-import sysconfig
+# import os
+# import sys
+# import sysconfig
 import tempfile
 from pathlib import Path
 from typing import Annotated
 
+import questionary
 import structlog
 import typer
-from packaging.version import Version
-from plumbum import ProcessExecutionError
-from plumbum import local as pl_local
-from plumbum.path.utils import move
 
+# from packaging.version import Version
 from pikesquares import services
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfig
+from pikesquares.domain.python_runtime import PythonAppRuntime
+from pikesquares.service_layer.handlers.runtimes import (
+    provision_python_app_runtime,
+)
+from pikesquares.service_layer.uow import UnitOfWork
 
 # from pikesquares.service_layer.handlers.runtimes import get_uv_python_installations
 
 logger = structlog.getLogger(__name__)
-
-
-class SCIERepoDoesNotExistError(Exception):
-    pass
-
-
-class UWSGISourceFilesMissingError(Exception):
-    pass
-
-
-class PluginHeaderFileMissingError(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
-def clone_repo(scie_home):
-
-    repo_url = "https://github.com/EloquentBits/scie-pikesquares.git"
-    cmd_env = {}
-    cmd_args = ["clone", repo_url, str(scie_home), "--recurse-submodules", "--depth", "1"]
-    if cmd_env:
-        pl_local.env.update(cmd_env)
-        logger.debug(f"{cmd_env=}")
-    git_cmd = pl_local["git"]
-    # with pl_local.as_user("pikesquares"):
-    try:
-        result = git_cmd.run(cmd_args, **{"env": cmd_env})
-    except ProcessExecutionError as exc:
-        for line in exc.stdout.split("\n"):
-            print(line)
-
-        if exc.stderr:
-            for line in exc.stderr.split("\n"):
-                print(line)
-        return typer.Exit(code=1)
-
-
-def build_uwsgi_deps(conf):
-
-    with tempfile.TemporaryDirectory() as scie_home:
-        clone_repo(scie_home)
-        try:
-            build_uwsgi(conf, scie_home)
-        except SCIERepoDoesNotExistError:
-            logger.error("unable to clone scie-pikesquares repo")
-            raise typer.Exit(1) from None
-
-        except UWSGISourceFilesMissingError:
-            console.error("unable to build plugin. uWSGI source files missing")
-            raise typer.Exit(1) from None
-
-        for plugin in conf.required_plugins:
-            plugin_path = conf.plugins_dir / f"{plugin}_plugin.so"
-            if not plugin_path.exists():
-                try:
-                    build_plugin(conf, plugin, scie_home)
-                except PluginHeaderFileMissingError as exc:
-                    console.warning(f"{plugin} development header files are not installed.")
-                    console.info(exc.message)
-                    raise typer.Exit(1) from None
-
-                except UWSGISourceFilesMissingError:
-                    console.error("unable to build plugin. uWSGI source files missing")
-                    raise typer.Exit(1) from None
 
 
 plugins = {
@@ -101,102 +38,6 @@ plugins = {
         "error-message-hint-linux": "install libzmq  package and development header files. i.e. sudo apt install libzmq5 libzmq3-dev",
     },
 }
-
-
-def build_plugin(conf, name, scie_home):
-    """
-    include_dir = Path(sysconfig.get_path("include"))
-    if name in plugins:
-        platform = None
-        if sys.platform == "darwin":
-            platform = "macos"
-        elif sys.platform.startswith("linux"):
-            platform = "linux"
-
-        # print(f"{include_dir / plugins[name]['header-filename']}")
-        # if not (include_dir / plugins[name]["header-filename"]).exists():
-        #    raise PluginHeaderFileMissingError(plugins[name]["error-message-hint-" + platform])
-    """
-
-    # scie_home = conf.data_dir / Path("scie-pikesquares")
-    uwsgi_src_home = scie_home / Path("uwsgi")
-    if not uwsgi_src_home.exists():
-        raise UWSGISourceFilesMissingError()
-
-    cwd = uwsgi_src_home
-
-    cmd_env = {}
-    cmd_args = ["run", "uwsgiconfig.py", "--plugin", f"plugins/{name}"]
-
-    if cmd_env:
-        pl_local.env.update(cmd_env)
-        logger.debug(f"{cmd_env=}")
-
-    # with pl_local.as_user(run_as_user):
-    uv = pl_local[str(conf.UV_BIN)]
-    console.info(f"Starting building the {name} uWSGI plugin")
-    try:
-        result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
-    except ProcessExecutionError as exc:
-        for line in exc.stdout.split("\n"):
-            print(line)
-
-        if exc.stderr:
-            logger.debug(f"building {name} plugin -  errors:")
-            for line in exc.stderr.split("\n"):
-                print(line)
-
-        return typer.Exit(code=1)
-
-    logger.info(f"{conf.plugins_dir=}")
-    # (uwsgi_src_home / f"{name}_plugin.so").rename(conf.plugins_dir / f"{name}_plugin.so")
-    pl_local.path(uwsgi_src_home).joinpath(f"{name}_plugin.so").move(conf.plugins_dir / f"{name}_plugin.so")
-
-    if (conf.plugins_dir / f"{name}_plugin.so").exists():
-        console.info(f"Completed building the uWSGI {name} plugin.")
-    else:
-        console.info(f"Failed to build the uWSGI {name} plugin.")
-
-
-def build_uwsgi(conf, scie_home) -> typer.Exit | None:
-    if not Path(scie_home).exists():
-        raise SCIERepoDoesNotExistError()
-
-    uwsgi_src_home = scie_home / Path("uwsgi")
-    if not pl_local.path(scie_home / Path("uwsgi")).exists():
-        raise UWSGISourceFilesMissingError()
-
-    cmd_env = {}
-    cmd_args = ["run", "uwsgiconfig.py", "--build", "nolang"]
-    if cmd_env:
-        pl_local.env.update(cmd_env)
-        logger.debug(f"{cmd_env=}")
-
-    console.info("Starting building the uWSGI binary")
-    # with pl_local.cwd(str(uwsgi_src_home)):
-    uv = pl_local[str(conf.UV_BIN)]
-    # with pl_local.as_user("pikesquares"):
-    try:
-        result = uv.run(cmd_args, cwd=str(uwsgi_src_home), **{"env": cmd_env})
-    except ProcessExecutionError as exc:
-        for line in exc.stdout.split("\n"):
-            print(line)
-
-        if exc.stderr:
-            for line in exc.stderr.split("\n"):
-                print(line)
-        return typer.Exit(code=1)
-
-    # (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
-    # os.remove(str(conf.data_dir / "bin/uwsgi"))
-    # pl_local.path(str(uwsgi_src_home / "uwsgi")).move(str(conf.data_dir / "bin"))
-    move(uwsgi_src_home / "uwsgi", conf.data_dir / "bin")
-
-    if pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists():
-        console.info("Completed building the uWSGI binary.")
-    else:
-        console.info("Failed to build the uWSGI binary.")
-
 
 app = typer.Typer()
 
@@ -229,9 +70,13 @@ def uwsgi(
 )
 def python_plugin(
     ctx: typer.Context,
-    py_version: Annotated[
+    version: Annotated[
         str | None, typer.Option(help="Python interpreter version to build the uWSGI plugin with")
     ] = None,
+    implementation: Annotated[
+        str | None, typer.Option(help="Python implementation to build the uWSGI plugin with")
+    ] = None,
+    py_bin: Annotated[str | None, typer.Option(help="Python executable path to build the uWSGI plugin with")] = None,
 ):
     """
     # do this only before building the Python plugin
@@ -247,49 +92,58 @@ def python_plugin(
     """
 
     context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
     conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
+    logger.info("build python plugin cli")
+    print("print | build python plugin cli")
 
-    # scie_home = conf.data_dir / Path("scie-pikesquares")
-    # uwsgi_src_home = scie_home / Path("uwsgi")
-    # cwd = uwsgi_src_home
+    if not py_bin:
+        python_versions = [
+            (ver["version"], ver["path"], ver["implementation"])
+            for ver in PythonAppRuntime.list_all_versions(conf.UV_BIN)
+            if ver["implementation"] in ["cpython", "pypy"]
+        ]
+        choices = []
+        for ver, path, implementation in python_versions:
+            title = f"{implementation} {ver}"
+            if path:
+                title += f" installed @ {path}"
+            choices.append(questionary.Choice(title, value=(ver, path, implementation)))
 
-    all_py_installs = get_uv_python_installations(
-        conf.UV_BIN,
-        # cwd
-    )
+        runtime_version = questionary.select(
+            "Select from available versions: ",
+            choices=choices,
+            style=custom_style,
+        ).ask()
+        if not runtime_version:
+            raise typer.Exit(0)
 
-    if not py_version:
-        py_install = max(all_py_installs, key=lambda item: Version(item["version"]))
-    else:
-        py_install = next(filter(lambda x: x["version"] == py_version, all_py_installs))
-    py_version = py_install.get(py_version)
-    py_bin_path = Path(py_install.get("path"))
-    logger.info(f"building uWSGI Python plugin in {uwsgi_src_home}. {py_version} @ {py_bin_path}")
+        py_bin = runtime_version[1]
+        py_version = runtime_version[0]
+        implementation = runtime_version[2]
+        try:
+            logger.info(f"calling provision_python_app_runtime: {py_version} {implementation}")
+            runtime = provision_python_app_runtime(runtime_version, uow)
+            if runtime:
+                console.success(f":heavy_check_mark:     Provisioned {py_version} {implementation}")
+                logger.info(f"installing runtime {runtime_version}")
+                PythonAppRuntime.install(f"{implementation}{py_version}")
+                scie_home = conf.data_dir / Path("scie-pikesquares")
+                result = PythonAppRuntime.build_uwsgi_python_plugin(py_bin, scie_home=scie_home, uv_bin=conf.UV_BIN)
+                logger.info(result)
+            else:
+                console.warning(f"unable to provision {py_version} {implementation}")
 
-    # uv run uwsgiconfig.py --plugin plugins/python
+            uow.commit()
+        except Exception as exc:
+            logger.exception(exc)
+            # console.print(traceback.format_exc())
+            console.warning(f"Unable to provision runtime {py_version} {implementation}")
+            uow.rollback()
+            raise typer.Exit(1) from None
 
-    cmd_env = {"PYTHON": str(py_bin_path)}
-    cmd_args = ["run", "uwsgiconfig.py", "--plugin", "plugins/python"]
-    if cmd_env:
-        pl_local.env.update(cmd_env)
-        logger.debug(f"{cmd_env=}")
-
-    # with pl_local.as_user(run_as_user):
-    uv = pl_local[str(conf.UV_BIN)]
-
-    try:
-        result = uv.run(cmd_args, cwd=str(cwd), **{"env": cmd_env})
-    except ProcessExecutionError as exc:
-        for line in exc.stdout.split("\n"):
-            print(line)
-
-        if exc.stderr:
-            for line in exc.stderr.split("\n"):
-                print(line)
-
-        return typer.Exit(code=1)
-
-    logger.debug(f"build {py_version} python plugin - {result.returncode=}")
+    # logger.debug(f"build {py_version} python plugin - {result.returncode=}")
 
     #   --plugin plugins/python pikesquares.ini python312
     #   PYTHON=python3.4 ./uwsgi --build-plugin "plugins/python python34"

@@ -87,6 +87,9 @@ def add(
             runtime = provision_python_app_runtime(runtime_version, uow)
             if runtime:
                 console.success(f":heavy_check_mark:     Provisioned {runtime_name} {runtime_version} runtime")
+                logger.info(f"installing runtime {runtime_version}")
+                PythonAppRuntime.install(f"{runtime_version[2]}{runtime_version[0]}")
+
             else:
                 console.warning(f"unable to provision {runtime_name} {runtime_version}")
 
