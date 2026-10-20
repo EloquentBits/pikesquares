@@ -12,6 +12,7 @@ from pikesquares.service_layer.uv import (
     build_python_plugin,
     install_python_version,
     list_installed_python_versions,
+    uninstall_python_version,
     which_uv,
 )
 
@@ -85,6 +86,13 @@ class PythonAppRuntime(AppRuntime, table=True):
         result = install_python_version(runtime_version, uv_bin)
 
         logger.info(f"installed python {runtime_version.implementation} {runtime_version.version}")
+        logger.info(result)
+
+    @classmethod
+    def uninstall(cls, runtime_version: PythonRuntimeVersion, uv_bin: Path | None = None):
+        result = uninstall_python_version(runtime_version, uv_bin)
+
+        logger.info(f"removed python {runtime_version.implementation} {runtime_version.version}")
         logger.info(result)
 
     @classmethod

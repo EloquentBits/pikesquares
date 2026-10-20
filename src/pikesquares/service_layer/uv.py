@@ -285,6 +285,44 @@ def install_python_version(
         raise UvCommandExecutionError(error_msg)
 
 
+def uninstall_python_version(
+    runtime_version: "PythonRuntimeVersion",
+    uv_bin: LocalPath | Path | None = None,
+    # cwd
+):
+    uv_bin = uv_bin or which_uv()
+    cmd_env = {}
+    cmd_args = ["python", "uninstall", runtime_version.version]
+    if cmd_env:
+        pl_local.env.update(cmd_env)
+        logger.debug(f"{cmd_env=}")
+    cmd_args = list(filter(lambda x: x != "", cmd_args))
+    logger.info(cmd_args)
+    uv = pl_local[str(uv_bin)]
+    error_msg = f"uv run {' '.join(cmd_args)}"
+    try:
+        result = uv.run(
+            cmd_args,
+            # cwd=str(cwd),
+            **{"env": cmd_env},
+        )
+        logger.info(result)
+        # if result[0] == 0:
+        #    return result[1]
+        # else:
+        #    error_msg = f"uv run {' '.join(cmd_args)} error: {result[2]}"
+        #    raise UvCommandExecutionError(error_msg)
+
+    except ProcessExecutionError as exc:
+        for line in exc.stdout.split("\n"):
+            print(line)
+
+        if exc.stderr:
+            for line in exc.stderr.split("\n"):
+                print(line)
+        raise UvCommandExecutionError(error_msg)
+
+
 def list_installed_python_versions(
     uv_bin: LocalPath | Path | None = None,
     only_installed: bool | None = False,
@@ -301,6 +339,7 @@ def list_installed_python_versions(
         "list",
         "--only-installed" if only_installed else "",
         "--only-downloads" if only_downloads else "",
+        "--managed-python",
         "--output-format",
         "json",
     ]
