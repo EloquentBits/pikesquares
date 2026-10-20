@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pydantic
 import structlog
 from packaging.version import Version
 from sqlmodel import Relationship
@@ -17,6 +18,44 @@ from pikesquares.service_layer.uv import (
 logger = structlog.getLogger()
 
 
+class VersionParts(pydantic.BaseModel):
+    major: int
+    minor: int
+    patch: int
+
+
+class PythonRuntimeVersion(pydantic.BaseModel):
+    """
+    [{'key': 'cpython-3.14.3-linux-x86_64-gnu',
+      'version': '3.14.3',
+      'version_parts': {'major': 3, 'minor': 14, 'patch': 3},
+      'path': '/home/pk/.local/share/uv/python/cpython-3.14-linux-x86_64-gnu/bin/python3.14',
+      'symlink': None,
+      'url': None,
+      'os': 'linux',
+      'variant': 'default',
+      'implementation': 'cpython',
+      'arch': 'x86_64',
+      'libc': 'gnu'},
+    """
+
+    key: str
+    version: str
+    version_parts: VersionParts
+    path: Path | None = None
+    synlink: Path | None = None
+    url: pydantic.HttpUrl | None = None
+    variant: str
+    implementation: str
+    arch: str
+    libc: str
+
+    @pydantic.computed_field  # type: ignore[prop-decorator]
+    @property
+    def uwsgi_plugin_name(self) -> str:
+        return f"{self.implementation}_{self.version.replace('.', '_')}"
+
+
 class PythonAppRuntime(AppRuntime, table=True):
     """Base App Runtime SQL model class."""
 
@@ -27,8 +66,9 @@ class PythonAppRuntime(AppRuntime, table=True):
     @classmethod
     def build_uwsgi_python_plugin(
         cls,
-        py_bin: Path | None = None,
-        scie_home: Path | None = None,
+        runtime_version: PythonRuntimeVersion,
+        plugins_dir: Path,
+        scie_home: Path,
         uv_bin: Path | None = None,
     ):
         # if not py_version:
@@ -38,13 +78,13 @@ class PythonAppRuntime(AppRuntime, table=True):
         # py_version = py_install.get(py_version)
         # py_bin_path = Path(py_install.get("path"))
         # logger.info(f"building uWSGI Python plugin in {uwsgi_src_home}. {py_version} @ {py_bin_path}")
-        build_python_plugin(py_bin, scie_home=scie_home, uv_bin=uv_bin)
+        build_python_plugin(runtime_version, plugins_dir, scie_home, uv_bin=uv_bin)
 
     @classmethod
-    def install(cls, version: str, uv_bin: Path | None = None):
-        result = install_python_version(version, uv_bin)
+    def install(cls, runtime_version: PythonRuntimeVersion, uv_bin: Path | None = None):
+        result = install_python_version(runtime_version, uv_bin)
 
-        logger.info(f"installed python {version}")
+        logger.info(f"installed python {runtime_version.implementation} {runtime_version.version}")
         logger.info(result)
 
     @classmethod

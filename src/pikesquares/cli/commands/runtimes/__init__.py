@@ -1,4 +1,4 @@
-import traceback
+from pathlib import Path
 
 import pluggy
 import questionary
@@ -66,32 +66,38 @@ def add(
         raise typer.Exit(0)
 
     if runtime_name in ["cpython", "pypy"]:
-        python_versions = [
-            (ver["version"], ver["path"], ver["implementation"])
-            for ver in PythonAppRuntime.list_all_versions(conf.UV_BIN)
-        ]
+        choices = []
+        for python_version in PythonAppRuntime.list_all_versions(conf.UV_BIN):
+            if python_version.implementation == runtime_name and python_version.variant == "default":
+                disabled = f"installed {python_version.path}" if python_version.path else ""
+                choices.append(questionary.Choice(python_version.version, value=python_version, disabled=disabled))
+
         runtime_version = questionary.select(
             "Select from available versions: ",
-            choices=[
-                questionary.Choice(ver, value=(ver, path, implementation), disabled=f"installed {path}" if path else "")
-                for ver, path, implementation in python_versions
-                if implementation == runtime_name
-            ],
+            choices=choices,
             style=custom_style,
         ).ask()
         if not runtime_version:
             raise typer.Exit(0)
 
         try:
-            logger.info(f"calling provision_python_app_runtime: {runtime_version}")
+            logger.info(
+                f"calling provision_python_app_runtime: {runtime_version.version} {runtime_version.implementation}"
+            )
             runtime = provision_python_app_runtime(runtime_version, uow)
             if runtime:
                 console.success(f":heavy_check_mark:     Provisioned {runtime_name} {runtime_version} runtime")
                 logger.info(f"installing runtime {runtime_version}")
-                PythonAppRuntime.install(f"{runtime_version[2]}{runtime_version[0]}")
+                PythonAppRuntime.install(f"{runtime_version.implementation}{runtime_version.version}")
 
             else:
                 console.warning(f"unable to provision {runtime_name} {runtime_version}")
+
+            scie_home = conf.data_dir / Path("scie-pikesquares")
+            result = PythonAppRuntime.build_uwsgi_python_plugin(
+                runtime_version, conf.plugins_dir, scie_home, uv_bin=conf.UV_BIN
+            )
+            logger.info(result)
 
         except Exception as exc:
             logger.exception(exc)

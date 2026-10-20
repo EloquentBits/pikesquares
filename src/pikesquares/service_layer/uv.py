@@ -107,24 +107,41 @@ def build_uwsgi_deps(conf):
 
 
 def build_python_plugin(
-    py_bin: LocalPath | Path,
-    scie_home: LocalPath | Path | None = None,
+    runtime_version: "PythonRuntimeVersion",
+    plugins_dir: LocalPath | Path,
+    scie_home: LocalPath | Path,
     uv_bin: LocalPath | Path | None = None,
 ):
     # uv run uwsgiconfig.py --plugin plugins/python
     uv_bin = uv_bin or which_uv()
-    cmd_env = {"PYTHON": str(py_bin)}
-    cmd_args = ["run", "uwsgiconfig.py", "--plugin", "plugins/python"]
+    # pythonXXX_plugin.so
+    cmd_env = {"PYTHON": str(runtime_version.path)}
+    cmd_args = [
+        "run",
+        "uwsgiconfig.py",
+        "--plugin",
+        "plugins/python",
+        "default",  # uwsgi profile
+        f"{runtime_version.uwsgi_plugin_name}",
+    ]
     if cmd_env:
         pl_local.env.update(cmd_env)
         logger.debug(f"{cmd_env=}")
 
     # with pl_local.as_user(run_as_user):
     uv = pl_local[str(uv_bin)]
+    uwsgi_src_home = scie_home / "uwsgi"
 
     try:
-        result = uv.run(cmd_args, cwd=str(scie_home / "uwsgi"), **{"env": cmd_env})
+        print(cmd_args)
+        result = uv.run(cmd_args, cwd=str(uwsgi_src_home), **{"env": cmd_env})
+
+        if result[0] == 0:
+            # cpython_3_14_7_plugin.so
+            move(uwsgi_src_home / f"{runtime_version.uwsgi_plugin_name}_plugin.so", plugins_dir)
+
         logger.info(result)
+        print(result)
         return result
     except ProcessExecutionError as exc:
         for line in exc.stdout.split("\n"):
@@ -231,13 +248,13 @@ def build_uwsgi(conf, scie_home) -> None:
 
 
 def install_python_version(
-    version: str,
+    runtime_version: "PythonRuntimeVersion",
     uv_bin: LocalPath | Path | None = None,
     # cwd
 ):
     uv_bin = uv_bin or which_uv()
     cmd_env = {}
-    cmd_args = ["python", "install", version]
+    cmd_args = ["python", "install", runtime_version.version]
     if cmd_env:
         pl_local.env.update(cmd_env)
         logger.debug(f"{cmd_env=}")
@@ -273,21 +290,10 @@ def list_installed_python_versions(
     only_installed: bool | None = False,
     only_downloads: bool | None = False,
     # cwd
-):
-    """
-    [{'key': 'cpython-3.14.3-linux-x86_64-gnu',
-      'version': '3.14.3',
-      'version_parts': {'major': 3, 'minor': 14, 'patch': 3},
-      'path': '/home/pk/.local/share/uv/python/cpython-3.14-linux-x86_64-gnu/bin/python3.14',
-      'symlink': None,
-      'url': None,
-      'os': 'linux',
-      'variant': 'default',
-      'implementation': 'cpython',
-      'arch': 'x86_64',
-      'libc': 'gnu'},
-    ]
-    """
+) -> list["PythonRuntimeVersion"]:
+
+    from pikesquares.domain.python_runtime import PythonRuntimeVersion
+
     uv_bin = uv_bin or which_uv()
     cmd_env = {}
     cmd_args = [
@@ -313,7 +319,7 @@ def list_installed_python_versions(
         )
         logger.info(result)
         if result[0] == 0:
-            return json.loads(result[1])
+            return [PythonRuntimeVersion(**py_version) for py_version in json.loads(result[1])]
         else:
             error_msg = f"uv run {' '.join(cmd_args)} error: {result[2]}"
             raise UvCommandExecutionError(error_msg)

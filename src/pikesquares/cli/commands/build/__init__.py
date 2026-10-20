@@ -2,6 +2,7 @@
 # import sys
 # import sysconfig
 import tempfile
+import traceback
 from pathlib import Path
 from typing import Annotated
 
@@ -13,7 +14,7 @@ import typer
 from pikesquares import services
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfig
-from pikesquares.domain.python_runtime import PythonAppRuntime
+from pikesquares.domain.python_runtime import PythonAppRuntime, PythonRuntimeVersion
 from pikesquares.service_layer.handlers.runtimes import (
     provision_python_app_runtime,
 )
@@ -100,16 +101,14 @@ def python_plugin(
 
     if not py_bin:
         python_versions = [
-            (ver["version"], ver["path"], ver["implementation"])
-            for ver in PythonAppRuntime.list_all_versions(conf.UV_BIN)
-            if ver["implementation"] in ["cpython", "pypy"]
+            ver for ver in PythonAppRuntime.list_all_versions(conf.UV_BIN) if ver.implementation in ["cpython", "pypy"]
         ]
         choices = []
-        for ver, path, implementation in python_versions:
-            title = f"{implementation} {ver}"
-            if path:
-                title += f" installed @ {path}"
-            choices.append(questionary.Choice(title, value=(ver, path, implementation)))
+        for python_version in python_versions:
+            title = f"{implementation} {python_version.version}"
+            if python_version.path:
+                title += f" installed @ {python_version.path}"
+            choices.append(questionary.Choice(title, value=python_version))
 
         runtime_version = questionary.select(
             "Select from available versions: ",
@@ -119,27 +118,31 @@ def python_plugin(
         if not runtime_version:
             raise typer.Exit(0)
 
-        py_bin = runtime_version[1]
-        py_version = runtime_version[0]
-        implementation = runtime_version[2]
         try:
-            logger.info(f"calling provision_python_app_runtime: {py_version} {implementation}")
+            logger.info(
+                f"calling provision_python_app_runtime: {runtime_version.version} {runtime_version.implementation}"
+            )
             runtime = provision_python_app_runtime(runtime_version, uow)
             if runtime:
-                console.success(f":heavy_check_mark:     Provisioned {py_version} {implementation}")
-                logger.info(f"installing runtime {runtime_version}")
-                PythonAppRuntime.install(f"{implementation}{py_version}")
+                console.success(
+                    f":heavy_check_mark:     Provisioned {runtime_version.version} {runtime_version.implementation}"
+                )
+                logger.info(f"installing runtime {runtime_version.version}")
+                PythonAppRuntime.install(runtime_version)
                 scie_home = conf.data_dir / Path("scie-pikesquares")
-                result = PythonAppRuntime.build_uwsgi_python_plugin(py_bin, scie_home=scie_home, uv_bin=conf.UV_BIN)
+                result = PythonAppRuntime.build_uwsgi_python_plugin(
+                    runtime_version, conf.plugins_dir, scie_home, uv_bin=conf.UV_BIN
+                )
                 logger.info(result)
             else:
-                console.warning(f"unable to provision {py_version} {implementation}")
+                console.warning(f"unable to provision {runtime_version.version} {runtime_version.implementation}")
 
             uow.commit()
         except Exception as exc:
-            logger.exception(exc)
+            # logger.exception(exc)
+            print(traceback.format_exc())
             # console.print(traceback.format_exc())
-            console.warning(f"Unable to provision runtime {py_version} {implementation}")
+            console.warning(f"Unable to provision runtime {runtime_version.version} {runtime_version.implementation}")
             uow.rollback()
             raise typer.Exit(1) from None
 

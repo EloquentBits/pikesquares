@@ -6,7 +6,7 @@ import pluggy
 import questionary
 import structlog
 
-from pikesquares.domain.python_runtime import PythonAppRuntime
+from pikesquares.domain.python_runtime import PythonAppRuntime, PythonRuntimeVersion
 from pikesquares.domain.runtime import PythonAppCodebase
 from pikesquares.hooks.plugins.apps.bugsink import Bugsink
 from pikesquares.hooks.plugins.apps.meshdb import Meshdb
@@ -17,20 +17,26 @@ from .prompt_utils import gather_repo_details_and_clone
 logger = structlog.getLogger()
 
 
-def provision_python_app_runtime(version: tuple[str, str, str], uow: UnitOfWork) -> PythonAppRuntime | None:
+def provision_python_app_runtime(runtime_version: PythonRuntimeVersion, uow: UnitOfWork) -> PythonAppRuntime | None:
     # (version, path, implementation)
-    logger.info(f"provisioning {version[1]} {version[2]} ")
+    logger.info(f"provisioning {runtime_version.version} {runtime_version.implementation}")
     try:
-        runtime = uow.python_app_runtimes.get_by_version(version[0], "Python", version[2])
+        runtime = uow.python_app_runtimes.get_by_version(
+            runtime_version.version, "python", runtime_version.implementation
+        )
         if not runtime:
             runtime = uow.python_app_runtimes.add(
-                PythonAppRuntime(version=version[0], lang="Python", implementation=version[2])
+                PythonAppRuntime(
+                    version=runtime_version.version, lang="Python", implementation=runtime_version.implementation
+                )
             )
             uow.commit()
         return runtime
     except Exception as exc:
         logger.exception(exc)
-        logger.info(f"failed provisioning Python App Runtime {version}")
+        logger.error(
+            f"failed provisioning Python App Runtime {runtime_version.version} {runtime_version.implementation}"
+        )
         uow.rollback()
         raise exc
 

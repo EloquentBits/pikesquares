@@ -35,6 +35,7 @@ class AppConfigError(Exception):
     pass
 
 
+"""
 def parse_cors(v: Any) -> list[str] | str:
     if isinstance(v, str) and not v.startswith("["):
         return [i.strip() for i in v.split(",")]
@@ -122,8 +123,9 @@ class APISettings(BaseSettings):
     @property
     def emails_enabled(self) -> bool:
         return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
-
     """
+
+"""
     EMAIL_TEST_USER: pydantic.EmailStr = "test@example.com"
     FIRST_SUPERUSER: pydantic.EmailStr = "admin@pikesquares.com"
     FIRST_SUPERUSER_PASSWORD: str = "secret"
@@ -446,4 +448,4 @@ def register_app_conf(
     register_factory(context, AppConfig, conf_factory)
 
 
-settings = APISettings()
+settings = AppConfig()
