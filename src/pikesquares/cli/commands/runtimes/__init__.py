@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pluggy
 import questionary
-import structlog
+import structlog_sentry_logger
 import typer
 
 from pikesquares import services
@@ -15,7 +15,7 @@ from pikesquares.service_layer.handlers.runtimes import (
 )
 from pikesquares.service_layer.uow import UnitOfWork
 
-logger = structlog.get_logger()
+logger = structlog_sentry_logger.get_logger()
 
 
 app = typer.Typer()
@@ -46,11 +46,6 @@ def add(
         console.error(f"cli up: unable to locate device by machine id {conf.machine_id}")
         raise typer.Exit(code=0) from None
 
-    # answers = questionary.form(
-    #    first = questionary.confirm("Would you like the next question?", default=True),
-    #    second = questionary.select("Select item", choices=["item1", "item2", "item3"])
-    # ).ask()
-
     runtime_name = questionary.select(
         "Select from available runtimes: ",
         choices=[
@@ -69,7 +64,11 @@ def add(
     if runtime_name in ["cpython", "pypy"]:
         choices = []
         for python_version in PythonAppRuntime.list_all_versions(conf.UV_BIN):
-            if python_version.implementation == runtime_name and python_version.variant == "default":
+            if (
+                python_version.implementation == runtime_name
+                and python_version.variant == "default"
+                and not python_version.symlink
+            ):
                 disabled = f"installed @ {python_version.path}" if python_version.path else ""
                 choices.append(questionary.Choice(python_version.version, value=python_version, disabled=disabled))
 
@@ -82,23 +81,33 @@ def add(
             raise typer.Exit(0)
 
         try:
-            logger.info(
-                f"calling provision_python_app_runtime: {runtime_version.version} {runtime_version.implementation}"
-            )
+            console.info(f"provisioning runtime {runtime_name} {runtime_version.version}")
             runtime = provision_python_app_runtime(runtime_version, uow)
             if runtime:
-                console.success(f":heavy_check_mark:     Provisioned {runtime_name} {runtime_version} runtime")
-                logger.info(f"installing runtime {runtime_version}")
-                PythonAppRuntime.install(f"{runtime_version.implementation}{runtime_version.version}")
+                console.success(f":heavy_check_mark:     Provisioned {runtime_name} {runtime_version.version} runtime")
+
+                console.info(f"installing runtime {runtime_name} {runtime_version.version}")
+                PythonAppRuntime.install(runtime_version)
+                console.success(f":heavy_check_mark:     Installed {runtime_name} {runtime_version.version} runtime")
 
             else:
-                console.warning(f"unable to provision {runtime_name} {runtime_version}")
+                console.warning(f"Unable to provision {runtime_name} {runtime_version.version}")
 
             scie_home = conf.data_dir / Path("scie-pikesquares")
-            result = PythonAppRuntime.build_uwsgi_python_plugin(
-                runtime_version, conf.plugins_dir, scie_home, uv_bin=conf.UV_BIN
-            )
-            logger.info(result)
+
+            if not (conf.plugins_dir / f"{runtime_version.uwsgi_plugin_name}_plugin.so").exists():
+                # FIXME find out where the interpreter is
+                # using interpreter @ {runtime_version.path}
+                console.info("building uWSGI Python plugin")
+                plugin_path = PythonAppRuntime.build_uwsgi_python_plugin(
+                    runtime_version, conf.plugins_dir, scie_home, uv_bin=conf.UV_BIN
+                )
+                if plugin_path:
+                    console.success(f"uWSGI Python plugin built and available at {plugin_path}.")
+                else:
+                    console.warning("unable to build uWSGI Python plugin.")
+            else:
+                logger.info(f"skip building {runtime_version.uwsgi_plugin_name}_plugin.so. One already exists.")
 
         except Exception as exc:
             logger.exception(exc)
@@ -153,8 +162,9 @@ def delete(
     if runtime_name in ["cpython", "pypy"]:
         choices = []
         for python_version in PythonAppRuntime.only_installed(conf.UV_BIN):
-            title = f"{python_version.version} installed @ {python_version.path}" if python_version.path else ""
-            choices.append(questionary.Choice(title, value=python_version))
+            if not python_version.symlink:
+                title = f"{python_version.version} installed @ {python_version.path}" if python_version.path else ""
+                choices.append(questionary.Choice(title, value=python_version))
 
         runtime_version = questionary.select(
             "Select from available versions: ",
@@ -165,15 +175,11 @@ def delete(
             raise typer.Exit(0)
 
         try:
-            logger.info(
-                f"calling delete_python_app_runtime: {runtime_version.version} {runtime_version.implementation}"
-            )
             delete_python_app_runtime(runtime_version, uow)
-            logger.info(f"removing runtime {runtime_version}")
-            PythonAppRuntime.uninstall(runtime_version)
+            PythonAppRuntime.uninstall(runtime_version, conf.plugins_dir)
             # console.warning(f"unable to provision {runtime_name} {runtime_version}")
             uow.commit()
-            console.success(f":heavy_check_mark:     Removed {runtime_name} {runtime_version} runtime")
+            console.success(f":heavy_check_mark:     Removed {runtime_name} {runtime_version.version} runtime")
         except Exception as exc:
             logger.exception(exc)
             # console.print(traceback.format_exc())

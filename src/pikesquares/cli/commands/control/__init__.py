@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pluggy
 import questionary
-import structlog
+import structlog_sentry_logger
 import tenacity
 import typer
 from plumbum import FG, ProcessExecutionError
@@ -23,6 +23,7 @@ from pikesquares.service_layer.handlers.attached_daemon import (
     attached_daemon_up,
     provision_attached_daemon,
 )
+from pikesquares.service_layer.handlers.codebases import provision_app_codebase
 from pikesquares.service_layer.handlers.project import project_up
 from pikesquares.service_layer.handlers.prompt_utils import (
     prompt_for_launch_service,
@@ -31,11 +32,12 @@ from pikesquares.service_layer.handlers.prompt_utils import (
 from pikesquares.service_layer.handlers.routers import http_router_up
 
 # from pikesquares.cli.commands.control import app
-from pikesquares.service_layer.handlers.runtimes import provision_app_codebase, provision_python_app_runtime
+from pikesquares.service_layer.handlers.runtimes import provision_python_app_runtime
 from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, wsgi_app_up
 from pikesquares.service_layer.uow import UnitOfWork
 
-logger = structlog.get_logger()
+# logger = structlog.get_logger()
+logger = structlog_sentry_logger.get_logger()
 
 app = typer.Typer()
 

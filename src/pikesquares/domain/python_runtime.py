@@ -2,7 +2,9 @@ from pathlib import Path
 
 import pydantic
 import structlog
-from packaging.version import Version
+from plumbum import local as pl_local
+from plumbum.path.utils import delete as pl_delete
+from plumbum.path.utils import move as pl_move
 from sqlmodel import Relationship
 
 from pikesquares.domain.runtime import AppRuntime
@@ -44,7 +46,7 @@ class PythonRuntimeVersion(pydantic.BaseModel):
     version: str
     version_parts: VersionParts
     path: Path | None = None
-    synlink: Path | None = None
+    symlink: Path | None = None
     url: pydantic.HttpUrl | None = None
     variant: str
     implementation: str
@@ -71,29 +73,29 @@ class PythonAppRuntime(AppRuntime, table=True):
         plugins_dir: Path,
         scie_home: Path,
         uv_bin: Path | None = None,
-    ):
-        # if not py_version:
-        #    py_install = max(all_py_installs, key=lambda item: Version(item["version"]))
-        # else:
-        #    py_install = next(filter(lambda x: x["version"] == py_version, all_py_installs))
-        # py_version = py_install.get(py_version)
-        # py_bin_path = Path(py_install.get("path"))
-        # logger.info(f"building uWSGI Python plugin in {uwsgi_src_home}. {py_version} @ {py_bin_path}")
-        build_python_plugin(runtime_version, plugins_dir, scie_home, uv_bin=uv_bin)
+    ) -> Path:
+        plugin_path = build_python_plugin(runtime_version, plugins_dir, scie_home, uv_bin=uv_bin)
+        if plugin_path.exists():
+            pl_move(plugin_path, plugins_dir)
+            return plugins_dir / plugin_path.name
 
     @classmethod
     def install(cls, runtime_version: PythonRuntimeVersion, uv_bin: Path | None = None):
-        result = install_python_version(runtime_version, uv_bin)
-
-        logger.info(f"installed python {runtime_version.implementation} {runtime_version.version}")
-        logger.info(result)
+        try:
+            install_python_version(runtime_version, uv_bin)
+        except UvCommandExecutionError as exc:
+            logger.error(exc)
 
     @classmethod
-    def uninstall(cls, runtime_version: PythonRuntimeVersion, uv_bin: Path | None = None):
+    def uninstall(cls, runtime_version: PythonRuntimeVersion, plugins_dir: Path, uv_bin: Path | None = None):
         result = uninstall_python_version(runtime_version, uv_bin)
 
         logger.info(f"removed python {runtime_version.implementation} {runtime_version.version}")
         logger.info(result)
+
+        plugin_path = pl_local.path(plugins_dir).joinpath(f"{runtime_version.uwsgi_plugin_name}_plugin.so")
+        if plugin_path.exists():
+            pl_delete(plugin_path)
 
     @classmethod
     def only_installed(cls, uv_bin: Path | None = None):

@@ -2,7 +2,7 @@ import json
 import tempfile
 from pathlib import Path
 
-import structlog
+import structlog_sentry_logger
 from plumbum import CommandNotFound, LocalPath, ProcessExecutionError
 from plumbum import local as pl_local
 from plumbum.path.utils import move
@@ -14,7 +14,7 @@ from pikesquares.exceptions import (
     UvSyncError,
 )
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
 
 
 class SCIERepoDoesNotExistError(Exception):
@@ -111,7 +111,7 @@ def build_python_plugin(
     plugins_dir: LocalPath | Path,
     scie_home: LocalPath | Path,
     uv_bin: LocalPath | Path | None = None,
-):
+) -> Path | LocalPath:
     # uv run uwsgiconfig.py --plugin plugins/python
     uv_bin = uv_bin or which_uv()
     # pythonXXX_plugin.so
@@ -126,22 +126,35 @@ def build_python_plugin(
     ]
     if cmd_env:
         pl_local.env.update(cmd_env)
-        logger.debug(f"{cmd_env=}")
 
     # with pl_local.as_user(run_as_user):
     uv = pl_local[str(uv_bin)]
     uwsgi_src_home = scie_home / "uwsgi"
 
     try:
-        print(cmd_args)
         result = uv.run(cmd_args, cwd=str(uwsgi_src_home), **{"env": cmd_env})
 
         if result[0] == 0:
-            # cpython_3_14_7_plugin.so
-            move(uwsgi_src_home / f"{runtime_version.uwsgi_plugin_name}_plugin.so", plugins_dir)
+            # result[1]
+            # stdout
+            # [
+            #    '/usr/lib/gcc/x86_64-linux-gnu/15/include',
+            #    '/usr/local/include',
+            #    '/usr/include/x86_64-linux-gnu',
+            #    '/usr/include'
+            # ]
+            #  cpython_3_15_0b1 plugin built and available in ./cpython_3_15_0b1_plugin.so
+            """using profile: buildconf/default.ini\ndetected include path: ['/usr/lib/gcc/x86_64-linux-gnu/15/include', '/usr/local/include', '/usr/include/x86_64-linux-gnu', '/usr/include']\n*** uWSGI building and linking plugin plugins/python ***\n[cc -pthread] ./cpython_3_15_0b1_plugin.so\nbuild time: 5 seconds\n*** cpython_3_15_0b1 plugin built and available in ./cpython_3_15_0b1_plugin.so ***\n
+            """
+            # result[2]
+            # stderr
 
-        logger.info(result)
-        print(result)
+            # cpython_3_14_7_plugin.so
+            plugin_path = uwsgi_src_home / f"{runtime_version.uwsgi_plugin_name}_plugin.so"
+            if plugin_path.exists():
+                return plugin_path
+
+        # logger.info(result)
         return result
     except ProcessExecutionError as exc:
         for line in exc.stdout.split("\n"):
@@ -250,16 +263,13 @@ def build_uwsgi(conf, scie_home) -> None:
 def install_python_version(
     runtime_version: "PythonRuntimeVersion",
     uv_bin: LocalPath | Path | None = None,
-    # cwd
 ):
     uv_bin = uv_bin or which_uv()
     cmd_env = {}
     cmd_args = ["python", "install", runtime_version.version]
     if cmd_env:
         pl_local.env.update(cmd_env)
-        logger.debug(f"{cmd_env=}")
     cmd_args = list(filter(lambda x: x != "", cmd_args))
-    logger.info(cmd_args)
     uv = pl_local[str(uv_bin)]
     error_msg = f"uv run {' '.join(cmd_args)}"
     try:
@@ -268,7 +278,6 @@ def install_python_version(
             # cwd=str(cwd),
             **{"env": cmd_env},
         )
-        logger.info(result)
         if result[0] == 0:
             return result[1]
         else:
@@ -276,12 +285,14 @@ def install_python_version(
             raise UvCommandExecutionError(error_msg)
 
     except ProcessExecutionError as exc:
-        for line in exc.stdout.split("\n"):
-            print(line)
+        logger.info(exc.stdout)
+        # for line in exc.stdout.split("\n"):
+        #    print(line)
 
         if exc.stderr:
-            for line in exc.stderr.split("\n"):
-                print(line)
+            logger.error(exc.stderr)
+            # for line in exc.stderr.split("\n"):
+            #    print(line)
         raise UvCommandExecutionError(error_msg)
 
 
@@ -306,7 +317,6 @@ def uninstall_python_version(
             # cwd=str(cwd),
             **{"env": cmd_env},
         )
-        logger.info(result)
         # if result[0] == 0:
         #    return result[1]
         # else:
@@ -347,7 +357,6 @@ def list_installed_python_versions(
         pl_local.env.update(cmd_env)
         logger.debug(f"{cmd_env=}")
     cmd_args = list(filter(lambda x: x != "", cmd_args))
-    logger.info(cmd_args)
     uv = pl_local[str(uv_bin)]
     error_msg = f"uv run {' '.join(cmd_args)}"
     try:
@@ -356,7 +365,7 @@ def list_installed_python_versions(
             # cwd=str(cwd),
             **{"env": cmd_env},
         )
-        logger.info(result)
+        # logger.debug(result)
         if result[0] == 0:
             return [PythonRuntimeVersion(**py_version) for py_version in json.loads(result[1])]
         else:

@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 
 import pluggy
-import structlog
+import structlog_sentry_logger
 import typer
 from sqlmodel import Session, SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -19,7 +19,7 @@ from pikesquares.service_layer.handlers.device import provision_device
 from pikesquares.service_layer.handlers.monitors import create_zmq_monitor
 from pikesquares.service_layer.uow import UnitOfWork
 
-logger = structlog.getLogger(__name__)
+logger = structlog_sentry_logger.getLogger(__name__)
 
 
 def init_db(context):

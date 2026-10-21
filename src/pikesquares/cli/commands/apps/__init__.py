@@ -9,7 +9,7 @@ from typing import Annotated, Optional
 import cuid
 import questionary
 import randomname
-import structlog
+import structlog_sentry_logger
 import typer
 from rich.layout import Layout
 from rich.live import Live
@@ -45,7 +45,7 @@ from .utils import (
 )
 from .validators import NameValidator
 
-logger = structlog.get_logger()
+logger = structlog_sentry_logger.get_logger()
 
 
 class LanguageRuntime(str, Enum):

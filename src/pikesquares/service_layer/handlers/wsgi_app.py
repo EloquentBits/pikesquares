@@ -5,11 +5,7 @@ import pluggy
 import structlog
 import tenacity
 
-from pikesquares.domain.project import Project
-from pikesquares.domain.python_runtime import PythonAppRuntime
-from pikesquares.domain.runtime import PythonAppCodebase
 from pikesquares.domain.wsgi_app import WsgiApp
-from pikesquares.exceptions import DjangoSettingsError
 from pikesquares.presets.wsgi_app import WsgiAppSection
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 from pikesquares.service_layer.handlers.routers import create_tuntap_device

@@ -17,7 +17,17 @@ from plumbum import CommandNotFound
 from plumbum import local as pl_local
 
 from pikesquares import __app_name__, __version__, services
-from pikesquares.cli.commands import apps, build, control, devices, managed_services, projects, routers, runtimes
+from pikesquares.cli.commands import (
+    apps,
+    build,
+    codebases,
+    control,
+    devices,
+    managed_services,
+    projects,
+    routers,
+    runtimes,
+)
 from pikesquares.cli.console import console
 from pikesquares.conf import (
     AppConfig,
@@ -56,8 +66,6 @@ logging.basicConfig(
 )
 for import_lib in [
     "svcs",
-    "asyncio",
-    "aiosqlite",
     # "plumbum"
 ]:
     warn_logger = logging.getLogger(import_lib)
@@ -124,6 +132,7 @@ app.add_typer(devices.app, name="devices")
 app.add_typer(managed_services.app, name="services")
 app.add_typer(build.app, name="build")
 app.add_typer(runtimes.app, name="runtimes")
+app.add_typer(codebases.app, name="codebases")
 
 
 def _version_callback(value: bool) -> None:

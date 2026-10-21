@@ -5,7 +5,7 @@ from typing import Optional
 import pluggy
 import questionary
 import randomname
-import structlog
+import structlog_sentry_logger
 import tenacity
 import typer
 
@@ -37,7 +37,7 @@ from pikesquares.services.data import DeviceStats
 # , NameValidator
 
 
-logger = structlog.get_logger()
+logger = structlog_sentry_logger.get_logger()
 
 
 # ALIASES = ("proj", "prj")

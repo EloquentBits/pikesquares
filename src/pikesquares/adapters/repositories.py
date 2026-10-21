@@ -11,6 +11,7 @@ from pikesquares.domain.device import Device, DeviceUWSGIOption
 from pikesquares.domain.managed_services import AttachedDaemon
 from pikesquares.domain.monitors import ZMQMonitor
 from pikesquares.domain.project import Project
+from pikesquares.domain.python_codebase import PythonAppCodebase
 from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.domain.router import (
     HttpRouter,
@@ -18,7 +19,6 @@ from pikesquares.domain.router import (
     # HttpsRouter,
     TuntapRouter,
 )
-from pikesquares.domain.runtime import PythonAppCodebase
 from pikesquares.domain.wsgi_app import WsgiApp
 
 # logger = logging.getLogger("uvicorn.error")
