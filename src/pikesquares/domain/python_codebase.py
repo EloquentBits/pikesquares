@@ -2,20 +2,24 @@ import re
 import shutil
 import tempfile
 import traceback
-import uuid
 from pathlib import Path
 
 import giturlparse
 import pluggy
-import pydantic
 import structlog
 import toml
 from plumbum import ProcessExecutionError
 from sqlmodel import Field, Relationship
 
 from pikesquares.domain.codebase import BaseAppCodebase
+from pikesquares.domain.python_django_codebase import (
+    DjangoCheckMessage,
+    DjangoCheckMessages,
+    DjangoSettings,
+)
 from pikesquares.exceptions import (
     DjangoCheckError,
+    DjangoDiffSettingsError,
     UvCommandExecutionError,
     UvPipInstallError,
     UvPipListError,
@@ -58,60 +62,15 @@ PY_TMP_DIR_IGNORE_PATTERNS: set[str] = set(
 py_runtime_emoji: str = ":snake:"
 
 
-class DjangoCheckMessage(pydantic.BaseModel):
-    # 4_0.E001
-    id: str
-    # ?: (4_0.E001) As of Django 4.0, the values in the CSRF_TRUSTED_ORIGINS setting must start with a scheme (usually http:// or https://) but found . See the release notes for details.
-    message: str
-
-
-class DjangoCheckMessages(pydantic.BaseModel):
-    messages: list[DjangoCheckMessage] = []
-
-
-class DjangoSettings(pydantic.BaseModel):
-    # SETTINGS_MODULE = 'mysite.settings'
-    # WSGI_APPLICATION = 'mysite.wsgi.application'
-    # DATABASES = {'default':
-    #   {'ENGINE': 'django.db.backends.sqlite3',
-    #       'NAME': PosixPath('/home/pk/dev/eqb/pikesquares-app-templates/sandbox/django/djangotutorial/db.sqlite3'),
-    #       'ATOMIC_REQUESTS': False, 'AUTOCOMMIT': True,
-    #       'CONN_MAX_AGE': 0, 'CONN_HEALTH_CHECKS': False,
-    #       'OPTIONS': {}, 'TIME_ZONE': None, 'USER': '', 'PASSWORD': '', 'HOST': '',
-    #       'PORT': '', 'TEST': {'CHARSET': None,
-    #       'COLLATION': None, 'MIGRATE': True, 'MIRROR': None, 'NAME': None}}}
-    # CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
-    # ALLOWED_HOSTS = []
-    # INSTALLED_APPS = [
-    #        'django.contrib.admin',
-    #        'django.contrib.auth',
-    #        'django.contrib.contenttypes',
-    #        'django.contrib.sessions',
-    #        'django.contrib.messages',
-    #        'django.contrib.staticfiles'
-    # ]
-    # ROOT_URLCONF = 'mysite.urls'  ###
-    # SECRET_KEY = ''
-    # STATIC_URL = 'static/'
-
-    settings_module: str
-    root_urlconf: str
-    wsgi_application: str
-    base_dir: Path | None = None
-
-    def settings_with_titles(self) -> list[tuple[str, str]]:
-        return [
-            ("Django Settings Module", self.settings_module),
-            ("Django URLConf Module", self.root_urlconf),
-            ("Django WSGI Module", self.wsgi_application),
-        ]
-
-
 class PythonAppCodebase(BaseAppCodebase, table=True):
     __tablename__ = "python_app_codebases"
 
-    uv_bin: str = Field(max_length=255)
+    uv_bin: str | None = Field(max_length=255)
     wsgi_apps: list["WsgiApp"] = Relationship(back_populates="python_app_codebase")
+
+    root_dir: str = Field(max_length=255)
+    wsgi_file: str | None = Field(max_length=255)
+    wsgi_module: str | None = Field(max_length=50)
 
     def get_files(self) -> set[Path]:
         all_files: set[Path] = set()

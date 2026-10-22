@@ -12,9 +12,9 @@ class BaseAppCodebase(TimeStampedBase):
         max_length=36,
     )
     root_dir: str = Field(max_length=255)
-    repo_dir: str = Field(max_length=255)
-    repo_git_url: str = Field(max_length=255)
-    venv_dir: str = Field(max_length=255)
+    repo_dir: str | None = Field(max_length=255)
+    repo_git_url: str | None = Field(max_length=255)
+    venv_dir: str | None = Field(max_length=255)
     editable_mode: bool = Field(default=False)
 
     class Config:

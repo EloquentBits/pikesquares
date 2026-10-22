@@ -26,24 +26,23 @@ def pluralize(count: int, words: list[str], show_count: bool = True):
 
 
 class _RenderMixin:
-
     def _label(self, *args, **kwargs):
         return Text(*args, **kwargs).markup
 
     @property
     def styles(self):
         return {
-            'header': {
-                'online': {'text': ":play_button: online", 'style': "bold green"},
-                'offline': {'text': ":stop_button: offline", 'style': "red"},
+            "header": {
+                "online": {"text": ":play_button: online", "style": "bold green"},
+                "offline": {"text": ":stop_button: offline", "style": "red"},
             },
-            'subtitle': {
-                'online': {'text': "online", 'style': "bold green"},
-                'offline': {'text': "offline", 'style': "bold red"},
+            "subtitle": {
+                "online": {"text": "online", "style": "bold green"},
+                "offline": {"text": "offline", "style": "bold red"},
             },
-            'item': {
-                'online': {'text': ":play_button: {name}", 'style': "green"},
-                'offline': {'text': ":stop_button: {name}", 'style': "red"},
+            "item": {
+                "online": {"text": ":play_button: {name}", "style": "green"},
+                "offline": {"text": ":stop_button: {name}", "style": "red"},
             },
         }
 
@@ -88,20 +87,20 @@ class _RenderMixin:
         )
 
     def _item(self, entity):
-        status = entity.get('status', 'offline')
-        label_params = self.styles['item'].get(status)
-        label_text = label_params.pop('text').format(name=entity.get('name'))
-        return self._label(label_text, style=label_params.pop('style'))
+        status = entity.get("status", "offline")
+        label_params = self.styles["item"].get(status)
+        label_text = label_params.pop("text").format(name=entity.get("name"))
+        return self._label(label_text, style=label_params.pop("style"))
 
     def _panel(self, entity, items_caption, show_id=True):
         title = "{name} (id: {id})".format(**entity)
         if not show_id:
             title = "{name}".format(**entity)
 
-        status = entity.get('status', 'offline')
+        status = entity.get("status", "offline")
         header = list()
-        header.append(self._label(**self.styles.get('header').get(status)))
-        subtitle = self._label(**self.styles.get('subtitle').get(status))
+        header.append(self._label(**self.styles.get("header").get(status)))
+        subtitle = self._label(**self.styles.get("subtitle").get(status))
 
         items = [self._item(item) for item in entity.get(items_caption.lower(), [])]
         header.append("--- {title} ---".format(title=items_caption.capitalize()))
@@ -126,7 +125,6 @@ class _RenderMixin:
 
 
 class Console(BaseConsole, _RenderMixin):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -145,29 +143,29 @@ class Console(BaseConsole, _RenderMixin):
     #    return echo_via_pager(content, color=color)
 
     def error(self, *args, **kwargs):
-        example = kwargs.pop('example', None)
-        example_description = kwargs.pop('example_description', None)
-        hint = kwargs.pop('hint', None)
-        self.print(*args, **kwargs, style='red')
+        example = kwargs.pop("example", None)
+        example_description = kwargs.pop("example_description", None)
+        hint = kwargs.pop("hint", None)
+        self.print(*args, **kwargs, style="red")
         if example:
             if example_description:
-                example = ' - '.join([f"[i]{example}[/i]", f"[default]{example_description}"])
+                example = " - ".join([f"[i]{example}[/i]", f"[default]{example_description}"])
             self.info(f"It should be:\n\t{example}")
         if hint:
             self.warning(f"[i]Hint: {hint}[/i]")
 
     def info(self, *args, **kwargs):
-        self.print(*args, **kwargs, style='blue')
+        self.print(*args, **kwargs, style="blue")
 
     def success(self, *args, **kwargs):
-        self.print(*args, **kwargs, style='green')
+        self.print(*args, **kwargs, style="green")
 
     def warning(self, *args, **kwargs):
-        self.print(*args, **kwargs, style='yellow')
+        self.print(*args, **kwargs, style="yellow")
 
     def ask(self, *args, **kwargs):
-        repeat = kwargs.pop('repeat', False)
-        validators = kwargs.pop('validators', [])
+        repeat = kwargs.pop("repeat", False)
+        validators = kwargs.pop("validators", [])
         result = None
         while True:
             result = Prompt.ask(*args, **kwargs)
@@ -186,7 +184,7 @@ class Console(BaseConsole, _RenderMixin):
 
     def ask_for_options(self, options, label=None, *args, **kwargs):
         options_filled = {}
-        options.update(kwargs.pop('defaults', {}))
+        options.update(kwargs.pop("defaults", {}))
         for k, v in options.items():
             validators = []
             is_path_key = any(k.endswith(o) for o in ("_dir", "_file", "_path"))
@@ -197,10 +195,10 @@ class Console(BaseConsole, _RenderMixin):
             options_filled[k] = self.ask(
                 label(k), *args, default=v.format(**options_filled), validators=validators, **kwargs
             )
-            if is_path_key and options_filled.get('root_dir') and not options_filled[k].startswith("/"):
+            if is_path_key and options_filled.get("root_dir") and not options_filled[k].startswith("/"):
                 # root_dir is filled and path DO NOT start with /
                 options_filled[k] = "{root_dir}/{path}".format(
-                    root_dir=options_filled.get('root_dir'), path=options_filled[k]
+                    root_dir=options_filled.get("root_dir"), path=options_filled[k]
                 )
         return options_filled
 
@@ -218,8 +216,8 @@ class Console(BaseConsole, _RenderMixin):
         return questionary.path(*args, **kwargs).unsafe_ask()
 
     def format_print(*args, **kwargs):
-        title = kwargs.pop('title', "")
-        fmt = kwargs.pop('format', "")
+        title = kwargs.pop("title", "")
+        fmt = kwargs.pop("format", "")
         _, value = args
         if fmt == "json":
             console.print(value)
@@ -232,13 +230,13 @@ class Console(BaseConsole, _RenderMixin):
 
     def simple_print(self, value):
         value_colors = {
-            'online': "green",
-            'offline': "red",
+            "online": "green",
+            "offline": "red",
         }
         if isinstance(value, dict):
             for k, v in value.items():
-                color = value_colors.get(v, 'default')
-                key = k.replace('service', '').replace('_', ' ').strip().capitalize()
+                color = value_colors.get(v, "default")
+                key = k.replace("service", "").replace("_", " ").strip().capitalize()
                 console.print(f"{key}: [{color}]{v}")
 
     def render_link(self, address, port=None, desc=None, user=None, protocol="https"):
@@ -256,13 +254,13 @@ class Console(BaseConsole, _RenderMixin):
             if key == "virtual_hosts":
                 lines = []
                 for i in value:
-                    lines.append(self.render_link(address=i.get('address'), protocol=i.get('protocol')))
+                    lines.append(self.render_link(address=i.get("address"), protocol=i.get("protocol")))
                     lines.extend(
                         [
                             self.render_link(
-                                address=sn, protocol=i.get('protocol'), port=i.get('address').split(':')[1]
+                                address=sn, protocol=i.get("protocol"), port=i.get("address").split(":")[1]
                             )
-                            for sn in i.get('server_names')
+                            for sn in i.get("server_names")
                         ]
                     )
                 return "\n".join(lines)
@@ -276,7 +274,7 @@ class Console(BaseConsole, _RenderMixin):
             exclude = []
 
         if not show_id:
-            exclude.append('cuid')
+            exclude.append("cuid")
 
         table = Table(title=title)
 
@@ -284,7 +282,7 @@ class Console(BaseConsole, _RenderMixin):
             for k in r:
                 if k in exclude:
                     continue
-                header = k.replace('service', '').replace('_', ' ').strip().title()
+                header = k.replace("service", "").replace("_", " ").strip().title()
                 if header not in [c.header for c in table.columns]:
                     table.add_column(header)
 
@@ -313,7 +311,7 @@ class Console(BaseConsole, _RenderMixin):
                     ),
                     characters="-",
                 )
-            envs_names = [e.get('name') for e in environments]
+            envs_names = [e.get("name") for e in environments]
             if len(set(envs_names)) < len(envs_names):
                 # always show ids when envs with same name occured
                 show_id = True
@@ -340,7 +338,7 @@ class Console(BaseConsole, _RenderMixin):
                 characters="-",
             )
         if len(projects) > 0:
-            projs_names = [e.get('name') for e in projects]
+            projs_names = [e.get("name") for e in projects]
             if len(set(projs_names)) < len(projs_names):
                 # always show ids when projects with same name occured
                 show_id = True

@@ -57,14 +57,14 @@ app = typer.Typer()
 @app.command(
     # "new", hidden=True
 )
-def create(
+def add(
     ctx: typer.Context,
     project_name: Optional[str] = typer.Argument("", help="New project name"),
 ):
     """
-    Create new project in environment
+    Add new project in environment
 
-    Aliases: [i] create, new
+    Aliases: [i] add, new
     """
     context = ctx.ensure_object(dict)
     custom_style = context.get("cli-style")
@@ -162,24 +162,24 @@ def create(
             # else:
             #    console.info(f"Not launching {project.name}")
             #    raise typer.Exit(0) from None
+            if 0:
+                for http_router in project.http_routers or []:
+                    try:
+                        http_router_up_result = http_router_up(uow, http_router)
+                        if http_router_up_result:
+                            console.success(":heavy_check_mark:     Launching http router.. Done!")
+                            console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
+                            # process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
+                    except Exception as exc:
+                        logger.exception(exc)
+                        console.print(traceback.format_exc())
+                        console.warning(f"Unable to launch http router {http_router}")
+                        raise typer.Exit(1) from None
 
-            for http_router in project.http_routers or []:
-                try:
-                    http_router_up_result = http_router_up(uow, http_router)
-                    if http_router_up_result:
-                        console.success(":heavy_check_mark:     Launching http router.. Done!")
-                        console.success(":heavy_check_mark:     Launching http router subscription server.. Done!")
-                        # process_compose.add_tail_log_process(http_router.service_id, http_router.log_file)
-                except Exception as exc:
-                    logger.exception(exc)
-                    console.print(traceback.format_exc())
-                    console.warning(f"Unable to launch http router {http_router}")
-                    raise typer.Exit(1) from None
-
-            for attached_daemon in project.attached_daemons or []:
-                if attached_daemon_up(attached_daemon, uow, plugin_manager):
-                    logger.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
-                logger.info(f"launched attached daemon for project {project.service_id}")
+                for attached_daemon in project.attached_daemons or []:
+                    if attached_daemon_up(attached_daemon, uow, plugin_manager):
+                        logger.info(f"started managed service {attached_daemon.name} [{attached_daemon.service_id}]")
+                    logger.info(f"launched attached daemon for project {project.service_id}")
 
         except Exception as exc:
             logger.exception(exc)
@@ -207,7 +207,7 @@ def create(
             device_zmq_monitor.create_or_restart_instance(f"{project.service_id}.ini", project)
             console.success(f":heavy_check_mark:     Launching project [{project.name}]. Done!")
         else:
-            console.warning("Failed to create a Project")
+            console.warning("Failed to add a project")
 
 
 @app.command(short_help="Stop Project Service.\nAliases:[s] stop")

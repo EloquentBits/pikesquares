@@ -31,7 +31,7 @@ from sqlmodel import SQLModel
 from pikesquares.domain.base import (
     ServiceBase,
 )
-from pikesquares.domain.codebase import AppCodebase
+from pikesquares.domain.codebase import BaseAppCodebase
 from pikesquares.domain.device import (
     Device,
     DeviceUWSGIOption,
@@ -40,8 +40,8 @@ from pikesquares.domain.device import (
 # from pikesquares.domain.managed_services import AttachedDaemon
 # from pikesquares.domain.monitors import DirMonitor, ZMQMonitor
 # from pikesquares.domain.project import Project
-# from pikesquares.domain.python_codebase import PythonAppCodebase
-# from pikesquares.domain.python_runtime import PythonAppRuntime
+from pikesquares.domain.python_codebase import PythonAppCodebase
+from pikesquares.domain.python_runtime import PythonAppRuntime
 from pikesquares.domain.router import (
     HttpRouter,
     TuntapDevice,

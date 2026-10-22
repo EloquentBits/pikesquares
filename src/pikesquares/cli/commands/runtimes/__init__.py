@@ -186,3 +186,44 @@ def delete(
             console.warning(f"Unable to remove runtime {runtime_name}")
             uow.rollback()
             raise typer.Exit(1) from None
+
+
+@app.command(
+    "runtimes",
+    rich_help_panel="Show",
+    short_help="Show all runtimes.\nAliases:[i] runtimes, runtimes list",
+)
+# @app.command("proj", rich_help_panel="Show", hidden=True)
+@app.command("list")
+def list_(ctx: typer.Context, show_id: bool = False):
+    """
+    Show all runtimes on current device
+
+    Aliases:[i] runtimes, runtimes list
+    """
+    context = ctx.ensure_object(dict)
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
+
+    device = uow.devices.get_by_machine_id(conf.machine_id)
+    if not device:
+        console.warning("unable to lookup device")
+        raise typer.Exit(0)
+
+    runtimes = uow.python_app_runtimes.list()
+    if not len(runtimes):
+        console.warning("No runtimes were initialized, nothing to show!")
+        raise typer.Exit()
+
+    runtimes_out = []
+    for runtime in runtimes:
+        runtimes_out.append(
+            {
+                "id": runtime.id,
+                "language": runtime.lang,
+                "version": runtime.version,
+                "implementation": runtime.implementation,
+            }
+        )
+
+    console.print_response(runtimes_out, title=f"runtimes count: {len(runtimes)}", show_id=show_id)

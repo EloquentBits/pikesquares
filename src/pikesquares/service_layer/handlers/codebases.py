@@ -17,8 +17,40 @@ logger = structlog.getLogger()
 
 def provision_managed_codebase(
     uow: UnitOfWork,
+    codebase_id: str,
+    root_dir: Path,
 ):
-    pass
+    try:
+        app_codebase = uow.python_app_codebases.add(
+            PythonAppCodebase(
+                id=codebase_id,
+                root_dir=str(root_dir),
+                # repo_dir=str(app_repo_dir),
+                # venv_dir=str(app_pyvenv_dir),
+                editable_mode=False,
+                # uv_bin=str(uv_bin),
+            )
+        )
+        logger.info(f"created App Codebase @ {root_dir}")
+
+        # if not app_codebase.dependencies_validate():
+        #    raise RuntimeError("validating dependencies failed")
+
+        # logger.info(f"Successfully validated {service_name} dependencies")
+
+        # if not app_codebase.dependencies_install(service_name, plugin_manager):
+        #    raise RuntimeError("installing dependencies failed")
+
+    except Exception as exc:
+        logger.exception(exc)
+        logger.info(f"failed provisioning Python App Codebase @ {root_dir}")
+        print(traceback.format_exc())
+        uow.rollback()
+        raise exc
+
+    uow.commit()
+
+    return app_codebase
 
 
 def provision_editable_codebase(
