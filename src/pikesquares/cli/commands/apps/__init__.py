@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import cuid
+import pluggy
 import questionary
 import randomname
 import structlog_sentry_logger
@@ -27,6 +28,7 @@ from pikesquares.cli.console import (
 )
 from pikesquares.conf import AppConfig
 from pikesquares.domain.wsgi_app import WsgiApp
+from pikesquares.service_layer.handlers.wsgi_app import provision_wsgi_app, wsgi_app_up
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.apps.exceptions import (
     DjangoCheckError,
@@ -74,6 +76,83 @@ def detect(
     conf = services.get(context, AppConfig)
     custom_style = context.get("cli-style")
     logger.info("Detecting project")
+
+
+@app.command(short_help="Add app.\nAliases:[i] new")
+@app.command(
+    # "new", hidden=True
+)
+def add(
+    ctx: typer.Context,
+    # project_name: Optional[str] = typer.Argument("", help="New project name"),
+):
+    """
+    Add runtime
+
+    Aliases: [i] add, create, new
+    """
+    context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
+    plugin_manager = services.get(context, pluggy.PluginManager)
+
+    device = uow.devices.get_by_machine_id(conf.machine_id)
+
+    if not device:
+        console.error(f"cli up: unable to locate device by machine id {conf.machine_id}")
+        raise typer.Exit(code=0) from None
+
+    runtimes = uow.python_app_runtimes.list()
+    if not len(runtimes):
+        console.warning("No runtimes were added. add runtimes first.")
+        raise typer.Exit()
+
+    runtime_choices = []
+    for runtime in runtimes:
+        runtime_choices.append(questionary.Choice(f"{runtime.implementation} {runtime.version}", value=runtime))
+
+    runtime_version = questionary.select(
+        "Select from available runtimes: ",
+        choices=runtime_choices,
+        style=custom_style,
+    ).ask()
+    if not runtime_version:
+        raise typer.Exit(0)
+
+    codebases = uow.python_app_codebases.list()
+    if not len(codebases):
+        console.warning("No codebases were added. add codebases first.")
+        raise typer.Exit()
+
+    codebase_choices = []
+    for codebase in codebases:
+        codebase_choices.append(questionary.Choice(f"{codebase.root_dir}", value=codebase))
+
+    runtime_version = questionary.select(
+        "Select from available codebases: ",
+        choices=codebase_choices,
+        style=custom_style,
+    ).ask()
+    if not runtime_version:
+        raise typer.Exit(0)
+
+    if 0:
+        launch_service = ""
+        try:
+            wsgi_app = provision_wsgi_app(launch_service, Path(python_app_codebase.root_dir), uow, plugin_manager)
+            if not wsgi_app:
+                console.error(f"unable to provision the {launch_service} app.")
+                raise typer.Exit(code=0) from None
+
+            wsgi_app_up(wsgi_app, uow, console)
+            uow.commit()
+
+        except Exception as exc:
+            logger.exception(exc)
+            uow.rollback()
+            console.error(f"unable to provision the {launch_service} app.")
+            raise typer.Exit(code=0) from None
 
 
 @app.command(short_help="Create new app\nAliases: [i] create, new")
