@@ -1,4 +1,5 @@
 import json
+import sys
 import tempfile
 from pathlib import Path
 
@@ -187,7 +188,19 @@ def build_plugin(conf, name, scie_home):
 
     cwd = uwsgi_src_home
 
+    platform = None
+    if sys.platform == "darwin":
+        platform = "macos"
+    elif sys.platform.startswith("linux"):
+        platform = "linux"
+
     cmd_env = {}
+
+    if platform and platform == "macos":
+        cmd_env = {
+            "CPATH": "/opt/homebrew/include",
+            "LIBRARY_PATH": "/opt/homebrew/lib",
+        }
     cmd_args = ["run", "uwsgiconfig.py", "--plugin", f"plugins/{name}"]
 
     if cmd_env:
