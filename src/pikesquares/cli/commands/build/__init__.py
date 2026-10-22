@@ -19,6 +19,7 @@ from pikesquares.service_layer.handlers.runtimes import (
     provision_python_app_runtime,
 )
 from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.service_layer.uv import PluginHeaderFileMissingError, build_plugin, build_uwsgi, clone_repo
 
 # from pikesquares.service_layer.handlers.runtimes import get_uv_python_installations
 
@@ -183,12 +184,12 @@ def emperor_zeromq_plugin(
     conf = services.get(context, AppConfig)
     with tempfile.TemporaryDirectory() as scie_home:
         clone_repo(scie_home)
-    try:
-        build_plugin(conf, "emperor_zeromq", scie_home)
-    except PluginHeaderFileMissingError as exc:
-        console.warning("emperor_zeromq_plugin development header files are not installed.")
-        console.info(exc.message)
-        raise typer.Exit(1) from None
+        try:
+            build_plugin(conf, "emperor_zeromq", scie_home)
+        except PluginHeaderFileMissingError as exc:
+            console.warning("emperor_zeromq_plugin development header files are not installed.")
+            console.info(exc.message)
+            raise typer.Exit(1) from None
 
 
 @app.command(short_help="Build uWSGI tuntap plugin.\nAliases:[p] tuntap-plugin")
