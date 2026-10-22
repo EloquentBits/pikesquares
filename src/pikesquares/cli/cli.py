@@ -35,6 +35,7 @@ from pikesquares.conf import (
     register_app_conf,
 )
 from pikesquares.domain.python_runtime import PythonRuntimePlugin
+from pikesquares.service_layer.uv import build_uwsgi_deps
 from pikesquares.services.init import init_db, init_device, init_pluggy, init_process_compose
 
 LOG_FILE = "app.log"
@@ -310,7 +311,7 @@ def main(
             filter(lambda plugin: not (conf.plugins_dir / f"{plugin}_plugin.so").exists(), conf.required_plugins)
         ):
             (conf.data_dir / "bin").mkdir(parents=True, exist_ok=True)
-            build.build_uwsgi_deps(conf)
+            build_uwsgi_deps(conf)
 
     device = init_device(context)
 
