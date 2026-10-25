@@ -237,6 +237,8 @@ def register_device_stats(
     def device_stats_factory():
         device = context.get("device")
         if device:
+            logger.info(f"reading {device} stats")
+            print(f"print | reading {device} stats")
             return device.read_stats()
 
     services.register_factory(

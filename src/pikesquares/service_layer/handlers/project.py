@@ -2,23 +2,27 @@ from pathlib import Path
 
 import cuid
 import netifaces
-import pluggy
-import structlog
+
+# import pluggy
+import structlog_sentry_logger
 import tenacity
 
 from pikesquares.domain.device import Device
 from pikesquares.domain.project import Project
-from pikesquares.domain.router import TuntapRouter
+
+# from pikesquares.domain.router import TuntapRouter
 from pikesquares.presets.project import ProjectSection
-from pikesquares.service_layer.handlers.attached_daemon import provision_attached_daemon
+
+# from pikesquares.service_layer.handlers.attached_daemon import provision_attached_daemon
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance, create_zmq_monitor, destroy_instance
-from pikesquares.service_layer.handlers.routers import (
-    provision_http_router,
-    provision_tuntap_router,
-)
+
+# from pikesquares.service_layer.handlers.routers import (
+#    provision_http_router,
+#    provision_tuntap_router,
+# )
 from pikesquares.service_layer.uow import UnitOfWork
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
 
 
 def get_nat_interfaces() -> list[str]:
@@ -148,13 +152,15 @@ def project_up(project: Project) -> bool | None:
                     command=f"iptables -t nat -A POSTROUTING -o {nat_interface} -j MASQUERADE",
                     phase=section.main_process.phases.PRIV_DROP_PRE,
                 )
-        # enable linux ip forwarding
-        section.main_process.run_command_on_event(
-            command="echo 1 >/proc/sys/net/ipv4/ip_forward",
-            phase=section.main_process.phases.PRIV_DROP_PRE,
-        )
-        # fs,pid,ipc,uts,net
-        section._set("emperor-use-clone", "net")
+
+        if project.tuntap_routers:
+            # enable linux ip forwarding
+            section.main_process.run_command_on_event(
+                command="echo 1 >/proc/sys/net/ipv4/ip_forward",
+                phase=section.main_process.phases.PRIV_DROP_PRE,
+            )
+            # fs,pid,ipc,uts,net
+            section._set("emperor-use-clone", "net")
 
         # try:
         #    _ = project.read_stats()

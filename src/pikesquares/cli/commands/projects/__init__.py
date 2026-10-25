@@ -210,6 +210,56 @@ def add(
             console.warning("Failed to add a project")
 
 
+@app.command(short_help="Start Project Service.\nAliases:[s] up")
+@app.command(
+    # "stop", hidden=True
+)
+def up(
+    ctx: typer.Context,
+    name: str | None = typer.Argument("", help="Project name"),
+):
+    """
+    Stop project service
+
+    Aliases: [s] stop
+    """
+    context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+    uow = services.get(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
+
+    device = uow.devices.get_by_machine_id(conf.machine_id)
+
+    if not len(device.projects):
+        console.success("Appears there have been no projects created yet.")
+        raise typer.Exit(0)
+
+    try:
+        selected_projects = questionary.checkbox(
+            "Select a project to start: ",
+            choices=[questionary.Choice(project.name, value=project.id, checked=True) for project in device.projects],
+            style=custom_style,
+        ).unsafe_ask()
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None
+
+    # if device.ping_stats() and not project_up(project):
+    #    console.error(f"Unable to launch project {project.name}")
+    #    raise typer.Exit(1)
+
+    for project_id in selected_projects:
+        if not project_id:
+            continue
+
+        for project in filter(lambda proj: proj.id == project_id, device.projects):
+            if project_up(project):
+                console.info(f"started project {project.name}")
+            else:
+                console.warning(f"unable to start project {project.name}")
+                continue
+
+
 @app.command(short_help="Stop Project Service.\nAliases:[s] stop")
 @app.command(
     # "stop", hidden=True
@@ -294,17 +344,18 @@ def list_(ctx: typer.Context, show_id: bool = False):
     try:
         stats = device.read_stats()
         device_stats = DeviceStats(**stats)
-    except tenacity.RetryError:
-        console.error(f"Unable to read stats for device [{conf.machine_id}]")
-        raise typer.Exit(0) from None
+    except:
+        device_stats = None
 
-    if not device_stats:
-        console.warning("unable to lookup device stats")
-        raise typer.Exit(0) from None
+    # if not device_stats:
+    #    console.warning("unable to lookup device stats")
+    #    raise typer.Exit(0) from None
 
     for project in projects:
         try:
-            vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
+            vassal_stats = None
+            if device_stats:
+                vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
             projects_out.append(
                 {
                     "name": project.name,

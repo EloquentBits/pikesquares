@@ -1,11 +1,10 @@
-# from pathlib import Path
 from pathlib import Path
 
-import structlog
+import structlog_sentry_logger
 
-from . import Section
+from pikesquares.presets import Section
 
-logger = structlog.get_logger()
+logger = structlog_sentry_logger.get_logger()
 
 
 class ProjectSection(Section):

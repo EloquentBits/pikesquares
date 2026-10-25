@@ -1,12 +1,10 @@
 # from pathlib import Path
-from typing import Union
-
-import structlog
+import structlog_sentry_logger
 from uwsgiconf.typehints import Strlist
 
-from . import Section
+from pikesquares.presets import Section
 
-logger = structlog.get_logger()
+logger = structlog_sentry_logger.get_logger()
 
 
 class BaseWsgiAppSection(Section):
@@ -61,7 +59,7 @@ class BaseWsgiAppSection(Section):
         super().__init__(strict_config=False, name=name, **kwargs)
 
         # Fix possible problems with non-ASCII.
-        self.env('LANG', 'en_US.UTF-8')
+        self.env("LANG", "en_US.UTF-8")
 
         if touch_reload:
             self.main_process.set_basic_params(touch_reload=touch_reload)
@@ -89,10 +87,10 @@ class BaseWsgiAppSection(Section):
         # self.main_process.set_basic_params(show_config=True)
 
         self.main_process.set_basic_params(vacuum=True)
-        #self.main_process.set_naming_params(
+        # self.main_process.set_naming_params(
         #    autonaming=False,
         #    prefix=f"{process_prefix} " if process_prefix else "",
-        #)
+        # )
         self.master_process.set_basic_params(
             enable=True,
         )
@@ -150,7 +148,6 @@ class BaseWsgiAppSection(Section):
 
 
 class WsgiAppSection(BaseWsgiAppSection):
-
     # virtual_hosts: list[VirtualHost] = [],
     def __init__(self, wsgi_app):
         self.wsgi_app = wsgi_app
@@ -209,10 +206,7 @@ class WsgiAppSection(BaseWsgiAppSection):
         #        * mypackage.my_wsgi_module:my_app -- read from `my_app` attr of mypackage/my_wsgi_module.py
         # :param callable_name: Set WSGI callable name. Default: application.
 
-        self.python.set_wsgi_params(
-            module=str(self.wsgi_app.wsgi_file),
-            callable_name=self.wsgi_app.wsgi_module
-        )
+        self.python.set_wsgi_params(module=str(self.wsgi_app.wsgi_file), callable_name=self.wsgi_app.wsgi_module)
         self.applications.set_basic_params(exit_if_none=require_app)
 
         self.networking.register_socket(self.networking.sockets.default(str(self.wsgi_app.socket_address)))

@@ -103,6 +103,25 @@ def add(
         console.error(f"cli up: unable to locate device by machine id {conf.machine_id}")
         raise typer.Exit(code=0) from None
 
+    # Projects
+    projects = uow.projects.list()
+    if not len(projects):
+        console.warning("No projects were added. add a project first.")
+        raise typer.Exit()
+
+    projects_choices = []
+    for project in projects:
+        projects_choices.append(questionary.Choice(f"{project.name}", value=project))
+
+    project = questionary.select(
+        "Select from available projects: ",
+        choices=projects_choices,
+        style=custom_style,
+    ).ask()
+    if not project:
+        raise typer.Exit(0)
+
+    # Runtimes
     runtimes = uow.python_app_runtimes.list()
     if not len(runtimes):
         console.warning("No runtimes were added. add runtimes first.")
@@ -153,6 +172,14 @@ def add(
             uow.rollback()
             console.error(f"unable to provision the {launch_service} app.")
             raise typer.Exit(code=0) from None
+
+    console.success("Starting Python WSGI App app")
+    console.success()
+    console.success("PikeSquares API is available at: http://127.0.0.1:8088")
+    console.success()
+    # console.success("Next steps: cd to your project directory and run `pikesquares init`")
+    # console.success()
+    console.success("🚀 PikeSquares Server is up and running. 🚀")
 
 
 @app.command(short_help="Create new app\nAliases: [i] create, new")

@@ -67,6 +67,8 @@ logging.basicConfig(
 )
 for import_lib in [
     "svcs",
+    "structlog_sentry_logger",
+    "structlog_sentry_logger._config",
     # "plumbum"
 ]:
     warn_logger = logging.getLogger(import_lib)
@@ -304,7 +306,7 @@ def main(
 
     conf = services.get(context, AppConfig)
 
-    logger.info(f"{conf.data_dir=} {conf.config_dir=} {conf.run_dir=} {conf.log_dir=}")
+    # logger.info(f"{conf.data_dir=} {conf.config_dir=} {conf.run_dir=} {conf.log_dir=}")
 
     if ctx.invoked_subcommand == "up":
         if not pl_local.path(str(conf.data_dir / "bin/uwsgi")).exists() or list(
@@ -315,8 +317,8 @@ def main(
 
     device = init_device(context)
 
-    if not run_foreground:
-        init_process_compose(context, device)
+    # if not run_foreground:
+    #   init_process_compose(context, device)
 
     init_pluggy(context)
 
@@ -324,7 +326,7 @@ def main(
     plugin_manager.register(
         PythonRuntimePlugin(),
     )
-    logger.info("registered PythonRuntimePlugin")
+    # logger.info("registered PythonRuntimePlugin")
 
     if conf.SENTRY_DSN:
         sentry_sdk.init(

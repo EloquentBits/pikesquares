@@ -69,11 +69,8 @@ class WsgiApp(ServiceBase, table=True):
     workers: int = Field(default=1)
     threads: int = Field(default=1)
 
-    @pydantic.computed_field
     # routers: list["BaseRouter"] = Relationship(back_populates="device")
-
     # app_options: WsgiAppOptions
-
     # virtual_hosts: list[VirtualHost] = []
     # zmq_socket = zmq.Socket(zmq.Context(), zmq.PUSH)
 
@@ -81,7 +78,7 @@ class WsgiApp(ServiceBase, table=True):
     def uwsgi_config_section_class(self) -> WsgiAppSection:
         return WsgiAppSection
 
-    async def up(self, wsgi_app_device, subscription_server_address, tuntap_router, project_zmq_monitor):
+    def up(self, wsgi_app_device, subscription_server_address, tuntap_router, project_zmq_monitor):
         from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
 
         section = WsgiAppSection(self)
@@ -133,12 +130,12 @@ class WsgiApp(ServiceBase, table=True):
         print(section.as_configuration().format())
         print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
 
-        await create_or_restart_instance(
+        create_or_restart_instance(
             project_zmq_monitor.zmq_address,
             f"{self.service_id}.ini",
             section.as_configuration().format(do_print=True),
         )
-        # await project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
+        # project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
 
     @property
     def subscription_notify_socket(self) -> Path:
