@@ -1,12 +1,12 @@
 from pathlib import Path
 
-import structlog
+import structlog_sentry_logger
 
 from pikesquares.exceptions import UvCommandExecutionError
 from pikesquares.hooks.markers import hook_impl
 from pikesquares.service_layer.uv import uv_cmd
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
 
 
 def uv_run_cmd(uv_bin: Path, chdir: Path, cmd_args: list[str], cmd_env: dict | None = None) -> tuple[str, str, str]:
@@ -39,15 +39,15 @@ class Bugsink:
             return "https://github.com/bugsink/bugsink.git"
 
     @hook_impl
-    def get_wsgi_file(
+    def get_wsgi_files(
         self,
         service_name: str,
-        repo_dir: Path,
-    ) -> Path | None:
+        root_dir: Path,
+    ) -> list[Path] | None:
         if service_name != "bugsink":
             return
 
-        return repo_dir / "bugsink" / "wsgi.py"
+        return [root_dir / "bugsink" / "wsgi.py"]
 
     @hook_impl
     def get_wsgi_module(

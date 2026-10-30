@@ -3,23 +3,21 @@ from pathlib import Path
 
 import pluggy
 import questionary
-import structlog
+import structlog_sentry_logger
 
 from pikesquares.domain.python_codebase import PythonAppCodebase
-from pikesquares.hooks.plugins.apps.bugsink import Bugsink
-from pikesquares.hooks.plugins.apps.meshdb import Meshdb
 from pikesquares.service_layer.uow import UnitOfWork
 
 from .prompt_utils import gather_repo_details_and_clone
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
 
 
 def provision_managed_codebase(
-    uow: UnitOfWork,
     codebase_id: str,
     root_dir: Path,
-):
+    uow: UnitOfWork,
+) -> PythonAppCodebase:
     try:
         app_codebase = uow.python_app_codebases.add(
             PythonAppCodebase(
@@ -31,6 +29,7 @@ def provision_managed_codebase(
                 # uv_bin=str(uv_bin),
             )
         )
+        uow.commit()
         logger.info(f"created App Codebase @ {root_dir}")
 
         # if not app_codebase.dependencies_validate():
@@ -40,17 +39,12 @@ def provision_managed_codebase(
 
         # if not app_codebase.dependencies_install(service_name, plugin_manager):
         #    raise RuntimeError("installing dependencies failed")
+        return app_codebase
 
     except Exception as exc:
-        logger.exception(exc)
         logger.info(f"failed provisioning Python App Codebase @ {root_dir}")
-        print(traceback.format_exc())
         uow.rollback()
         raise exc
-
-    uow.commit()
-
-    return app_codebase
 
 
 def provision_editable_codebase(
@@ -82,9 +76,6 @@ def provision_app_codebase(
     app_root_dir = None
     app_repo_dir = None
     editable_mode = True
-
-    plugin_manager.register(Bugsink())
-    plugin_manager.register(Meshdb())
 
     repo_git_urls: list[str] = plugin_manager.hook.get_repo_url(
         service_name=service_name,
@@ -144,6 +135,24 @@ def provision_app_codebase(
     uow.commit()
 
     return app_codebase
+
+
+def codebase_delete(
+    codebase,
+    uow: UnitOfWork,
+) -> bool:
+    try:
+        for wsgi_app in codebase.wsgi_apps:
+            uow.wsgi_apps.delete(wsgi_app.id)
+            logger.info("deleted wsgi app")
+
+        uow.python_app_codebases.delete(codebase.id)
+        logger.info("deleted Python codebase")
+
+    except Exception as exc:
+        raise exc
+
+    return True
 
 
 """

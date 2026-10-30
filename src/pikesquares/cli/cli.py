@@ -35,6 +35,9 @@ from pikesquares.conf import (
     register_app_conf,
 )
 from pikesquares.domain.python_runtime import PythonRuntimePlugin
+from pikesquares.hooks.plugins.apps.bugsink import Bugsink
+from pikesquares.hooks.plugins.apps.generic_wsgi import GenericWSGI
+from pikesquares.hooks.plugins.apps.meshdb import Meshdb
 from pikesquares.service_layer.uv import build_uwsgi_deps
 from pikesquares.services.init import init_db, init_device, init_pluggy, init_process_compose
 
@@ -326,6 +329,12 @@ def main(
     plugin_manager.register(
         PythonRuntimePlugin(),
     )
+    plugin_manager.register(
+        GenericWSGI(),
+    )
+    # plugin_manager.register(Bugsink())
+    # plugin_manager.register(Meshdb())
+
     # logger.info("registered PythonRuntimePlugin")
 
     if conf.SENTRY_DSN:

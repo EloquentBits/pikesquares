@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated
 
 import questionary
-import structlog
+import structlog_sentry_logger
 import typer
 
 # from packaging.version import Version
@@ -23,7 +23,7 @@ from pikesquares.service_layer.uv import PluginHeaderFileMissingError, build_plu
 
 # from pikesquares.service_layer.handlers.runtimes import get_uv_python_installations
 
-logger = structlog.getLogger(__name__)
+logger = structlog_sentry_logger.getLogger(__name__)
 
 
 plugins = {
@@ -98,7 +98,6 @@ def python_plugin(
     conf = services.get(context, AppConfig)
     uow = services.get(context, UnitOfWork)
     logger.info("build python plugin cli")
-    print("print | build python plugin cli")
 
     if not py_bin:
         python_versions = [

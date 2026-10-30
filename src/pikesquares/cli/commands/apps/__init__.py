@@ -131,12 +131,12 @@ def add(
     for runtime in runtimes:
         runtime_choices.append(questionary.Choice(f"{runtime.implementation} {runtime.version}", value=runtime))
 
-    runtime_version = questionary.select(
+    runtime = questionary.select(
         "Select from available runtimes: ",
         choices=runtime_choices,
         style=custom_style,
     ).ask()
-    if not runtime_version:
+    if not runtime:
         raise typer.Exit(0)
 
     codebases = uow.python_app_codebases.list()
@@ -148,30 +148,148 @@ def add(
     for codebase in codebases:
         codebase_choices.append(questionary.Choice(f"{codebase.root_dir}", value=codebase))
 
-    runtime_version = questionary.select(
+    codebase = questionary.select(
         "Select from available codebases: ",
         choices=codebase_choices,
         style=custom_style,
     ).ask()
-    if not runtime_version:
+    if not codebase:
         raise typer.Exit(0)
 
-    if 0:
-        launch_service = ""
-        try:
-            wsgi_app = provision_wsgi_app(launch_service, Path(python_app_codebase.root_dir), uow, plugin_manager)
-            if not wsgi_app:
-                console.error(f"unable to provision the {launch_service} app.")
-                raise typer.Exit(code=0) from None
+    app_name = questionary.text(
+        "Choose a name for your app: ",
+        default=randomname.get_name().lower(),
+        style=custom_style,
+        validate=NameValidator,
+    ).ask()
 
-            wsgi_app_up(wsgi_app, uow, console)
-            uow.commit()
+    if not app_name:
+        raise typer.Exit()
 
-        except Exception as exc:
-            logger.exception(exc)
-            uow.rollback()
-            console.error(f"unable to provision the {launch_service} app.")
+    try:
+        venv_dir = conf.data_dir / "python-venvs" / f"{runtime.implementation}-{runtime.version}"
+        venv_dir.mkdir(parents=True, exist_ok=True)
+        run_as_uid = "1000"
+        run_as_gid = "1000"
+
+        # wsgi_file = next(
+        #    filter(
+        #        lambda f: f is not None,
+        #        plugin_manager.hook.get_wsgi_file(
+        #            service_name="GenericWSGI",
+        #            root_dir=Path(codebase.root_dir),
+        #        ),
+        #    )
+        # )
+
+        # wsgi_files = plugin_manager.hook.get_wsgi_files(
+        #    service_name="GenericWSGI",
+        #    root_dir=Path(codebase.root_dir),
+        # )
+        wsgi_files = list(
+            filter(
+                lambda f: f is not None,
+                plugin_manager.hook.get_wsgi_files(
+                    service_name="GenericWSGI",
+                    root_dir=Path(codebase.root_dir),
+                )[0],
+            )
+        )
+        if wsgi_files:
+            logger.info(f"located {len(wsgi_files)} wsgi files in {codebase.root_dir}")
+
+        logger.info(f"{wsgi_files=}")
+
+        wsgi_file = None
+
+        if wsgi_files:
+            if len(wsgi_files) > 1:
+                wsgi_file_q = questionary.path(
+                    "Enter the location of your app Python WSGI file:",
+                    default=str(codebase.root_dir),
+                    only_directories=False,
+                    style=custom_style,
+                )
+                if len(wsgi_files) > 1:
+                    wsgi_file = questionary.select(
+                        "Select a WSGI file: ",
+                        choices=wsgi_files + [questionary.Separator(), CHOSE_FILE_MYSELF],
+                        style=custom_style,
+                    ).ask()
+                    if wsgi_file == CHOSE_FILE_MYSELF:
+                        wsgi_file = wsgi_file_q.ask()
+
+                # WSGI File
+                """
+                wsgi_file_q = questionary.path(
+                    "Enter the location of your app Python WSGI file:",
+                    default=str(codebase.root_dir),
+                    only_directories=False,
+                    style=custom_style,
+                )
+                wsgi_files_choices = [
+                    f for f in glob(f"{codebase.root_dir}/**/*wsgi*.py", recursive=True) if "tests" not in f
+                ]
+                if wsgi_files_choices:
+                    wsgi_file = questionary.select(
+                        "Select a WSGI file: ",
+                        choices=wsgi_files_choices + [questionary.Separator(), CHOSE_FILE_MYSELF],
+                        style=custom_style,
+                    ).ask()
+                    if wsgi_file == CHOSE_FILE_MYSELF:
+                        wsgi_file = wsgi_file_q.ask()
+                else:
+                    wsgi_file = wsgi_file_q.ask()
+                """
+            elif len(wsgi_files) == 1:
+                wsgi_file = wsgi_files[0]
+
+        if not wsgi_file:
+            console.error(f"unable to provision the {app_name} app. no wsgi file could be located")
             raise typer.Exit(code=0) from None
+
+        logger.info(f"{wsgi_file=}")
+        logger.info(f"{codebase.root_dir=}")
+        wsgi_file = codebase.root_dir / wsgi_file
+        logger.info(f"located wsgi file {wsgi_file}")
+
+        wsgi_module = next(
+            filter(lambda m: m is not None, plugin_manager.hook.get_wsgi_module(service_name="GenericWSGI"))
+        )
+        if not wsgi_module:
+            # WSGI Module
+            wsgi_module = questionary.text(
+                "Enter your app Python WSGI module name: ",
+                default="application",
+                style=custom_style,
+            ).ask()
+
+        wsgi_app = provision_wsgi_app(
+            app_name,
+            venv_dir,
+            wsgi_file,
+            wsgi_module,
+            runtime,
+            codebase,
+            project,
+            run_as_uid,
+            run_as_gid,
+            uow,
+        )
+        if not wsgi_app:
+            console.error(f"unable to provision the {app_name} app.")
+            raise typer.Exit(code=0) from None
+        uow.commit()
+
+        wsgi_app_up(wsgi_app)
+
+        console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
+
+    except Exception as exc:
+        logger.exception(exc)
+        uow.rollback()
+        console.error(f"unable to provision the {app_name} app.")
+        raise typer.Exit(code=0) from None
 
     console.success("Starting Python WSGI App app")
     console.success()

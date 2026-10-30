@@ -154,11 +154,11 @@ class WsgiAppSection(BaseWsgiAppSection):
         # self.virtual_hosts = virtual_hosts or []
 
         require_app = True
-        embedded_plugins = self.embedded_plugins_presets.BASIC + ["python", "python2", "python3"]
+        # embedded_plugins = self.embedded_plugins_presets.BASIC + ["python", "python2", "python3"]
 
         super().__init__(
             name="uwsgi",
-            embedded_plugins=embedded_plugins,
+            # embedded_plugins=embedded_plugins,
             owner=f"{self.wsgi_app.run_as_uid}:{self.wsgi_app.run_as_gid}",
             touch_reload=str(self.wsgi_app.touch_reload_file),
             # **app_options.model_dump(),
@@ -169,7 +169,7 @@ class WsgiAppSection(BaseWsgiAppSection):
         )
         self.python.set_basic_params(python_home=self.wsgi_app.venv_dir)
 
-        self.main_process.change_dir(to=self.wsgi_app.root_dir)
+        self.main_process.change_dir(to=self.wsgi_app.python_app_codebase.root_dir)
         self.main_process.set_pid_file(str(self.wsgi_app.pid_file))
 
         self.master_process.set_basic_params(

@@ -13,6 +13,7 @@ from pikesquares import services
 from pikesquares.cli.console import console
 from pikesquares.conf import AppConfig
 from pikesquares.service_layer.handlers.codebases import (
+    codebase_delete,
     provision_editable_codebase,
     provision_managed_codebase,
 )
@@ -251,10 +252,13 @@ def add(
             clone_into_dir = conf.data_dir / "codebases" / codebase_id
             clone_into_dir.mkdir(parents=True, exist_ok=True)
 
-            managed_codebase = provision_managed_codebase(uow, codebase_id, clone_into_dir)
+            managed_codebase = provision_managed_codebase(
+                codebase_id,
+                clone_into_dir,
+                uow,
+            )
             if managed_codebase:
                 console.success(f":heavy_check_mark:     Provisioned {codebase_type} codebase")
-                uow.commit()
             else:
                 console.warning(f"unable to provision {codebase_type} codebase")
 
@@ -274,7 +278,7 @@ def add(
         except Exception as exc:
             logger.exception(exc)
             # console.print(traceback.format_exc())
-            console.warning("Unable to provision codebase")
+            console.error("Unable to provision codebase")
             uow.rollback()
             raise typer.Exit(1) from None
 
@@ -342,3 +346,53 @@ def list_(ctx: typer.Context, show_id: bool = False):
         )
 
     console.print_response(codebases_out, title=f"Codebases count: {len(codebases)}", show_id=show_id)
+
+
+@app.command(short_help="Delete existing codebase(s) \nAliases:[i] delete, rm")
+@app.command("rm", hidden=True)
+def delete(
+    ctx: typer.Context,
+    # project_name: Optional[str] = typer.Argument("", help="Name of project to remove"),
+):
+    """
+    Delete existing codebase
+
+    Aliases:[i] delete, rm
+    """
+    context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+    uow = services.get(context, UnitOfWork)
+
+    codebases = uow.python_app_codebases.list()
+    if not len(codebases):
+        console.warning("No codebases were initialized, nothing to show!")
+        raise typer.Exit()
+
+    try:
+        selected_codebases = questionary.checkbox(
+            "Existing codebases: ",
+            choices=[
+                questionary.Choice(
+                    f"{codebase.root_dir} [{codebase.id}]",
+                    value=codebase,
+                    checked=False,
+                )
+                for codebase in codebases
+            ],
+            style=custom_style,
+        ).unsafe_ask()
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None
+
+    for codebase in selected_codebases:
+        try:
+            # TODO
+            # delete directories
+            codebase_delete(codebase, uow)
+            uow.commit()
+        except Exception as exc:
+            logger.exception(exc)
+            console.error(f"Unable to delete codebase {codebase.root_dir}")
+            uow.rollback()
+            continue

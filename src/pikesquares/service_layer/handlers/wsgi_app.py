@@ -1,15 +1,14 @@
 from pathlib import Path
 
 import cuid
-import pluggy
 import structlog
-import tenacity
 
 from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.presets.wsgi_app import WsgiAppSection
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
-from pikesquares.service_layer.handlers.routers import create_tuntap_device
-from pikesquares.service_layer.ipaddress_utils import tuntap_router_next_available_ip
+
+# from pikesquares.service_layer.handlers.routers import create_tuntap_device
+# from pikesquares.service_layer.ipaddress_utils import tuntap_router_next_available_ip
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()
@@ -74,59 +73,47 @@ logger = structlog.getLogger()
 
 def provision_wsgi_app(
     name: str,
-    root_dir: Path,
+    venv_dir: Path,
+    wsgi_file: Path,
+    wsgi_module: Path,
+    runtime,
+    codebase,
+    project,
+    run_as_uid: str,
+    run_as_gid: str,
     uow: UnitOfWork,
-    plugin_manager: pluggy.PluginManager,
-) -> WsgiApp | None:
+    commit: bool = False,
+) -> WsgiApp:
 
     try:
-        if not root_dir.exists():
-            raise RuntimeError(f"root dir @ {root_dir} does not exist.")
-
-        app_codebase = uow.python_app_codebases.get_by_root_dir(str(root_dir))
-        if not app_codebase:
-            raise RuntimeError(f"unable to look up {name} app codebase.")
-
-        app_runtime = uow.python_app_runtimes.get_by_version("3.12")
-        if not app_runtime:
-            raise RuntimeError(f"unable to look up {name} app runtime")
-
-        project = uow.projects.get_by_name(name)
-        if not project:
-            raise RuntimeError(f"unable to look up {name} project")
-
         service_type = "WSGI-App"
-        wsgi_file = next(
-            filter(
-                lambda f: f is not None,
-                plugin_manager.hook.get_wsgi_file(
-                    service_name=name,
-                    repo_dir=Path(app_codebase.repo_dir),
-                ),
-            )
-        )
-        wsgi_module = next(filter(lambda m: m is not None, plugin_manager.hook.get_wsgi_module(service_name=name)))
+        uwsgi_plugin_name = f"{runtime.implementation}_{runtime.version.replace('.', '_')}"
         wsgi_app = WsgiApp(
             service_id=f"{service_type.lower()}-{cuid.slug()}",
             name=name,
-            run_as_uid="pikesquares",
-            run_as_gid="pikesquares",
+            run_as_uid=run_as_uid,
+            run_as_gid=run_as_gid,
             project=project,
-            python_app_runtime=app_runtime,
-            python_app_codebase=app_codebase,
-            uwsgi_plugins="tuntap;forkptyrouter",
-            root_dir=app_codebase.root_dir,
+            python_app_runtime=runtime,
+            python_app_codebase=codebase,
+            uwsgi_plugins=uwsgi_plugin_name,
+            # uwsgi_plugins="tuntap;forkptyrouter",
+            root_dir=codebase.root_dir,
             wsgi_file=str(wsgi_file),
             wsgi_module=wsgi_module,
-            venv_dir=app_codebase.venv_dir,
+            venv_dir=str(venv_dir),
         )
         uow.wsgi_apps.add(wsgi_app)
+        if commit:
+            uow.commit()
+        return wsgi_app
 
-        tuntap_routers = uow.tuntap_routers.get_by_project_id(project.id)
-        if tuntap_routers:
-            ip = tuntap_router_next_available_ip(tuntap_routers[0])
-            wgsi_app_tuntap_device = create_tuntap_device(uow, tuntap_routers[0], ip, wsgi_app.service_id)
-            logger.info(f"created wsgi app tuntap device: {wgsi_app_tuntap_device}")
+        # tuntap_routers = uow.tuntap_routers.get_by_project_id(project.id)
+        # if tuntap_routers:
+        #    ip = tuntap_router_next_available_ip(tuntap_routers[0])
+        #    wgsi_app_tuntap_device = create_tuntap_device(uow, tuntap_routers[0], ip, wsgi_app.service_id)
+        #    logger.info(f"created wsgi app tuntap device: {wgsi_app_tuntap_device}")
+        #
     except Exception as exc:
         logger.info(f"failed provisioning Python App {name}")
         raise exc
@@ -136,16 +123,14 @@ def provision_wsgi_app(
 
 def wsgi_app_up(
     wsgi_app: WsgiApp,
-    uow: UnitOfWork,
-    console,
 ):
 
-    stats = None
-    while not stats:
-        try:
-            return wsgi_app.read_stats()
-        except tenacity.RetryError:
-            break
+    # stats = None
+    # while not stats:
+    #    try:
+    #        return wsgi_app.read_stats()
+    #    except tenacity.RetryError:
+    #        break
 
     try:
         # wsgi_app = uow.wsgi_apps.get_by_service_id(service_id)
@@ -154,6 +139,8 @@ def wsgi_app_up(
         app_codebase = wsgi_app.python_app_codebase
         # app_runtime = wsgi_app.python_app_runtime
         project = wsgi_app.project
+
+        """
         http_routers = project.http_routers
         if not http_routers:
             raise RuntimeError(f"could not locate http routers for project {project.name} [{project.id}]")
@@ -166,7 +153,9 @@ def wsgi_app_up(
         tuntap_router = tuntap_routers[0]
 
         wsgi_app_device = uow.tuntap_devices.get_by_linked_service_id(wsgi_app.service_id)
+
         http_router = http_routers[0]
+        """
 
         section = WsgiAppSection(wsgi_app)
         section._set("jailed", "true")
@@ -175,7 +164,7 @@ def wsgi_app_up(
         section.main_process.run_command_on_event(
             command=f"hostname {wsgi_app.service_id}", phase=section.main_process.phases.PRIV_DROP_PRE
         )
-
+        """
         router_tuntap = section.routing.routers.tuntap().device_connect(
             device_name=wsgi_app_device.name,
             socket=tuntap_router.socket_address,
@@ -188,7 +177,9 @@ def wsgi_app_up(
         #    target="10.20.30.40:5060",
         # )
         section.routing.use_router(router_tuntap)
-        if 0:
+        """
+
+        """
             router_forkpty = (
                 section.routing.routers.forkpty(
                     on=Path(wsgi_app.run_dir) / f"{wsgi_app.service_id}-forkptyrouter.socket", undeferred=True
@@ -199,9 +190,11 @@ def wsgi_app_up(
             )
 
             section.routing.use_router(router_forkpty)
+        """
 
         # ; bring up loopback
         # exec-as-root = ifconfig lo up
+        """
         section.main_process.run_command_on_event(
             command="ifconfig lo up",
             phase=section.main_process.phases.PRIV_DROP_PRE,
@@ -229,12 +222,14 @@ def wsgi_app_up(
             command="ping -c 1 8.8.8.8",
             phase=section.main_process.phases.PRIV_DROP_PRE,
         )
+        """
 
         # if not all([
         #    http_router.subscription_server_address.exists(),
         #    http_router.subscription_server_address.is_socket()]):
         #    raise Exception("http router subscription server is not available")
 
+        """
         section.subscriptions.subscribe(
             server=http_router.subscription_server_address,
             address=str(wsgi_app.socket_address),  # address and port of wsgi app
@@ -243,16 +238,16 @@ def wsgi_app_up(
         section.subscriptions.set_server_params(
             client_notify_address=wsgi_app.subscription_notify_socket,
         )
+        """
 
         # section._set("env","REQUESTS_CA_BUNDLE=/var/lib/pikesquares/pikesquares-ca.pem")
-        section._set("pythonpath", app_codebase.repo_dir)
+        section._set("pythonpath", app_codebase.root_dir)
 
         # try:
         #    _ = wsgi_app.read_stats()
         # except tenacity.RetryError:
         #    return False
 
-        console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
         # print(section.as_configuration().format())
         project_zmq_monitor = project.zmq_monitor
         project_zmq_monitor_address = project_zmq_monitor.zmq_address
@@ -269,9 +264,9 @@ def wsgi_app_up(
         logger.error("failed provisioning Python App")
         raise exc
 
-    stats = None
-    while not stats:
-        try:
-            return wsgi_app.read_stats()
-        except tenacity.RetryError:
-            break
+    # stats = None
+    # while not stats:
+    #    try:
+    #        return wsgi_app.read_stats()
+    #    except tenacity.RetryError:
+    #        break

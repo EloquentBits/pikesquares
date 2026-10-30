@@ -90,11 +90,11 @@ class WSGIPythonAppCodebaseHookSpec:
     """
 
     @hook_spec(firstresult=False)
-    def get_wsgi_file(
+    def get_wsgi_files(
         self,
         service_name: str,
-        repo_dir: Path,
-    ) -> Path | None: ...
+        root_dir: Path,
+    ) -> list[Path] | None: ...
 
     @hook_spec(firstresult=False)
     def get_wsgi_module(
