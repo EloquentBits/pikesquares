@@ -4,8 +4,7 @@ import uuid
 from pathlib import Path
 
 import git
-import pluggy
-import questionary
+import questionary as qy
 import structlog
 import typer
 
@@ -26,8 +25,8 @@ logger = structlog.get_logger()
 app = typer.Typer()
 
 
-def prompt_base_dir(repo_name: str, custom_style: questionary.Style) -> Path:
-    return questionary.path(
+def prompt_base_dir(repo_name: str, custom_style: qy.Style) -> Path:
+    return qy.path(
         f"Choose a directory to clone your `{repo_name}` git repository into: ",
         default=str(Path.cwd()),
         only_directories=True,
@@ -36,8 +35,8 @@ def prompt_base_dir(repo_name: str, custom_style: questionary.Style) -> Path:
     ).unsafe_ask()
 
 
-def prompt_repo_url(custom_style: questionary.Style) -> str:
-    repo_url_q = questionary.text(
+def prompt_repo_url(custom_style: qy.Style) -> str:
+    repo_url_q = qy.text(
         "Enter your app git repository url:",
         default="",
         instruction="""\nExamples:\n    https://host.xz/path/to/repo.git\n    ssh://host.xz/path/to/repo.git\n>>>""",
@@ -57,7 +56,7 @@ class CloneProgress(git.RemoteProgress):
 
 
 def try_again_q(instruction, custom_style):
-    return questionary.confirm(
+    return qy.confirm(
         "Try entring a different repository url?",
         instruction=instruction,
         default=True,
@@ -70,7 +69,7 @@ def gather_repo_details_and_clone(
     # app_name: str,
     # app_root_dir: Path | None,
     clone_into_dir: Path,
-    custom_style: questionary.Style,
+    custom_style: qy.Style | None,
     repo_git_url: str | None = None,
 ) -> tuple[Path, str]:
     repo = None
@@ -89,7 +88,7 @@ def gather_repo_details_and_clone(
         clone_into_dir_files = [path for path in clone_into_dir.glob("**/*")]
         # clone_into_dir.glob("*")
         if clone_into_dir / ".git" in clone_into_dir_files:
-            # if questionary.confirm(
+            # if qy.confirm(
             #    f"There appears to be a git repository already cloned in {clone_into_dir}. Overwrite?",
             #    default=False,
             #    auto_enter=False,
@@ -99,7 +98,7 @@ def gather_repo_details_and_clone(
             logger.info(f"deleted repo dir {clone_into_dir}")
         """
         elif len(clone_into_dir_files):
-            if not questionary.confirm(
+            if not qy.confirm(
                 f"Directory {str(clone_into_dir)} is not emptry. Continue?",
                 default=True,
                 auto_enter=True,
@@ -120,7 +119,7 @@ def gather_repo_details_and_clone(
                 )
             except git.GitCommandError as exc:
                 if "already exists and is not an empty directory" in exc.stderr:
-                    if questionary.confirm(
+                    if qy.confirm(
                         "Continue with this directory?",
                         instruction=f"A git repository exists at {clone_into_dir}",
                         default=True,
@@ -135,10 +134,9 @@ def gather_repo_details_and_clone(
                         custom_style,
                     ).unsafe_ask():
                         gather_repo_details_and_clone(
-                            app_name,
-                            repo_git_url,
                             app_root_dir,
                             custom_style,
+                            repo_git_url,
                         )
                     raise typer.Exit(0) from None
                 else:
@@ -149,9 +147,9 @@ def gather_repo_details_and_clone(
                         f"Unable to clone the provided repository url at {repo_url} into {clone_into_dir}",
                         custom_style,
                     ).unsafe_ask():
-                        gather_repo_details_and_clone(app_name, repo_git_url, app_root_dir, custom_style)
+                        gather_repo_details_and_clone(app_root_dir, repo_git_url, custom_style)
     except Exception as exc:
-        logger.info(f"failed provisioning App Codebase @ {oot_dir}")
+        logger.info(f"failed provisioning App Codebase @ {app_root_dir}")
         logger.exception(exc)
         print(traceback.format_exc())
         raise exc
@@ -172,23 +170,16 @@ def add(
     Aliases: [i] add, create, new
     """
     context = ctx.ensure_object(dict)
-    custom_style = context.get("cli-style")
+    custom_style: qy.Style | None = context.get("cli-style")
     conf = services.get(context, AppConfig)
     uow = services.get(context, UnitOfWork)
-    plugin_manager = services.get(context, pluggy.PluginManager)
-
-    device = uow.devices.get_by_machine_id(conf.machine_id)
-
-    if not device:
-        console.error(f"cli up: unable to locate device by machine id {conf.machine_id}")
-        raise typer.Exit(code=0) from None
 
     """
         Managed: Clone from a git repo into a project data directory.
         Editable: Clone from a git repo into a local directory.
     """
 
-    prompt_style = questionary.Style(
+    prompt_style = qy.Style(
         [
             ("separator", "fg:#6C6C6C"),
             ("qmark", "fg:#FF9D00 bold"),
@@ -197,7 +188,10 @@ def add(
             ("pointer", "fg:#FF9D00 bold"),
             ("answer", "fg:#5F819D bold"),
             ("instruction", "fg:#5F819D bold"),
-            ("aaa", "#ff0066"),
+            ("managed", "yellow"),
+            # ("managed", "#ff0066"),
+            ("highlighted1", "ansigreen"),  # style for a token which should appear highlighted
+            ("highlighted2", "green"),  # style for a token which should appear highlighted
         ]
     )
 
@@ -226,18 +220,29 @@ def add(
         style=style,
     )
     """
+
+    # choices = [qy.Choice(title=[("class:text", "order a "), ("class:highlighted", "big pizza")])]
     choices = [
-        questionary.Choice(
-            "Managed: Clone from a git repo into a project data directory.\n             and more here",
+        qy.Choice(
+            title=[
+                ("class:managed", "Managed:"),
+                (
+                    "class:highlighted1",
+                    " Clone from a git repo into a project data directory.\n             and more here",
+                ),
+            ],
             value="managed",
         ),
-        questionary.Choice(
-            "Editable: Clone from a git repo into a local directory.",
+        qy.Choice(
+            title=[
+                ("class:managed", "Editable:"),
+                ("class:highlighted2", " Clone from a git repo into a local directory."),
+            ],
             value="editable",
         ),
     ]
 
-    codebase_type = questionary.select(
+    codebase_type = qy.select(
         "Select from available codebase types: ",
         instruction="\n       this is instruction  \n",
         choices=choices,
@@ -257,10 +262,11 @@ def add(
                 clone_into_dir,
                 uow,
             )
-            if managed_codebase:
-                console.success(f":heavy_check_mark:     Provisioned {codebase_type} codebase")
-            else:
-                console.warning(f"unable to provision {codebase_type} codebase")
+            uow.commit()
+            # if managed_codebase:
+            #    console.success(f":heavy_check_mark:     Provisioned {codebase_type} codebase")
+            # else:
+            #    console.warning(f"unable to provision {codebase_type} codebase")
 
             clone_into_dir, repo_git_url = gather_repo_details_and_clone(
                 clone_into_dir,
@@ -274,6 +280,7 @@ def add(
 
             managed_codebase.repo_git_url = repo_git_url
             managed_codebase = uow.python_app_codebases.update(managed_codebase)
+            uow.commit()
 
         except Exception as exc:
             logger.exception(exc)
@@ -339,8 +346,9 @@ def list_(ctx: typer.Context, show_id: bool = False):
     for codebase in codebases:
         codebases_out.append(
             {
-                "id": codebase.id,
+                # "id": codebase.id,
                 "root dir": codebase.root_dir,
+                "repo_url": codebase.repo_git_url,
                 "repo cloned?": True if dir_contains_repo(Path(codebase.root_dir)) else False,
             }
         )
@@ -369,10 +377,10 @@ def delete(
         raise typer.Exit()
 
     try:
-        selected_codebases = questionary.checkbox(
+        selected_codebases = qy.checkbox(
             "Existing codebases: ",
             choices=[
-                questionary.Choice(
+                qy.Choice(
                     f"{codebase.root_dir} [{codebase.id}]",
                     value=codebase,
                     checked=False,

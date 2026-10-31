@@ -29,7 +29,6 @@ def provision_managed_codebase(
                 # uv_bin=str(uv_bin),
             )
         )
-        uow.commit()
         logger.info(f"created App Codebase @ {root_dir}")
 
         # if not app_codebase.dependencies_validate():

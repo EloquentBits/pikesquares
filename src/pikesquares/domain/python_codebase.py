@@ -69,8 +69,8 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
     wsgi_apps: list["WsgiApp"] = Relationship(back_populates="python_app_codebase")
 
     root_dir: str = Field(max_length=255)
-    wsgi_file: str | None = Field(max_length=255)
-    wsgi_module: str | None = Field(max_length=50)
+    # wsgi_file: str | None = Field(max_length=255)
+    # wsgi_module: str | None = Field(max_length=50)
 
     def get_files(self) -> set[Path]:
         all_files: set[Path] = set()
