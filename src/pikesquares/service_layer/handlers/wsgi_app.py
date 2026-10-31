@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import cuid
-import structlog
+import structlog_sentry_logger
 
 from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.presets.wsgi_app import WsgiAppSection
@@ -11,7 +11,9 @@ from pikesquares.service_layer.handlers.monitors import create_or_restart_instan
 # from pikesquares.service_layer.ipaddress_utils import tuntap_router_next_available_ip
 from pikesquares.service_layer.uow import UnitOfWork
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
+
+
 """
 #runtime_base = PythonRuntime
 #py_kwargs = {
@@ -81,13 +83,13 @@ def provision_wsgi_app(
     project,
     run_as_uid: str,
     run_as_gid: str,
+    uwsgi_plugins: list[str],
     uow: UnitOfWork,
     commit: bool = False,
 ) -> WsgiApp:
 
     try:
         service_type = "WSGI-App"
-        uwsgi_plugin_name = f"{runtime.implementation}_{runtime.version.replace('.', '_')}"
         wsgi_app = WsgiApp(
             service_id=f"{service_type.lower()}-{cuid.slug()}",
             name=name,
@@ -96,7 +98,7 @@ def provision_wsgi_app(
             project=project,
             python_app_runtime=runtime,
             python_app_codebase=codebase,
-            uwsgi_plugins=uwsgi_plugin_name,
+            uwsgi_plugins=";".join(uwsgi_plugins) if uwsgi_plugins else "",
             # uwsgi_plugins="tuntap;forkptyrouter",
             root_dir=codebase.root_dir,
             wsgi_file=str(wsgi_file),
@@ -158,12 +160,12 @@ def wsgi_app_up(
         """
 
         section = WsgiAppSection(wsgi_app)
-        section._set("jailed", "true")
+        # section._set("jailed", "true")
         # forkpty
-        section._set("unshared", "true")
-        section.main_process.run_command_on_event(
-            command=f"hostname {wsgi_app.service_id}", phase=section.main_process.phases.PRIV_DROP_PRE
-        )
+        # section._set("unshared", "true")
+        # section.main_process.run_command_on_event(
+        #    command=f"hostname {wsgi_app.service_id}", phase=section.main_process.phases.PRIV_DROP_PRE
+        # )
         """
         router_tuntap = section.routing.routers.tuntap().device_connect(
             device_name=wsgi_app_device.name,
@@ -248,15 +250,15 @@ def wsgi_app_up(
         # except tenacity.RetryError:
         #    return False
 
-        # print(section.as_configuration().format())
+        print(section.as_configuration().format())
         project_zmq_monitor = project.zmq_monitor
         project_zmq_monitor_address = project_zmq_monitor.zmq_address
-        # print(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
+        logger.info(f"launching wsgi app in {project_zmq_monitor.zmq_address}")
 
         create_or_restart_instance(
             project_zmq_monitor_address,
             f"{wsgi_app.service_id}.ini",
-            section.as_configuration().format(do_print=False),
+            section.as_configuration().format(do_print=True),
         )
         # project.zmq_monitor.create_or_restart_instance(f"{wsgi_app.service_id}.ini", wsgi_app, project.zmq_monitor)
 

@@ -90,12 +90,12 @@ def provision_project(
 
 
 def project_up(project: Project) -> bool | None:
-    stats = None
-    while not stats:
-        try:
-            return project.read_stats()
-        except tenacity.RetryError:
-            break
+    # stats = None
+    # while not stats:
+    #    try:
+    #        return project.read_stats()
+    #    except tenacity.RetryError:
+    #        break
 
     try:
         section = ProjectSection(project)
@@ -110,6 +110,7 @@ def project_up(project: Project) -> bool | None:
                 # pid_file=str((Path(conf.RUN_DIR) / f"{project.service_id}.pid").resolve()),
             )
         logger.info(project_zmq_monitor)
+        """
         for tuntap_router in project.tuntap_routers:
             router_cls = section.routing.routers.tuntap
             router = router_cls(
@@ -161,6 +162,7 @@ def project_up(project: Project) -> bool | None:
             )
             # fs,pid,ipc,uts,net
             section._set("emperor-use-clone", "net")
+        """
 
         # try:
         #    _ = project.read_stats()
@@ -181,12 +183,12 @@ def project_up(project: Project) -> bool | None:
     except Exception as exc:
         raise exc
 
-    stats = None
-    while not stats:
-        try:
-            return project.read_stats()
-        except tenacity.RetryError:
-            break
+    # stats = None
+    # while not stats:
+    #    try:
+    #        return project.read_stats()
+    #    except tenacity.RetryError:
+    #        break
 
 
 def project_delete(

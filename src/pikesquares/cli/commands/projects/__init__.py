@@ -6,7 +6,6 @@ import pluggy
 import questionary
 import randomname
 import structlog_sentry_logger
-import tenacity
 import typer
 
 # from pikesquares import (

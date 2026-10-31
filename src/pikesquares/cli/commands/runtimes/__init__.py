@@ -86,12 +86,28 @@ def add(
             if runtime:
                 console.success(f":heavy_check_mark:     Provisioned {runtime_name} {runtime_version.version} runtime")
 
-                console.info(f"installing runtime {runtime_name} {runtime_version.version}")
-                PythonAppRuntime.install(runtime_version)
-                console.success(f":heavy_check_mark:     Installed {runtime_name} {runtime_version.version} runtime")
+            console.info(f"installing runtime {runtime_name} {runtime_version.version}")
+            PythonAppRuntime.install(runtime_version)
+            console.success(f":heavy_check_mark:     Installed {runtime_name} {runtime_version.version} runtime")
 
+            # `runtime_version` came from `uv python list` and may still have
+            # `path=None` if the version had to be installed above. Re-resolve
+            # the installed interpreter path before building the plugin, so the
+            # build doesn't fall back to the system Python.
+            installed_versions = [
+                v
+                for v in PythonAppRuntime.only_installed(conf.UV_BIN)
+                if v.implementation == runtime_version.implementation
+                and v.version == runtime_version.version
+                and v.path is not None
+            ]
+            if installed_versions:
+                runtime_version = installed_versions[0]
             else:
-                console.warning(f"Unable to provision {runtime_name} {runtime_version.version}")
+                console.warning(f"unable to resolve installed path for {runtime_name} {runtime_version.version}")
+
+            # else:
+            #    console.warning(f"Unable to provision {runtime_name} {runtime_version.version}")
 
             scie_home = conf.data_dir / Path("scie-pikesquares")
 

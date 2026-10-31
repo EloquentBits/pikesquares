@@ -101,7 +101,9 @@ def python_plugin(
 
     if not py_bin:
         python_versions = [
-            ver for ver in PythonAppRuntime.list_all_versions(conf.UV_BIN) if ver.implementation in ["cpython", "pypy"]
+            ver
+            for ver in PythonAppRuntime.list_all_versions(conf.UV_BIN)
+            if ver.implementation in ["cpython", "pypy"] and ver.path is not None
         ]
         choices = []
         for python_version in python_versions:

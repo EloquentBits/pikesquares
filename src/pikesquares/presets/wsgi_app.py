@@ -161,8 +161,10 @@ class WsgiAppSection(BaseWsgiAppSection):
             # embedded_plugins=embedded_plugins,
             owner=f"{self.wsgi_app.run_as_uid}:{self.wsgi_app.run_as_gid}",
             touch_reload=str(self.wsgi_app.touch_reload_file),
+            embedded_plugins=False,
             # **app_options.model_dump(),
         )
+        self.python.plugin = False
         self.python.set_basic_params(
             enable_threads=True,
             # search_path=str(Path(self.project.pyvenv_dir) / 'lib/python3.10/site-packages'),
@@ -182,6 +184,7 @@ class WsgiAppSection(BaseWsgiAppSection):
             autonaming=False,
         )
         for plugin in self.wsgi_app.uwsgi_plugins.split(";"):
+            logger.info(f"{self.wsgi_app.name} plugin: {plugin} @ {self.wsgi_app.plugins_dir}")
             self.set_plugins_params(
                 plugins=plugin,
                 search_dirs=self.wsgi_app.plugins_dir,

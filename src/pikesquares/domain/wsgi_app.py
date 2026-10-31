@@ -66,6 +66,10 @@ class WsgiApp(ServiceBase, table=True):
     python_app_codebase: "PythonAppCodebase" = Relationship(back_populates="wsgi_apps")
 
     venv_dir: str = Field(max_length=255)
+
+    wsgi_file: str | None = Field(max_length=255)
+    wsgi_module: str | None = Field(max_length=50)
+
     workers: int = Field(default=1)
     threads: int = Field(default=1)
 

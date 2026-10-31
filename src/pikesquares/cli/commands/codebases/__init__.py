@@ -192,6 +192,7 @@ def add(
             # ("managed", "#ff0066"),
             ("highlighted1", "ansigreen"),  # style for a token which should appear highlighted
             ("highlighted2", "green"),  # style for a token which should appear highlighted
+            ("message", "ansigreen"),  # style for a token which should appear highlighted
         ]
     )
 
@@ -225,10 +226,10 @@ def add(
     choices = [
         qy.Choice(
             title=[
-                ("class:managed", "Managed:"),
+                ("class:managed", "Managed:\n"),
                 (
                     "class:highlighted1",
-                    " Clone from a git repo into a project data directory.\n             and more here",
+                    "                 Clone from a git repo into a project data directory.\n             and more here\n\n",
                 ),
             ],
             value="managed",
@@ -236,15 +237,15 @@ def add(
         qy.Choice(
             title=[
                 ("class:managed", "Editable:"),
-                ("class:highlighted2", " Clone from a git repo into a local directory."),
+                ("class:highlighted2", " Clone from a git repo into a local directory.\n\n"),
             ],
             value="editable",
         ),
     ]
 
     codebase_type = qy.select(
-        "Select from available codebase types: ",
-        instruction="\n       this is instruction  \n",
+        "\nSelect from available codebase types:",
+        instruction="\nthis is instruction\n",
         choices=choices,
         style=prompt_style,
     ).ask()

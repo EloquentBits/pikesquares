@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pydantic
-import structlog
+import structlog_sentry_logger
 from plumbum import local as pl_local
 from plumbum.path.utils import delete as pl_delete
 from plumbum.path.utils import move as pl_move
@@ -18,7 +18,7 @@ from pikesquares.service_layer.uv import (
     which_uv,
 )
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
 
 
 class VersionParts(pydantic.BaseModel):
@@ -73,11 +73,15 @@ class PythonAppRuntime(AppRuntime, table=True):
         plugins_dir: Path,
         scie_home: Path,
         uv_bin: Path | None = None,
-    ) -> Path:
+    ) -> Path | None:
         plugin_path = build_python_plugin(runtime_version, plugins_dir, scie_home, uv_bin=uv_bin)
-        if plugin_path.exists():
-            pl_move(plugin_path, plugins_dir)
-            return plugins_dir / plugin_path.name
+        logger.info(plugin_path)
+        current_plugin = plugins_dir / plugin_path.name
+        if current_plugin.exists():
+            logger.info(f"python plugin exists. deleting {current_plugin}")
+            pl_delete(str(current_plugin))
+        pl_move(str(plugin_path), str(plugins_dir))
+        return plugins_dir / plugin_path.name
 
     @classmethod
     def install(cls, runtime_version: PythonRuntimeVersion, uv_bin: Path | None = None):

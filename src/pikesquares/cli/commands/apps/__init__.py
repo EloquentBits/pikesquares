@@ -78,6 +78,55 @@ def detect(
     logger.info("Detecting project")
 
 
+@app.command(short_help="Start app.\nAliases:[i] start")
+@app.command(
+    # "new", hidden=True
+)
+def start(
+    ctx: typer.Context,
+    # project_name: Optional[str] = typer.Argument("", help="New project name"),
+):
+    """
+    Start app
+
+    Aliases: [i] add, create, new
+    """
+    context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
+    plugin_manager = services.get(context, pluggy.PluginManager)
+
+    device = uow.devices.get_by_machine_id(conf.machine_id)
+
+    if not device:
+        console.error(f"cli up: unable to locate device by machine id {conf.machine_id}")
+        raise typer.Exit(code=0) from None
+
+    apps = uow.wsgi_apps.list()
+    if not len(apps):
+        console.warning("No apps were added. add app first.")
+        raise typer.Exit()
+
+    app_choices = []
+
+    for app in apps:
+        app_choices.append(questionary.Choice(f"{app.name} [{app.service_id}]", value=app))
+
+    wsgi_app = questionary.select(
+        "Select from available apps: ",
+        choices=app_choices,
+        style=custom_style,
+    ).ask()
+    if not wsgi_app:
+        raise typer.Exit(0)
+
+    console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
+    wsgi_app_up(wsgi_app)
+
+    console.success("Started Python WSGI App")
+
+
 @app.command(short_help="Add app.\nAliases:[i] new")
 @app.command(
     # "new", hidden=True
@@ -87,7 +136,7 @@ def add(
     # project_name: Optional[str] = typer.Argument("", help="New project name"),
 ):
     """
-    Add runtime
+    Add app
 
     Aliases: [i] add, create, new
     """
@@ -167,7 +216,7 @@ def add(
         raise typer.Exit()
 
     try:
-        venv_dir = conf.data_dir / "python-venvs" / f"{runtime.implementation}-{runtime.version}"
+        venv_dir = conf.data_dir / "python-venvs" / f"{app_name}-{runtime.implementation}-{runtime.version}"
         venv_dir.mkdir(parents=True, exist_ok=True)
         run_as_uid = "1000"
         run_as_gid = "1000"
@@ -264,6 +313,9 @@ def add(
                 style=custom_style,
             ).ask()
 
+        uwsgi_python_plugin = f"{runtime.implementation}_{runtime.version.replace('.', '_')}"
+
+        uwsgi_plugins = [uwsgi_python_plugin, "logfile"]
         wsgi_app = provision_wsgi_app(
             app_name,
             venv_dir,
@@ -274,16 +326,19 @@ def add(
             project,
             run_as_uid,
             run_as_gid,
+            uwsgi_plugins,
             uow,
         )
         if not wsgi_app:
             console.error(f"unable to provision the {app_name} app.")
             raise typer.Exit(code=0) from None
+
         uow.commit()
+        console.success(f"Provisioned {app_name} app.")
 
+        console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
         wsgi_app_up(wsgi_app)
-
-        console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]. Done!")
+        console.success(f":heavy_check_mark:     Launched WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
 
     except Exception as exc:
         logger.exception(exc)
@@ -291,13 +346,13 @@ def add(
         console.error(f"unable to provision the {app_name} app.")
         raise typer.Exit(code=0) from None
 
-    console.success("Starting Python WSGI App app")
-    console.success()
-    console.success("PikeSquares API is available at: http://127.0.0.1:8088")
-    console.success()
+    # console.success("Starting Python WSGI App app")
+    # console.success()
+    # console.success("PikeSquares API is available at: http://127.0.0.1:8088")
+    # console.success()
     # console.success("Next steps: cd to your project directory and run `pikesquares init`")
     # console.success()
-    console.success("🚀 PikeSquares Server is up and running. 🚀")
+    # console.success("🚀 PikeSquares Server is up and running. 🚀")
 
 
 @app.command(short_help="Create new app\nAliases: [i] create, new")

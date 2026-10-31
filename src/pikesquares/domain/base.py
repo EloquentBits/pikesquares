@@ -61,10 +61,10 @@ class ServiceBase(TimeStampedBase):
     run_as_gid: str = Field(default="root")
     service_id: str = Field(default=None, unique=True)
     uwsgi_plugins: str | None = Field(default=None, max_length=255)
-    data_dir: str = Field(default="/var/lib/pikesquares", max_length=255)
-    log_dir: str = Field(default="/var/log/pikesquares", max_length=255)
-    config_dir: str = Field(default="/etc/pikesquares", max_length=255)
-    run_dir: str = Field(default="/var/run/pikesquares", max_length=255)
+    data_dir: str = Field(default=str(Path.home() / ".pikesquares"), max_length=255)
+    log_dir: str = Field(default=str(Path.home() / ".pikesquares/log"), max_length=255)
+    config_dir: str = Field(default=str(Path.home() / ".pikesquares/etc"), max_length=255)
+    run_dir: str = Field(default=str(Path.home() / ".pikesquares/run"), max_length=255)
 
     cert_name: str | None = "_wildcard_pikesquares_dev"
 

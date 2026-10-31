@@ -116,7 +116,7 @@ def build_python_plugin(
     # uv run uwsgiconfig.py --plugin plugins/python
     uv_bin = uv_bin or which_uv()
     # pythonXXX_plugin.so
-    cmd_env = {"PYTHON": str(runtime_version.path)}
+    cmd_env = {"UV_PYTHON": str(runtime_version.path)}
     cmd_args = [
         "run",
         "uwsgiconfig.py",
@@ -133,6 +133,8 @@ def build_python_plugin(
     uwsgi_src_home = scie_home / "uwsgi"
 
     try:
+        logger.info(f"building python plugin {cmd_args=} {cmd_env=} {runtime_version=}")
+
         result = uv.run(cmd_args, cwd=str(uwsgi_src_home), **{"env": cmd_env})
 
         if result[0] == 0:

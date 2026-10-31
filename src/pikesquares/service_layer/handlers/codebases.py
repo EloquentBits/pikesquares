@@ -23,10 +23,7 @@ def provision_managed_codebase(
             PythonAppCodebase(
                 id=codebase_id,
                 root_dir=str(root_dir),
-                # repo_dir=str(app_repo_dir),
-                # venv_dir=str(app_pyvenv_dir),
                 editable_mode=False,
-                # uv_bin=str(uv_bin),
             )
         )
         logger.info(f"created App Codebase @ {root_dir}")

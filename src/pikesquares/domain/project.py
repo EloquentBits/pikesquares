@@ -1,18 +1,17 @@
-import structlog
+import structlog_sentry_logger
 from sqlmodel import Field, Relationship
 
 from pikesquares.presets.project import ProjectSection
 
 from .base import ServiceBase
 from .device import Device
-from .wsgi_app import WsgiApp
 from .managed_services import AttachedDaemon
+from .wsgi_app import WsgiApp
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
 
 
 class Project(ServiceBase, table=True):
-
     __tablename__ = "projects"
 
     name: str = Field(default="sandbox", max_length=32)
@@ -35,4 +34,3 @@ class Project(ServiceBase, table=True):
 
     def ping(self) -> None:
         print(f"== {self.__class__.__name__} ping ==")
-
