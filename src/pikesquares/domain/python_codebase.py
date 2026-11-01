@@ -6,7 +6,7 @@ from pathlib import Path
 
 import giturlparse
 import pluggy
-import structlog
+import structlog_sentry_logger
 import toml
 from plumbum import ProcessExecutionError
 from sqlmodel import Field, Relationship
@@ -26,12 +26,14 @@ from pikesquares.exceptions import (
     UvSyncError,
 )
 from pikesquares.service_layer.uv import (
+    dependencies_install as uv_dependencies_install,
+)
+from pikesquares.service_layer.uv import (
     uv_cmd,
-    uv_dependencies_install,
     uv_dependencies_list,
 )
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
 
 PY_MATCH_FILES: set[str] = set(
     {
@@ -73,7 +75,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
         all_files: set[Path] = set()
         for ext in PY_MATCH_FILES:
             try:
-                all_files.add(next(Path(self.repo_dir).glob(ext)))
+                all_files.add(next(Path(self.root_dir).glob(ext)))
             except StopIteration:
                 continue
         return all_files
@@ -92,7 +94,7 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
 
     def detect_version(self) -> str:
         try:
-            version_file = Path(self.app_repo_dir) / ".python-version"
+            version_file = Path(self.root_dir) / ".python-version"
             _ver = version_file.read_text()
             return _ver.strip()
         except FileNotFoundError:
@@ -112,7 +114,10 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
             return giturl.name
         raise ValueError(f"invalid git repo url {self.repo_git_url}")
 
-    def dependencies_validate(self) -> bool | None:
+    def dependencies_validate(
+        self,
+        venv_dir: Path | None = None,
+    ) -> bool | None:
         """
         copy repo into a temporary directory and attempt to run `uv sync`
         """
@@ -128,16 +133,15 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
                 ignore=shutil.ignore_patterns(*list(PY_TMP_DIR_IGNORE_PATTERNS)),
             )
             logger.info(f"coppied {self.root_dir} into {app_tmp_dir}")
-            app_root_dir = app_tmp_dir / self.repo_name
-            logger.info(f"{app_root_dir=}")
+            root_dir = app_tmp_dir / self.repo_name
+            logger.info(f"{root_dir=}")
             try:
-                logger.info(f"installing deps into tmp dir {app_root_dir}")
+                logger.info(f"installing deps into tmp dir {root_dir}")
                 uv_dependencies_install(
-                    uv_bin=Path(self.uv_bin),
-                    venv=app_root_dir / ".venv",
-                    repo_dir=app_root_dir,
+                    root_dir,
+                    venv_dir=venv_dir,
                 )
-                logger.info(f"installed deps into tmp dir {app_root_dir}")
+                logger.info(f"installed deps into tmp dir {root_dir}")
             except (UvSyncError, UvPipInstallError):
                 logger.error("installing dependencies failed.")
                 # self.check_cleanup(app_tmp_dir)
@@ -153,33 +157,34 @@ class PythonAppCodebase(BaseAppCodebase, table=True):
 
             return True
 
-    def dependencies_install(self, service_name, plugin_manager: pluggy.PluginManager) -> bool | None:
+    def dependencies_install(
+        self,
+        service_name,
+        plugin_manager: pluggy.PluginManager,
+        venv_dir: Path | None = None,
+    ) -> bool | None:
 
-        plugin_manager.hook.before_dependencies_install(
-            service_name=service_name,
-            uv_bin=Path(self.uv_bin),
-            repo_dir=Path(self.repo_dir),
-        )
+        # plugin_manager.hook.before_dependencies_install(
+        #    service_name=service_name,
+        #    uv_bin=Path(self.uv_bin),
+        #    repo_dir=Path(self.repo_dir),
+        # )
         try:
-            if not Path(self.venv_dir).exists():
-                logger.info(f"installing deps into dir {self.repo_dir}")
-                uv_dependencies_install(
-                    uv_bin=Path(self.uv_bin),
-                    venv=Path(self.venv_dir),
-                    repo_dir=Path(self.repo_dir),
-                )
-                logger.info(f"installed deps into dir {self.repo_dir}")
-            else:
-                logger.info(f"skipping installing deps into dir {self.repo_dir}")
+            logger.info(f"installing deps into dir {self.root_dir}")
+            uv_dependencies_install(
+                Path(self.root_dir),
+                venv_dir=venv_dir,
+            )
+            logger.info(f"installed deps into dir {self.root_dir}")
         except (UvSyncError, UvPipInstallError):
             logger.error("installing dependencies failed.")
             # self.check_cleanup(app_tmp_dir)
 
-        plugin_manager.hook.after_dependencies_install(
-            service_name=service_name,
-            uv_bin=Path(self.uv_bin),
-            repo_dir=Path(self.repo_dir),
-        )
+        # plugin_manager.hook.after_dependencies_install(
+        #    service_name=service_name,
+        #    uv_bin=Path(self.uv_bin),
+        #    repo_dir=Path(self.repo_dir),
+        # )
 
         return True
 

@@ -6,9 +6,8 @@ import questionary
 import structlog_sentry_logger
 
 from pikesquares.domain.python_codebase import PythonAppCodebase
+from pikesquares.service_layer.handlers.prompt_utils import gather_repo_details_and_clone
 from pikesquares.service_layer.uow import UnitOfWork
-
-from .prompt_utils import gather_repo_details_and_clone
 
 logger = structlog_sentry_logger.getLogger()
 
@@ -112,14 +111,6 @@ def provision_app_codebase(
                 )
             )
             logger.info(f"created App Codebase @ {app_root_dir}")
-
-        if not app_codebase.dependencies_validate():
-            raise RuntimeError("validating dependencies failed")
-
-        logger.info(f"Successfully validated {service_name} dependencies")
-
-        if not app_codebase.dependencies_install(service_name, plugin_manager):
-            raise RuntimeError("installing dependencies failed")
 
     except Exception as exc:
         logger.exception(exc)

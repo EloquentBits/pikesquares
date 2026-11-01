@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pydantic
-import structlog
+import structlog_sentry_logger
 from sqlmodel import Field, Relationship
 
 # from pikesquares.services.apps.django import PythonRuntimeDjango
@@ -12,7 +12,7 @@ from pikesquares.domain.python_runtime import PythonAppRuntime
 # from pikesquares.hooks.markers import hook_impl
 from pikesquares.presets.wsgi_app import WsgiAppSection
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
 
 
 class Router(pydantic.BaseModel):

@@ -334,9 +334,20 @@ def add(
             raise typer.Exit(code=0) from None
 
         uow.commit()
+
+        # if not codebase.dependencies_validate():
+        #    console.error("unable to validate codebase dependencies.")
+        #    raise typer.Exit(code=0) from None
+        # logger.info(f":check_mark: {app_name} dependencies validated.")
+
+        if not codebase.dependencies_install(app_name, plugin_manager, venv_dir):
+            console.error("unable to install codebase dependencies.")
+            raise typer.Exit(code=0) from None
+        logger.info(f":check_mark: {app_name} dependencies installed.")
+
         console.success(f"Provisioned {app_name} app.")
 
-        console.success(f":heavy_check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
+        console.success(f":check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
         wsgi_app_up(wsgi_app)
         console.success(f":heavy_check_mark:     Launched WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
 

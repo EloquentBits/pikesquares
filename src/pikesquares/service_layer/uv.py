@@ -14,6 +14,7 @@ from pikesquares.exceptions import (
     UvPipListError,
     UvSyncError,
 )
+from pikesquares.service_layer import PythonRuntimeVersion
 
 logger = structlog_sentry_logger.getLogger()
 
@@ -355,8 +356,6 @@ def list_installed_python_versions(
     # cwd
 ) -> list["PythonRuntimeVersion"]:
 
-    from pikesquares.domain.python_runtime import PythonRuntimeVersion
-
     uv_bin = uv_bin or which_uv()
     cmd_env = {}
     cmd_args = [
@@ -397,6 +396,101 @@ def list_installed_python_versions(
         raise UvCommandExecutionError(error_msg)
 
 
+def dependencies_install(
+    root_dir: Path,
+    venv_dir: Path | None = None,
+    uv_bin: LocalPath | Path | None = None,
+    debug: bool = False,
+) -> bool:
+
+    if not root_dir.exists():
+        raise RuntimeError("app root dir does not exist.")
+
+    cmd_env = {"UV_PROJECT_ENVIRONMENT": str(venv_dir)}
+    cmd_args: list[str] = [
+        "sync",
+        # "--directory", str(app_root_dir),
+        # "--project", str(app_root_dir),
+        # "--frozen",
+        # "--no-sync",
+        "--all-groups",
+        "--all-extras",
+        # "--python",
+        # str(python_bin),
+        # If the lockfile is not up-to-date,
+        # an error will be raised instead of updating the lockfile.
+        # "--locked",
+        "--color",
+        "never",
+        # FIXME
+        # "--cache-dir",
+        # "/var/lib/pikesquares/uv-cache",
+    ]
+
+    if debug:
+        cmd_args.append("--verbose")
+    # if "uv.lock" and "pyproject.toml" in self.top_level_file_names:
+    #    logger.info("installing dependencies from uv.lock")
+
+    uv = pl_local[str(uv_bin or which_uv())]
+    error_msg = f"uv run {' '.join(cmd_args)}"
+    try:
+        result = uv.run(
+            cmd_args,
+            cwd=str(root_dir),
+            **{"env": cmd_env},
+        )
+        # logger.debug(result)
+        if result[0] == 0:
+            return True
+        else:
+            error_msg = f"uv run {' '.join(cmd_args)} error: {result[2]}"
+            raise UvCommandExecutionError(error_msg)
+
+    except ProcessExecutionError as exc:
+        for line in exc.stdout.split("\n"):
+            print(line)
+
+        if exc.stderr:
+            for line in exc.stderr.split("\n"):
+                print(line)
+        raise UvCommandExecutionError(error_msg)
+
+    """
+    # elif not "uv.lock" in self.top_level_file_names  \
+    #    and "pyproject.toml" in self.top_level_file_names:
+    #    logger.info("uv install")
+
+    if 0:  # "requirements.txt" in self.top_level_file_names:
+        # uv pip install -r requirements.txt
+        # uv add -r requirements.txt
+        # uv export --format requirements-txt
+        logger.info("installing depedencies from requirements.txt")
+        cmd_args = [*cmd_args, "pip", "install", "-r", "requirements.txt"]
+        try:
+            retcode, stdout, stderr = uv_cmd(
+                Path(uv_bin),
+                cmd_args,
+                cmd_env=cmd_env,
+                chdir=repo_dir,
+            )
+        except UvCommandExecutionError:
+            raise UvPipInstallError("unable to install dependencies from requirements.txt")
+            # for p in Path(app_root_dir / ".venv/lib/python3.12/site-packages").iterdir():
+            #    print(p)
+        if install_inspect_extensions:
+            logger.info("installing inspect-extensions")
+            cmd_args = [*cmd_args, "pip", "install", "inspect-extensions"]
+            try:
+                retcode, stdout, stderr = uv_cmd(Path(uv_bin), cmd_args, cmd_env)
+            except UvCommandExecutionError:
+                raise UvPipInstallError("unable to install inspect-extensions in")
+    # else:
+    #    raise PythonRuntimeDepsInstallError("unable to install Python runtime dependencies")
+    #
+    """
+
+
 def uv_cmd(
     uv_bin: Path,
     cmd_args: list[str],
@@ -435,7 +529,7 @@ def uv_cmd(
         # )
 
 
-def uv_dependencies_install(
+def uv_dependencies_install_bak(
     uv_bin: Path,
     venv: Path,
     repo_dir: Path,

@@ -1,6 +1,7 @@
 import structlog
 
-from pikesquares.domain.python_runtime import PythonAppRuntime, PythonRuntimeVersion
+from pikesquares.domain.python_runtime import PythonAppRuntime
+from pikesquares.service_layer import PythonRuntimeVersion
 from pikesquares.service_layer.uow import UnitOfWork
 
 logger = structlog.getLogger()

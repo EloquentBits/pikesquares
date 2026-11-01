@@ -84,9 +84,9 @@ class PythonAppCodebaseHookSpec:
     ) -> None: ...
 
 
-class WSGIPythonAppCodebaseHookSpec:
+class WSGIPythonAppHookSpec:
     """
-    Python App Codebase Hook Specification
+    Python App Hook Specification
     """
 
     @hook_spec(firstresult=False)
@@ -109,5 +109,5 @@ def plugin_manager_factory():
     pm.add_hookspecs(AppRuntimeHookSpec)
     pm.add_hookspecs(BaseAppCodebaseHookSpec)
     pm.add_hookspecs(PythonAppCodebaseHookSpec)
-    pm.add_hookspecs(WSGIPythonAppCodebaseHookSpec)
+    pm.add_hookspecs(WSGIPythonAppHookSpec)
     return pm

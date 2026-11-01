@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pydantic
 import structlog_sentry_logger
 from plumbum import local as pl_local
 from plumbum.path.utils import delete as pl_delete
@@ -10,6 +9,7 @@ from sqlmodel import Relationship
 from pikesquares.domain.runtime import AppRuntime
 from pikesquares.exceptions import UvCommandExecutionError
 from pikesquares.hooks.markers import hook_impl
+from pikesquares.service_layer import PythonRuntimeVersion
 from pikesquares.service_layer.uv import (
     build_python_plugin,
     install_python_version,
@@ -19,44 +19,6 @@ from pikesquares.service_layer.uv import (
 )
 
 logger = structlog_sentry_logger.getLogger()
-
-
-class VersionParts(pydantic.BaseModel):
-    major: int
-    minor: int
-    patch: int
-
-
-class PythonRuntimeVersion(pydantic.BaseModel):
-    """
-    [{'key': 'cpython-3.14.3-linux-x86_64-gnu',
-      'version': '3.14.3',
-      'version_parts': {'major': 3, 'minor': 14, 'patch': 3},
-      'path': '/home/pk/.local/share/uv/python/cpython-3.14-linux-x86_64-gnu/bin/python3.14',
-      'symlink': None,
-      'url': None,
-      'os': 'linux',
-      'variant': 'default',
-      'implementation': 'cpython',
-      'arch': 'x86_64',
-      'libc': 'gnu'},
-    """
-
-    key: str
-    version: str
-    version_parts: VersionParts
-    path: Path | None = None
-    symlink: Path | None = None
-    url: pydantic.HttpUrl | None = None
-    variant: str
-    implementation: str
-    arch: str
-    libc: str
-
-    @pydantic.computed_field  # type: ignore[prop-decorator]
-    @property
-    def uwsgi_plugin_name(self) -> str:
-        return f"{self.implementation}_{self.version.replace('.', '_')}"
 
 
 class PythonAppRuntime(AppRuntime, table=True):
@@ -97,7 +59,7 @@ class PythonAppRuntime(AppRuntime, table=True):
         logger.info(f"removed python {runtime_version.implementation} {runtime_version.version}")
         logger.info(result)
 
-        plugin_path = pl_local.path(plugins_dir).joinpath(f"{runtime_version.uwsgi_plugin_name}_plugin.so")
+        plugin_path = pl_local.path(str(plugins_dir)).joinpath(f"{runtime_version.uwsgi_plugin_name}_plugin.so")
         if plugin_path.exists():
             pl_delete(plugin_path)
 
