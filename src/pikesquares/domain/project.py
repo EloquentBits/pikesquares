@@ -1,12 +1,12 @@
 import structlog_sentry_logger
 from sqlmodel import Field, Relationship
 
+from pikesquares.domain.base import ServiceBase
+from pikesquares.domain.device import Device
+from pikesquares.domain.managed_services import AttachedDaemon
+from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.presets.project import ProjectSection
-
-from .base import ServiceBase
-from .device import Device
-from .managed_services import AttachedDaemon
-from .wsgi_app import WsgiApp
+from pikesquares.services.data import EmperorStats
 
 logger = structlog_sentry_logger.getLogger()
 
@@ -34,3 +34,19 @@ class Project(ServiceBase, table=True):
 
     def ping(self) -> None:
         print(f"== {self.__class__.__name__} ping ==")
+
+    def is_running(self):
+        try:
+            vassals = EmperorStats(**self.device.read_stats()).vassals
+            stats = next(filter(lambda v: v.id.split(".ini")[0] == self.service_id, vassals))
+            return all([stats.loyal, stats.accepting, stats.loyal])
+        except:
+            pass
+
+    def is_blacklisted(self):
+        try:
+            blacklist = EmperorStats(**self.device.read_stats()).blacklist
+            blacklist_item = next(filter(lambda v: v.id.split(".ini")[0] == self.service_id, blacklist))
+            return bool(blacklist_item)
+        except:
+            pass

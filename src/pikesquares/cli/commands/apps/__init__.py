@@ -37,7 +37,7 @@ from pikesquares.services.apps.exceptions import (
     UvPipListError,
     UvSyncError,
 )
-from pikesquares.services.data import Router, WsgiAppOptions
+from pikesquares.services.data import EmperorStats, Router, WsgiAppOptions
 
 from ...console import console
 from .utils import (
@@ -1016,8 +1016,8 @@ def init(
     # console.log(wsgi_app.config_json)
 
 
-@app.command(short_help="Show all apps in specific project.\nAliases:[i] apps, app list")
-def ls(
+@app.command("list", short_help="Show all apps in specific project.\nAliases:[i] apps, app list")
+def list_(
     ctx: typer.Context,
     project: str = typer.Argument("", help="Project name"),
     show_id: bool = False,
@@ -1033,25 +1033,61 @@ def ls(
 
     conf = services.get(context, AppConfig)
     uow = services.get(context, UnitOfWork)
-    device = context.get("device")
+
+    device = uow.devices.get_by_machine_id(conf.machine_id)
     if not device:
-        console.error("unable to locate device in app context")
-        raise typer.Exit(code=0) from None
+        console.warning("unable to lookup device")
+        raise typer.Exit(0)
 
-    attached_daemons = uow.attached_daemons.list()
-    for daemon in attached_daemons:
+    wsgi_apps = uow.wsgi_apps.list()
+    if not len(wsgi_apps):
+        console.warning("No WSGI Apps were created.")
+        raise typer.Exit()
+
+    wsgi_apps_out = []
+
+    projects = uow.projects.list()
+    from rich import print
+
+    for project in projects:
         try:
-            daemon_stats_available = bool(daemon.__class__.read_stats(daemon.stats_address))
-        except StatsReadError:
-            daemon_stats_available = False
+            stats = EmperorStats(**project.read_stats())
+            print(stats.vassals)
+            print(stats.blacklist)
+        except:
+            stats = None
 
-        console.info(
-            f"""{daemon.name} | \
-{daemon.service_id} | \
-{"Stats Up" if daemon_stats_available else "Stats Down"} | \
-{Path(daemon.pid_file).read_text()}
-            """
-        )
+        for app in project.wsgi_apps:
+            try:
+                wsgi_apps_out.append(
+                    {
+                        "id": app.service_id,
+                        "name": app.name,
+                        "project": project.name,
+                        "status": "running" if app.is_running(stats) else "stopped",
+                        "blacklisted": "yes" if app.is_blacklisted(stats) else "no",
+                    }
+                )
+            except StopIteration:
+                continue
+    console.print_response(wsgi_apps_out, title=f"App count: {len(wsgi_apps)}", show_id=show_id)
+
+    # attached_daemons = uow.attached_daemons.list()
+    # for daemon in attached_daemons:
+    #    try:
+    #        daemon_stats_available = bool(daemon.__class__.read_stats(daemon.stats_address))
+    #    except StatsReadError:
+    #        daemon_stats_available = False
+
+    #    console.info(
+    #        f"""{daemon.name} | \
+
+
+# {daemon.service_id} | \
+# {"Stats Up" if daemon_stats_available else "Stats Down"} | \
+# {Path(daemon.pid_file).read_text()}
+#            """
+#        )
 
 
 @app.command(short_help="Show all apps in specific project.\nAliases:[i] apps, app list")

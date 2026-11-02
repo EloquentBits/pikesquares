@@ -15,7 +15,7 @@ from pikesquares import services
 
 # from sqlalchemy import event
 from pikesquares.presets.device import DeviceSection
-from pikesquares.services.data import DeviceStats
+from pikesquares.services.data import EmperorStats
 from pikesquares.services.mixins.pki import DevicePKIMixin
 
 from .base import ServiceBase, TimeStampedBase
@@ -222,7 +222,7 @@ def register_device(
 """
 
 
-async def ping_device_stats(device_stats: DeviceStats):
+async def ping_device_stats(device_stats: EmperorStats):
     if device_stats:
         logger.debug(f"{device_stats=}")
         return True
@@ -243,7 +243,7 @@ def register_device_stats(
 
     services.register_factory(
         context,
-        DeviceStats,
+        EmperorStats,
         device_stats_factory,
         ping=ping_device_stats,
         # ping=lambda svc: svc.ping()

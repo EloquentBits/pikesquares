@@ -31,7 +31,7 @@ from pikesquares.service_layer.handlers.routers import (
     provision_tuntap_router,
 )
 from pikesquares.service_layer.uow import UnitOfWork
-from pikesquares.services.data import DeviceStats
+from pikesquares.services.data import EmperorStats
 
 # , NameValidator
 
@@ -340,26 +340,14 @@ def list_(ctx: typer.Context, show_id: bool = False):
         raise typer.Exit()
 
     projects_out = []
-    try:
-        stats = device.read_stats()
-        device_stats = DeviceStats(**stats)
-    except:
-        device_stats = None
-
-    # if not device_stats:
-    #    console.warning("unable to lookup device stats")
-    #    raise typer.Exit(0) from None
-
     for project in projects:
         try:
-            vassal_stats = None
-            if device_stats:
-                vassal_stats = next(filter(lambda v: v.id.split(".ini")[0], device_stats.vassals))
             projects_out.append(
                 {
-                    "name": project.name,
-                    "status": "running" if vassal_stats else "stopped",
                     "id": project.service_id,
+                    "name": project.name,
+                    "status": "running" if project.is_running() else "stopped",
+                    "blacklisted": "yes" if project.is_blacklisted() else "no",
                 }
             )
         except StopIteration:

@@ -16,10 +16,7 @@ class VirtualHost(pydantic.BaseModel):
 
     @property
     def is_https(self):
-        return all([
-            self.certificate_key,
-            self.certificate_path
-        ])
+        return all([self.certificate_key, self.certificate_path])
 
 
 class Router(pydantic.BaseModel):
@@ -99,7 +96,7 @@ class RouterStats(pydantic.BaseModel):
     cheap: int = pydantic.Field(ge=0)
 
 
-class DeviceAppStats(pydantic.BaseModel):
+class VassalStats(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(strict=True)
     id: str  # "project_sandbox.json",
     pid: int
@@ -123,7 +120,23 @@ class DeviceAppStats(pydantic.BaseModel):
     respawns: int
 
 
-class DeviceStats(pydantic.BaseModel):
+"""
+ blacklist=[
+        {'id': 'wsgi-app-ix0x17z.ini', 'throttle_level': 3001, 'attempt': 3, 'first_attempt': 1793456028, 'last_attempt': 1793456404},
+        {'id': 'wsgi-app-7i0h1dm.ini', 'throttle_level': 3001, 'attempt': 3, 'first_attempt': 1793457205, 'last_attempt': 1793461026}
+    ]
+"""
+
+
+class BlackListItem(pydantic.BaseModel):
+    id: str
+    throttle_level: int
+    attempt: int
+    first_attempt: int
+    last_attempt: int
+
+
+class EmperorStats(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(strict=True)
     version: str
     pid: int = pydantic.Field(ge=0)
@@ -133,8 +146,8 @@ class DeviceStats(pydantic.BaseModel):
     emperor: list[str]
     emperor_tyrant: int
     throttle_level: int
-    vassals: list[DeviceAppStats]
-    blacklist: list
+    vassals: list[VassalStats]
+    blacklist: list[BlackListItem]
 
 
 class SocketStats(pydantic.BaseModel):

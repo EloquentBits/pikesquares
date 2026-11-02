@@ -11,6 +11,7 @@ from pikesquares.domain.python_runtime import PythonAppRuntime
 
 # from pikesquares.hooks.markers import hook_impl
 from pikesquares.presets.wsgi_app import WsgiAppSection
+from pikesquares.services.data import EmperorStats
 
 logger = structlog_sentry_logger.getLogger()
 
@@ -147,3 +148,26 @@ class WsgiApp(ServiceBase, table=True):
 
     def ping(self) -> None:
         logger.debug("== WsgiApp.ping ==")
+
+    def is_running(self, stats: EmperorStats | None = None):
+        try:
+            stats = stats or EmperorStats(**self.project.read_stats())
+            vassals = stats.vassals
+            print(vassals)
+            print(self.service_id)
+            stats = next(filter(lambda v: v.id.split(".ini")[0] == self.service_id, vassals))
+
+            # TDOD find out what stats.loyal means
+            return all([stats.accepting, stats.ready])
+        except:
+            pass
+
+    def is_blacklisted(self, stats: EmperorStats | None = None):
+        try:
+            stats = stats or EmperorStats(**self.project.read_stats())
+            blacklist = stats.blacklist
+            print(blacklist)
+            print(self.service_id)
+            return bool(next(filter(lambda v: v.id.split(".ini")[0] == self.service_id, blacklist)))
+        except:
+            pass
