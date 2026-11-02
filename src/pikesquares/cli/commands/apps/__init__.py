@@ -1047,13 +1047,9 @@ def list_(
     wsgi_apps_out = []
 
     projects = uow.projects.list()
-    from rich import print
-
     for project in projects:
         try:
             stats = EmperorStats(**project.read_stats())
-            print(stats.vassals)
-            print(stats.blacklist)
         except:
             stats = None
 
@@ -1064,6 +1060,7 @@ def list_(
                         "id": app.service_id,
                         "name": app.name,
                         "project": project.name,
+                        "runtime": app.python_app_runtime.format_as_string(),
                         "status": "running" if app.is_running(stats) else "stopped",
                         "blacklisted": "yes" if app.is_blacklisted(stats) else "no",
                     }

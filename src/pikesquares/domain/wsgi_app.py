@@ -153,8 +153,6 @@ class WsgiApp(ServiceBase, table=True):
         try:
             stats = stats or EmperorStats(**self.project.read_stats())
             vassals = stats.vassals
-            print(vassals)
-            print(self.service_id)
             stats = next(filter(lambda v: v.id.split(".ini")[0] == self.service_id, vassals))
 
             # TDOD find out what stats.loyal means
@@ -166,8 +164,6 @@ class WsgiApp(ServiceBase, table=True):
         try:
             stats = stats or EmperorStats(**self.project.read_stats())
             blacklist = stats.blacklist
-            print(blacklist)
-            print(self.service_id)
             return bool(next(filter(lambda v: v.id.split(".ini")[0] == self.service_id, blacklist)))
         except:
             pass

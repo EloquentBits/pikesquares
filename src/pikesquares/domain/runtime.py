@@ -23,3 +23,6 @@ class AppRuntime(TimeStampedBase):
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
+
+    def format_as_string(self):
+        return f"{self.implementation} {self.version}"
