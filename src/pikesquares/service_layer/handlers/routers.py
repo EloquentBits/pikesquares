@@ -240,6 +240,18 @@ def http_router_ips(uow: UnitOfWork) -> list[str]:
         raise exc
 
 
+def http_router_delete(http_router, uow: UnitOfWork, commit: bool = False):
+    logger.info(f"deleting {http_router.address} [{http_router.service_id}]")
+    try:
+        uow.http_routers.delete(http_router.id)
+        if commit:
+            uow.commit()
+    except Exception as exc:
+        logger.exception(exc)
+        uow.rollback()
+        raise exc
+
+
 def http_router_up(
     uow: UnitOfWork,
     http_router: HttpRouter,

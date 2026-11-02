@@ -194,7 +194,6 @@ def delete(
             delete_python_app_runtime(runtime_version, uow)
             PythonAppRuntime.uninstall(runtime_version, conf.plugins_dir)
             # console.warning(f"unable to provision {runtime_name} {runtime_version}")
-            uow.commit()
             console.success(f":heavy_check_mark:     Removed {runtime_name} {runtime_version.version} runtime")
         except Exception as exc:
             logger.exception(exc)

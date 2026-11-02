@@ -16,7 +16,7 @@ from pikesquares import get_first_available_port, services
 from pikesquares.conf import AppConfig
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.monitors import destroy_instance
-from pikesquares.service_layer.handlers.routers import http_router_up, provision_http_router
+from pikesquares.service_layer.handlers.routers import http_router_delete, http_router_up, provision_http_router
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.data import EmperorStats
 
@@ -106,7 +106,7 @@ def add(
         http_router = provision_http_router(
             project,
             "127.0.0.1",
-            "34340",
+            get_first_available_port("34340"),
             run_as_uid,
             run_as_gid,
             uow,
@@ -179,6 +179,57 @@ def list_(
             except StopIteration:
                 continue
     console.print_response(routers_out, title=f"Router count: {len(routers)}", show_id=show_id)
+
+
+@app.command(short_help="Delete router\nAliases:[i] delete, rm")
+@app.command("rm", hidden=True)
+def delete(
+    ctx: typer.Context,
+    # router_address: Annotated[str, typer.Option("--router-address", help="router to remove")] = "",
+):
+    """
+    Delete existing router
+
+    Aliases:[i] delete, rm
+    """
+    context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+    uow = services.get(context, UnitOfWork)
+    conf = services.get(context, AppConfig)
+
+    device = uow.devices.get_by_machine_id(conf.machine_id)
+    try:
+        selected_routers = questionary.checkbox(
+            "Existing routers: ",
+            choices=[
+                questionary.Choice(
+                    f"{router.address} [{router.service_id}]",
+                    value=router,
+                    checked=True,
+                )
+                for router in uow.http_routers.list()
+            ],
+            style=custom_style,
+        ).unsafe_ask()
+    except KeyboardInterrupt:
+        console.info("selection cancelled.")
+        raise typer.Exit(0) from None
+
+    for router in selected_routers:
+        # if project_down(device, project):
+        #    console.info(f"stopped project {project.name}")
+        # else:
+        #    console.warning(f"unable to stop project {project.name}")
+        #    continue
+
+        try:
+            http_router_delete(router, uow)
+            uow.commit()
+        except Exception as exc:
+            logger.exception(exc)
+            console.error(f"Unable to delete router {router.service_id}")
+            uow.rollback()
+            continue
 
 
 @app.command("routers", rich_help_panel="Show", short_help="Show all routers.\nAliases:[i] routers, routers list")
@@ -452,7 +503,7 @@ def create(
 
 @app.command(short_help="Delete router\nAliases:[i] delete, rm")
 @app.command("rm", hidden=True)
-def delete(
+def delete_old(
     ctx: typer.Context,
     router_address: Annotated[str, typer.Option("--router-address", help="router to remove")] = "",
 ):
