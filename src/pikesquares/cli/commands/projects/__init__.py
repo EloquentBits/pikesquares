@@ -25,11 +25,12 @@ from pikesquares.service_layer.handlers.project import (
     project_up,
     provision_project,
 )
-from pikesquares.service_layer.handlers.routers import (
-    http_router_up,
-    provision_http_router,
-    provision_tuntap_router,
-)
+
+# from pikesquares.service_layer.handlers.routers import (
+# http_router_up,
+# provision_http_router,
+# provision_tuntap_router,
+# )
 from pikesquares.service_layer.uow import UnitOfWork
 from pikesquares.services.data import EmperorStats
 

@@ -8,6 +8,7 @@ from sqlmodel import Field, Relationship
 from uwsgiconf.options.routing_routers import RouterTunTap
 
 from pikesquares.presets.routers import HttpRouterSection, HttpsRouterSection
+from pikesquares.services.data import EmperorStats
 
 from .base import ServiceBase, TimeStampedBase
 from .project import Project
@@ -71,6 +72,17 @@ class HttpRouter(ServiceBase, table=True):
     address: str | None = Field(default=None, max_length=100)
     project_id: str | None = Field(default=None, foreign_key="projects.id")
     project: "Project" = Relationship(back_populates="http_routers")
+
+    def is_running(self, stats: EmperorStats | None = None):
+        try:
+            stats = stats or EmperorStats(**self.project.read_stats())
+            vassals = stats.vassals
+            stats = next(filter(lambda v: v.id.split(".ini")[0] == self.service_id, vassals))
+
+            # TDOD find out what stats.loyal means
+            return all([stats.accepting, stats.ready])
+        except:
+            pass
 
     @property
     def subscription_server_address(self) -> Path:

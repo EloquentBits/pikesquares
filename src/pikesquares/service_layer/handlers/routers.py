@@ -3,7 +3,7 @@ from ipaddress import IPv4Interface
 from pathlib import Path
 
 import cuid
-import structlog
+import structlog_sentry_logger
 import tenacity
 
 from pikesquares.domain.project import Project
@@ -17,7 +17,7 @@ from pikesquares.service_layer.ipaddress_utils import (
 )
 from pikesquares.service_layer.uow import UnitOfWork
 
-logger = structlog.getLogger()
+logger = structlog_sentry_logger.getLogger()
 
 # caddy_config_initial = """{"apps": {"http": {"https_port": 443, "servers": {"*.pikesquares.dev": {"listen": [":443"], "routes": [{"match": [{"host": ["*.pikesquares.dev"]}], "handle": [{"handler": "reverse_proxy", "transport": {"protocol": "http"}, "upstreams": [{"dial": "127.0.0.1:8035"}]}]}]}}}, "tls": {"automation": {"policies": [{"issuers": [{"module": "internal"}]}]}}}, "storage": {"module": "file_system", "root": "/var/lib/pikesquares/caddy"}}"""
 
@@ -96,6 +96,37 @@ def edit_caddy_config(caddy_config_path: Path):
 
 
 def provision_http_router(
+    project: Project,
+    listen_on_ip: str,
+    listen_on_port: int,
+    run_as_uid: str,
+    run_as_gid: str,
+    uow: UnitOfWork,
+    commit: bool = False,
+    uwsgi_plugins: list[str] | None = None,
+) -> HttpRouter:
+
+    try:
+        http_router = HttpRouter(
+            service_id=f"http-router-{cuid.slug()}",
+            run_as_uid=run_as_uid,
+            run_as_gid=run_as_gid,
+            project=project,
+            uwsgi_plugins=";".join(uwsgi_plugins) if uwsgi_plugins else "",
+            address=f"{listen_on_ip}:{listen_on_port}",
+        )
+        http_router = uow.http_routers.add(http_router)
+
+        if commit:
+            uow.commit()
+        return http_router
+
+    except Exception as exc:
+        logger.info("failed provisioning http router")
+        raise exc
+
+
+def provision_http_router_on_tuntap(
     uow: UnitOfWork,
     project: Project,
     tuntap_router: TuntapRouter,

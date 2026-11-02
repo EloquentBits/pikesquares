@@ -83,9 +83,9 @@ def provision_wsgi_app(
     project,
     run_as_uid: str,
     run_as_gid: str,
-    uwsgi_plugins: list[str],
     uow: UnitOfWork,
     commit: bool = False,
+    uwsgi_plugins: list[str] | None = None,
 ) -> WsgiApp:
 
     try:
@@ -119,8 +119,6 @@ def provision_wsgi_app(
     except Exception as exc:
         logger.info(f"failed provisioning Python App {name}")
         raise exc
-
-    return wsgi_app
 
 
 def wsgi_app_up(

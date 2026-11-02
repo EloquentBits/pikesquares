@@ -1,9 +1,11 @@
 from pathlib import Path
 from typing import Annotated
 
+import pluggy
+
 # from cuid import cuid
 import questionary
-import structlog
+import structlog_sentry_logger
 
 # from typing import Optional
 # import shutil
@@ -12,10 +14,11 @@ from tinydb import Query, TinyDB, where
 
 from pikesquares import get_first_available_port, services
 from pikesquares.conf import AppConfig
-from pikesquares.domain import project
 from pikesquares.exceptions import StatsReadError
 from pikesquares.service_layer.handlers.monitors import destroy_instance
+from pikesquares.service_layer.handlers.routers import http_router_up, provision_http_router
 from pikesquares.service_layer.uow import UnitOfWork
+from pikesquares.services.data import EmperorStats
 
 # from tests.unit_tests.service_layer_tests.conftest import project
 # from pikesquares.services.router import (
@@ -27,7 +30,7 @@ from ...console import console
 # from ..validators import ServiceNameValidator
 # from ..cli import app
 
-logger = structlog.get_logger()
+logger = structlog_sentry_logger.get_logger()
 
 
 app = typer.Typer()
@@ -37,6 +40,7 @@ app = typer.Typer()
 #     Routers related commands.\n
 #     Aliases: [i]{', '.join(ALIASES)}[/i]
 # """
+
 
 # routers_cmd = typer.Typer(
 #     no_args_is_help=True,
@@ -51,11 +55,135 @@ app = typer.Typer()
 #         help=HELP,
 #         hidden=True
 #     )
+#
+@app.command(short_help="Add router.\nAliases:[i] new")
+@app.command(
+    # "new", hidden=True
+)
+def add(
+    ctx: typer.Context,
+    # project_name: Optional[str] = typer.Argument("", help="New project name"),
+):
+    """
+    Add router
+
+    Aliases: [i] add, create, new
+    """
+    context = ctx.ensure_object(dict)
+    custom_style = context.get("cli-style")
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
+    plugin_manager = services.get(context, pluggy.PluginManager)
+
+    device = uow.devices.get_by_machine_id(conf.machine_id)
+
+    if not device:
+        console.error(f"cli up: unable to locate device by machine id {conf.machine_id}")
+        raise typer.Exit(code=0) from None
+
+    # Projects
+    projects = uow.projects.list()
+    if not len(projects):
+        console.warning("No projects were added. add a project first.")
+        raise typer.Exit()
+
+    projects_choices = []
+    for project in projects:
+        projects_choices.append(questionary.Choice(f"{project.name}", value=project))
+
+    project = questionary.select(
+        "Select from available projects: ",
+        choices=projects_choices,
+        style=custom_style,
+    ).ask()
+    if not project:
+        raise typer.Exit(0)
+
+    run_as_uid = "1000"
+    run_as_gid = "1000"
+
+    try:
+        http_router = provision_http_router(
+            project,
+            "127.0.0.1",
+            "34340",
+            run_as_uid,
+            run_as_gid,
+            uow,
+        )
+        if not http_router:
+            console.error("unable to provision http router.")
+            raise typer.Exit(code=0) from None
+
+        uow.commit()
+        console.success(f"Provisioned router {http_router.service_id} @ {http_router.address}.")
+
+        console.success(f":check_mark:     Launching router [{http_router.service_id} @ {http_router.address}]")
+        # http_router_up(http_router)
+        console.success(f":heavy_check_mark:     Launched router [{http_router.service_id}] @ {http_router.address}")
+
+    except Exception as exc:
+        logger.exception(exc)
+        uow.rollback()
+        console.error(f"unable to provision http router.")
+        raise typer.Exit(code=0) from None
+
+
+@app.command("list", short_help="Show all routers .\nAliases:[i] apps, app list")
+def list_(
+    ctx: typer.Context,
+    project: str = typer.Argument("", help="Project name"),
+    show_id: bool = False,
+):
+    """
+    Show all routers
+
+    Aliases:[i] routers, routers list
+    """
+    context = ctx.ensure_object(dict)
+    # device_handler = obj.get("device-handler")
+    custom_style = context.get("cli-style")
+
+    conf = services.get(context, AppConfig)
+    uow = services.get(context, UnitOfWork)
+
+    device = uow.devices.get_by_machine_id(conf.machine_id)
+    if not device:
+        console.warning("unable to lookup device")
+        raise typer.Exit(0)
+
+    routers = uow.http_routers.list()
+    if not len(routers):
+        console.warning("No routers were created.")
+        raise typer.Exit()
+
+    routers_out = []
+
+    projects = uow.projects.list()
+    for project in projects:
+        try:
+            stats = EmperorStats(**project.read_stats())
+        except:
+            stats = None
+
+        for router in project.http_routers:
+            try:
+                routers_out.append(
+                    {
+                        "id": router.service_id,
+                        "project": project.name,
+                        "address": router.address,
+                        "status": "running" if router.is_running(stats) else "stopped",
+                    }
+                )
+            except StopIteration:
+                continue
+    console.print_response(routers_out, title=f"Router count: {len(routers)}", show_id=show_id)
 
 
 @app.command("routers", rich_help_panel="Show", short_help="Show all routers.\nAliases:[i] routers, routers list")
-@app.command("list")
-def list_(
+@app.command("list_all")
+def list_all(
     ctx: typer.Context,
     show_id: bool = False,
 ):

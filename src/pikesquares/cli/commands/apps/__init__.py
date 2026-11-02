@@ -326,8 +326,8 @@ def add(
             project,
             run_as_uid,
             run_as_gid,
-            uwsgi_plugins,
             uow,
+            uwsgi_plugins=uwsgi_plugins,
         )
         if not wsgi_app:
             console.error(f"unable to provision the {app_name} app.")
@@ -344,9 +344,7 @@ def add(
             console.error("unable to install codebase dependencies.")
             raise typer.Exit(code=0) from None
         logger.info(f":check_mark: {app_name} dependencies installed.")
-
         console.success(f"Provisioned {app_name} app.")
-
         console.success(f":check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
         wsgi_app_up(wsgi_app)
         console.success(f":heavy_check_mark:     Launched WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
