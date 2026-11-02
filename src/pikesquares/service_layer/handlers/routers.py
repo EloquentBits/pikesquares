@@ -1,4 +1,5 @@
 import json
+import os
 from ipaddress import IPv4Interface
 from pathlib import Path
 
@@ -97,11 +98,10 @@ def edit_caddy_config(caddy_config_path: Path):
 
 def provision_http_router(
     project: Project,
-    listen_on_ip: str,
-    listen_on_port: int,
-    run_as_uid: str,
-    run_as_gid: str,
+    address: str,
     uow: UnitOfWork,
+    run_as_uid: int = os.getuid(),
+    run_as_gid: int = os.getgid(),
     commit: bool = False,
     uwsgi_plugins: list[str] | None = None,
 ) -> HttpRouter:
@@ -113,7 +113,7 @@ def provision_http_router(
             run_as_gid=run_as_gid,
             project=project,
             uwsgi_plugins=";".join(uwsgi_plugins) if uwsgi_plugins else "",
-            address=f"{listen_on_ip}:{listen_on_port}",
+            address=address,
         )
         http_router = uow.http_routers.add(http_router)
 
@@ -124,6 +124,42 @@ def provision_http_router(
     except Exception as exc:
         logger.info("failed provisioning http router")
         raise exc
+
+
+def http_router_up(
+    http_router: HttpRouter,
+) -> bool | None:
+
+    # stats = None
+    # while not stats:
+    #    try:
+    #        return http_router.read_stats()
+    #    except tenacity.RetryError:
+    #        break
+
+    try:
+        project = http_router.project
+
+        section = HttpRouterSection(http_router)
+
+        project_zmq_monitor = project.zmq_monitor
+        if not project_zmq_monitor:
+            return False
+
+        create_or_restart_instance(
+            project_zmq_monitor.zmq_address,
+            f"{http_router.service_id}.ini",
+            section.as_configuration().format(do_print=False),
+        )
+    except Exception as exc:
+        raise exc
+
+    # stats = None
+    # while not stats:
+    #    try:
+    #        return http_router.read_stats()
+    #    except tenacity.RetryError:
+    #        break
 
 
 def provision_http_router_on_tuntap(
@@ -252,7 +288,7 @@ def http_router_delete(http_router, uow: UnitOfWork, commit: bool = False):
         raise exc
 
 
-def http_router_up(
+def http_router_up_on_tuntap(
     uow: UnitOfWork,
     http_router: HttpRouter,
 ) -> bool | None:

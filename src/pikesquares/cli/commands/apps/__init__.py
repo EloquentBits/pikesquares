@@ -218,8 +218,6 @@ def add(
     try:
         venv_dir = conf.data_dir / "python-venvs" / f"{app_name}-{runtime.implementation}-{runtime.version}"
         venv_dir.mkdir(parents=True, exist_ok=True)
-        run_as_uid = "1000"
-        run_as_gid = "1000"
 
         # wsgi_file = next(
         #    filter(
@@ -324,8 +322,6 @@ def add(
             runtime,
             codebase,
             project,
-            run_as_uid,
-            run_as_gid,
             uow,
             uwsgi_plugins=uwsgi_plugins,
         )

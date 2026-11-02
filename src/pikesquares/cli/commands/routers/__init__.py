@@ -99,16 +99,12 @@ def add(
     if not project:
         raise typer.Exit(0)
 
-    run_as_uid = "1000"
-    run_as_gid = "1000"
-
+    listen_on_ip = "127.0.0.1"
+    listen_on_port = get_first_available_port(34340)
     try:
         http_router = provision_http_router(
             project,
-            "127.0.0.1",
-            get_first_available_port("34340"),
-            run_as_uid,
-            run_as_gid,
+            f"{listen_on_ip}:{listen_on_port}",
             uow,
         )
         if not http_router:
@@ -119,7 +115,7 @@ def add(
         console.success(f"Provisioned router {http_router.service_id} @ {http_router.address}.")
 
         console.success(f":check_mark:     Launching router [{http_router.service_id} @ {http_router.address}]")
-        # http_router_up(http_router)
+        http_router_up(http_router)
         console.success(f":heavy_check_mark:     Launched router [{http_router.service_id}] @ {http_router.address}")
 
     except Exception as exc:

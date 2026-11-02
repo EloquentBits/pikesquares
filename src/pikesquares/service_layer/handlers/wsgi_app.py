@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import cuid
@@ -81,9 +82,9 @@ def provision_wsgi_app(
     runtime,
     codebase,
     project,
-    run_as_uid: str,
-    run_as_gid: str,
     uow: UnitOfWork,
+    run_as_uid: int = os.getuid(),
+    run_as_gid: int = os.getgid(),
     commit: bool = False,
     uwsgi_plugins: list[str] | None = None,
 ) -> WsgiApp:

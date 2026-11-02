@@ -57,8 +57,8 @@ class ServiceBase(TimeStampedBase):
         default_factory=lambda: str(uuid.uuid4()),
         max_length=36,
     )
-    run_as_uid: str = Field(default="root")
-    run_as_gid: str = Field(default="root")
+    run_as_uid: int = Field()
+    run_as_gid: int = Field()
     service_id: str = Field(default=None, unique=True)
     uwsgi_plugins: str | None = Field(default=None, max_length=255)
     data_dir: str = Field(default=str(Path.home() / ".pikesquares"), max_length=255)
