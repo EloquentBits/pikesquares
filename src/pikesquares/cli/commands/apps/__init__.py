@@ -188,6 +188,7 @@ def add(
     if not runtime:
         raise typer.Exit(0)
 
+    # codebases
     codebases = uow.python_app_codebases.list()
     if not len(codebases):
         console.warning("No codebases were added. add codebases first.")
@@ -203,6 +204,24 @@ def add(
         style=custom_style,
     ).ask()
     if not codebase:
+        raise typer.Exit(0)
+
+    # routers
+    http_routers = uow.http_routers.list()
+    if not len(http_routers):
+        console.warning("No http routers were added. add a router first.")
+        raise typer.Exit()
+
+    http_router_choices = []
+    for http_router in http_routers:
+        http_router_choices.append(questionary.Choice(f"{http_router.address}", value=http_router))
+
+    http_router = questionary.select(
+        "Select from available http routers: ",
+        choices=http_router_choices,
+        style=custom_style,
+    ).ask()
+    if not http_router:
         raise typer.Exit(0)
 
     app_name = questionary.text(
@@ -342,7 +361,7 @@ def add(
         logger.info(f":check_mark: {app_name} dependencies installed.")
         console.success(f"Provisioned {app_name} app.")
         console.success(f":check_mark:     Launching WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
-        wsgi_app_up(wsgi_app)
+        wsgi_app_up(wsgi_app, http_router=http_router)
         console.success(f":heavy_check_mark:     Launched WSGI App {wsgi_app.name} [{wsgi_app.service_id}]")
 
     except Exception as exc:

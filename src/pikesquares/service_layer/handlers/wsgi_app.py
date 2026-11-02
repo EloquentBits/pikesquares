@@ -4,6 +4,7 @@ from pathlib import Path
 import cuid
 import structlog_sentry_logger
 
+from pikesquares.domain.router import HttpRouter
 from pikesquares.domain.wsgi_app import WsgiApp
 from pikesquares.presets.wsgi_app import WsgiAppSection
 from pikesquares.service_layer.handlers.monitors import create_or_restart_instance
@@ -122,9 +123,7 @@ def provision_wsgi_app(
         raise exc
 
 
-def wsgi_app_up(
-    wsgi_app: WsgiApp,
-):
+def wsgi_app_up(wsgi_app: WsgiApp, http_router: HttpRouter | None = None):
 
     # stats = None
     # while not stats:
@@ -134,9 +133,6 @@ def wsgi_app_up(
     #        break
 
     try:
-        # wsgi_app = uow.wsgi_apps.get_by_service_id(service_id)
-        # if not wsgi_app:
-        #    raise RuntimeError(f"unable to look up app by service id: {service_id}")
         app_codebase = wsgi_app.python_app_codebase
         # app_runtime = wsgi_app.python_app_runtime
         project = wsgi_app.project
@@ -225,21 +221,21 @@ def wsgi_app_up(
         )
         """
 
-        # if not all([
-        #    http_router.subscription_server_address.exists(),
-        #    http_router.subscription_server_address.is_socket()]):
-        #    raise Exception("http router subscription server is not available")
+        if http_router:
+            if not all(
+                [http_router.subscription_server_address.exists(), http_router.subscription_server_address.is_socket()]
+            ):
+                raise RuntimeError("http router subscription server is not available")
 
-        """
-        section.subscriptions.subscribe(
-            server=http_router.subscription_server_address,
-            address=str(wsgi_app.socket_address),  # address and port of wsgi app
-            key=f"{wsgi_app.name}.pikesquares.dev",
-        )
-        section.subscriptions.set_server_params(
-            client_notify_address=wsgi_app.subscription_notify_socket,
-        )
-        """
+            section.subscriptions.subscribe(
+                server=http_router.subscription_server_address,
+                address=str(wsgi_app.socket_address),  # address and port of wsgi app
+                # key=f"{wsgi_app.name}.pikesquares.dev",
+                key=http_router.address,
+            )
+            section.subscriptions.set_server_params(
+                client_notify_address=wsgi_app.subscription_notify_socket,
+            )
 
         # section._set("env","REQUESTS_CA_BUNDLE=/var/lib/pikesquares/pikesquares-ca.pem")
         section._set("pythonpath", app_codebase.root_dir)
